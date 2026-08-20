@@ -67,10 +67,28 @@ class BankLauncher {
   /// Buka aplikasi bank/e-wallet [app] ke layar utamanya. Tidak bisa mengisi
   /// otomatis nomor VA di dalam aplikasi pihak ketiga (tidak ada standar
   /// untuk itu) — nomor VA disalin manual lewat tombol "Salin Kode VA".
-  static Future<bool> launch(BankApp app) async {
+  static Future<bool> launch(BankApp app) => launchPackage(app.packageName);
+
+  /// Cek satu [packageName] tunggal — dipakai untuk kasus di luar daftar
+  /// kandidat bank/e-wallet (mis. Google Authenticator di layar MFA).
+  static Future<bool> isInstalled(String packageName) async {
     if (!Platform.isAndroid) return false;
     try {
-      final ok = await _channel.invokeMethod<bool>('launchApp', {'packageName': app.packageName});
+      final installed = await _channel.invokeMethod<List<Object?>>('checkInstalledApps', {
+        'packageNames': [packageName],
+      });
+      return (installed ?? []).map((e) => e.toString()).contains(packageName);
+    } on PlatformException {
+      return false;
+    }
+  }
+
+  /// Buka aplikasi [packageName] ke layar utamanya, sama seperti [launch]
+  /// tapi tanpa perlu membungkus package name ke [BankApp] dulu.
+  static Future<bool> launchPackage(String packageName) async {
+    if (!Platform.isAndroid) return false;
+    try {
+      final ok = await _channel.invokeMethod<bool>('launchApp', {'packageName': packageName});
       return ok ?? false;
     } on PlatformException {
       return false;

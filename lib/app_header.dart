@@ -11,12 +11,14 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
   final ValueChanged<CheckMode> onModeChanged;
   final ThemeController themeController;
   final bool isOperator;
+  final VoidCallback onMonitoringPressed;
 
   const AppHeader({
     super.key,
     required this.activeMode,
     required this.onModeChanged,
     required this.themeController,
+    required this.onMonitoringPressed,
     this.isOperator = false,
   });
 
@@ -44,6 +46,7 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
             final menu = _ModeMenu(
               activeMode: activeMode,
               onModeChanged: onModeChanged,
+              onMonitoringPressed: onMonitoringPressed,
             );
             final settingsButton = IconButton(
               onPressed: () => _openSettings(context),
@@ -146,14 +149,18 @@ class _LogoAndName extends StatelessWidget {
 class _ModeMenu extends StatelessWidget {
   final CheckMode activeMode;
   final ValueChanged<CheckMode> onModeChanged;
+  final VoidCallback onMonitoringPressed;
 
-  const _ModeMenu({required this.activeMode, required this.onModeChanged});
+  const _ModeMenu({
+    required this.activeMode,
+    required this.onModeChanged,
+    required this.onMonitoringPressed,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Wrap(
-      spacing: 8,
-      children: CheckMode.values.map((mode) {
+    final chips = <Widget>[
+      ...CheckMode.values.map((mode) {
         final selected = mode == activeMode;
         return ChoiceChip(
           label: Text(mode.label),
@@ -167,7 +174,34 @@ class _ModeMenu extends StatelessWidget {
           backgroundColor: kHeaderGreen.withValues(alpha: 0.4),
           side: const BorderSide(color: Colors.white70),
         );
-      }).toList(),
+      }),
+      // Bukan mode tampilan seperti chip lain — ini navigasi ke alur
+      // login + MFA Portal Staf (lihat MainShell._openMonitoring), jadi
+      // sengaja tidak pernah "selected".
+      ChoiceChip(
+        label: const Text('Monitoring'),
+        selected: false,
+        onSelected: (_) => onMonitoringPressed(),
+        labelStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        backgroundColor: kHeaderGreen.withValues(alpha: 0.4),
+        side: const BorderSide(color: Colors.white70),
+      ),
+    ];
+
+    // Scroll horizontal, bukan Wrap — Wrap membuat baris kedua begitu chip
+    // tidak muat (mis. layar sempit + chip "Monitoring"), dan baris kedua itu
+    // mendorong tinggi header melebihi preferredSize tetap milik AppHeader
+    // sehingga overflow di bagian bawah header.
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          for (var i = 0; i < chips.length; i++) ...[
+            if (i > 0) const SizedBox(width: 8),
+            chips[i],
+          ],
+        ],
+      ),
     );
   }
 }

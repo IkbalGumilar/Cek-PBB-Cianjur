@@ -1,0 +1,428 @@
+<!-- Fixture: potongan <script> asli dari halaman Monitoring Wilayah yang
+     dikirim pengguna (main.php?param=YT1hUEJCJm09bU1vbml0b3JpbmdXaWxheWFoVjM=).
+     Bagian CSS ad-blocker & markup form/tabel yang tidak berpengaruh pada
+     regex ekstraksi token sengaja dibuang; setiap blok <script> di bawah
+     disalin verbatim (termasuk token q/funcMode literalnya) supaya test
+     yang membaca fixture ini benar-benar menguji terhadap data asli, bukan
+     rekaan. -->
+<html><body>
+<script>
+
+        function onSubmitSudahBayar(sts) {
+
+            var tahun_1 = $('#tahun-pajak-awal-'+sts).val();
+            var tahun_2 = $('#tahun-pajak-akhir-'+sts).val();
+            var nop = $('#nop-'+sts).val();
+            var nama_wp = $('#wp-name-'+sts).val();
+            var bank = $('#bank-'+sts).val();
+            var mitrabank = $('#mitra-bank-'+sts).val();
+            var merchant = $('#merchant-status-bayar-'+sts).val();
+            var tgl_pembayaran_1 = $('#jatuh-tempo-awal-'+sts).val();
+            var tgl_pembayaran_2 = $('#jatuh-tempo-akhir-'+sts).val();
+            var kec = $('#kecamatan-'+sts).val();
+            var kel = $('#kelurahan-'+sts).val();
+            var buku_1 = $('#src-buku-status-bayar-min-'+sts).val();
+            var buku_2 = $('#src-buku-status-bayar-max-'+sts).val();
+            var tgl_pelimpahan_1 = $('#tgl-pelimpahan-awal-'+sts).val();
+            var tgl_pelimpahan_2 = $('#tgl-pelimpahan-akhir-'+sts).val();
+            var kode_bayar_individu = $('#kode-bayar-individu-'+sts).val();
+            var kode_bayar_kolektif = $('#kode-bayar-kolektif-'+sts).val();
+            var va = $('#va-'+sts).val();
+            var qris = $('#qris-'+sts).val();
+            var tgl_cutoff = $('#tgl-cutoff-'+sts).val();
+            var operator = $('#operator-'+sts).val();
+            var query = "Sudah_Bayar";
+
+            if(tgl_pembayaran_1=='' || tgl_pembayaran_2==''){
+                alert("Silahkan Isi Tanggal Pembayaran");
+                return false;
+            }
+
+            $("#monitoring-content-" + sts).html("loading ...");
+            var svc = "";
+            $("#monitoring-content-" + sts).load("main.php?q=eydhJzonYVBCQicsICdtJzonbU1vbml0b3JpbmdXaWxheWFoVjMnLCAncyc6JzIzJywndWlkJzondTQ2OCd9",
+                    {
+                        query:query,
+                        tahun_1: tahun_1,
+                        tahun_2: tahun_2,
+                        nop: nop,
+                        nama_wp: nama_wp,
+                        bank: bank,
+                        merchant: merchant,
+                        mitrabank: mitrabank,
+                        st: sts,
+                        tgl_pembayaran_1: tgl_pembayaran_1,
+                        tgl_pembayaran_2: tgl_pembayaran_2,
+                        kec: kec,
+                        kel:kel,
+                        buku_1:buku_1,
+                        buku_2: buku_2,
+                        tgl_pelimpahan_1: tgl_pelimpahan_1,
+                        tgl_pelimpahan_2: tgl_pelimpahan_2,
+                        kode_bayar_individu: kode_bayar_individu,
+                        kode_bayar_kolektif: kode_bayar_kolektif,
+                        va: va,
+                        qris: qris,
+                        tgl_cutoff: tgl_cutoff,
+                        operator: operator,
+                        exp:"", //jangan export
+                        LBL_KEL: LBL_KEL,
+                        funcMode: 'MHprcHFPR21UZ1BwVEIwelZ5enkzaDdIR21XRC90UHNKUWZoMmpuSUFNWVRwT1dVc29CSTJzSmRBamdaT3QyL3F6R0kyT1h3MEFNS3cyMUpGTnFGNWc9PTo68Or2tbeipMjc8dw9uyXueg==',
+                    }, function (response, status, xhr) {
+                    var config_sum_total = "1";
+                    if(config_sum_total == "1"){
+                        var filter = {
+                            q:'eydhJzonYVBCQicsICdtJzonbU1vbml0b3JpbmdXaWxheWFoVjMnLCAncyc6JzIzJywndWlkJzondTQ2OCd9',
+                            funcMode: 'YWJXYm9zd3J3eGdZMTNjMW9pVWpLUG52all3eGc2RW52VktXbElKQk9yOFo0TkdjYzZ3Y3lEZG13cGludUVxc0FDNGpkQkcvc1ZtbnRqWGE0RnRLREE9PTo6awRhE0Z764l6dTghbjWaqw==',
+                        }
+                    }
+                }
+            );
+        }
+
+        function loadDataDownloadExcelSudahBayar(sts) {
+            $("#monitoring-content-" + sts + "-excel").load("main.php?q=eydhJzonYVBCQicsICdtJzonbU1vbml0b3JpbmdXaWxheWFoVjMnLCAncyc6JzIzJywndWlkJzondTQ2OCd9",
+                    {
+                        st: sts,
+                        funcMode: 'eWlMT3EyNW1BWnlqN3ZlQU5ZMExsVmsyay9haHJobmJsQnRibWR6ZjNkNlZGOHYwMXE1Uzh2QTBMa1MrK3lubEdlOVF2SFV0OXRjWDd1Y21YK0JhSjlTOEkxOVhQbFlVazFIUDd0MmF6Y2s9OjqJj6cox5C-gx95B1qiMyZt',
+                    }, function (response, status, xhr) {});
+        }
+</script>
+<script>
+
+        function onSubmitBelumBayar(sts) {
+
+            var tahun_1 = $('#tahun-pajak-awal-'+sts).val();
+            var tahun_2 = $('#tahun-pajak-akhir-'+sts).val();
+            var nop = $('#nop-'+sts).val();
+            var nama_wp = $('#wp-name-'+sts).val();
+            var bank = $('#bank-'+sts).val();
+            var merchant = $('#merchant-status-bayar-'+sts).val();
+            var tgl_pembayaran_1 = $('#jatuh-tempo-awal-'+sts).val();
+            var tgl_pembayaran_2 = $('#jatuh-tempo-akhir-'+sts).val();
+            var kec = $('#kecamatan-'+sts).val();
+            var kel = $('#kelurahan-'+sts).val();
+            var buku_1 = $('#src-buku-status-bayar-min-'+sts).val();
+            var buku_2 = $('#src-buku-status-bayar-max-'+sts).val();
+            var tgl_pelimpahan_1 = $('#tgl-pelimpahan-awal-'+sts).val();
+            var tgl_pelimpahan_2 = $('#tgl-pelimpahan-akhir-'+sts).val();
+            var kode_bayar_individu = $('#kode-bayar-individu-'+sts).val();
+            var kode_bayar_kolektif = $('#kode-bayar-kolektif-'+sts).val();
+            var va = $('#va-'+sts).val();
+            var qris = $('#qris-'+sts).val();
+            var tgl_cutoff = $('#tgl-cutoff-'+sts).val();
+            var operator = $('#operator-'+sts).val();
+            var query = "Belum_Bayar";
+
+            if(tgl_cutoff==''){
+                alert("Silahkan Isi Tanggal Cuttoff");
+                return false;
+            }
+
+            $("#monitoring-content-" + sts).html("loading ...");
+            var svc = "";
+            $("#monitoring-content-" + sts).load("main.php?q=eydhJzonYVBCQicsICdtJzonbU1vbml0b3JpbmdXaWxheWFoVjMnLCAncyc6JzIzJywndWlkJzondTQ2OCd9",
+                    {
+                        query:query,
+                        tahun_1: tahun_1,
+                        tahun_2: tahun_2,
+                        nop: nop,
+                        nama_wp: nama_wp,
+                        bank: bank,
+                        merchant: merchant,
+                        st: sts,
+                        tgl_pembayaran_1: tgl_pembayaran_1,
+                        tgl_pembayaran_2: tgl_pembayaran_2,
+                        kec: kec,
+                        kel:kel,
+                        buku_1:buku_1,
+                        buku_2: buku_2,
+                        tgl_pelimpahan_1: tgl_pelimpahan_1,
+                        tgl_pelimpahan_2: tgl_pelimpahan_2,
+                        kode_bayar_individu: kode_bayar_individu,
+                        kode_bayar_kolektif: kode_bayar_kolektif,
+                        va: va,
+                        qris: qris,
+                        tgl_cutoff: tgl_cutoff,
+                        operator: operator,
+                        exp:"", //jangan export
+                        LBL_KEL: LBL_KEL,
+                        funcMode: 'TmgxU2diYnlOaFFPU3I2WGJmNHo3b00wN0hVMUpKd3pJLzFEaXhQMTRoQS91WFhjdWNKb1ZRTHNJMmllWWgvbTRjckFlZjIvRG41YW1Wa3I4WldCZnc9PTo6fgHQNJQZ1tzhN6ljdKDZtg==',
+                    }, function (response, status, xhr) {
+                    var config_sum_total = "1";
+                    if(config_sum_total == "1"){
+                        var filter = {
+                            q:'eydhJzonYVBCQicsICdtJzonbU1vbml0b3JpbmdXaWxheWFoVjMnLCAncyc6JzIzJywndWlkJzondTQ2OCd9',
+                            funcMode: 'M1h0SlVmejB6Q2tZRVFXWWtyell5NmhFejZiVnVBYmxSdyt4WW5xRGtIVzBsaUhnam1LTWlPV1c4Z3p5MHg5VEFFZUNqaUNyV2RIbW11bVoxbmJNSkE9PTo6dMww/ZOX-w57MHH9xDyVTA==',
+                        }
+                    }
+                if (status == "error") {}
+            });
+        }
+</script>
+<script>
+        function fetchMerchant() {}
+
+        function showModelRealisasi1() {
+            var bukuMin             = $("#src-buku-realisasi-min").val();
+            var bukuMax             = $("#src-buku-realisasi-max").val();
+            var tahun               = $("#tahun-pajak-realisasi").val();
+            var tahun2              = $("#tahun-pajak-realisasi-2").val();
+            var kecamatan           = $("#kecamatan-realisasi").val();
+            var kelurahan 	        = $("#kelurahan-realisasi").val();
+            var namakec             = $("#kecamatan-realisasi option:selected").text();
+            var namakel 	        = $("#kelurahan-realisasi option:selected").text();
+            var eperiode            = $("#tgl-pembayaran").val();
+            var eperiode2           = $("#tgl-pembayaran-2").val();
+            var tgl_pelimpahan      = $("#tgl-pelimpahan").val();
+            var tgl_pelimpahan_2    = $("#tgl-pelimpahan-2").val();
+            var tgl_cutoff          = $("#tgl-cutoff").val();
+            var bank                = $("#bank-realisasi").val();
+            var merchant            = $("#merchant").val();
+            var mitrabank           = $('#mitra-bank-realisasi').val();
+            var sts                 = 1;
+            var query = "Realisasi";
+
+            if(tahun != "" && tahun2 == "" || tahun2 != "" && tahun == ""){
+                alert('silakan pilih Tahun !');
+                return false;
+            }
+
+            if(tgl_pelimpahan != "" && tgl_pelimpahan_2 == "" || tgl_pelimpahan_2 != "" && tgl_pelimpahan == ""){
+                alert('silakan pilih Tanggal Pelimpahan !');
+                return false;
+            }
+
+            if(eperiode=='' || eperiode2==''){
+                alert("Silahkan Isi Tanggal Pembayaran");
+                return false;
+            }
+
+            if(tgl_cutoff==''){
+                alert("Silahkan Isi Tanggal Cuttoff");
+                return;
+            }
+
+
+            $("#monitoring-content-realisasi-1").html("loading ...");
+            $("#monitoring-content-realisasi-1").load("main.php?q=eydhJzonYVBCQicsICdtJzonbU1vbml0b3JpbmdXaWxheWFoVjMnLCAncyc6JzMnLCd1aWQnOid1NDY4Jywnc3JjaCc6Jyd9",
+                    {
+                        query:query,
+                        bk_min: bukuMin,
+                        bk_max: bukuMax,
+                        th: tahun,
+                        th2: tahun2,
+                        st: sts,
+                        kc: kecamatan,
+                        n: namakec,
+                        kl: kelurahan,
+                        nl: namakel,
+                        eperiode: eperiode,
+                        eperiode2: eperiode2,
+                        tgl_pelimpahan: tgl_pelimpahan,
+                        tgl_pelimpahan_2: tgl_pelimpahan_2,
+                        tgl_cutoff: tgl_cutoff,
+                        bank: bank,
+                        merchant: merchant,
+                        mitrabank: mitrabank,
+                        target_ketetapan: 'semua',
+                        exp:"", //jangan export
+                        LBL_KEL: LBL_KEL,
+                        funcMode: 'U1hGWldua3dtU1JhVEtnRjBzNk1pcS96aW95MGswTkxsR3NJdkowei84QnZ0NXlCdThSaXRRai91akNvc0draEF0QXluVHVIa3JCVWdaT1ZkalpwbVFKYTBQelpxeUt1UmdId3FudGorWnM9OjooG6cnSAzlOAZl/G9JYd7b',
+                    }, function (response, status, xhr) {});
+        }
+</script>
+<script>
+
+        function showModelPiutang() {
+
+            var tahunawal           = $("#tahun-pajak-piutang-awal").val();
+            var tahunakhir          = $("#tahun-pajak-piutang-akhir").val();
+            var kecamatan           = $("#kecamatan-piutang").val();
+            var kelurahan           = $("#kelurahan-piutang").val();
+            var namakec             = $("#kecamatan-piutang option:selected").text();
+            var namakel             = $("#kelurahan-piutang option:selected").text();
+            var tglawal             = $("#piutang-tgl-bayar-awal").val();
+            var tglakhir            = $("#piutang-tgl-bayar-akhir").val();
+            var tglpelimpahanawal   = $("#piutang-tgl-pelimpahan-awal").val();
+            var tglpelimpahanakhir  = $("#piutang-tgl-pelimpahan-akhir").val();
+            var tglcutoff           = $("#piutang-tgl-cutoff").val();
+            var bukumin             = $("#src-buku-piutang-min").val();
+            var bukumax             = $("#src-buku-piutang-max").val();
+            var orderby             = $("#src-orderby").val();
+            var query               = "Piutang";
+
+            var sts = 1;
+            if((bukumin == '' || bukumax == '')){
+                alert('silakan pilih buku !');
+                return false;
+            }
+
+            if(tglpelimpahanawal != "" && tglpelimpahanakhir == "" || tglpelimpahanakhir != "" && tglpelimpahanawal == ""){
+                alert('silakan pilih Tanggal Pelimpahan !');
+                return false;
+            }
+
+            if(tglawal=='' || tglakhir==''){
+                alert("Silahkan Isi Tanggal Pembayaran");
+                return false;
+            }
+
+            if(tglcutoff==''){
+                alert("Silahkan Isi Tanggal Cuttoff");
+                return;
+            }
+
+            $("#monitoring-content-piutang-1").html("loading ...");
+            $("#monitoring-content-piutang-1").load("main.php?q=eydhJzonYVBCQicsICdtJzonbU1vbml0b3JpbmdXaWxheWFoVjMnLCAncyc6JzMnLCd1aWQnOid1NDY4Jywnc3JjaCc6Jyd9",
+                    {
+                        query:query,
+                        tahunawal: tahunawal,
+                        tahunakhir: tahunakhir,
+                        st: sts,
+                        kecamatan: kecamatan,
+                        namakec: namakec,
+                        kelurahan: kelurahan,
+                        namakel: namakel,
+                        tglawal:tglawal,
+                        tglakhir:tglakhir,
+                        tglpelimpahanawal: tglpelimpahanawal,
+                        tglpelimpahanakhir: tglpelimpahanakhir,
+                        tglcutoff: tglcutoff,
+                        bukumin: bukumin,
+                        bukumax: bukumax,
+                        orderby: orderby,
+                        exp:"", //jangan export
+                        LBL_KEL: LBL_KEL,
+                        funcMode: 'WEZ0aFJlYkZQL1pBMkpKbDdCVGlXaVpuTmpaejY5aVJZV2VaSjNkbk5DZkN2UVRlZGZNZDRxN3BzSjhMQnhOcllLdmd5SmQzRUFlckw5eXBGWmZKemNSUnFCTURNYXVpQW02YmpWLzNRL289Ojq53SoAxUHfcEW1OXMyA8-Q',
+                    }, function (response, status, xhr) {});
+        }
+</script>
+<script>
+        function onSubmitSudahBayarKolektif(sts) {
+
+            var tgl_pembayaran_1 = $('#tgl-pembayaran-awal-kolektif-'+sts).val();
+            var tgl_pembayaran_2 = $('#tgl-pembayaran-akhir-kolektif-'+sts).val();
+            var kode_bayar_kolektif = $('#kode-bayar-kolektif-tk-'+sts).val();
+            var nama_grup = $('#nama-grup-kolektif-'+sts).val();
+            var nama_kolektor = $('#nama-kolektor-kolektif-'+sts).val();
+            var tgl_cutoff_belum_bayar = $('#tgl-cutoff-belum-bayar-'+sts).val();
+            var tgl_cutoff_kadaluarsa = $('#tgl-cutoff-kadaluarsa-'+sts).val();
+            var kecamatan           = $("#kecamatan-kolektif-sudah-bayar").val();
+            var kelurahan           = $("#kelurahan-kolektif-sudah-bayar").val();
+            var query               = "Sudah_Bayar_Kolektif";
+
+            if(tgl_pembayaran_1=='' || tgl_pembayaran_2==''){
+                alert("Silahkan Isi Tanggal Pembayaran");
+                return false;
+            }
+
+            $("#monitoring-content-kolektif-" + sts).html("loading ...");
+            var svc = "";
+            $("#monitoring-content-kolektif-" + sts).load("main.php?q=eydhJzonYVBCQicsICdtJzonbU1vbml0b3JpbmdXaWxheWFoVjMnLCAncyc6JzIzJywndWlkJzondTQ2OCd9",
+                    {
+                        query:query,
+                        tgl_pembayaran_1: tgl_pembayaran_1,
+                        tgl_pembayaran_2: tgl_pembayaran_2,
+                        nama_grup: nama_grup,
+                        nama_kolektor: nama_kolektor,
+                        kc:kecamatan,
+                        kl:kelurahan,
+                        kode_bayar_kolektif: kode_bayar_kolektif,
+                        tgl_cutoff_belum_bayar: tgl_cutoff_belum_bayar,
+                        tgl_cutoff_kadaluarsa: tgl_cutoff_kadaluarsa,
+                        st: sts,
+                        exp:"", //jangan export
+                        LBL_KEL: LBL_KEL,
+                        ADMIN_SW_DBNAME: ADMIN_SW_DBNAME,
+                        funcMode: 'NUlOVnd6aGFRUFRIVHB6OHJHcElXRkJWMkhKQ2lUMWdmbXgyWjN0bjhiWTJUb21kQnRSYWIwRVRWV040alQ5R09FNWVsNzNxZ1ZIMGpqWk1TWXNudmEvTlJLTSt2cVJodjIxTWF0cmlNTVU9OjovX2u2dnJ39siOdqA4fmKY',
+                    }, function (response, status, xhr) {});
+        }
+</script>
+<script>
+        function onSubmitBelumBayarKolektif(sts) {
+
+            var tgl_pembayaran_1 = $('#tgl-pembayaran-awal-kolektif-'+sts).val();
+            var tgl_pembayaran_2 = $('#tgl-pembayaran-akhir-kolektif-'+sts).val();
+            var kode_bayar_kolektif = $('#kode-bayar-kolektif-tk-'+sts).val();
+            var nama_grup = $('#nama-grup-kolektif-'+sts).val();
+            var nama_kolektor = $('#nama-kolektor-kolektif-'+sts).val();
+            var tgl_cutoff_belum_bayar = $('#tgl-cutoff-belum-bayar-'+sts).val();
+            var tgl_cutoff_kadaluarsa = $('#tgl-cutoff-kadaluarsa-'+sts).val();
+            var kecamatan           = $("#kecamatan-kolektif-belum-bayar").val();
+            var kelurahan           = $("#kelurahan-kolektif-belum-bayar").val();
+            var query = "Belum_Bayar_Kolektif";
+
+            if(tgl_pembayaran_1=='' || tgl_pembayaran_2==''){
+                alert("Silahkan Isi Tanggal Pembayaran");
+                return false;
+            }
+
+            if(tgl_cutoff_belum_bayar==''){
+                alert("Silahkan Isi Tanggal Cuttoff Belum Bayar");
+                return;
+            }
+
+            if(tgl_cutoff_kadaluarsa==''){
+                alert("Silahkan Isi Tanggal Cuttoff Kadaluarsa");
+                return;
+            }
+
+
+            $("#monitoring-content-kolektif-" + sts).html("loading ...");
+            var svc = "";
+            $("#monitoring-content-kolektif-" + sts).load("main.php?q=eydhJzonYVBCQicsICdtJzonbU1vbml0b3JpbmdXaWxheWFoVjMnLCAncyc6JzIzJywndWlkJzondTQ2OCd9",
+                    {
+                        query: query,
+                        tgl_pembayaran_1: tgl_pembayaran_1,
+                        tgl_pembayaran_2: tgl_pembayaran_2,
+                        nama_grup: nama_grup,
+                        nama_kolektor: nama_kolektor,
+                        kode_bayar_kolektif: kode_bayar_kolektif,
+                        tgl_cutoff_belum_bayar: tgl_cutoff_belum_bayar,
+                        tgl_cutoff_kadaluarsa: tgl_cutoff_kadaluarsa,
+                        st: sts,
+                        kc: kecamatan,
+                        kl: kelurahan,
+                        exp:"", //jangan export
+                        LBL_KEL: LBL_KEL,
+                        funcMode: 'K04yZlJDak5VM3RJRmR2QkhrYmgzS3h1enNrNE9ZdnhDYXRyajlPN3MrRUJNU1dRT3hUS3ZFRE5WSWdzRHRNSjI4U1BVa0ZLbnBrZGZhSTdSRVRFVGZhTWxXVFgxYzdlOWVRVHViVlYvTlU9OjoLmJdAc753GIv3R5sGBTmS',
+                    }, function (response, status, xhr) {});
+        }
+</script>
+<script>
+
+        function showRangkingRealisasi() {
+                var tahun 		= "";
+                var kecamatan 	= $("#kecamatan-rangking-realisasi").val();
+                var kelurahan 	= $("#kelurahan-rangking-realisasi").val();
+                var namakec 	= $("#kecamatan-rangking-realisasi option:selected").text();
+				var namakel 	= $("#kelurahan-rangking-realisasi option:selected").text();
+				var e_periode 	= "";
+                var sts 		= 1;
+                var bukuFilter 	= $("#src-bukuFilters-1").val();
+                var query = "Ranking_Realisasi";
+
+                    $("#monitoring-content-rangking-realisasi").html("loading ...");
+                    $("#monitoring-content-rangking-realisasi").load("main.php?q=eydhJzonYVBCQicsICdtJzonbU1vbml0b3JpbmdXaWxheWFoVjMnLCAncyc6JzUnLCd1aWQnOid1NDY4Jywnc3JjaCc6Jyd9",
+                    {query:query,th:tahun,st:sts,kc:kecamatan,kl:kelurahan,n:namakec,bukuFilter:bukuFilter,eperiode:e_periode,
+                        funcMode: 'cEtMaTNGUTR3djQ3SzNlcy9uRUNMSFZ2dnoxcVR0OXdWVlphTUhkRlFFL3dlL1ozbWNGaEVTYlpOVmszR2Q3VDNJbkxvbUxJanQzeDd5UFp0TnZ4WVc2T1BxZ2QwVWo4Zm56MnExUnkxM1g1Umk0RXV1VVRXakl2SE94bmtESks6OmeRbdZ6MeizJwX71QoXnWk='
+                    },function(response, status, xhr) {});
+        }
+</script>
+<script>
+        var LBL_KEL = 'Desa/Kelurahan';
+
+        function showBank() {
+            var config_filter_bank = '1';
+            var request = $.ajax({
+                url: "main.php",
+                type: "POST",
+				data: "q=eydhJzonYVBCQicsICdtJzonbU1vbml0b3JpbmdXaWxheWFoVjMnLCAncyc6JzIzJywndWlkJzondTQ2OCd9" +"&config_filter_bank=" + config_filter_bank + "&funcMode=" + 'cDRRR09lWTJZdW5KRmRmdkNkT3NlZnB0YnhRVmZLaUVIZjF6Wnp1UDZKTVN5aGRIaHNoMUpNZVVIYmcwOW5iWHpuMjBLaStNQWorK0pCV3hua1dHQUE9PTo65qP8Gx836M7SHl0j6L3BMA==',
+                dataType: "json",
+                success: function (data) {}
+            });
+
+        }
+</script>
+</body></html>

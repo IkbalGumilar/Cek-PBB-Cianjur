@@ -6,7 +6,10 @@ import 'blok_data_store.dart';
 import 'check_form_view.dart';
 import 'check_mode.dart';
 import 'import_view.dart';
+import 'monitoring_hub_screen.dart';
 import 'operator_mode_store.dart';
+import 'staff_login_screen.dart';
+import 'staff_portal_client.dart';
 import 'theme_controller.dart';
 import 'update_checker.dart';
 import 'update_screen.dart';
@@ -126,6 +129,32 @@ class _MainShellState extends State<MainShell> {
     setState(() => _view = _ActiveView.import);
   }
 
+  // Menu "Monitoring" di header — beda dari chip Cek Tagihan/Cek Status
+  // Bayar (yang cuma ganti tampilan inline), ini navigasi ke alur login +
+  // MFA Portal Staf, lalu (kalau berhasil) ke MonitoringHubScreen. Sesi
+  // login disimpan ke berkas (lihat StaffPortalClient), jadi di sini dicek
+  // dulu apakah sesi lama masih aktif — kalau iya langsung ke
+  // MonitoringHubScreen tanpa login ulang.
+  Future<void> _openMonitoring() async {
+    final client = StaffPortalClient();
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+    final alreadyLoggedIn = await client.hasActiveSession();
+    if (!mounted) return;
+    Navigator.pop(context); // tutup dialog loading
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => alreadyLoggedIn
+            ? MonitoringHubScreen(client: client, themeController: widget.themeController)
+            : StaffLoginScreen(client: client, themeController: widget.themeController),
+      ),
+    );
+  }
+
   void _backToCheck() {
     setState(() => _view = _ActiveView.check);
   }
@@ -154,6 +183,7 @@ class _MainShellState extends State<MainShell> {
         onModeChanged: _changeMode,
         themeController: widget.themeController,
         isOperator: _isOperator,
+        onMonitoringPressed: _openMonitoring,
       ),
       body: _view == _ActiveView.check
           ? CheckFormView(

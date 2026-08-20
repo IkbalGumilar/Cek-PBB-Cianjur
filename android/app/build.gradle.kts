@@ -22,7 +22,9 @@ if (keystorePropertiesFile.exists()) {
 
 android {
     namespace = "id.cianjur.cekpbb.cek_pbb_app"
-    compileSdk = flutter.compileSdkVersion
+    // flutter_secure_storage butuh compileSdk 37+ — flutter.compileSdkVersion
+    // (bawaan Flutter) masih 36, jadi di-override manual.
+    compileSdk = 37
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

@@ -52,6 +52,7 @@ dependencies:
   connectivity_plus: ^7.3.1
   encrypt: ^5.0.3
   crypto: ^3.0.6
+  flutter_secure_storage: ^11.0.0
 
 dev_dependencies:
   flutter_test:

@@ -1,0 +1,29 @@
+<!-- Fixture: potongan <script> asli dari halaman Pembayaran Kolektif yang
+     dikirim pengguna (main.php?param=YT1hUEJCJm09bTE3OQ==). Sama seperti
+     fixture Monitoring Wilayah — hanya bagian <script> yang relevan untuk
+     ekstraksi token, disalin verbatim dari halaman aslinya. -->
+<html><body>
+<script type="text/javascript">
+var IS_ADMIN = '0' == 1;
+var DEFAULT_KECAMATAN = '';
+var DEFAULT_KELURAHAN = '';
+if (DEFAULT_KELURAHAN != '') DEFAULT_KECAMATAN = '3205200';
+
+var q = 'eydhJzonYVBCQicsICdtJzonbTE3OScsICd1JzonTUFOREVfQk9CT0pPTkcnLCAndWlkJzondTQ2OCd9';
+
+function reloadDataGroup(){
+    if (myTable){
+      var search = myTable.search();
+            myTable.destroy();
+          }
+          var funcMode = 'OUdObTJ0OHhFeC8vYW10NTNtZFY3QjlyOHpQYjA4SHMxYlhzUm5lTXRXNWRCWTB1V2djRENnZVRQMnJhMThQNVk1TDE4bG5jQnV6czUyWVVNK2F2MXc9PTo6TgKXPGtZPWED62APtMML1Q==';
+          $(".loader").show();
+          myTable =  $('#myTable').DataTable({
+            "processing": true,
+            "serverSide": true,
+            "ajax" : "main.php?userID=u468&bulan=" + document.getElementById('bulan-group').value +"&status="+ document.getElementById('status-payment').value +"&kec="+ document.getElementById('kecamatan-group-sch').value +"&kel="+ document.getElementById('kelurahan-group-sch').value+"&tahun="+ document.getElementById('tahun-group-sch').value+"&tgl1="+ document.getElementById('tgl1-group-sch').value+"&tgl2="+ document.getElementById('tgl2-group-sch').value+"&funcMode="+ funcMode,
+            "order": [[ 11, "desc" ]],
+          });
+}
+</script>
+</body></html>

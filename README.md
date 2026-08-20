@@ -24,6 +24,7 @@ Aplikasi untuk membantu staf desa/kelurahan di Kabupaten Cianjur mengecek dan me
 - **Cek Massal (Import)** — cek banyak NOP sekaligus dari teks tempel atau berkas (.txt/.csv/.xlsx/.xls), hasil pembayaran otomatis tercatat ke Buku Catatan Blok
 - **Buku Catatan Blok** — rekap pembayaran per blok/wilayah kerja, dengan filter tahun & urutan, cetak ulang bukti bayar, hapus baris yang salah tercatat, total otomatis, dan ekspor ke PDF/Excel/CSV
 - **Backup harian otomatis** — kalau ada data baru, dibackup otomatis setiap hari ke berkas terenkripsi
+- **Monitoring (Portal Staf)** — khusus staf berakun Portal Staf (`cianjurkab.v-tax.id`): login + verifikasi MFA, lihat Monitoring Wilayah (Sudah/Belum Bayar, Realisasi, Piutang, Sudah/Belum Bayar Kolektif, Rangking Realisasi) dan daftar Pembayaran Kolektif, dengan hasil yang bisa diunduh/dibagikan/dicetak sebagai PDF/Excel/CSV — lihat [Monitoring (Portal Staf)](#8-monitoring-portal-staf)
 - **Periksa Pembaruan dalam aplikasi** — cek versi terbaru dari rilis GitHub lengkap dengan catatan pembaruannya, lihat [Pembaruan Aplikasi](#pembaruan-aplikasi)
 - Semua dokumen (hasil cek, bukti bayar, laporan, backup) tersimpan di satu folder: `Dokumen/Cek PBB Cianjur` (Android) atau `Downloads/Cek PBB Cianjur` (Windows/Linux)
 
@@ -87,6 +88,31 @@ Ikon roda gigi di header membuka Pengaturan, berisi:
 
 Aplikasi memantau koneksi internet dan kesehatan server portal PBB secara berkala. Kalau ada masalah (tidak ada internet, internet lambat, atau server sedang bermasalah), muncul pil peringatan mengambang di bagian atas layar secara otomatis.
 
+### 8. Monitoring (Portal Staf)
+
+Chip **Monitoring** di header membuka portal staf terpisah (`cianjurkab.v-tax.id`) — beda dari Cek Tagihan/Cek Status Bayar yang publik tanpa login, menu ini khusus untuk staf yang punya akun Portal Staf.
+
+**Login & Verifikasi MFA**
+
+1. Login pertama: isi **Username**, **Password**, dan kode **captcha** yang tampil, lalu tekan **Login**.
+2. Kalau kredensial & captcha benar, lanjut ke layar **Verifikasi MFA** — masukkan kode 6 digit dari aplikasi Google Authenticator. Di bawah kolom kode ada tile "Cara Memasukkan Kode Dengan Google Authenticator" yang menampilkan ikon Google Authenticator asli (kalau aplikasinya terpasang di perangkat) dan bisa ditekan untuk langsung membuka aplikasi itu; kalau belum terpasang, tile ini membuka halaman Play Store-nya.
+3. Setelah verifikasi berhasil, sesi login tersimpan di perangkat — buka aplikasi dan tekan Monitoring lagi lain kali tidak perlu login ulang selama sesi di server belum berakhir. Tekan ikon **Keluar** di layar Monitoring untuk logout manual.
+4. Username & password tersimpan otomatis setelah login pertama berhasil (bukan sejak awal) — login kedua dan seterusnya kolom Username/Password sudah terisi sendiri, tinggal isi captcha & kode MFA saja.
+
+**Monitoring Wilayah** — 7 tab meniru modul asli, field per tab dicocokkan langsung dengan nama field aslinya. Wilayah otomatis mengikuti akun staf yang login (tidak perlu pilih kecamatan/kelurahan sendiri):
+
+- **Sudah Bayar** — filter rentang Tanggal Pembayaran (default 30 hari terakhir), Tahun Pajak, Buku, Bank, NOP, Nama WP, Petugas Pembayaran, Kode Bayar Individu/Kolektif, VA, QRIS.
+- **Belum Bayar** — filter Tanggal Cutoff (menghitung semua piutang belum bayar sampai tanggal tersebut — butuh waktu lebih lama dari tab lain karena tidak ada batas tanggal awal), Tahun Pajak, Buku, NOP, Nama WP, Kode Bayar.
+- **Realisasi**, **Piutang**, **Sudah Bayar Kolektif**, **Belum Bayar Kolektif**, **Rangking Realisasi** — field masing-masing tab sama persis dengan modul aslinya.
+
+Hasil tabel setiap tab ditampilkan 10 baris dulu, dengan tombol **Muat 10 Data Lagi** untuk menambah tampilan bertahap (supaya hasil dengan ratusan/ribuan baris tidak langsung dirender semua sekaligus). Di atas tabel ada tiga ikon aksi:
+
+- **Unduh** — simpan hasil ke folder Dokumen dalam format PDF/Excel/CSV pilihan Anda.
+- **Bagikan** *(khusus Android)* — kirim langsung lewat share sheet dalam format yang sama.
+- **Cetak** — buka pratinjau PDF hasilnya, bisa langsung dicetak/dibagikan/diunduh dari layar pratinjau itu.
+
+**Pembayaran Kolektif** — daftar grup pembayaran kolektif (read-only): filter Bulan, Status, Tahun, Tanggal Awal/Akhir. Menu ini sengaja belum punya Tambah/Ubah/Hapus Group, Kelola Anggota, Finalkan, atau Generate VA — semua itu mengubah data pembayaran asli di server pemerintah, jadi belum dibuat sampai ada kebutuhan & konfirmasi lebih lanjut.
+
 ## Pembaruan Aplikasi
 
 Aplikasi bisa mengecek versi terbaru langsung dari [halaman rilis GitHub repo ini](https://github.com/IkbalGumilar/Cek-PBB-Cianjur/releases/latest) — lewat menu **Pengaturan → Tentang Aplikasi → Periksa Pembaruan**, atau otomatis setiap aplikasi dibuka (maksimal sekali per 24 jam, muncul sebagai banner kecil kalau ada versi baru).
@@ -117,7 +143,7 @@ Deteksi versi & catatan pembaruan (log "apa yang ditambahkan/diperbaiki/dihapus"
 
 - [Flutter](https://flutter.dev/) / Dart — Android, Windows, Linux
 - Kode native Kotlin (`android/app/src/main/kotlin/.../MainActivity.kt`, khusus Android) untuk: penyimpanan berkas ke folder publik, share berkas, deteksi & buka aplikasi bank/e-wallet, ambil ikon aplikasi asli dari sistem, dan buka installer sistem untuk pembaruan
-- Package penting: `dio` + `cookie_jar` (sesi HTTP ke portal resmi & pengecekan rilis GitHub), `html` (parsing respons HTML), `pdf` + `printing`, `excel`, `csv`, `file_picker`, `shared_preferences`, `package_info_plus`, `connectivity_plus`, `url_launcher`
+- Package penting: `dio` + `cookie_jar` (sesi HTTP ke portal resmi, portal staf & pengecekan rilis GitHub — sesi login Portal Staf tersimpan ke berkas supaya bertahan lewat restart aplikasi), `flutter_secure_storage` (kredensial Portal Staf tersimpan aman di perangkat), `html` (parsing respons HTML), `pdf` + `printing`, `excel`, `csv`, `file_picker`, `shared_preferences`, `package_info_plus`, `connectivity_plus`, `url_launcher`
 
 ## Build
 
