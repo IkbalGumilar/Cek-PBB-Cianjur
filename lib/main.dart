@@ -11,7 +11,38 @@ import 'network_status_overlay.dart';
 import 'theme_controller.dart';
 
 void main() {
-  runApp(const CekPbbApp());
+  runApp(const RestartWidget(child: CekPbbApp()));
+}
+
+/// Bungkus seluruh aplikasi supaya bisa "direstart" tanpa mematikan proses
+/// native — dipakai saat Mode Operator baru diaktifkan (lihat
+/// license_screen.dart), supaya semua state (WilayahKerjaStore,
+/// OperatorModeStore, dst) dibaca ulang dari awal seolah aplikasi baru
+/// dibuka. Mengganti [_key] membuang seluruh subtree lama termasuk state-nya.
+class RestartWidget extends StatefulWidget {
+  final Widget child;
+
+  const RestartWidget({super.key, required this.child});
+
+  static void restartApp(BuildContext context) {
+    context.findAncestorStateOfType<_RestartWidgetState>()?._restart();
+  }
+
+  @override
+  State<RestartWidget> createState() => _RestartWidgetState();
+}
+
+class _RestartWidgetState extends State<RestartWidget> {
+  Key _key = UniqueKey();
+
+  void _restart() {
+    setState(() => _key = UniqueKey());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return KeyedSubtree(key: _key, child: widget.child);
+  }
 }
 
 class CekPbbApp extends StatefulWidget {

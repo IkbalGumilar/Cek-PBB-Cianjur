@@ -1,19 +1,21 @@
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
 import 'blok_data_store.dart';
 import 'blok_record.dart';
-import 'blok_whitelist_store.dart';
 import 'check_mode.dart';
 import 'document_preview_screen.dart';
 import 'nop_helper.dart';
+import 'operator_mode_store.dart';
 import 'pbb_client.dart';
 import 'qris_result.dart';
 import 'qris_view_screen.dart';
 import 'tagihan_result.dart';
 import 'va_result.dart';
 import 'va_view_screen.dart';
+import 'wilayah_kerja_store.dart';
 
 class CheckFormView extends StatefulWidget {
   final CheckMode mode;
@@ -109,16 +111,6 @@ class _CheckFormViewState extends State<CheckFormView> {
       return;
     }
 
-    final blok = nopBlok(nop);
-    if (!await BlokWhitelistStore.instance.isDecided(blok)) {
-      if (!mounted) return;
-      final included = await _confirmWilayahKerja(blok);
-      if (included != null) {
-        await BlokWhitelistStore.instance.decide(blok, included);
-      }
-    }
-    if (!mounted) return;
-
     setState(() {
       _submitting = true;
       _errorText = null;
@@ -131,13 +123,7 @@ class _CheckFormViewState extends State<CheckFormView> {
         final result = await _client.checkStatusBayar(nop: nop, tahun: tahun, captchaCode: captcha);
         setState(() => _statusBayarResult = result);
         if (result.status.startsWith('Sudah Bayar')) {
-          await BlokDataStore.instance.upsert(BlokRecord(
-            nop: nop,
-            namaWajibPajak: result.namaWajibPajak ?? '',
-            tahunBayar: tahun,
-            tanggalBayar: result.tanggalBayar ?? '',
-            jumlahPbb: result.jumlahPbb ?? '',
-          ));
+          await _recordIfInWilayah(nop: nop, tahun: tahun, result: result);
         }
       } else {
         final result = await _client.checkTagihan(nop: nop, captchaCode: captcha);
@@ -159,24 +145,51 @@ class _CheckFormViewState extends State<CheckFormView> {
     }
   }
 
-  /// Tanya sekali per blok apakah blok ini termasuk wilayah kerja user
-  /// perangkat ini — dipakai untuk menyaring "Buku Catatan Blok" karena tidak
-  /// semua user bertugas di blok yang sama. Jawaban Ya/Tidak sama-sama
-  /// disimpan (supaya tidak ditanyakan lagi); null hanya kalau dialog
-  /// tertutup tanpa jawaban (mis. tombol back).
-  Future<bool?> _confirmWilayahKerja(String blok) {
-    return showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        title: Text('Blok ${int.parse(blok)}'),
-        content: const Text('Apakah blok ini termasuk wilayah kerja Anda?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Tidak')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Ya')),
-        ],
-      ),
-    );
+  /// Catat hasil "Sudah Bayar" ke Buku Catatan Blok kalau blok-nya termasuk
+  /// wilayah kerja yang sedang dipilih (lihat WilayahKerjaStore). Kalau belum
+  /// ada wilayah kerja dipilih sama sekali, diam-diam tidak dicatat (memang
+  /// pilihan user untuk tidak menyimpan riwayat). Kalau sudah ada wilayah
+  /// kerja tapi blok ini di luar itu, beri tahu lewat dialog lalu tetap tidak
+  /// dicatat — pengecekan & pembayaran sendiri tidak terpengaruh sama sekali.
+  ///
+  /// Mode Operator melewati semua pengecekan wilayah ini — operator menerima
+  /// laporan dari semua dusun, jadi semua blok otomatis dicatat.
+  Future<void> _recordIfInWilayah({
+    required String nop,
+    required String tahun,
+    required PbbResult result,
+  }) async {
+    final isOperator = await OperatorModeStore.instance.isEnabled();
+    if (!isOperator) {
+      final dusun = await WilayahKerjaStore.instance.selectedDusun();
+      if (dusun == null) return;
+
+      final blok = nopBlok(nop);
+      final wilayahBloks = await WilayahKerjaStore.instance.whitelistedBloks();
+      if (!wilayahBloks.contains(blok)) {
+        if (!mounted) return;
+        await showDialog<void>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Blok Bukan Wilayah Anda'),
+            content: const Text(
+              'Blok ini tidak termasuk wilayah kerja Anda, jadi hasil cek ini tidak akan dicatat '
+              'ke Buku Catatan Blok. Pengecekan & pembayaran tetap bisa dilanjutkan seperti biasa.',
+            ),
+            actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Mengerti'))],
+          ),
+        );
+        return;
+      }
+    }
+
+    await BlokDataStore.instance.upsert(BlokRecord(
+      nop: nop,
+      namaWajibPajak: result.namaWajibPajak ?? '',
+      tahunBayar: tahun,
+      tanggalBayar: result.tanggalBayar ?? '',
+      jumlahPbb: result.jumlahPbb ?? '',
+    ));
   }
 
   @override
@@ -554,14 +567,16 @@ class _TagihanResultCard extends StatelessWidget {
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: DataTable(
-                columns: const [
-                  DataColumn(label: Text('Tahun')),
-                  DataColumn(label: Text('PBB')),
-                  DataColumn(label: Text('Denda')),
-                  DataColumn(label: Text('Kurang Bayar')),
-                  DataColumn(label: Text('Status')),
-                  DataColumn(label: Text('QRIS')),
-                  DataColumn(label: Text('VA')),
+                // VA hanya lewat aplikasi bank di HP (butuh channel native
+                // Android) — di Windows/Linux pembayaran cuma lewat QRIS.
+                columns: [
+                  const DataColumn(label: Text('Tahun')),
+                  const DataColumn(label: Text('PBB')),
+                  const DataColumn(label: Text('Denda')),
+                  const DataColumn(label: Text('Kurang Bayar')),
+                  const DataColumn(label: Text('Status')),
+                  const DataColumn(label: Text('QRIS')),
+                  if (Platform.isAndroid) const DataColumn(label: Text('VA')),
                 ],
                 rows: result.rows
                     .map((r) => DataRow(cells: [
@@ -576,14 +591,15 @@ class _TagihanResultCard extends StatelessWidget {
                               child: const Text('Bayar QRIS'),
                             ),
                           ),
-                          DataCell(
-                            r.paymentCodeVa == null
-                                ? const Text('-')
-                                : FilledButton(
-                                    onPressed: () => _payWithVa(context, r),
-                                    child: const Text('Bayar VA'),
-                                  ),
-                          ),
+                          if (Platform.isAndroid)
+                            DataCell(
+                              r.paymentCodeVa == null
+                                  ? const Text('-')
+                                  : FilledButton(
+                                      onPressed: () => _payWithVa(context, r),
+                                      child: const Text('Bayar VA'),
+                                    ),
+                            ),
                         ]))
                     .toList(),
               ),

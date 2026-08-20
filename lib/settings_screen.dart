@@ -1,14 +1,22 @@
+import 'dart:io';
+
 import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'apk_share_helper.dart';
 import 'blok_data_store.dart';
-import 'blok_whitelist_store.dart';
+import 'license_screen.dart';
+import 'operator_mode_store.dart';
 import 'theme_controller.dart';
+import 'update_checker.dart';
+import 'update_screen.dart';
+import 'wilayah_kerja_picker.dart';
+import 'wilayah_kerja_store.dart';
 
 const _githubUsername = 'IkbalGumilar';
 final _githubProfileUrl = Uri.parse('https://github.com/$_githubUsername');
@@ -168,13 +176,21 @@ class _BlokDataSection extends StatefulWidget {
 class _BlokDataSectionState extends State<_BlokDataSection> {
   bool _busy = false;
   int? _totalCount;
-  Set<String>? _whitelist;
+  int? _selectedDusun;
+  bool _isOperator = false;
 
   @override
   void initState() {
     super.initState();
     _refreshCount();
-    _loadWhitelist();
+    _loadDusun();
+    _loadOperatorStatus();
+  }
+
+  Future<void> _loadOperatorStatus() async {
+    final isOperator = await OperatorModeStore.instance.isEnabled();
+    if (!mounted) return;
+    setState(() => _isOperator = isOperator);
   }
 
   Future<void> _refreshCount() async {
@@ -183,21 +199,66 @@ class _BlokDataSectionState extends State<_BlokDataSection> {
     setState(() => _totalCount = count);
   }
 
-  Future<void> _loadWhitelist() async {
-    final whitelist = await BlokWhitelistStore.instance.loadWhitelist();
+  Future<void> _loadDusun() async {
+    final dusun = await WilayahKerjaStore.instance.selectedDusun();
     if (!mounted) return;
-    setState(() => _whitelist = whitelist);
+    setState(() => _selectedDusun = dusun);
   }
 
-  Future<void> _toggleBlok(String blok, bool included) async {
-    setState(() {
-      if (included) {
-        _whitelist!.add(blok);
-      } else {
-        _whitelist!.remove(blok);
+  /// Ganti wilayah kerja. Kalau sudah ada data Buku Catatan Blok tersimpan
+  /// (dari wilayah sebelumnya), tanya dulu mau di-backup atau langsung
+  /// dihapus — data lama sudah tidak relevan untuk wilayah yang baru.
+  Future<void> _changeWilayah() async {
+    final chosen = await pickDusunDialog(context, allowSkip: false, currentDusun: _selectedDusun);
+    if (chosen == null || chosen == _selectedDusun) return;
+
+    final hasData = (_totalCount ?? 0) > 0;
+    if (!hasData) {
+      await WilayahKerjaStore.instance.setSelectedDusun(chosen);
+      if (!mounted) return;
+      setState(() => _selectedDusun = chosen);
+      return;
+    }
+
+    if (!mounted) return;
+    final action = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Ganti Wilayah Kerja?'),
+        content: const Text(
+          'Mengganti wilayah kerja akan menghapus semua data Buku Catatan Blok yang tersimpan '
+          'sekarang (data lama sudah tidak relevan untuk wilayah yang baru).',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, 'batal'), child: const Text('Batal')),
+          TextButton(onPressed: () => Navigator.pop(ctx, 'ganti'), child: const Text('Ganti Saja')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, 'backup'), child: const Text('Backup Dulu')),
+        ],
+      ),
+    );
+    if (action == null || action == 'batal') return;
+
+    setState(() => _busy = true);
+    try {
+      if (action == 'backup') {
+        await BlokDataStore.instance.exportCsv();
       }
-    });
-    await BlokWhitelistStore.instance.decide(blok, included);
+      await BlokDataStore.instance.clearAll();
+      await WilayahKerjaStore.instance.setSelectedDusun(chosen);
+      await _refreshCount();
+      if (!mounted) return;
+      setState(() => _selectedDusun = chosen);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Wilayah kerja diganti ke Dusun $chosen.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal mengganti wilayah kerja: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   Future<void> _exportBackup() async {
@@ -219,21 +280,27 @@ class _BlokDataSectionState extends State<_BlokDataSection> {
   }
 
   Future<void> _importRestore() async {
-    final files = await FilePicker.pickFiles(type: FileType.custom, allowedExtensions: ['csv']);
+    final files = await FilePicker.pickFiles(type: FileType.custom, allowedExtensions: ['bak', 'csv']);
     if (files.isEmpty || files.first.path == null) return;
 
     if (!mounted) return;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Impor Data Blok?'),
+        title: Text(_isOperator ? 'Terima Laporan Dusun?' : 'Impor Data Blok?'),
         content: Text(
-          'Data dari "${files.first.name}" akan digabungkan dengan data blok yang sudah '
-          'ada di aplikasi ini (baris dengan NOP+tahun yang sama akan ditimpa).',
+          _isOperator
+              ? 'Laporan dari "${files.first.name}" akan digabungkan ke data operator (baris dengan '
+                  'NOP+tahun yang sama akan ditimpa).'
+              : 'Data dari "${files.first.name}" akan digabungkan dengan data blok yang sudah '
+                  'ada di aplikasi ini (baris dengan NOP+tahun yang sama akan ditimpa).',
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Impor')),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(_isOperator ? 'Terima' : 'Impor'),
+          ),
         ],
       ),
     );
@@ -278,44 +345,57 @@ class _BlokDataSectionState extends State<_BlokDataSection> {
             contentPadding: EdgeInsets.zero,
             leading: const Icon(Icons.upload_outlined),
             title: const Text('Ekspor Data (Backup)'),
-            subtitle: const Text('Simpan semua data blok ke berkas CSV di folder Dokumen.'),
+            subtitle: const Text(
+              'Simpan semua data blok ke berkas backup terenkripsi (.bak) di folder Dokumen — '
+              'hanya bisa dibuka kembali oleh wilayah/mode ini sendiri.',
+            ),
             trailing: const Icon(Icons.chevron_right),
             enabled: !_busy,
             onTap: _exportBackup,
           ),
           ListTile(
             contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.download_outlined),
-            title: const Text('Impor Data (Restore)'),
-            subtitle: const Text('Muat data blok dari berkas CSV backup.'),
+            leading: Icon(_isOperator ? Icons.inbox_outlined : Icons.download_outlined),
+            title: Text(_isOperator ? 'Terima Laporan Dusun' : 'Impor Data (Restore)'),
+            subtitle: Text(
+              _isOperator
+                  ? 'Impor berkas backup (.bak) yang dikirim kepala dusun — hanya laporan asli '
+                      'dari dusun (atau backup Operator) yang bisa dibuka, digabungkan ke data '
+                      'operator, semua blok otomatis tercatat.'
+                  : 'Muat data blok dari berkas backup (.bak) milik wilayah ini sendiri — berkas '
+                      'dari wilayah lain otomatis ditolak.',
+            ),
             trailing: const Icon(Icons.chevron_right),
             enabled: !_busy,
             onTap: _importRestore,
           ),
           const SizedBox(height: 16),
-          Text('Wilayah Kerja (Blok)', style: Theme.of(context).textTheme.titleMedium),
+          Text('Wilayah Kerja', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
-          const Text(
-            'Centang blok yang termasuk wilayah kerja Anda. Blok yang belum dicentang '
-            'otomatis ditanyakan lagi saat pertama kali Anda mengecek NOP di blok itu, dan '
-            'disembunyikan dari Buku Catatan Blok.',
-          ),
-          const SizedBox(height: 8),
-          if (_whitelist == null)
-            const Center(child: CircularProgressIndicator())
-          else
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (var i = 1; i <= totalBlokCount; i++)
-                  FilterChip(
-                    label: Text('$i'),
-                    selected: _whitelist!.contains(i.toString().padLeft(3, '0')),
-                    onSelected: (selected) => _toggleBlok(i.toString().padLeft(3, '0'), selected),
-                  ),
-              ],
+          if (_isOperator)
+            const Text(
+              'Anda adalah Operator — menerima laporan dari semua dusun, wilayah kerja tidak '
+              'berlaku. Status ini permanen di perangkat ini (tidak bisa dibatalkan kecuali '
+              'data aplikasi dihapus).',
+            )
+          else ...[
+            Text(
+              _selectedDusun == null
+                  ? 'Belum ada wilayah kerja dipilih — hasil "Sudah Bayar" tidak akan dicatat ke '
+                      'Buku Catatan Blok sampai Anda memilih dusun.'
+                  : 'Wilayah kerja saat ini: Dusun $_selectedDusun. Blok di luar dusun ini tetap '
+                      'bisa dicek & dibayar, hanya saja tidak dicatat.',
             ),
+            const SizedBox(height: 8),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.map_outlined),
+              title: Text(_selectedDusun == null ? 'Pilih Wilayah Kerja' : 'Ganti Wilayah Kerja'),
+              trailing: const Icon(Icons.chevron_right),
+              enabled: !_busy,
+              onTap: _changeWilayah,
+            ),
+          ],
         ],
       ),
     );
@@ -332,15 +412,27 @@ class _ShareAppSection extends StatefulWidget {
 class _ShareAppSectionState extends State<_ShareAppSection> {
   bool _sharing = false;
 
+  // Android: bagikan berkas APK langsung (sideload). Windows/Linux: tidak
+  // ada mekanisme share-sheet berkas biner yang generik lintas platform,
+  // jadi cukup salin link halaman rilis GitHub-nya — penerima unduh sendiri
+  // versi yang cocok untuk sistem operasinya.
   Future<void> _shareApp() async {
     setState(() => _sharing = true);
     try {
-      final location = await ApkShareHelper.shareApk();
-      if (!mounted) return;
-      final message = location != null
-          ? 'APK tersimpan di $location'
-          : 'Share sheet dibuka. Gagal menyimpan salinan ke folder Dokumen.';
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+      if (Platform.isAndroid) {
+        final location = await ApkShareHelper.shareApk();
+        if (!mounted) return;
+        final message = location != null
+            ? 'APK tersimpan di $location'
+            : 'Share sheet dibuka. Gagal menyimpan salinan ke folder Dokumen.';
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+      } else {
+        await Clipboard.setData(const ClipboardData(text: UpdateChecker.releasesPageUrl));
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Link unduhan aplikasi disalin, tinggal tempel & bagikan.')),
+        );
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -360,18 +452,21 @@ class _ShareAppSectionState extends State<_ShareAppSection> {
         children: [
           Text('Bagikan Aplikasi', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
-          const Text(
-            'Aplikasi ini belum ada di Play Store, jadi diinstal manual. Berkas APK-nya akan '
-            'disimpan ke penyimpanan internal (folder Dokumen) dan bisa langsung dibagikan '
-            'lewat WhatsApp, Quick Share, Bluetooth, atau aplikasi lain.',
+          Text(
+            Platform.isAndroid
+                ? 'Aplikasi ini belum ada di Play Store, jadi diinstal manual. Berkas APK-nya akan '
+                    'disimpan ke penyimpanan internal (folder Dokumen) dan bisa langsung dibagikan '
+                    'lewat WhatsApp, Quick Share, Bluetooth, atau aplikasi lain.'
+                : 'Bagikan link halaman unduhan aplikasi ini (bukan berkas langsung), supaya penerima '
+                    'bisa mengunduh sendiri versi yang sesuai dengan sistem operasinya.',
           ),
           const SizedBox(height: 8),
           ListTile(
             contentPadding: EdgeInsets.zero,
             leading: _sharing
                 ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
-                : const Icon(Icons.share),
-            title: const Text('Bagikan Aplikasi (APK)'),
+                : Icon(Platform.isAndroid ? Icons.share : Icons.link),
+            title: Text(Platform.isAndroid ? 'Bagikan Aplikasi (APK)' : 'Salin Link Aplikasi'),
             trailing: const Icon(Icons.chevron_right),
             onTap: _sharing ? null : _shareApp,
           ),
@@ -381,8 +476,35 @@ class _ShareAppSectionState extends State<_ShareAppSection> {
   }
 }
 
-class _AboutSection extends StatelessWidget {
+class _AboutSection extends StatefulWidget {
   const _AboutSection();
+
+  @override
+  State<_AboutSection> createState() => _AboutSectionState();
+}
+
+class _AboutSectionState extends State<_AboutSection> {
+  bool _checking = false;
+
+  Future<void> _checkForUpdate() async {
+    setState(() => _checking = true);
+    try {
+      final info = await UpdateChecker.checkForUpdate();
+      if (!mounted) return;
+      if (info == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Aplikasi sudah menggunakan versi terbaru.')),
+        );
+        return;
+      }
+      await Navigator.push(context, MaterialPageRoute(builder: (_) => UpdateScreen(info: info)));
+    } on UpdateCheckError catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    } finally {
+      if (mounted) setState(() => _checking = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -413,18 +535,19 @@ class _AboutSection extends StatelessWidget {
           const SizedBox(height: 8),
           ListTile(
             contentPadding: EdgeInsets.zero,
+            leading: _checking
+                ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.system_update_outlined),
+            title: const Text('Periksa Pembaruan'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: _checking ? null : _checkForUpdate,
+          ),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
             leading: const Icon(Icons.description_outlined),
             title: const Text('Lisensi Open Source'),
             trailing: const Icon(Icons.chevron_right),
-            onTap: () async {
-              final info = await PackageInfo.fromPlatform();
-              if (!context.mounted) return;
-              showLicensePage(
-                context: context,
-                applicationName: info.appName,
-                applicationVersion: info.version,
-              );
-            },
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const LicenseScreen())),
           ),
         ],
       ),

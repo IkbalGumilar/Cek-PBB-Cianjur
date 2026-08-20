@@ -7,9 +7,11 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
+import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
+import android.provider.Settings
 import androidx.core.content.FileProvider
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -33,6 +35,8 @@ class MainActivity : FlutterActivity() {
             when (call.method) {
                 "exportApk" -> exportApk(result)
                 "shareApk" -> shareApk(result)
+                "installApk" -> installApk(call, result)
+                "openInstallPermissionSettings" -> openInstallPermissionSettings(result)
                 else -> result.notImplemented()
             }
         }
@@ -112,6 +116,51 @@ class MainActivity : FlutterActivity() {
             result.success(true)
         } catch (e: Exception) {
             result.error("LAUNCH_FAILED", e.message, null)
+        }
+    }
+
+    // Buka installer sistem untuk APK rilis terbaru yang sudah diunduh Dart
+    // ke cache aplikasi (fitur Periksa Pembaruan). Balikin "NEED_PERMISSION"
+    // kalau izin "Instal aplikasi tidak dikenal" belum aktif untuk aplikasi
+    // ini di Android 8+ — tidak bisa dipaksa lewati, harus user yang
+    // aktifkan sendiri lewat layar Pengaturan.
+    private fun installApk(call: MethodCall, result: MethodChannel.Result) {
+        try {
+            val filePath = call.argument<String>("filePath")!!
+            val file = File(filePath)
+            if (!file.exists()) {
+                result.error("FILE_NOT_FOUND", "Berkas APK tidak ditemukan.", null)
+                return
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !packageManager.canRequestPackageInstalls()) {
+                result.success("NEED_PERMISSION")
+                return
+            }
+            val uri = FileProvider.getUriForFile(this, "$packageName.apkprovider", file)
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, "application/vnd.android.package-archive")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            startActivity(intent)
+            result.success("OPENED")
+        } catch (e: Exception) {
+            result.error("INSTALL_FAILED", e.message, null)
+        }
+    }
+
+    private fun openInstallPermissionSettings(result: MethodChannel.Result) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val intent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
+                    data = Uri.parse("package:$packageName")
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                startActivity(intent)
+            }
+            result.success(null)
+        } catch (e: Exception) {
+            result.error("OPEN_SETTINGS_FAILED", e.message, null)
         }
     }
 

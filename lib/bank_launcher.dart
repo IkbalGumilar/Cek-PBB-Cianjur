@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/services.dart';
 
 class BankApp {
@@ -46,6 +48,10 @@ class BankLauncher {
   /// Cek dari [_candidateBankApps] mana saja yang benar-benar terpasang di
   /// perangkat ini.
   static Future<List<BankApp>> installedApps() async {
+    // Channel-nya cuma diimplementasikan di sisi Kotlin (Android); di
+    // Windows/Linux tidak ada handler-nya sama sekali (VA hanya tersedia di
+    // Android, lihat CheckFormView), jadi keluar duluan di sini.
+    if (!Platform.isAndroid) return [];
     try {
       final packageNames = _candidateBankApps.map((a) => a.packageName).toList();
       final installed = await _channel.invokeMethod<List<Object?>>('checkInstalledApps', {
@@ -62,6 +68,7 @@ class BankLauncher {
   /// otomatis nomor VA di dalam aplikasi pihak ketiga (tidak ada standar
   /// untuk itu) — nomor VA disalin manual lewat tombol "Salin Kode VA".
   static Future<bool> launch(BankApp app) async {
+    if (!Platform.isAndroid) return false;
     try {
       final ok = await _channel.invokeMethod<bool>('launchApp', {'packageName': app.packageName});
       return ok ?? false;
@@ -73,6 +80,7 @@ class BankLauncher {
   /// Ambil ikon asli aplikasi [packageName] langsung dari sistem (bukan aset
   /// logo yang dibundel sendiri), null kalau gagal.
   static Future<Uint8List?> getAppIcon(String packageName) async {
+    if (!Platform.isAndroid) return null;
     try {
       return await _channel.invokeMethod<Uint8List>('getAppIcon', {'packageName': packageName});
     } on PlatformException {

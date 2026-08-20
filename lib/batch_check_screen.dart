@@ -4,13 +4,14 @@ import 'package:flutter/material.dart';
 
 import 'blok_data_store.dart';
 import 'blok_record.dart';
-import 'blok_whitelist_store.dart';
 import 'check_mode.dart';
 import 'download_helper.dart';
 import 'nop_helper.dart';
+import 'operator_mode_store.dart';
 import 'pbb_client.dart';
 import 'result_screen.dart';
 import 'tax_record.dart';
+import 'wilayah_kerja_store.dart';
 
 class BatchCheckScreen extends StatefulWidget {
   final List<TaxRecord> records;
@@ -44,6 +45,30 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
   void initState() {
     super.initState();
     _loadCaptcha();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _warnIfOutsideWilayah());
+  }
+
+  /// Peringatan sekali di awal kalau daftar impor ini ada NOP yang bloknya
+  /// di luar wilayah kerja — cuma info, tidak menghentikan/mengganggu proses
+  /// cek massal-nya sama sekali (per-NOP tetap jalan, cuma yang di luar
+  /// wilayah tidak dicatat ke Buku Catatan Blok, lihat [_submit]). Tidak
+  /// relevan sama sekali di Mode Operator — semua blok otomatis dicatat.
+  Future<void> _warnIfOutsideWilayah() async {
+    if (await OperatorModeStore.instance.isEnabled()) return;
+    final dusun = await WilayahKerjaStore.instance.selectedDusun();
+    if (dusun == null || !mounted) return;
+    final wilayahBloks = await WilayahKerjaStore.instance.whitelistedBloks();
+    final hasOutside = widget.records.any((r) => !wilayahBloks.contains(nopBlok(r.nop)));
+    if (!hasOutside || !mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Terdapat blok yang bukan wilayah kerja Anda di daftar ini — tetap bisa dicek, '
+          'tapi hasilnya tidak akan dicatat ke Buku Catatan Blok.',
+        ),
+        duration: Duration(seconds: 6),
+      ),
+    );
   }
 
   @override
@@ -87,16 +112,6 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
       return;
     }
 
-    final blok = nopBlok(_current.nop);
-    if (!await BlokWhitelistStore.instance.isDecided(blok)) {
-      if (!mounted) return;
-      final included = await _confirmWilayahKerja(blok);
-      if (included != null) {
-        await BlokWhitelistStore.instance.decide(blok, included);
-      }
-    }
-    if (!mounted) return;
-
     setState(() {
       _submitting = true;
       _errorText = null;
@@ -113,13 +128,17 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
       _current.namaWajibPajak = result.namaWajibPajak;
 
       if (_current.isPaid) {
-        await BlokDataStore.instance.upsert(BlokRecord(
-          nop: _current.nop,
-          namaWajibPajak: result.namaWajibPajak ?? '',
-          tahunBayar: widget.tahun,
-          tanggalBayar: result.tanggalBayar ?? '',
-          jumlahPbb: result.jumlahPbb ?? '',
-        ));
+        final isOperator = await OperatorModeStore.instance.isEnabled();
+        final wilayahBloks = await WilayahKerjaStore.instance.whitelistedBloks();
+        if (isOperator || wilayahBloks.contains(nopBlok(_current.nop))) {
+          await BlokDataStore.instance.upsert(BlokRecord(
+            nop: _current.nop,
+            namaWajibPajak: result.namaWajibPajak ?? '',
+            tahunBayar: widget.tahun,
+            tanggalBayar: result.tanggalBayar ?? '',
+            jumlahPbb: result.jumlahPbb ?? '',
+          ));
+        }
       }
 
       if (widget.downloadBuktiBayar && _current.isPaid) {
@@ -136,24 +155,6 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
     } finally {
       setState(() => _submitting = false);
     }
-  }
-
-  /// Tanya sekali per blok apakah blok ini termasuk wilayah kerja user
-  /// perangkat ini (sama seperti di CheckFormView) — dipakai untuk menyaring
-  /// "Buku Catatan Blok". Jawaban Ya/Tidak sama-sama disimpan.
-  Future<bool?> _confirmWilayahKerja(String blok) {
-    return showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        title: Text('Blok ${int.parse(blok)}'),
-        content: const Text('Apakah blok ini termasuk wilayah kerja Anda?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Tidak')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Ya')),
-        ],
-      ),
-    );
   }
 
   Future<bool> _downloadBuktiBayar(TaxRecord record) async {

@@ -4,11 +4,12 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
 import 'blok_record.dart';
+import 'tagihan_result.dart' show formatRupiah;
 
 /// Membuat PDF laporan data blok. [records] harus sudah diurutkan sebelum
 /// dipanggil (laporan selalu urut blok lalu nomor wilayah menaik).
 class BlokReportPdf {
-  static Future<Uint8List> build(List<BlokRecord> records, {String? tahun}) async {
+  static Future<Uint8List> build(List<BlokRecord> records, {String? tahun, int totalPbb = 0}) async {
     final doc = pw.Document();
     final judul = (tahun == null || tahun.isEmpty)
         ? 'Laporan Data Blok - Semua Tahun'
@@ -28,6 +29,14 @@ class BlokReportPdf {
             cellStyle: const pw.TextStyle(fontSize: 8),
             headerStyle: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold),
             cellAlignment: pw.Alignment.centerLeft,
+          ),
+          pw.SizedBox(height: 12),
+          pw.Align(
+            alignment: pw.Alignment.centerRight,
+            child: pw.Text(
+              'Total Keseluruhan: ${formatRupiah(formatRibuan(totalPbb))}',
+              style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold),
+            ),
           ),
         ],
       ),

@@ -6,7 +6,12 @@ import 'blok_data_store.dart';
 import 'check_form_view.dart';
 import 'check_mode.dart';
 import 'import_view.dart';
+import 'operator_mode_store.dart';
 import 'theme_controller.dart';
+import 'update_checker.dart';
+import 'update_screen.dart';
+import 'wilayah_kerja_picker.dart';
+import 'wilayah_kerja_store.dart';
 
 enum _ActiveView { check, import }
 
@@ -26,6 +31,86 @@ class _MainShellState extends State<MainShell> {
   String? _prefillBlok;
   String? _prefillWilayah;
   String? _prefillTahun;
+  bool _isOperator = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _runStartupChecks());
+  }
+
+  Future<void> _runStartupChecks() async {
+    final isOperator = await OperatorModeStore.instance.isEnabled();
+    if (!mounted) return;
+    setState(() => _isOperator = isOperator);
+
+    if (isOperator) {
+      await _maybeShowOperatorWelcome();
+    } else {
+      await _ensureWilayahKerjaChosen();
+    }
+    await _checkForUpdateSilently();
+  }
+
+  // Muncul sekali, tepat setelah Mode Operator baru diaktifkan lewat 2
+  // saklar tersembunyi di layar Lisensi (lihat license_screen.dart) dan
+  // aplikasi restart sendiri.
+  Future<void> _maybeShowOperatorWelcome() async {
+    final justEnabled = await OperatorModeStore.instance.consumeJustEnabledFlag();
+    if (!justEnabled || !mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Selamat Datang, Operator!'),
+        content: const Text(
+          'Mode Operator aktif. Anda sekarang menerima & mencatat laporan dari semua dusun, '
+          'tanpa batasan wilayah kerja. Status ini permanen di perangkat ini — tidak bisa '
+          'kembali jadi petugas wilayah kecuali data aplikasi dihapus.',
+        ),
+        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Mengerti'))],
+      ),
+    );
+  }
+
+  // Tanya sekali di aplikasi pertama kali dijalankan (lihat
+  // WilayahKerjaStore.hasBeenAsked) — melewati dialog ini sepenuhnya boleh,
+  // cuma berarti tidak ada riwayat "Sudah Bayar" yang dicatat ke Buku
+  // Catatan Blok; cek & bayar tetap jalan normal. Tidak dipanggil sama
+  // sekali di Mode Operator — operator tidak terikat satu wilayah.
+  Future<void> _ensureWilayahKerjaChosen() async {
+    final alreadyAsked = await WilayahKerjaStore.instance.hasBeenAsked();
+    if (alreadyAsked || !mounted) return;
+    final chosen = await pickDusunDialog(context, allowSkip: true);
+    await WilayahKerjaStore.instance.setSelectedDusun(chosen);
+    await WilayahKerjaStore.instance.markAsked();
+  }
+
+  // Cek pembaruan otomatis saat aplikasi dibuka (dibatasi sekali per 24 jam
+  // lewat UpdateChecker.checkForUpdateIfDue), tampil sebagai banner yang
+  // tidak mengganggu alur cek PBB kalau tidak ada pembaruan.
+  Future<void> _checkForUpdateSilently() async {
+    final info = await UpdateChecker.checkForUpdateIfDue();
+    if (info == null || !mounted) return;
+    ScaffoldMessenger.of(context).showMaterialBanner(
+      MaterialBanner(
+        content: Text('Pembaruan tersedia: versi ${info.version}.'),
+        leading: const Icon(Icons.system_update),
+        actions: [
+          TextButton(
+            onPressed: () => ScaffoldMessenger.of(context).hideCurrentMaterialBanner(),
+            child: const Text('Nanti'),
+          ),
+          FilledButton(
+            onPressed: () {
+              ScaffoldMessenger.of(context).hideCurrentMaterialBanner();
+              Navigator.push(context, MaterialPageRoute(builder: (_) => UpdateScreen(info: info)));
+            },
+            child: const Text('Lihat'),
+          ),
+        ],
+      ),
+    );
+  }
 
   void _changeMode(CheckMode mode) {
     setState(() {
@@ -68,6 +153,7 @@ class _MainShellState extends State<MainShell> {
         activeMode: _mode,
         onModeChanged: _changeMode,
         themeController: widget.themeController,
+        isOperator: _isOperator,
       ),
       body: _view == _ActiveView.check
           ? CheckFormView(

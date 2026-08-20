@@ -3,6 +3,10 @@
     <uses-permission
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="29" />
+    <!-- Wajib untuk memicu installer sistem dari dalam aplikasi (fitur
+         Periksa Pembaruan) — tanpa ini Android 8+ menolak Intent instal APK
+         yang dipicu oleh aplikasi lain (bukan Play Store/toko aplikasi). -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <application
         android:label="Cek PBB Cianjur"
         android:name="${applicationName}"

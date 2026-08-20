@@ -42,7 +42,7 @@ class BlokBackupScheduler {
     }
 
     try {
-      await exportCsv('backup_harian_$today.csv');
+      await exportCsv('backup_harian_$today');
       await prefs.setString(_lastBackupDateKey, today);
       await prefs.setBool(_dirtyKey, false);
     } catch (_) {

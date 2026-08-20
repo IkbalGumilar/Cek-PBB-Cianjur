@@ -5,7 +5,7 @@ import 'package:path_provider/path_provider.dart';
 
 import 'native_file_helper.dart';
 
-const _folderName = 'Cek PBB Cianjur';
+const appFolderName = 'Cek PBB Cianjur';
 
 /// Simpan bytes (CSV, XLSX, PDF, dll) ke folder Dokumen/[_folderName]
 /// (Android) atau Downloads/[_folderName] (desktop, sebagai fallback karena
@@ -40,7 +40,7 @@ class DownloadHelper {
       throw Exception('Folder Downloads tidak ditemukan di perangkat ini.');
     }
 
-    final targetDir = Directory('${downloadsDir.path}/$_folderName');
+    final targetDir = Directory('${downloadsDir.path}/$appFolderName');
     await targetDir.create(recursive: true);
     final targetFile = File('${targetDir.path}/$fileName');
     await targetFile.writeAsBytes(bytes);

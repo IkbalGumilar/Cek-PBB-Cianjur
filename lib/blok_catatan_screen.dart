@@ -3,11 +3,13 @@ import 'package:flutter/material.dart';
 import 'blok_data_store.dart';
 import 'blok_record.dart';
 import 'blok_report_exporter.dart';
-import 'blok_whitelist_store.dart';
 import 'document_preview_screen.dart';
 import 'download_helper.dart';
+import 'dusun_data.dart';
 import 'native_file_helper.dart';
+import 'operator_mode_store.dart';
 import 'tagihan_result.dart' show formatRupiah;
+import 'wilayah_kerja_store.dart';
 
 /// Dikembalikan lewat Navigator.pop saat user menekan "Cetak Bukti Bayar"
 /// pada sebuah baris — dipakai MainShell untuk membuka Cek Status Bayar
@@ -41,10 +43,13 @@ class BlokCatatanScreen extends StatefulWidget {
 class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
   bool _loading = true;
   bool _busy = false;
+  bool _isOperator = false;
+  List<String> _allBloks = [];
   List<String> _bloks = [];
   Set<String> _whitelist = {};
   String? _selectedBlok;
   String? _selectedTahun;
+  int? _selectedWilayah;
   BlokSortBy _sortBy = BlokSortBy.blokWilayah;
   List<BlokRecord> _records = [];
 
@@ -55,19 +60,54 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
   }
 
   Future<void> _load() async {
+    final isOperator = await OperatorModeStore.instance.isEnabled();
     final allBloks = await BlokDataStore.instance.blokList();
-    final whitelist = await BlokWhitelistStore.instance.loadWhitelist();
-    // Hanya tampilkan blok yang termasuk wilayah kerja user perangkat ini —
-    // tidak semua user bertugas di blok yang sama.
-    final bloks = allBloks.where(whitelist.contains).toList();
-    setState(() {
-      _bloks = bloks;
-      _whitelist = whitelist;
-      _selectedBlok = bloks.isNotEmpty ? bloks.first : null;
-      _selectedTahun = '${DateTime.now().year}';
-      _loading = false;
-    });
+
+    if (isOperator) {
+      // Operator tidak terikat satu wilayah kerja — bisa pilih dusun mana
+      // saja untuk dilihat, default ke dusun pertama yang datanya sudah ada.
+      final defaultDusun = dusunList.firstWhere((d) => d.bloks.isNotEmpty, orElse: () => dusunList.first);
+      final whitelist = defaultDusun.bloks.toSet();
+      setState(() {
+        _isOperator = true;
+        _allBloks = allBloks;
+        _bloks = allBloks.where(whitelist.contains).toList();
+        _whitelist = whitelist;
+        _selectedWilayah = defaultDusun.number;
+        _selectedBlok = _semuaBlokValue;
+        _selectedTahun = '${DateTime.now().year}';
+        _loading = false;
+      });
+    } else {
+      final whitelist = await WilayahKerjaStore.instance.whitelistedBloks();
+      // Hanya tampilkan blok yang termasuk wilayah kerja user perangkat ini —
+      // tidak semua user bertugas di blok yang sama.
+      final bloks = allBloks.where(whitelist.contains).toList();
+      setState(() {
+        _isOperator = false;
+        _allBloks = allBloks;
+        _bloks = bloks;
+        _whitelist = whitelist;
+        _selectedBlok = bloks.isNotEmpty ? bloks.first : null;
+        _selectedTahun = '${DateTime.now().year}';
+        _loading = false;
+      });
+    }
     if (_selectedBlok != null) await _loadRecords();
+  }
+
+  /// Khusus Mode Operator — pilih dusun mana yang mau dilihat, lalu daftar
+  /// Blok yang tersedia mengikuti blok-blok dusun itu.
+  void _pilihWilayah(int? wilayah) {
+    if (wilayah == null) return;
+    final whitelist = dusunByNumber(wilayah)?.bloks.toSet() ?? {};
+    setState(() {
+      _selectedWilayah = wilayah;
+      _whitelist = whitelist;
+      _bloks = _allBloks.where(whitelist.contains).toList();
+      _selectedBlok = _semuaBlokValue;
+    });
+    _loadRecords();
   }
 
   Future<void> _loadRecords() async {
@@ -107,6 +147,29 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
     if (sortBy == null) return;
     setState(() => _sortBy = sortBy);
     _loadRecords();
+  }
+
+  /// Hapus satu baris — mis. untuk mengoreksi baris yang salah tercatat
+  /// (data uji coba, salah impor, dsb).
+  Future<void> _hapusBaris(BlokRecord record) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Hapus Baris Ini?'),
+        content: Text(
+          '${record.namaWajibPajak} — NOP ${record.nop} (${record.tahunBayar}) akan dihapus '
+          'permanen dari Buku Catatan Blok.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Hapus')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    await BlokDataStore.instance.deleteByKey(record.uniqueKey);
+    await _loadRecords();
   }
 
   void _cetakBuktiBayar(BlokRecord record) {
@@ -243,7 +306,7 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
       body: SafeArea(
         child: _loading
             ? const Center(child: CircularProgressIndicator())
-            : _bloks.isEmpty
+            : (!_isOperator && _bloks.isEmpty)
                 ? const Center(
                     child: Padding(
                       padding: EdgeInsets.all(24),
@@ -261,11 +324,35 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
+                        if (_isOperator) ...[
+                          DropdownButtonFormField<int>(
+                            initialValue: _selectedWilayah,
+                            decoration: const InputDecoration(
+                              labelText: 'Wilayah (Dusun)',
+                              border: OutlineInputBorder(),
+                            ),
+                            items: [
+                              for (final dusun in dusunList)
+                                DropdownMenuItem(
+                                  value: dusun.number,
+                                  child: Text('${dusun.label} (${dusun.bloks.length} blok)'),
+                                ),
+                            ],
+                            onChanged: _pilihWilayah,
+                          ),
+                          const SizedBox(height: 8),
+                        ],
                         Row(
                           children: [
                             Expanded(
                               flex: 2,
                               child: DropdownButtonFormField<String>(
+                                // DropdownButtonFormField.initialValue cuma dibaca sekali saat
+                                // widget pertama kali dipasang — kalau _selectedBlok direset dari
+                                // kode (bukan dari onChanged dropdown ini sendiri, mis. saat ganti
+                                // Wilayah di Mode Operator), key ini beda supaya widget dibongkar &
+                                // dipasang ulang, dan initialValue yang baru benar-benar kepakai.
+                                key: ValueKey('blok-dropdown-$_selectedWilayah'),
                                 initialValue: _selectedBlok,
                                 decoration: const InputDecoration(labelText: 'Blok', border: OutlineInputBorder()),
                                 items: [
@@ -326,10 +413,20 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
                                               DataCell(Text(r.tanggalBayar.isEmpty ? '-' : r.tanggalBayar)),
                                               DataCell(Text(r.jumlahPbb.isEmpty ? '-' : r.jumlahPbb)),
                                               DataCell(
-                                                IconButton(
-                                                  onPressed: () => _cetakBuktiBayar(r),
-                                                  icon: const Icon(Icons.picture_as_pdf),
-                                                  tooltip: 'Cetak Bukti Bayar',
+                                                Row(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    IconButton(
+                                                      onPressed: () => _cetakBuktiBayar(r),
+                                                      icon: const Icon(Icons.picture_as_pdf),
+                                                      tooltip: 'Cetak Bukti Bayar',
+                                                    ),
+                                                    IconButton(
+                                                      onPressed: () => _hapusBaris(r),
+                                                      icon: const Icon(Icons.delete_outline),
+                                                      tooltip: 'Hapus Baris',
+                                                    ),
+                                                  ],
                                                 ),
                                               ),
                                             ]))

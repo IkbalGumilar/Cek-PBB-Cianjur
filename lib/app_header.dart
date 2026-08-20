@@ -10,12 +10,14 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
   final CheckMode activeMode;
   final ValueChanged<CheckMode> onModeChanged;
   final ThemeController themeController;
+  final bool isOperator;
 
   const AppHeader({
     super.key,
     required this.activeMode,
     required this.onModeChanged,
     required this.themeController,
+    this.isOperator = false,
   });
 
   static const _narrowThreshold = 480.0;
@@ -38,7 +40,7 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
         child: LayoutBuilder(
           builder: (context, constraints) {
             final isNarrow = constraints.maxWidth < _narrowThreshold;
-            final logoAndName = _LogoAndName();
+            final logoAndName = _LogoAndName(isOperator: isOperator);
             final menu = _ModeMenu(
               activeMode: activeMode,
               onModeChanged: onModeChanged,
@@ -93,7 +95,9 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
 }
 
 class _LogoAndName extends StatelessWidget {
-  const _LogoAndName();
+  final bool isOperator;
+
+  const _LogoAndName({required this.isOperator});
 
   @override
   Widget build(BuildContext context) {
@@ -117,6 +121,23 @@ class _LogoAndName extends StatelessWidget {
             fontWeight: FontWeight.bold,
           ),
         ),
+        if (isOperator) ...[
+          const SizedBox(width: 8),
+          Tooltip(
+            message: 'Mode Operator — menerima laporan dari semua dusun',
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: Colors.amber,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: const Text(
+                'OPERATOR',
+                style: TextStyle(color: Colors.black, fontSize: 10, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ),
+        ],
       ],
     );
   }
