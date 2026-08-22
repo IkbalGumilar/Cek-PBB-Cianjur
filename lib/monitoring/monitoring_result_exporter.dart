@@ -54,7 +54,10 @@ class MonitoringResultExporter {
     return Uint8List.fromList(excel.encode()!);
   }
 
-  static Future<Uint8List> _buildPdf(MonitoringTableResult result, String title) async {
+  static Future<Uint8List> _buildPdf(
+    MonitoringTableResult result,
+    String title,
+  ) async {
     final doc = pw.Document();
     doc.addPage(
       pw.MultiPage(
@@ -65,7 +68,10 @@ class MonitoringResultExporter {
             headers: result.headers,
             data: result.rows,
             cellStyle: const pw.TextStyle(fontSize: 7),
-            headerStyle: pw.TextStyle(fontSize: 7, fontWeight: pw.FontWeight.bold),
+            headerStyle: pw.TextStyle(
+              fontSize: 7,
+              fontWeight: pw.FontWeight.bold,
+            ),
             cellAlignment: pw.Alignment.centerLeft,
           ),
         ],
@@ -77,8 +83,15 @@ class MonitoringResultExporter {
   /// [prefix] memisahkan berkas antar-modul yang sama-sama memakai pengekspor
   /// ini (mis. `monitoring_…` vs `anggota_…`), supaya berkas unduhan tidak
   /// tercampur di folder Dokumen.
-  static String fileName(MonitoringExportFormat format, String title, {String prefix = 'monitoring'}) {
-    final slug = title.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '_').replaceAll(RegExp(r'^_|_$'), '');
+  static String fileName(
+    MonitoringExportFormat format,
+    String title, {
+    String prefix = 'monitoring',
+  }) {
+    final slug = title
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]+'), '_')
+        .replaceAll(RegExp(r'^_|_$'), '');
     return '${prefix}_${slug}_${DateTime.now().millisecondsSinceEpoch}.${format.extension}';
   }
 }

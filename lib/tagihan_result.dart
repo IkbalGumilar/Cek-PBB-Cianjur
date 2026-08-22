@@ -1,6 +1,8 @@
 String formatRupiah(String raw) {
   final trimmed = raw.trim();
-  if (trimmed.isEmpty || trimmed == '-' || trimmed.toLowerCase().startsWith('rp')) {
+  if (trimmed.isEmpty ||
+      trimmed == '-' ||
+      trimmed.toLowerCase().startsWith('rp')) {
     return trimmed;
   }
   return 'Rp. $trimmed';
@@ -35,6 +37,8 @@ class TagihanResult {
   final String totalDenda;
   final String totalKurangBayar;
   final bool notFound;
+  final String? serverMessage;
+  final String? inactiveUntilYear;
   final String rawText;
 
   TagihanResult({
@@ -44,6 +48,8 @@ class TagihanResult {
     required this.totalDenda,
     required this.totalKurangBayar,
     required this.notFound,
+    this.serverMessage,
+    this.inactiveUntilYear,
     required this.rawText,
   });
 
@@ -54,6 +60,22 @@ class TagihanResult {
     totalDenda: '',
     totalKurangBayar: '',
     notFound: true,
+    rawText: rawText,
+  );
+
+  factory TagihanResult.message(
+    String message,
+    String rawText, {
+    String? inactiveUntilYear,
+  }) => TagihanResult(
+    namaWajibPajak: '',
+    rows: const [],
+    totalPbb: '',
+    totalDenda: '',
+    totalKurangBayar: '',
+    notFound: false,
+    serverMessage: message,
+    inactiveUntilYear: inactiveUntilYear,
     rawText: rawText,
   );
 }

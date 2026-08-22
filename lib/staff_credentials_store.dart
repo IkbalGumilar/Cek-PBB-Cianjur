@@ -15,7 +15,10 @@ class StaffCredentialsStore {
 
   final _storage = const FlutterSecureStorage();
 
-  Future<void> save({required String username, required String password}) async {
+  Future<void> save({
+    required String username,
+    required String password,
+  }) async {
     await _storage.write(key: _usernameKey, value: username);
     await _storage.write(key: _passwordKey, value: password);
   }

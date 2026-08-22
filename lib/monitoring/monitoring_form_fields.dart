@@ -72,7 +72,9 @@ class MonitoringSectionTitle extends StatelessWidget {
       padding: const EdgeInsets.only(top: 12, bottom: 4),
       child: Text(
         text,
-        style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+        style: Theme.of(
+          context,
+        ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
       ),
     );
   }
@@ -102,7 +104,10 @@ class BukuDropdown extends StatelessWidget {
   ];
 
   static (String min, String max) rangeFor(String key) {
-    final match = options.firstWhere((o) => o.$1 == key, orElse: () => options.first);
+    final match = options.firstWhere(
+      (o) => o.$1 == key,
+      orElse: () => options.first,
+    );
     return (match.$3, match.$4);
   }
 
@@ -111,8 +116,14 @@ class BukuDropdown extends StatelessWidget {
     return DropdownButtonFormField<String>(
       initialValue: value,
       isExpanded: true,
-      decoration: const InputDecoration(labelText: 'Buku', border: OutlineInputBorder()),
-      items: [for (final o in options) DropdownMenuItem(value: o.$1, child: Text(o.$2))],
+      decoration: const InputDecoration(
+        labelText: 'Buku',
+        border: OutlineInputBorder(),
+      ),
+      items: [
+        for (final o in options)
+          DropdownMenuItem(value: o.$1, child: Text(o.$2)),
+      ],
       onChanged: (v) => onChanged(v ?? 'semua'),
     );
   }
@@ -125,14 +136,20 @@ class BankDropdown extends StatefulWidget {
   final String value;
   final ValueChanged<String> onChanged;
 
-  const BankDropdown({super.key, required this.client, required this.value, required this.onChanged});
+  const BankDropdown({
+    super.key,
+    required this.client,
+    required this.value,
+    required this.onChanged,
+  });
 
   @override
   State<BankDropdown> createState() => _BankDropdownState();
 }
 
 class _BankDropdownState extends State<BankDropdown> {
-  late final Future<List<BankOption>> _future = widget.client.fetchBankOptions();
+  late final Future<List<BankOption>> _future = widget.client
+      .fetchBankOptions();
 
   @override
   Widget build(BuildContext context) {
@@ -141,7 +158,9 @@ class _BankDropdownState extends State<BankDropdown> {
       builder: (context, snapshot) {
         final options = snapshot.data ?? const <BankOption>[];
         return DropdownButtonFormField<String>(
-          initialValue: options.any((o) => o.id == widget.value) ? widget.value : '',
+          initialValue: options.any((o) => o.id == widget.value)
+              ? widget.value
+              : '',
           isExpanded: true,
           decoration: InputDecoration(
             labelText: 'Bank (opsional)',
@@ -149,13 +168,21 @@ class _BankDropdownState extends State<BankDropdown> {
             suffixIcon: snapshot.connectionState == ConnectionState.waiting
                 ? const Padding(
                     padding: EdgeInsets.all(12),
-                    child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                    child: SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
                   )
                 : null,
           ),
           items: [
             const DropdownMenuItem(value: '', child: Text('Pilih Semua')),
-            for (final o in options) DropdownMenuItem(value: o.id, child: Text(o.name, overflow: TextOverflow.ellipsis)),
+            for (final o in options)
+              DropdownMenuItem(
+                value: o.id,
+                child: Text(o.name, overflow: TextOverflow.ellipsis),
+              ),
           ],
           onChanged: (v) => widget.onChanged(v ?? ''),
         );

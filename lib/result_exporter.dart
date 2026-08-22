@@ -13,7 +13,11 @@ class ResultExporter {
       for (final r in records) [r.nop, r.status],
     ];
     final csvContent = Csv().encode(rows);
-    final fileName = 'hasil_cek_pbb_${DateTime.now().millisecondsSinceEpoch}.csv';
-    return DownloadHelper.saveBytes(Uint8List.fromList(utf8.encode(csvContent)), fileName);
+    final fileName =
+        'hasil_cek_pbb_${DateTime.now().millisecondsSinceEpoch}.csv';
+    return DownloadHelper.saveBytes(
+      Uint8List.fromList(utf8.encode(csvContent)),
+      fileName,
+    );
   }
 }

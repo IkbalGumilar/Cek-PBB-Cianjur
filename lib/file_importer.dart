@@ -54,7 +54,9 @@ class FileImporter {
 
     var nopColumn = 0;
     var startRow = 0;
-    final firstRow = rows.first.map((c) => c.toString().trim().toLowerCase()).toList();
+    final firstRow = rows.first
+        .map((c) => c.toString().trim().toLowerCase())
+        .toList();
     final headerIndex = firstRow.indexWhere((c) => c == 'nop');
     if (headerIndex != -1) {
       nopColumn = headerIndex;

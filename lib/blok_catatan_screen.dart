@@ -19,7 +19,11 @@ class BlokNavigationRequest {
   final String wilayah;
   final String tahun;
 
-  const BlokNavigationRequest({required this.blok, required this.wilayah, required this.tahun});
+  const BlokNavigationRequest({
+    required this.blok,
+    required this.wilayah,
+    required this.tahun,
+  });
 }
 
 /// Nilai dropdown Blok untuk menampilkan gabungan semua blok wilayah kerja
@@ -66,7 +70,10 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
     if (isOperator) {
       // Operator tidak terikat satu wilayah kerja — bisa pilih dusun mana
       // saja untuk dilihat, default ke dusun pertama yang datanya sudah ada.
-      final defaultDusun = dusunList.firstWhere((d) => d.bloks.isNotEmpty, orElse: () => dusunList.first);
+      final defaultDusun = dusunList.firstWhere(
+        (d) => d.bloks.isNotEmpty,
+        orElse: () => dusunList.first,
+      );
       final whitelist = defaultDusun.bloks.toSet();
       setState(() {
         _isOperator = true;
@@ -114,8 +121,16 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
     final blok = _selectedBlok;
     if (blok == null) return;
     final records = blok == _semuaBlokValue
-        ? await BlokDataStore.instance.byWhitelist(_whitelist, tahun: _selectedTahun, sortBy: _sortBy)
-        : await BlokDataStore.instance.byBlok(blok, tahun: _selectedTahun, sortBy: _sortBy);
+        ? await BlokDataStore.instance.byWhitelist(
+            _whitelist,
+            tahun: _selectedTahun,
+            sortBy: _sortBy,
+          )
+        : await BlokDataStore.instance.byBlok(
+            blok,
+            tahun: _selectedTahun,
+            sortBy: _sortBy,
+          );
     if (!mounted) return;
     setState(() => _records = records);
   }
@@ -161,8 +176,14 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
           'permanen dari Buku Catatan Blok.',
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Hapus')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Hapus'),
+          ),
         ],
       ),
     );
@@ -175,7 +196,11 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
   void _cetakBuktiBayar(BlokRecord record) {
     Navigator.pop(
       context,
-      BlokNavigationRequest(blok: record.blok, wilayah: record.wilayah, tahun: record.tahunBayar),
+      BlokNavigationRequest(
+        blok: record.blok,
+        wilayah: record.wilayah,
+        tahun: record.tahunBayar,
+      ),
     );
   }
 
@@ -202,18 +227,25 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
     setState(() => _busy = true);
     try {
       final records = await _scopedRecordsForExport();
-      final bytes = await BlokReportExporter.build(format, records, tahun: _selectedTahun);
-      final fileName = BlokReportExporter.fileName(format, tahun: _selectedTahun);
+      final bytes = await BlokReportExporter.build(
+        format,
+        records,
+        tahun: _selectedTahun,
+      );
+      final fileName = BlokReportExporter.fileName(
+        format,
+        tahun: _selectedTahun,
+      );
       final location = await DownloadHelper.saveBytes(bytes, fileName);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Laporan tersimpan di $location')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Laporan tersimpan di $location')));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal membuat laporan: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Gagal membuat laporan: $e')));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -226,8 +258,15 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
     setState(() => _busy = true);
     try {
       final records = await _scopedRecordsForExport();
-      final bytes = await BlokReportExporter.build(format, records, tahun: _selectedTahun);
-      final fileName = BlokReportExporter.fileName(format, tahun: _selectedTahun);
+      final bytes = await BlokReportExporter.build(
+        format,
+        records,
+        tahun: _selectedTahun,
+      );
+      final fileName = BlokReportExporter.fileName(
+        format,
+        tahun: _selectedTahun,
+      );
       await NativeFileHelper.shareBytes(
         bytes: bytes,
         fileName: fileName,
@@ -235,9 +274,9 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal membagikan laporan: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Gagal membagikan laporan: $e')));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -254,7 +293,11 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
         );
         return;
       }
-      final bytes = await BlokReportExporter.build(BlokExportFormat.pdf, records, tahun: _selectedTahun);
+      final bytes = await BlokReportExporter.build(
+        BlokExportFormat.pdf,
+        records,
+        tahun: _selectedTahun,
+      );
       if (!mounted) return;
       final tahunLabel = _selectedTahun ?? 'semua-tahun';
       Navigator.push(
@@ -268,9 +311,9 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal menyiapkan cetakan: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Gagal menyiapkan cetakan: $e')));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -307,149 +350,196 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
         child: _loading
             ? const Center(child: CircularProgressIndicator())
             : (!_isOperator && _bloks.isEmpty)
-                ? const Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(24),
-                      child: Text(
-                        'Belum ada data untuk blok wilayah kerja Anda. Data blok terisi '
-                        'otomatis setiap kali Cek Status Bayar menemukan status "Sudah '
-                        'Bayar", untuk blok yang sudah ditandai sebagai wilayah kerja Anda '
-                        '(bisa diatur di Setelan > Data Blok).',
-                        textAlign: TextAlign.center,
+            ? const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Text(
+                    'Belum ada data untuk blok wilayah kerja Anda. Data blok terisi '
+                    'otomatis setiap kali Cek Status Bayar menemukan status "Sudah '
+                    'Bayar", untuk blok yang sudah ditandai sebagai wilayah kerja Anda '
+                    '(bisa diatur di Setelan > Data Blok).',
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              )
+            : Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (_isOperator) ...[
+                      DropdownButtonFormField<int>(
+                        initialValue: _selectedWilayah,
+                        decoration: const InputDecoration(
+                          labelText: 'Wilayah (Dusun)',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: [
+                          for (final dusun in dusunList)
+                            DropdownMenuItem(
+                              value: dusun.number,
+                              child: Text(
+                                '${dusun.label} (${dusun.bloks.length} blok)',
+                              ),
+                            ),
+                        ],
+                        onChanged: _pilihWilayah,
                       ),
-                    ),
-                  )
-                : Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      const SizedBox(height: 8),
+                    ],
+                    Row(
                       children: [
-                        if (_isOperator) ...[
-                          DropdownButtonFormField<int>(
-                            initialValue: _selectedWilayah,
+                        Expanded(
+                          flex: 2,
+                          child: DropdownButtonFormField<String>(
+                            // DropdownButtonFormField.initialValue cuma dibaca sekali saat
+                            // widget pertama kali dipasang — kalau _selectedBlok direset dari
+                            // kode (bukan dari onChanged dropdown ini sendiri, mis. saat ganti
+                            // Wilayah di Mode Operator), key ini beda supaya widget dibongkar &
+                            // dipasang ulang, dan initialValue yang baru benar-benar kepakai.
+                            key: ValueKey('blok-dropdown-$_selectedWilayah'),
+                            initialValue: _selectedBlok,
                             decoration: const InputDecoration(
-                              labelText: 'Wilayah (Dusun)',
+                              labelText: 'Blok',
                               border: OutlineInputBorder(),
                             ),
                             items: [
-                              for (final dusun in dusunList)
+                              const DropdownMenuItem(
+                                value: _semuaBlokValue,
+                                child: Text('Semua Blok (Wilayah Kerja)'),
+                              ),
+                              for (final b in _bloks)
                                 DropdownMenuItem(
-                                  value: dusun.number,
-                                  child: Text('${dusun.label} (${dusun.bloks.length} blok)'),
+                                  value: b,
+                                  child: Text('Blok ${int.parse(b)}'),
                                 ),
                             ],
-                            onChanged: _pilihWilayah,
+                            onChanged: _pilihBlok,
                           ),
-                          const SizedBox(height: 8),
-                        ],
-                        Row(
-                          children: [
-                            Expanded(
-                              flex: 2,
-                              child: DropdownButtonFormField<String>(
-                                // DropdownButtonFormField.initialValue cuma dibaca sekali saat
-                                // widget pertama kali dipasang — kalau _selectedBlok direset dari
-                                // kode (bukan dari onChanged dropdown ini sendiri, mis. saat ganti
-                                // Wilayah di Mode Operator), key ini beda supaya widget dibongkar &
-                                // dipasang ulang, dan initialValue yang baru benar-benar kepakai.
-                                key: ValueKey('blok-dropdown-$_selectedWilayah'),
-                                initialValue: _selectedBlok,
-                                decoration: const InputDecoration(labelText: 'Blok', border: OutlineInputBorder()),
-                                items: [
-                                  const DropdownMenuItem(
-                                    value: _semuaBlokValue,
-                                    child: Text('Semua Blok (Wilayah Kerja)'),
-                                  ),
-                                  for (final b in _bloks)
-                                    DropdownMenuItem(value: b, child: Text('Blok ${int.parse(b)}')),
-                                ],
-                                onChanged: _pilihBlok,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: DropdownButtonFormField<String?>(
-                                initialValue: _selectedTahun,
-                                decoration: const InputDecoration(labelText: 'Tahun', border: OutlineInputBorder()),
-                                items: [
-                                  const DropdownMenuItem(value: null, child: Text('Semua')),
-                                  for (final y in _availableYears())
-                                    DropdownMenuItem(value: '$y', child: Text('$y')),
-                                ],
-                                onChanged: _pilihTahun,
-                              ),
-                            ),
-                          ],
                         ),
-                        const SizedBox(height: 8),
-                        DropdownButtonFormField<BlokSortBy>(
-                          initialValue: _sortBy,
-                          decoration: const InputDecoration(labelText: 'Urutkan Berdasarkan', border: OutlineInputBorder()),
-                          items: BlokSortBy.values
-                              .map((s) => DropdownMenuItem(value: s, child: Text(s.label)))
-                              .toList(),
-                          onChanged: _pilihSort,
-                        ),
-                        const SizedBox(height: 12),
+                        const SizedBox(width: 8),
                         Expanded(
-                          child: _records.isEmpty
-                              ? const Center(child: Text('Tidak ada data untuk filter ini.'))
-                              : SingleChildScrollView(
-                                  scrollDirection: Axis.horizontal,
-                                  child: DataTable(
-                                    columns: const [
-                                      DataColumn(label: Text('Nama WP')),
-                                      DataColumn(label: Text('NOP')),
-                                      DataColumn(label: Text('Tahun Bayar')),
-                                      DataColumn(label: Text('Tanggal Bayar')),
-                                      DataColumn(label: Text('Jumlah PBB')),
-                                      DataColumn(label: Text('')),
-                                    ],
-                                    rows: _records
-                                        .map((r) => DataRow(cells: [
-                                              DataCell(Text(r.namaWajibPajak)),
-                                              DataCell(Text(r.nop)),
-                                              DataCell(Text(r.tahunBayar)),
-                                              DataCell(Text(r.tanggalBayar.isEmpty ? '-' : r.tanggalBayar)),
-                                              DataCell(Text(r.jumlahPbb.isEmpty ? '-' : r.jumlahPbb)),
-                                              DataCell(
-                                                Row(
-                                                  mainAxisSize: MainAxisSize.min,
-                                                  children: [
-                                                    IconButton(
-                                                      onPressed: () => _cetakBuktiBayar(r),
-                                                      icon: const Icon(Icons.picture_as_pdf),
-                                                      tooltip: 'Cetak Bukti Bayar',
-                                                    ),
-                                                    IconButton(
-                                                      onPressed: () => _hapusBaris(r),
-                                                      icon: const Icon(Icons.delete_outline),
-                                                      tooltip: 'Hapus Baris',
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
-                                            ]))
-                                        .toList(),
-                                  ),
-                                ),
-                        ),
-                        if (_selectedTahun != null) ...[
-                          const Divider(),
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: Text(
-                              'Total: ${formatRupiah(formatRibuan(totalPbb))}',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .titleMedium
-                                  ?.copyWith(fontWeight: FontWeight.bold),
+                          child: DropdownButtonFormField<String?>(
+                            initialValue: _selectedTahun,
+                            decoration: const InputDecoration(
+                              labelText: 'Tahun',
+                              border: OutlineInputBorder(),
                             ),
+                            items: [
+                              const DropdownMenuItem(
+                                value: null,
+                                child: Text('Semua'),
+                              ),
+                              for (final y in _availableYears())
+                                DropdownMenuItem(
+                                  value: '$y',
+                                  child: Text('$y'),
+                                ),
+                            ],
+                            onChanged: _pilihTahun,
                           ),
-                        ],
+                        ),
                       ],
                     ),
-                  ),
+                    const SizedBox(height: 8),
+                    DropdownButtonFormField<BlokSortBy>(
+                      initialValue: _sortBy,
+                      decoration: const InputDecoration(
+                        labelText: 'Urutkan Berdasarkan',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: BlokSortBy.values
+                          .map(
+                            (s) => DropdownMenuItem(
+                              value: s,
+                              child: Text(s.label),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: _pilihSort,
+                    ),
+                    const SizedBox(height: 12),
+                    Expanded(
+                      child: _records.isEmpty
+                          ? const Center(
+                              child: Text('Tidak ada data untuk filter ini.'),
+                            )
+                          : SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: DataTable(
+                                columns: const [
+                                  DataColumn(label: Text('Nama WP')),
+                                  DataColumn(label: Text('NOP')),
+                                  DataColumn(label: Text('Tahun Bayar')),
+                                  DataColumn(label: Text('Tanggal Bayar')),
+                                  DataColumn(label: Text('Jumlah PBB')),
+                                  DataColumn(label: Text('')),
+                                ],
+                                rows: _records
+                                    .map(
+                                      (r) => DataRow(
+                                        cells: [
+                                          DataCell(Text(r.namaWajibPajak)),
+                                          DataCell(Text(r.nop)),
+                                          DataCell(Text(r.tahunBayar)),
+                                          DataCell(
+                                            Text(
+                                              r.tanggalBayar.isEmpty
+                                                  ? '-'
+                                                  : r.tanggalBayar,
+                                            ),
+                                          ),
+                                          DataCell(
+                                            Text(
+                                              r.jumlahPbb.isEmpty
+                                                  ? '-'
+                                                  : r.jumlahPbb,
+                                            ),
+                                          ),
+                                          DataCell(
+                                            Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                IconButton(
+                                                  onPressed: () =>
+                                                      _cetakBuktiBayar(r),
+                                                  icon: const Icon(
+                                                    Icons.picture_as_pdf,
+                                                  ),
+                                                  tooltip: 'Cetak Bukti Bayar',
+                                                ),
+                                                IconButton(
+                                                  onPressed: () =>
+                                                      _hapusBaris(r),
+                                                  icon: const Icon(
+                                                    Icons.delete_outline,
+                                                  ),
+                                                  tooltip: 'Hapus Baris',
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    )
+                                    .toList(),
+                              ),
+                            ),
+                    ),
+                    if (_selectedTahun != null) ...[
+                      const Divider(),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: Text(
+                          'Total: ${formatRupiah(formatRibuan(totalPbb))}',
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
       ),
     );
   }

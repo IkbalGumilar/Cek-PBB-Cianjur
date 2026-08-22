@@ -9,7 +9,11 @@ class DocumentPreviewScreen extends StatelessWidget {
   final Uint8List pdfBytes;
   final String fileName;
 
-  const DocumentPreviewScreen({super.key, required this.pdfBytes, required this.fileName});
+  const DocumentPreviewScreen({
+    super.key,
+    required this.pdfBytes,
+    required this.fileName,
+  });
 
   Future<void> _download(BuildContext context) async {
     final messenger = ScaffoldMessenger.of(context);

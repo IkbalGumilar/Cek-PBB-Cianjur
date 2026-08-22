@@ -45,7 +45,9 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
   void initState() {
     super.initState();
     _loadCaptcha();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _warnIfOutsideWilayah());
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _warnIfOutsideWilayah(),
+    );
   }
 
   /// Peringatan sekali di awal kalau daftar impor ini ada NOP yang bloknya
@@ -58,7 +60,9 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
     final dusun = await WilayahKerjaStore.instance.selectedDusun();
     if (dusun == null || !mounted) return;
     final wilayahBloks = await WilayahKerjaStore.instance.whitelistedBloks();
-    final hasOutside = widget.records.any((r) => !wilayahBloks.contains(nopBlok(r.nop)));
+    final hasOutside = widget.records.any(
+      (r) => !wilayahBloks.contains(nopBlok(r.nop)),
+    );
     if (!hasOutside || !mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
@@ -84,11 +88,13 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
     });
     try {
       final bytes = await _client.fetchCaptchaImage(CheckMode.statusBayar);
+      if (!mounted) return;
       setState(() => _captchaBytes = bytes);
     } catch (e) {
+      if (!mounted) return;
       setState(() => _errorText = 'Gagal ambil captcha: $e');
     } finally {
-      setState(() => _loadingCaptcha = false);
+      if (mounted) setState(() => _loadingCaptcha = false);
     }
   }
 
@@ -97,7 +103,9 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
     if (_index + 1 >= widget.records.length) {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => ResultScreen(records: widget.records)),
+        MaterialPageRoute(
+          builder: (_) => ResultScreen(records: widget.records),
+        ),
       );
       return;
     }
@@ -123,43 +131,59 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
         tahun: widget.tahun,
         captchaCode: captcha,
       );
+      if (!mounted) return;
       _current.status = result.status;
       _current.rawText = result.rawText;
       _current.namaWajibPajak = result.namaWajibPajak;
 
       if (_current.isPaid) {
         final isOperator = await OperatorModeStore.instance.isEnabled();
-        final wilayahBloks = await WilayahKerjaStore.instance.whitelistedBloks();
+        if (!mounted) return;
+        final wilayahBloks = await WilayahKerjaStore.instance
+            .whitelistedBloks();
+        if (!mounted) return;
         if (isOperator || wilayahBloks.contains(nopBlok(_current.nop))) {
-          await BlokDataStore.instance.upsert(BlokRecord(
-            nop: _current.nop,
-            namaWajibPajak: result.namaWajibPajak ?? '',
-            tahunBayar: widget.tahun,
-            tanggalBayar: result.tanggalBayar ?? '',
-            jumlahPbb: result.jumlahPbb ?? '',
-          ));
+          await BlokDataStore.instance.upsert(
+            BlokRecord(
+              nop: _current.nop,
+              namaWajibPajak: result.namaWajibPajak ?? '',
+              tahunBayar: widget.tahun,
+              tanggalBayar: result.tanggalBayar ?? '',
+              jumlahPbb: result.jumlahPbb ?? '',
+            ),
+          );
         }
       }
 
       if (widget.downloadBuktiBayar && _current.isPaid) {
-        _current.buktiBayarDownloaded = await _downloadBuktiBayar(_current);
+        final buktiBayarDownloaded = await _downloadBuktiBayar(_current);
+        if (!mounted) return;
+        _current.buktiBayarDownloaded = buktiBayarDownloaded;
       }
 
+      if (!mounted) return;
       _goToNext();
     } on CaptchaError catch (e) {
+      if (!mounted) return;
       setState(() => _errorText = e.message);
       _captchaController.clear();
+      await Future<void>.delayed(const Duration(seconds: 1));
+      if (!mounted) return;
       await _loadCaptcha();
     } catch (e) {
+      if (!mounted) return;
       setState(() => _errorText = 'Gagal cek: $e');
     } finally {
-      setState(() => _submitting = false);
+      if (mounted) setState(() => _submitting = false);
     }
   }
 
   Future<bool> _downloadBuktiBayar(TaxRecord record) async {
     try {
-      final bytes = await _client.fetchBuktiBayarPdf(nop: record.nop, tahun: widget.tahun);
+      final bytes = await _client.fetchBuktiBayarPdf(
+        nop: record.nop,
+        tahun: widget.tahun,
+      );
       final fileName =
           'Bukti Bayar (${record.namaWajibPajak ?? record.nop}) No. '
           '(${nopBlok(record.nop)}) (${nopWilayah(record.nop)}) (${widget.tahun}).pdf';
@@ -194,8 +218,14 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('NOP', style: Theme.of(context).textTheme.labelMedium),
-                      Text(_current.nop, style: Theme.of(context).textTheme.titleLarge),
+                      Text(
+                        'NOP',
+                        style: Theme.of(context).textTheme.labelMedium,
+                      ),
+                      Text(
+                        _current.nop,
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
                       const SizedBox(height: 4),
                       Text('Tahun Pajak: ${widget.tahun}'),
                     ],
@@ -210,11 +240,13 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
                         child: CircularProgressIndicator(),
                       )
                     : _captchaBytes != null
-                        ? Container(
-                            decoration: BoxDecoration(border: Border.all(color: Colors.grey)),
-                            child: Image.memory(_captchaBytes!, height: 84),
-                          )
-                        : const Text('Captcha belum dimuat'),
+                    ? Container(
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.grey),
+                        ),
+                        child: Image.memory(_captchaBytes!, height: 84),
+                      )
+                    : const Text('Captcha belum dimuat'),
               ),
               const SizedBox(height: 8),
               Center(
@@ -243,7 +275,10 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
                           ? const SizedBox(
                               height: 20,
                               width: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
                             )
                           : const Text('Cek & Lanjut'),
                     ),

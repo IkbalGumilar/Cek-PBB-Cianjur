@@ -22,7 +22,11 @@ class MonitoringWilayahScreen extends StatelessWidget {
   final StaffPortalClient client;
   final ThemeController themeController;
 
-  const MonitoringWilayahScreen({super.key, required this.client, required this.themeController});
+  const MonitoringWilayahScreen({
+    super.key,
+    required this.client,
+    required this.themeController,
+  });
 
   static const _tabs = [
     'Sudah Bayar',
@@ -47,7 +51,10 @@ class MonitoringWilayahScreen extends StatelessWidget {
             IconButton(
               onPressed: () => Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => SettingsScreen(themeController: themeController)),
+                MaterialPageRoute(
+                  builder: (_) =>
+                      SettingsScreen(themeController: themeController),
+                ),
               ),
               icon: const Icon(Icons.settings),
               tooltip: 'Pengaturan',

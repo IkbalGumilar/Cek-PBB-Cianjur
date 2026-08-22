@@ -41,7 +41,11 @@ class KelolaAnggotaScreen extends StatefulWidget {
   final StaffPortalClient client;
   final KolektifGroup group;
 
-  const KelolaAnggotaScreen({super.key, required this.client, required this.group});
+  const KelolaAnggotaScreen({
+    super.key,
+    required this.client,
+    required this.group,
+  });
 
   @override
   State<KelolaAnggotaScreen> createState() => _KelolaAnggotaScreenState();
@@ -125,7 +129,17 @@ class _KelolaAnggotaScreenState extends State<KelolaAnggotaScreen> {
       ],
       rows: [
         for (final m in hasil.members)
-          [m.nop, m.tahunPajak, m.jatuhTempo, m.namaWp, m.kecamatan, m.kelurahan, m.pokok, m.denda, m.total],
+          [
+            m.nop,
+            m.tahunPajak,
+            m.jatuhTempo,
+            m.namaWp,
+            m.kecamatan,
+            m.kelurahan,
+            m.pokok,
+            m.denda,
+            m.total,
+          ],
         [
           '',
           '',
@@ -164,8 +178,16 @@ class _KelolaAnggotaScreenState extends State<KelolaAnggotaScreen> {
     if (format == null) return;
     setState(() => _aksiBerjalan = true);
     try {
-      final bytes = await MonitoringResultExporter.build(format, _sebagaiTabel(hasil), _judulBerkas);
-      final namaBerkas = MonitoringResultExporter.fileName(format, _judulBerkas, prefix: 'anggota');
+      final bytes = await MonitoringResultExporter.build(
+        format,
+        _sebagaiTabel(hasil),
+        _judulBerkas,
+      );
+      final namaBerkas = MonitoringResultExporter.fileName(
+        format,
+        _judulBerkas,
+        prefix: 'anggota',
+      );
       final lokasi = await DownloadHelper.saveBytes(bytes, namaBerkas);
       if (!mounted) return;
       _snack('Tersimpan di $lokasi');
@@ -182,8 +204,16 @@ class _KelolaAnggotaScreenState extends State<KelolaAnggotaScreen> {
     if (format == null) return;
     setState(() => _aksiBerjalan = true);
     try {
-      final bytes = await MonitoringResultExporter.build(format, _sebagaiTabel(hasil), _judulBerkas);
-      final namaBerkas = MonitoringResultExporter.fileName(format, _judulBerkas, prefix: 'anggota');
+      final bytes = await MonitoringResultExporter.build(
+        format,
+        _sebagaiTabel(hasil),
+        _judulBerkas,
+      );
+      final namaBerkas = MonitoringResultExporter.fileName(
+        format,
+        _judulBerkas,
+        prefix: 'anggota',
+      );
       await NativeFileHelper.shareBytes(
         bytes: bytes,
         fileName: namaBerkas,
@@ -209,7 +239,10 @@ class _KelolaAnggotaScreenState extends State<KelolaAnggotaScreen> {
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => DocumentPreviewScreen(pdfBytes: bytes, fileName: '$_judulBerkas.pdf'),
+          builder: (_) => DocumentPreviewScreen(
+            pdfBytes: bytes,
+            fileName: '$_judulBerkas.pdf',
+          ),
         ),
       );
     } catch (e) {
@@ -236,7 +269,11 @@ class _KelolaAnggotaScreenState extends State<KelolaAnggotaScreen> {
       setState(() => _result = result);
     } catch (e) {
       if (!mounted) return;
-      setState(() => _result = KolektifMemberListResult(errorMessage: 'Gagal memuat daftar anggota: $e'));
+      setState(
+        () => _result = KolektifMemberListResult(
+          errorMessage: 'Gagal memuat daftar anggota: $e',
+        ),
+      );
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -259,10 +296,16 @@ class _KelolaAnggotaScreenState extends State<KelolaAnggotaScreen> {
     final nop = _nop.text.trim();
     final tahun = _tahunPajak.text.trim();
     if (nop.isEmpty) {
-      _pesan('NOP belum diisi', 'Isi dulu NOP yang mau dimasukkan. Pakai koma (,) sebagai pemisah kalau lebih dari satu.');
+      _pesan(
+        'NOP belum diisi',
+        'Isi dulu NOP yang mau dimasukkan. Pakai koma (,) sebagai pemisah kalau lebih dari satu.',
+      );
       return;
     }
-    final terurai = uraikanNopKolektif(nop, kelurahanCode: widget.group.kelurahanCode);
+    final terurai = uraikanNopKolektif(
+      nop,
+      kelurahanCode: widget.group.kelurahanCode,
+    );
     if (terurai.error != null) {
       _pesan('NOP belum bisa dibaca', terurai.error!);
       return;
@@ -279,7 +322,8 @@ class _KelolaAnggotaScreenState extends State<KelolaAnggotaScreen> {
     // sebelum terkirim.
     final lanjut = await _konfirmasi(
       judul: 'Tambahkan ke grup?',
-      isi: '${daftar.length} NOP akan dimasukkan ke grup "${widget.group.namaGroup}" '
+      isi:
+          '${daftar.length} NOP akan dimasukkan ke grup "${widget.group.namaGroup}" '
           'untuk tahun pajak $tahun, ${_bukuOptions.firstWhere((b) => b.$1 == _buku).$2}.\n\n'
           '${daftar.join('\n')}',
       labelAksi: 'Tambahkan',
@@ -300,7 +344,8 @@ class _KelolaAnggotaScreenState extends State<KelolaAnggotaScreen> {
     } catch (e) {
       hasil = KolektifActionResult(
         success: false,
-        message: 'Koneksi terputus saat menunggu jawaban server, jadi hasilnya belum pasti. '
+        message:
+            'Koneksi terputus saat menunggu jawaban server, jadi hasilnya belum pasti. '
             'Periksa dulu daftar anggota di bawah sebelum mencoba lagi.\n\n$e',
       );
     } finally {
@@ -312,7 +357,10 @@ class _KelolaAnggotaScreenState extends State<KelolaAnggotaScreen> {
       _nop.clear();
       _snack(hasil.message ?? 'NOP berhasil ditambahkan.');
     } else {
-      _pesan('NOP tidak jadi ditambahkan', hasil.message ?? 'Server menolak tanpa keterangan.');
+      _pesan(
+        'NOP tidak jadi ditambahkan',
+        hasil.message ?? 'Server menolak tanpa keterangan.',
+      );
     }
     await _muat();
   }
@@ -326,8 +374,11 @@ class _KelolaAnggotaScreenState extends State<KelolaAnggotaScreen> {
     final tahun = _tahunPajak.text.trim();
     final masalahTahun = _masalahTahun(tahun);
     if (masalahTahun != null) {
-      _pesan('Tahun pajak tidak wajar', '$masalahTahun\n\nBetulkan dulu sebelum memilih berkas — '
-          'tahun ini dipakai untuk seluruh NOP di dalam berkas.');
+      _pesan(
+        'Tahun pajak tidak wajar',
+        '$masalahTahun\n\nBetulkan dulu sebelum memilih berkas — '
+            'tahun ini dipakai untuk seluruh NOP di dalam berkas.',
+      );
       return;
     }
 
@@ -351,7 +402,10 @@ class _KelolaAnggotaScreenState extends State<KelolaAnggotaScreen> {
     } on Exception catch (e) {
       if (!mounted) return;
       setState(() => _aksiBerjalan = false);
-      _pesan('Gagal membaca berkas', 'Isi "${berkas.first.name}" tidak bisa dibaca: $e');
+      _pesan(
+        'Gagal membaca berkas',
+        'Isi "${berkas.first.name}" tidak bisa dibaca: $e',
+      );
       return;
     }
     if (!mounted) return;
@@ -381,7 +435,9 @@ class _KelolaAnggotaScreenState extends State<KelolaAnggotaScreen> {
   }
 
   Future<void> _hapusTerpilih() async {
-    final members = (_result?.members ?? []).where((m) => _terpilih.contains(m.kunci)).toList();
+    final members = (_result?.members ?? [])
+        .where((m) => _terpilih.contains(m.kunci))
+        .toList();
     if (members.isEmpty) {
       _pesan('Belum ada yang dipilih', 'Silakan pilih data terlebih dahulu.');
       return;
@@ -389,7 +445,8 @@ class _KelolaAnggotaScreenState extends State<KelolaAnggotaScreen> {
 
     final lanjut = await _konfirmasi(
       judul: 'Hapus ${members.length} data terpilih?',
-      isi: 'NOP berikut akan dikeluarkan dari grup "${widget.group.namaGroup}". '
+      isi:
+          'NOP berikut akan dikeluarkan dari grup "${widget.group.namaGroup}". '
           'Selama grup masih Draft, NOP ini bisa dimasukkan lagi nanti.\n\n'
           '${members.map((m) => '${m.nop} (${m.tahunPajak})').join('\n')}',
       labelAksi: 'Hapus',
@@ -404,7 +461,8 @@ class _KelolaAnggotaScreenState extends State<KelolaAnggotaScreen> {
     } catch (e) {
       hasil = KolektifActionResult(
         success: false,
-        message: 'Koneksi terputus saat menunggu jawaban server, jadi hasilnya belum pasti. '
+        message:
+            'Koneksi terputus saat menunggu jawaban server, jadi hasilnya belum pasti. '
             'Periksa dulu daftar anggota di bawah sebelum mencoba lagi.\n\n$e',
       );
     } finally {
@@ -415,7 +473,10 @@ class _KelolaAnggotaScreenState extends State<KelolaAnggotaScreen> {
     if (hasil.success) {
       _snack('${members.length} data dikeluarkan dari grup.');
     } else {
-      _pesan('Data tidak jadi dihapus', hasil.message ?? 'Server menolak tanpa keterangan.');
+      _pesan(
+        'Data tidak jadi dihapus',
+        hasil.message ?? 'Server menolak tanpa keterangan.',
+      );
     }
     await _muat();
   }
@@ -433,9 +494,14 @@ class _KelolaAnggotaScreenState extends State<KelolaAnggotaScreen> {
         title: Text(judul),
         content: SingleChildScrollView(child: Text(isi)),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Batal')),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Batal'),
+          ),
           FilledButton(
-            style: warna == null ? null : FilledButton.styleFrom(backgroundColor: warna),
+            style: warna == null
+                ? null
+                : FilledButton.styleFrom(backgroundColor: warna),
             onPressed: () => Navigator.pop(dialogContext, true),
             child: Text(labelAksi),
           ),
@@ -445,7 +511,9 @@ class _KelolaAnggotaScreenState extends State<KelolaAnggotaScreen> {
   }
 
   Widget _barisTotal(String label, int nilai, {bool tebal = false}) {
-    final gaya = tebal ? const TextStyle(fontWeight: FontWeight.bold, fontSize: 16) : null;
+    final gaya = tebal
+        ? const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)
+        : null;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
@@ -458,7 +526,9 @@ class _KelolaAnggotaScreenState extends State<KelolaAnggotaScreen> {
     );
   }
 
-  void _snack(String pesan) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(pesan)));
+  void _snack(String pesan) => ScaffoldMessenger.of(
+    context,
+  ).showSnackBar(SnackBar(content: Text(pesan)));
 
   void _pesan(String judul, String isi) {
     showDialog<void>(
@@ -466,7 +536,12 @@ class _KelolaAnggotaScreenState extends State<KelolaAnggotaScreen> {
       builder: (dialogContext) => AlertDialog(
         title: Text(judul),
         content: SingleChildScrollView(child: Text(isi)),
-        actions: [TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Tutup'))],
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Tutup'),
+          ),
+        ],
       ),
     );
   }
@@ -485,10 +560,13 @@ class _KelolaAnggotaScreenState extends State<KelolaAnggotaScreen> {
       ),
       floatingActionButton: members.length > _pageSize
           ? FloatingActionButton.extended(
-              onPressed: sibuk ? null : () => _bukaSemuaLaluKeBawah(members.length),
+              onPressed: sibuk
+                  ? null
+                  : () => _bukaSemuaLaluKeBawah(members.length),
               icon: const Icon(Icons.vertical_align_bottom),
               label: const Text('Ke Bawah'),
-              tooltip: 'Buka semua anggota lalu lompat ke total di paling bawah',
+              tooltip:
+                  'Buka semua anggota lalu lompat ke total di paling bawah',
             )
           : null,
       body: SafeArea(
@@ -498,7 +576,10 @@ class _KelolaAnggotaScreenState extends State<KelolaAnggotaScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(widget.group.namaGroup, style: Theme.of(context).textTheme.titleMedium),
+              Text(
+                widget.group.namaGroup,
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
               const SizedBox(height: 4),
               Text(
                 '${rapikanNamaWilayah(widget.group.kelurahan)} · ${widget.group.status}',
@@ -520,41 +601,54 @@ class _KelolaAnggotaScreenState extends State<KelolaAnggotaScreen> {
                   controller: _nop,
                   keyboardType: TextInputType.number,
                   maxLines: 2,
-                  inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9,]'))],
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'[0-9,]')),
+                  ],
                   decoration: const InputDecoration(
                     labelText: 'NOP',
-                    helperText: 'NOP lengkap 18 angka, atau singkatan blok+nomor wilayah 5–7 angka '
+                    helperText:
+                        'NOP lengkap 18 angka, atau singkatan blok+nomor wilayah 5–7 angka '
                         '(contoh 17154 → blok 017 nomor 0154). Pisahkan dengan koma kalau lebih dari satu.',
                     helperMaxLines: 3,
                     border: OutlineInputBorder(),
                   ),
                 ),
                 const SizedBox(height: 12),
-                Row(children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _tahunPajak,
-                      keyboardType: TextInputType.number,
-                      maxLength: 4,
-                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                      decoration: const InputDecoration(
-                        labelText: 'Tahun Pajak',
-                        border: OutlineInputBorder(),
-                        counterText: '',
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _tahunPajak,
+                        keyboardType: TextInputType.number,
+                        maxLength: 4,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                        ],
+                        decoration: const InputDecoration(
+                          labelText: 'Tahun Pajak',
+                          border: OutlineInputBorder(),
+                          counterText: '',
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: DropdownButtonFormField<String>(
-                      isExpanded: true,
-                      initialValue: _buku,
-                      decoration: const InputDecoration(labelText: 'Buku', border: OutlineInputBorder()),
-                      items: [for (final b in _bukuOptions) DropdownMenuItem(value: b.$1, child: Text(b.$2))],
-                      onChanged: (v) => setState(() => _buku = v ?? '1'),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: DropdownButtonFormField<String>(
+                        isExpanded: true,
+                        initialValue: _buku,
+                        decoration: const InputDecoration(
+                          labelText: 'Buku',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: [
+                          for (final b in _bukuOptions)
+                            DropdownMenuItem(value: b.$1, child: Text(b.$2)),
+                        ],
+                        onChanged: (v) => setState(() => _buku = v ?? '1'),
+                      ),
                     ),
-                  ),
-                ]),
+                  ],
+                ),
                 const SizedBox(height: 12),
                 FilledButton.icon(
                   onPressed: sibuk ? null : _tambahNop,
@@ -571,7 +665,9 @@ class _KelolaAnggotaScreenState extends State<KelolaAnggotaScreen> {
                 Text(
                   'Berkas dibaca dulu dan ditampilkan sebagai NOP 18 angka sebelum ada yang dikirim. '
                   'Tahun pajak & buku di atas dipakai untuk seluruh isi berkas.',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: Colors.grey),
                 ),
               ],
               const SizedBox(height: 20),
@@ -579,7 +675,9 @@ class _KelolaAnggotaScreenState extends State<KelolaAnggotaScreen> {
                 children: [
                   Expanded(
                     child: Text(
-                      members.isEmpty ? 'Anggota' : 'Anggota (${members.length})',
+                      members.isEmpty
+                          ? 'Anggota'
+                          : 'Anggota (${members.length})',
                       style: Theme.of(context).textTheme.titleSmall,
                     ),
                   ),
@@ -610,11 +708,12 @@ class _KelolaAnggotaScreenState extends State<KelolaAnggotaScreen> {
               if (_bisaDiubah && members.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 8),
-                  child: Row(children: [
-                    TextButton(
-                      onPressed: sibuk
-                          ? null
-                          : () => setState(() {
+                  child: Row(
+                    children: [
+                      TextButton(
+                        onPressed: sibuk
+                            ? null
+                            : () => setState(() {
                                 if (_terpilih.length == members.length) {
                                   _terpilih.clear();
                                 } else {
@@ -623,23 +722,38 @@ class _KelolaAnggotaScreenState extends State<KelolaAnggotaScreen> {
                                     ..addAll(members.map((m) => m.kunci));
                                 }
                               }),
-                      child: Text(_terpilih.length == members.length ? 'Batal Pilih Semua' : 'Pilih Semua Data'),
-                    ),
-                    const Spacer(),
-                    TextButton.icon(
-                      onPressed: sibuk || _terpilih.isEmpty ? null : _hapusTerpilih,
-                      icon: const Icon(Icons.delete_outline),
-                      style: TextButton.styleFrom(foregroundColor: Theme.of(context).colorScheme.error),
-                      label: Text('Hapus (${_terpilih.length})'),
-                    ),
-                  ]),
+                        child: Text(
+                          _terpilih.length == members.length
+                              ? 'Batal Pilih Semua'
+                              : 'Pilih Semua Data',
+                        ),
+                      ),
+                      const Spacer(),
+                      TextButton.icon(
+                        onPressed: sibuk || _terpilih.isEmpty
+                            ? null
+                            : _hapusTerpilih,
+                        icon: const Icon(Icons.delete_outline),
+                        style: TextButton.styleFrom(
+                          foregroundColor: Theme.of(context).colorScheme.error,
+                        ),
+                        label: Text('Hapus (${_terpilih.length})'),
+                      ),
+                    ],
+                  ),
                 ),
               if (_loading)
-                const Padding(padding: EdgeInsets.symmetric(vertical: 24), child: Center(child: CircularProgressIndicator()))
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 24),
+                  child: Center(child: CircularProgressIndicator()),
+                )
               else if (_result?.errorMessage != null)
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 12),
-                  child: Text(_result!.errorMessage!, style: const TextStyle(color: Colors.grey)),
+                  child: Text(
+                    _result!.errorMessage!,
+                    style: const TextStyle(color: Colors.grey),
+                  ),
                 )
               else ...[
                 for (final m in tampil)
@@ -652,15 +766,18 @@ class _KelolaAnggotaScreenState extends State<KelolaAnggotaScreen> {
                               onChanged: sibuk
                                   ? null
                                   : (v) => setState(() {
-                                        if (v == true) {
-                                          _terpilih.add(m.kunci);
-                                        } else {
-                                          _terpilih.remove(m.kunci);
-                                        }
-                                      }),
+                                      if (v == true) {
+                                        _terpilih.add(m.kunci);
+                                      } else {
+                                        _terpilih.remove(m.kunci);
+                                      }
+                                    }),
                             )
                           : null,
-                      title: Text(m.nop, style: const TextStyle(fontFamily: 'monospace')),
+                      title: Text(
+                        m.nop,
+                        style: const TextStyle(fontFamily: 'monospace'),
+                      ),
                       subtitle: Text(
                         '${m.namaWp}\nTahun ${m.tahunPajak} · Jatuh tempo ${m.jatuhTempo}\n'
                         'Pokok ${m.pokok} · Denda ${m.denda} · Total ${m.total}',
@@ -671,7 +788,9 @@ class _KelolaAnggotaScreenState extends State<KelolaAnggotaScreen> {
                 if (_tampil < members.length) ...[
                   OutlinedButton(
                     onPressed: () => setState(() => _tampil += _pageSize),
-                    child: Text('Muat $_pageSize Data Lagi (${members.length - _tampil} tersisa)'),
+                    child: Text(
+                      'Muat $_pageSize Data Lagi (${members.length - _tampil} tersisa)',
+                    ),
                   ),
                   const SizedBox(height: 8),
                   TextButton.icon(
@@ -692,20 +811,29 @@ class _KelolaAnggotaScreenState extends State<KelolaAnggotaScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Total Keseluruhan (${members.length} NOP)',
-                              style: Theme.of(context).textTheme.titleSmall),
+                          Text(
+                            'Total Keseluruhan (${members.length} NOP)',
+                            style: Theme.of(context).textTheme.titleSmall,
+                          ),
                           const SizedBox(height: 8),
                           _barisTotal('Pokok', _result!.totalPokok),
                           _barisTotal('Denda', _result!.totalDenda),
                           const Divider(),
-                          _barisTotal('Total Bayar', _result!.totalBayar, tebal: true),
+                          _barisTotal(
+                            'Total Bayar',
+                            _result!.totalBayar,
+                            tebal: true,
+                          ),
                         ],
                       ),
                     ),
                   ),
               ],
               if (_aksiBerjalan)
-                const Padding(padding: EdgeInsets.symmetric(vertical: 24), child: Center(child: CircularProgressIndicator())),
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 24),
+                  child: Center(child: CircularProgressIndicator()),
+                ),
             ],
           ),
         ),

@@ -28,10 +28,15 @@ class PembayaranKolektifScreen extends StatefulWidget {
   final StaffPortalClient client;
   final ThemeController themeController;
 
-  const PembayaranKolektifScreen({super.key, required this.client, required this.themeController});
+  const PembayaranKolektifScreen({
+    super.key,
+    required this.client,
+    required this.themeController,
+  });
 
   @override
-  State<PembayaranKolektifScreen> createState() => _PembayaranKolektifScreenState();
+  State<PembayaranKolektifScreen> createState() =>
+      _PembayaranKolektifScreenState();
 }
 
 class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
@@ -47,21 +52,35 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
   KolektifFormOptions? _formOptions;
 
   static const _bulanOptions = [
-    ('0', 'Semua'), ('1', 'Januari'), ('2', 'Februari'), ('3', 'Maret'), ('4', 'April'),
-    ('5', 'Mei'), ('6', 'Juni'), ('7', 'Juli'), ('8', 'Agustus'), ('9', 'September'),
-    ('10', 'Oktober'), ('11', 'November'), ('12', 'Desember'),
+    ('0', 'Semua'),
+    ('1', 'Januari'),
+    ('2', 'Februari'),
+    ('3', 'Maret'),
+    ('4', 'April'),
+    ('5', 'Mei'),
+    ('6', 'Juni'),
+    ('7', 'Juli'),
+    ('8', 'Agustus'),
+    ('9', 'September'),
+    ('10', 'Oktober'),
+    ('11', 'November'),
+    ('12', 'Desember'),
   ];
   static const _statusOptions = [
-    ('', 'Semua'), ('0', 'Draft'), ('1', 'Siap Dibayar'), ('2', 'Sudah Di Bayar'), ('99', 'Expired'),
+    ('', 'Semua'),
+    ('0', 'Draft'),
+    ('1', 'Siap Dibayar'),
+    ('2', 'Sudah Di Bayar'),
+    ('99', 'Expired'),
   ];
 
   static String _labelStatus(String code) => switch (code) {
-        '0' => 'Draft',
-        '1' => 'Siap Dibayar',
-        '2' => 'Sudah Di Bayar',
-        '99' => 'Expired',
-        _ => code.isEmpty ? '-' : code,
-      };
+    '0' => 'Draft',
+    '1' => 'Siap Dibayar',
+    '2' => 'Sudah Di Bayar',
+    '99' => 'Expired',
+    _ => code.isEmpty ? '-' : code,
+  };
 
   @override
   void initState() {
@@ -85,7 +104,11 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
       setState(() => _formOptions = options);
     } catch (e) {
       if (!mounted) return;
-      setState(() => _formOptions = KolektifFormOptions(errorMessage: 'Gagal membaca wilayah: $e'));
+      setState(
+        () => _formOptions = KolektifFormOptions(
+          errorMessage: 'Gagal membaca wilayah: $e',
+        ),
+      );
     }
   }
 
@@ -106,7 +129,11 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
       setState(() => _result = result);
     } catch (e) {
       if (!mounted) return;
-      setState(() => _result = KolektifListResult(errorMessage: 'Gagal memuat daftar grup: $e'));
+      setState(
+        () => _result = KolektifListResult(
+          errorMessage: 'Gagal memuat daftar grup: $e',
+        ),
+      );
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -114,7 +141,10 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
 
   Future<void> _tambahGroup() async {
     final options = _formOptions;
-    if (options == null || options.errorMessage != null || options.kelurahan.isEmpty || !options.bisaTambah) {
+    if (options == null ||
+        options.errorMessage != null ||
+        options.kelurahan.isEmpty ||
+        !options.bisaTambah) {
       _tampilkanPesan(
         'Belum bisa menambah grup',
         options?.errorMessage ??
@@ -131,10 +161,13 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
     );
     if (isian == null || !mounted) return;
 
-    final kelurahan = options.kelurahan.firstWhere((k) => k.code == isian.kelurahanCode);
+    final kelurahan = options.kelurahan.firstWhere(
+      (k) => k.code == isian.kelurahanCode,
+    );
     final lanjut = await _konfirmasi(
       judul: 'Buat grup ini sekarang?',
-      peringatan: 'Grup akan dibuat di server pemda dan tercatat permanen di sana.',
+      peringatan:
+          'Grup akan dibuat di server pemda dan tercatat permanen di sana.',
       rincian: {
         'Nama Group': isian.namaGroup,
         'Keterangan': isian.keterangan,
@@ -143,7 +176,8 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
         'Kecamatan': options.kecamatanName.isEmpty
             ? options.kecamatanCode
             : '${options.kecamatanName} (${options.kecamatanCode})',
-        'Kelurahan': '${rapikanNamaWilayah(kelurahan.name)} (${kelurahan.code})',
+        'Kelurahan':
+            '${rapikanNamaWilayah(kelurahan.name)} (${kelurahan.code})',
       },
       labelAksi: 'Simpan',
       warnaAksi: null,
@@ -167,7 +201,8 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
       // dan yang putus cuma jawabannya.
       hasil = KolektifActionResult(
         success: false,
-        message: 'Koneksi terputus saat menunggu jawaban server, jadi hasilnya belum pasti. '
+        message:
+            'Koneksi terputus saat menunggu jawaban server, jadi hasilnya belum pasti. '
             'Periksa dulu daftar grup di bawah sebelum mencoba lagi.\n\n$e',
       );
     } finally {
@@ -178,7 +213,10 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
     if (hasil.success) {
       _tampilkanSnack('Grup "${isian.namaGroup}" berhasil dibuat.');
     } else {
-      _tampilkanPesan('Grup tidak jadi dibuat', hasil.message ?? 'Server menolak tanpa keterangan.');
+      _tampilkanPesan(
+        'Grup tidak jadi dibuat',
+        hasil.message ?? 'Server menolak tanpa keterangan.',
+      );
     }
     await _muat();
   }
@@ -203,9 +241,13 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              title: Text(group.namaGroup, style: const TextStyle(fontWeight: FontWeight.bold)),
+              title: Text(
+                group.namaGroup,
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
               subtitle: Text(
-                  '${rapikanNamaWilayah(group.kelurahan)} · ${group.status} · ${group.anggota} anggota'),
+                '${rapikanNamaWilayah(group.kelurahan)} · ${group.status} · ${group.anggota} anggota',
+              ),
             ),
             const Divider(height: 1),
             ListTile(
@@ -221,7 +263,10 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => KelolaAnggotaScreen(client: widget.client, group: group),
+                    builder: (_) => KelolaAnggotaScreen(
+                      client: widget.client,
+                      group: group,
+                    ),
                   ),
                 ).then((_) => _muat());
               },
@@ -230,7 +275,9 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
               ListTile(
                 leading: const Icon(Icons.edit_outlined),
                 title: const Text('Ubah Group'),
-                subtitle: const Text('Ubah nama, keterangan, kolektor, atau no HP'),
+                subtitle: const Text(
+                  'Ubah nama, keterangan, kolektor, atau no HP',
+                ),
                 onTap: () {
                   Navigator.pop(sheetContext);
                   _ubahGroup(group);
@@ -248,9 +295,17 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
               ),
             if (group.canDelete)
               ListTile(
-                leading: Icon(Icons.delete_outline, color: Theme.of(context).colorScheme.error),
-                title: Text('Hapus Group', style: TextStyle(color: Theme.of(context).colorScheme.error)),
-                subtitle: const Text('Tercatat permanen di Log History Penghapusan'),
+                leading: Icon(
+                  Icons.delete_outline,
+                  color: Theme.of(context).colorScheme.error,
+                ),
+                title: Text(
+                  'Hapus Group',
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+                subtitle: const Text(
+                  'Tercatat permanen di Log History Penghapusan',
+                ),
                 onTap: () {
                   Navigator.pop(sheetContext);
                   _hapusGroup(group);
@@ -259,8 +314,13 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
             else
               const ListTile(
                 leading: Icon(Icons.delete_outline, color: Colors.grey),
-                title: Text('Hapus Group', style: TextStyle(color: Colors.grey)),
-                subtitle: Text('Tidak tersedia — grup sudah difinalkan, dibayar, atau tidak boleh dihapus'),
+                title: Text(
+                  'Hapus Group',
+                  style: TextStyle(color: Colors.grey),
+                ),
+                subtitle: Text(
+                  'Tidak tersedia — grup sudah difinalkan, dibayar, atau tidak boleh dihapus',
+                ),
               ),
           ],
         ),
@@ -270,7 +330,9 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
 
   Future<void> _ubahGroup(KolektifGroup group) async {
     final options = _formOptions;
-    if (options == null || options.errorMessage != null || !options.bisaTambah) {
+    if (options == null ||
+        options.errorMessage != null ||
+        !options.bisaTambah) {
       _tampilkanPesan(
         'Belum bisa mengubah grup',
         options?.errorMessage ??
@@ -288,7 +350,8 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
 
     final lanjut = await _konfirmasi(
       judul: 'Simpan perubahan grup?',
-      peringatan: 'Data grup di server pemda akan diganti dengan isian di bawah.',
+      peringatan:
+          'Data grup di server pemda akan diganti dengan isian di bawah.',
       rincian: {
         'Nama Group': isian.namaGroup,
         'Keterangan': isian.keterangan,
@@ -315,7 +378,8 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
     } catch (e) {
       hasil = KolektifActionResult(
         success: false,
-        message: 'Koneksi terputus saat menunggu jawaban server, jadi hasilnya belum pasti. '
+        message:
+            'Koneksi terputus saat menunggu jawaban server, jadi hasilnya belum pasti. '
             'Periksa dulu daftar grup di bawah sebelum mencoba lagi.\n\n$e',
       );
     } finally {
@@ -326,7 +390,10 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
     if (hasil.success) {
       _tampilkanSnack('Perubahan grup "${isian.namaGroup}" tersimpan.');
     } else {
-      _tampilkanPesan('Perubahan tidak tersimpan', hasil.message ?? 'Server menolak tanpa keterangan.');
+      _tampilkanPesan(
+        'Perubahan tidak tersimpan',
+        hasil.message ?? 'Server menolak tanpa keterangan.',
+      );
     }
     await _muat();
   }
@@ -350,7 +417,10 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
       _tampilkanPesan('Surat pengantar tidak bisa dibuka', e.message);
     } catch (e) {
       if (!mounted) return;
-      _tampilkanPesan('Surat pengantar tidak bisa dibuka', 'Gagal mengambil dokumen dari server:\n\n$e');
+      _tampilkanPesan(
+        'Surat pengantar tidak bisa dibuka',
+        'Gagal mengambil dokumen dari server:\n\n$e',
+      );
     } finally {
       if (mounted) setState(() => _aksiBerjalan = false);
     }
@@ -374,7 +444,8 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
 
     final lanjut = await _konfirmasi(
       judul: 'Hapus grup ini sekarang?',
-      peringatan: 'Penghapusan tidak bisa dibatalkan. Grup, alasan di bawah, dan nama akun Anda '
+      peringatan:
+          'Penghapusan tidak bisa dibatalkan. Grup, alasan di bawah, dan nama akun Anda '
           'akan tercatat permanen di Log History Penghapusan milik pemda.',
       rincian: {
         'Nama Group': group.namaGroup,
@@ -391,11 +462,15 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
     setState(() => _aksiBerjalan = true);
     KolektifActionResult hasil;
     try {
-      hasil = await widget.client.deleteKolektifGroup(groupId: group.id, alasan: alasan);
+      hasil = await widget.client.deleteKolektifGroup(
+        groupId: group.id,
+        alasan: alasan,
+      );
     } catch (e) {
       hasil = KolektifActionResult(
         success: false,
-        message: 'Koneksi terputus saat menunggu jawaban server, jadi hasilnya belum pasti. '
+        message:
+            'Koneksi terputus saat menunggu jawaban server, jadi hasilnya belum pasti. '
             'Periksa dulu daftar grup di bawah sebelum mencoba lagi.\n\n$e',
       );
     } finally {
@@ -406,7 +481,10 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
     if (hasil.success) {
       _tampilkanSnack('Grup "${group.namaGroup}" berhasil dihapus.');
     } else {
-      _tampilkanPesan('Grup tidak jadi dihapus', hasil.message ?? 'Server menolak tanpa keterangan.');
+      _tampilkanPesan(
+        'Grup tidak jadi dihapus',
+        hasil.message ?? 'Server menolak tanpa keterangan.',
+      );
     }
     await _muat();
   }
@@ -428,7 +506,10 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(peringatan, style: const TextStyle(fontWeight: FontWeight.bold)),
+              Text(
+                peringatan,
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
               const SizedBox(height: 16),
               for (final entry in rincian.entries)
                 Padding(
@@ -438,9 +519,14 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
                     children: [
                       SizedBox(
                         width: 116,
-                        child: Text(entry.key, style: const TextStyle(color: Colors.grey)),
+                        child: Text(
+                          entry.key,
+                          style: const TextStyle(color: Colors.grey),
+                        ),
                       ),
-                      Expanded(child: Text(entry.value.isEmpty ? '-' : entry.value)),
+                      Expanded(
+                        child: Text(entry.value.isEmpty ? '-' : entry.value),
+                      ),
                     ],
                   ),
                 ),
@@ -448,9 +534,14 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Batal')),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Batal'),
+          ),
           FilledButton(
-            style: warnaAksi == null ? null : FilledButton.styleFrom(backgroundColor: warnaAksi),
+            style: warnaAksi == null
+                ? null
+                : FilledButton.styleFrom(backgroundColor: warnaAksi),
             onPressed: () => Navigator.pop(dialogContext, true),
             child: Text(labelAksi),
           ),
@@ -469,7 +560,12 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
       builder: (dialogContext) => AlertDialog(
         title: Text(judul),
         content: SingleChildScrollView(child: Text(isi)),
-        actions: [TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Tutup'))],
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Tutup'),
+          ),
+        ],
       ),
     );
   }
@@ -477,11 +573,16 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
   @override
   Widget build(BuildContext context) {
     final opsi = _formOptions;
-    final opsiSiap = opsi != null && opsi.errorMessage == null && opsi.kelurahan.isNotEmpty && opsi.bisaTambah;
+    final opsiSiap =
+        opsi != null &&
+        opsi.errorMessage == null &&
+        opsi.kelurahan.isNotEmpty &&
+        opsi.bisaTambah;
     final sibuk = _loading || _aksiBerjalan;
-    final peringatanToken = (opsi != null && opsi.errorMessage == null && !opsi.bisaTambah)
+    final peringatanToken =
+        (opsi != null && opsi.errorMessage == null && !opsi.bisaTambah)
         ? 'Aksi tambah/hapus dimatikan: struktur halaman Pembayaran Kolektif di server tidak '
-            'terbaca seperti biasanya. Daftar grup di bawah tetap bisa dilihat.'
+              'terbaca seperti biasanya. Daftar grup di bawah tetap bisa dilihat.'
         : null;
 
     return Scaffold(
@@ -493,7 +594,10 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
           IconButton(
             onPressed: () => Navigator.push(
               context,
-              MaterialPageRoute(builder: (_) => SettingsScreen(themeController: widget.themeController)),
+              MaterialPageRoute(
+                builder: (_) =>
+                    SettingsScreen(themeController: widget.themeController),
+              ),
             ),
             icon: const Icon(Icons.settings),
             tooltip: 'Pengaturan',
@@ -523,65 +627,114 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
               if (opsi?.errorMessage != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
-                  child: Text(opsi!.errorMessage!, style: const TextStyle(color: Colors.red)),
+                  child: Text(
+                    opsi!.errorMessage!,
+                    style: const TextStyle(color: Colors.red),
+                  ),
                 )
               else if (peringatanToken != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
-                  child: Text(peringatanToken, style: const TextStyle(color: Colors.orange)),
+                  child: Text(
+                    peringatanToken,
+                    style: const TextStyle(color: Colors.orange),
+                  ),
                 ),
               const SizedBox(height: 16),
-              Row(children: [
-                Expanded(
-                  child: DropdownButtonFormField<String>(
-                    isExpanded: true,
-                    initialValue: _bulan,
-                    decoration: const InputDecoration(labelText: 'Bulan', border: OutlineInputBorder()),
-                    items: [for (final o in _bulanOptions) DropdownMenuItem(value: o.$1, child: Text(o.$2))],
-                    onChanged: (v) => setState(() => _bulan = v ?? '0'),
+              Row(
+                children: [
+                  Expanded(
+                    child: DropdownButtonFormField<String>(
+                      isExpanded: true,
+                      initialValue: _bulan,
+                      decoration: const InputDecoration(
+                        labelText: 'Bulan',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: [
+                        for (final o in _bulanOptions)
+                          DropdownMenuItem(value: o.$1, child: Text(o.$2)),
+                      ],
+                      onChanged: (v) => setState(() => _bulan = v ?? '0'),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: DropdownButtonFormField<String>(
-                    isExpanded: true,
-                    initialValue: _status,
-                    decoration: const InputDecoration(labelText: 'Status', border: OutlineInputBorder()),
-                    items: [for (final o in _statusOptions) DropdownMenuItem(value: o.$1, child: Text(o.$2))],
-                    onChanged: (v) => setState(() => _status = v ?? ''),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: DropdownButtonFormField<String>(
+                      isExpanded: true,
+                      initialValue: _status,
+                      decoration: const InputDecoration(
+                        labelText: 'Status',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: [
+                        for (final o in _statusOptions)
+                          DropdownMenuItem(value: o.$1, child: Text(o.$2)),
+                      ],
+                      onChanged: (v) => setState(() => _status = v ?? ''),
+                    ),
                   ),
-                ),
-              ]),
+                ],
+              ),
               const SizedBox(height: 12),
               TextField(
                 controller: _tahun,
                 keyboardType: TextInputType.number,
                 maxLength: 4,
-                decoration: const InputDecoration(labelText: 'Tahun (opsional)', border: OutlineInputBorder(), counterText: ''),
+                decoration: const InputDecoration(
+                  labelText: 'Tahun (opsional)',
+                  border: OutlineInputBorder(),
+                  counterText: '',
+                ),
               ),
               const SizedBox(height: 12),
-              Row(children: [
-                Expanded(child: MonitoringDateField(label: 'Tanggal Awal', controller: _tglAwal)),
-                const SizedBox(width: 8),
-                Expanded(child: MonitoringDateField(label: 'Tanggal Akhir', controller: _tglAkhir)),
-              ]),
+              Row(
+                children: [
+                  Expanded(
+                    child: MonitoringDateField(
+                      label: 'Tanggal Awal',
+                      controller: _tglAwal,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: MonitoringDateField(
+                      label: 'Tanggal Akhir',
+                      controller: _tglAkhir,
+                    ),
+                  ),
+                ],
+              ),
               const SizedBox(height: 16),
               FilledButton(
                 onPressed: sibuk ? null : _muat,
                 child: _loading
-                    ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
                     : const Text('Tampilkan'),
               ),
               const SizedBox(height: 16),
               if (_loading)
-                const Padding(padding: EdgeInsets.symmetric(vertical: 24), child: Center(child: CircularProgressIndicator()))
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 24),
+                  child: Center(child: CircularProgressIndicator()),
+                )
               else if (_result != null)
                 _KolektifResultView(
                   result: _result!,
                   onAksi: _aksiBerjalan ? null : _aksiGrup,
                 ),
               if (_aksiBerjalan)
-                const Padding(padding: EdgeInsets.symmetric(vertical: 24), child: Center(child: CircularProgressIndicator())),
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 24),
+                  child: Center(child: CircularProgressIndicator()),
+                ),
             ],
           ),
         ),
@@ -599,15 +752,20 @@ class _KolektifResultView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (result.errorMessage != null) {
-      return Text(result.errorMessage!, style: const TextStyle(color: Colors.red));
+      return Text(
+        result.errorMessage!,
+        style: const TextStyle(color: Colors.red),
+      );
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Padding(
           padding: EdgeInsets.only(bottom: 8),
-          child: Text('Ketuk baris grup untuk Kelola Anggota / Hapus Group.',
-              style: TextStyle(color: Colors.grey, fontSize: 12)),
+          child: Text(
+            'Ketuk baris grup untuk Kelola Anggota / Hapus Group.',
+            style: TextStyle(color: Colors.grey, fontSize: 12),
+          ),
         ),
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
@@ -623,14 +781,14 @@ class _KolektifResultView extends StatelessWidget {
       columns: const [
         DataColumn(label: Text('')),
         DataColumn(label: Text('Nama Group')),
-          DataColumn(label: Text('Nama Kolektor')),
-          DataColumn(label: Text('HP Kolektor')),
-          DataColumn(label: Text('Anggota')),
-          DataColumn(label: Text('Kode Bayar')),
-          DataColumn(label: Text('Status')),
-          DataColumn(label: Text('Kecamatan')),
-          DataColumn(label: Text('Kelurahan')),
-          DataColumn(label: Text('Keterangan')),
+        DataColumn(label: Text('Nama Kolektor')),
+        DataColumn(label: Text('HP Kolektor')),
+        DataColumn(label: Text('Anggota')),
+        DataColumn(label: Text('Kode Bayar')),
+        DataColumn(label: Text('Status')),
+        DataColumn(label: Text('Kecamatan')),
+        DataColumn(label: Text('Kelurahan')),
+        DataColumn(label: Text('Keterangan')),
         DataColumn(label: Text('Tanggal Kadaluarsa')),
       ],
       rows: [
@@ -641,10 +799,14 @@ class _KolektifResultView extends StatelessWidget {
               // Kolom paling kiri cuma penanda bahwa barisnya bisa diketuk —
               // aksinya sendiri ada di sheet yang muncul setelah diketuk, biar
               // tetap terjangkau walau tabelnya digeser mendatar.
-              DataCell(Icon(
-                Icons.more_horiz,
-                color: g.canDelete ? Theme.of(context).colorScheme.primary : Colors.grey,
-              )),
+              DataCell(
+                Icon(
+                  Icons.more_horiz,
+                  color: g.canDelete
+                      ? Theme.of(context).colorScheme.primary
+                      : Colors.grey,
+                ),
+              ),
               DataCell(Text(g.namaGroup)),
               DataCell(Text(g.namaKolektor)),
               DataCell(Text(g.hpKolektor)),
@@ -707,7 +869,9 @@ class _TambahGroupDialogState extends State<_TambahGroupDialog> {
 
   /// Sama seperti `cekValidasi()` di halaman asli — karakter di luar daftar
   /// ini dibuang saat diketik, bukan ditolak saat submit.
-  static final _teksDiizinkan = FilteringTextInputFormatter.allow(RegExp(r"""[a-zA-Z0-9 ()/'"_.\-]"""));
+  static final _teksDiizinkan = FilteringTextInputFormatter.allow(
+    RegExp(r"""[a-zA-Z0-9 ()/'"_.\-]"""),
+  );
 
   bool get _modeUbah => widget.groupDiubah != null;
 
@@ -716,7 +880,8 @@ class _TambahGroupDialogState extends State<_TambahGroupDialog> {
   /// baik ditampilkan sebagai keterangan daripada dropdown yang bisa salah
   /// tersentuh.
   bool get _kelurahanTerkunci =>
-      (_modeUbah && widget.groupDiubah!.kelurahanCode.isNotEmpty) || widget.options.kelurahan.length == 1;
+      (_modeUbah && widget.groupDiubah!.kelurahanCode.isNotEmpty) ||
+      widget.options.kelurahan.length == 1;
 
   @override
   void initState() {
@@ -737,10 +902,13 @@ class _TambahGroupDialogState extends State<_TambahGroupDialog> {
   }
 
   String get _namaKelurahanTerpilih {
-    final cocok = widget.options.kelurahan.where((k) => k.code == _kelurahanCode);
+    final cocok = widget.options.kelurahan.where(
+      (k) => k.code == _kelurahanCode,
+    );
     if (cocok.isNotEmpty) return rapikanNamaWilayah(cocok.first.name);
     final group = widget.groupDiubah;
-    if (group != null && group.kelurahan.isNotEmpty) return rapikanNamaWilayah(group.kelurahan);
+    if (group != null && group.kelurahan.isNotEmpty)
+      return rapikanNamaWilayah(group.kelurahan);
     return _kelurahanCode ?? '';
   }
 
@@ -754,7 +922,9 @@ class _TambahGroupDialogState extends State<_TambahGroupDialog> {
   }
 
   String? _wajib(String? value, String namaField) =>
-      (value == null || value.trim().isEmpty) ? '$namaField tidak boleh kosong' : null;
+      (value == null || value.trim().isEmpty)
+      ? '$namaField tidak boleh kosong'
+      : null;
 
   void _lanjut() {
     if (!_formKey.currentState!.validate()) return;
@@ -763,7 +933,11 @@ class _TambahGroupDialogState extends State<_TambahGroupDialog> {
     // ditolak server setelah datanya telanjur dikirim.
     if (_kelurahanCode == null || _kelurahanCode!.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Kelurahan tidak terbaca — coba buka ulang menu Pembayaran Kolektif.')),
+        const SnackBar(
+          content: Text(
+            'Kelurahan tidak terbaca — coba buka ulang menu Pembayaran Kolektif.',
+          ),
+        ),
       );
       return;
     }
@@ -793,7 +967,10 @@ class _TambahGroupDialogState extends State<_TambahGroupDialog> {
                 controller: _namaGroup,
                 textCapitalization: TextCapitalization.characters,
                 inputFormatters: [_teksDiizinkan, _FormatHurufBesar()],
-                decoration: const InputDecoration(labelText: 'Nama Group', border: OutlineInputBorder()),
+                decoration: const InputDecoration(
+                  labelText: 'Nama Group',
+                  border: OutlineInputBorder(),
+                ),
                 validator: (v) => _wajib(v, 'Nama Group'),
               ),
               const SizedBox(height: 12),
@@ -802,7 +979,10 @@ class _TambahGroupDialogState extends State<_TambahGroupDialog> {
                 textCapitalization: TextCapitalization.characters,
                 inputFormatters: [_teksDiizinkan, _FormatHurufBesar()],
                 maxLines: 2,
-                decoration: const InputDecoration(labelText: 'Keterangan', border: OutlineInputBorder()),
+                decoration: const InputDecoration(
+                  labelText: 'Keterangan',
+                  border: OutlineInputBorder(),
+                ),
                 validator: (v) => _wajib(v, 'Keterangan'),
               ),
               const SizedBox(height: 12),
@@ -810,7 +990,10 @@ class _TambahGroupDialogState extends State<_TambahGroupDialog> {
                 controller: _namaKolektor,
                 textCapitalization: TextCapitalization.characters,
                 inputFormatters: [_teksDiizinkan, _FormatHurufBesar()],
-                decoration: const InputDecoration(labelText: 'Kolektor', border: OutlineInputBorder()),
+                decoration: const InputDecoration(
+                  labelText: 'Kolektor',
+                  border: OutlineInputBorder(),
+                ),
                 validator: (v) => _wajib(v, 'Kolektor'),
               ),
               const SizedBox(height: 12),
@@ -818,11 +1001,16 @@ class _TambahGroupDialogState extends State<_TambahGroupDialog> {
                 controller: _noHpKolektor,
                 keyboardType: TextInputType.phone,
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                decoration: const InputDecoration(labelText: 'No HP Kolektor', border: OutlineInputBorder()),
+                decoration: const InputDecoration(
+                  labelText: 'No HP Kolektor',
+                  border: OutlineInputBorder(),
+                ),
                 validator: (v) {
                   final kosong = _wajib(v, 'No HP Kolektor');
                   if (kosong != null) return kosong;
-                  return v!.trim().length < 10 ? 'No HP Kolektor minimal 10 angka' : null;
+                  return v!.trim().length < 10
+                      ? 'No HP Kolektor minimal 10 angka'
+                      : null;
                 },
               ),
               const SizedBox(height: 12),
@@ -835,7 +1023,10 @@ class _TambahGroupDialogState extends State<_TambahGroupDialog> {
                     : widget.options.kecamatanCode,
                 readOnly: true,
                 enabled: false,
-                decoration: const InputDecoration(labelText: 'Kecamatan', border: OutlineInputBorder()),
+                decoration: const InputDecoration(
+                  labelText: 'Kecamatan',
+                  border: OutlineInputBorder(),
+                ),
               ),
               const SizedBox(height: 12),
               if (_kelurahanTerkunci)
@@ -844,29 +1035,43 @@ class _TambahGroupDialogState extends State<_TambahGroupDialog> {
                   initialValue: _namaKelurahanTerpilih,
                   readOnly: true,
                   enabled: false,
-                  decoration: const InputDecoration(labelText: 'Kelurahan', border: OutlineInputBorder()),
+                  decoration: const InputDecoration(
+                    labelText: 'Kelurahan',
+                    border: OutlineInputBorder(),
+                  ),
                 )
               else
                 DropdownButtonFormField<String>(
                   isExpanded: true,
                   initialValue: _kelurahanCode,
-                  decoration: const InputDecoration(labelText: 'Kelurahan', border: OutlineInputBorder()),
+                  decoration: const InputDecoration(
+                    labelText: 'Kelurahan',
+                    border: OutlineInputBorder(),
+                  ),
                   items: [
                     for (final k in widget.options.kelurahan)
                       DropdownMenuItem(
                         value: k.code,
-                        child: Text(rapikanNamaWilayah(k.name), overflow: TextOverflow.ellipsis),
+                        child: Text(
+                          rapikanNamaWilayah(k.name),
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                   ],
                   onChanged: (v) => setState(() => _kelurahanCode = v),
-                  validator: (v) => (v == null || v.isEmpty) ? 'Kelurahan tidak boleh kosong' : null,
+                  validator: (v) => (v == null || v.isEmpty)
+                      ? 'Kelurahan tidak boleh kosong'
+                      : null,
                 ),
             ],
           ),
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Kembali Ke Group')),
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Kembali Ke Group'),
+        ),
         FilledButton(onPressed: _lanjut, child: const Text('Lanjut')),
       ],
     );
@@ -935,7 +1140,10 @@ class _HapusGroupDialogState extends State<_HapusGroupDialog> {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(widget.namaGroup, style: const TextStyle(fontWeight: FontWeight.bold)),
+              Text(
+                widget.namaGroup,
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
                 isExpanded: true,
@@ -945,8 +1153,12 @@ class _HapusGroupDialogState extends State<_HapusGroupDialog> {
                   border: OutlineInputBorder(),
                 ),
                 items: [
-                  for (final a in _alasanSiapPakai) DropdownMenuItem(value: a, child: Text(a)),
-                  const DropdownMenuItem(value: _lainnya, child: Text('Lainnya — tulis sendiri')),
+                  for (final a in _alasanSiapPakai)
+                    DropdownMenuItem(value: a, child: Text(a)),
+                  const DropdownMenuItem(
+                    value: _lainnya,
+                    child: Text('Lainnya — tulis sendiri'),
+                  ),
                 ],
                 onChanged: _pilihAlasan,
               ),
@@ -958,21 +1170,28 @@ class _HapusGroupDialogState extends State<_HapusGroupDialog> {
                 decoration: const InputDecoration(
                   labelText: 'Alasan Penghapusan',
                   hintText: 'Masukkan alasan penghapusan group kolektif',
-                  helperText: 'Tersimpan permanen di Log History Penghapusan beserta nama akun Anda.',
+                  helperText:
+                      'Tersimpan permanen di Log History Penghapusan beserta nama akun Anda.',
                   helperMaxLines: 2,
                   border: OutlineInputBorder(),
                 ),
-                validator: (v) =>
-                    (v == null || v.trim().isEmpty) ? 'Mohon isi alasan penghapusan terlebih dahulu' : null,
+                validator: (v) => (v == null || v.trim().isEmpty)
+                    ? 'Mohon isi alasan penghapusan terlebih dahulu'
+                    : null,
               ),
             ],
           ),
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Batal')),
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Batal'),
+        ),
         FilledButton(
-          style: FilledButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
+          style: FilledButton.styleFrom(
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
           onPressed: () {
             if (!_formKey.currentState!.validate()) return;
             Navigator.pop(context, _alasan.text.trim());
@@ -989,7 +1208,13 @@ class _HapusGroupDialogState extends State<_HapusGroupDialog> {
 /// yang dilihat staf sama dengan apa yang tersimpan.
 class _FormatHurufBesar extends TextInputFormatter {
   @override
-  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
-    return TextEditingValue(text: newValue.text.toUpperCase(), selection: newValue.selection);
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    return TextEditingValue(
+      text: newValue.text.toUpperCase(),
+      selection: newValue.selection,
+    );
   }
 }

@@ -19,7 +19,9 @@ class NativeFileHelper {
     required String mimeType,
   }) async {
     if (!Platform.isAndroid) {
-      throw UnsupportedError('Penyimpanan ke Dokumen hanya didukung di Android saat ini.');
+      throw UnsupportedError(
+        'Penyimpanan ke Dokumen hanya didukung di Android saat ini.',
+      );
     }
     try {
       final location = await _channel.invokeMethod<String>('saveToDocuments', {

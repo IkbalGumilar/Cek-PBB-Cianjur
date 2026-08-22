@@ -106,8 +106,14 @@ class _ImportViewState extends State<ImportView> {
           'Semua NOP yang diketik/tersimpan di catatan akan dihapus. Berkas hasil import tidak terpengaruh.',
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Hapus')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Hapus'),
+          ),
         ],
       ),
     );
@@ -132,9 +138,18 @@ class _ImportViewState extends State<ImportView> {
           'diunduh semua ke folder Dokumen setelah dicek?',
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, null), child: const Text('Kembali')),
-          OutlinedButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Tidak')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Iya')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, null),
+            child: const Text('Kembali'),
+          ),
+          OutlinedButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Tidak'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Iya'),
+          ),
         ],
       ),
     );
@@ -143,13 +158,18 @@ class _ImportViewState extends State<ImportView> {
   Future<void> _startBatch() async {
     final tahun = _tahunController.text.trim();
     final combined = <String, TaxRecord>{};
-    for (final r in [..._records, ...FileImporter.importFromText(_textController.text)]) {
+    for (final r in [
+      ..._records,
+      ...FileImporter.importFromText(_textController.text),
+    ]) {
       combined[r.nop] = r;
     }
     final records = combined.values.toList();
 
     if (records.isEmpty) {
-      setState(() => _errorText = 'Belum ada data NOP dari file atau catatan di atas.');
+      setState(
+        () => _errorText = 'Belum ada data NOP dari file atau catatan di atas.',
+      );
       return;
     }
     if (widget.mode == CheckMode.statusBayar && tahun.isEmpty) {
@@ -200,13 +220,17 @@ class _ImportViewState extends State<ImportView> {
             icon: const Icon(Icons.folder_open),
             label: Text(_fileName ?? 'Pilih File'),
           ),
-          if (_loading) const Padding(
-            padding: EdgeInsets.only(top: 16),
-            child: Center(child: CircularProgressIndicator()),
-          ),
+          if (_loading)
+            const Padding(
+              padding: EdgeInsets.only(top: 16),
+              child: Center(child: CircularProgressIndicator()),
+            ),
           if (_records.isNotEmpty) ...[
             const SizedBox(height: 12),
-            Text('${_records.length} NOP dari file', style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              '${_records.length} NOP dari file',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
             const SizedBox(height: 8),
             Container(
               constraints: const BoxConstraints(maxHeight: 160),
@@ -216,7 +240,10 @@ class _ImportViewState extends State<ImportView> {
               ),
               child: ListView.builder(
                 shrinkWrap: true,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
                 itemCount: _records.length,
                 itemBuilder: (context, index) => Text(
                   _records[index].nop,
@@ -228,7 +255,10 @@ class _ImportViewState extends State<ImportView> {
           const SizedBox(height: 20),
           const Divider(),
           const SizedBox(height: 8),
-          Text('Atau ketik langsung di sini', style: Theme.of(context).textTheme.titleMedium),
+          Text(
+            'Atau ketik langsung di sini',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
           const SizedBox(height: 8),
           TextField(
             controller: _textController,
@@ -255,7 +285,11 @@ class _ImportViewState extends State<ImportView> {
                 icon: const Icon(Icons.delete_outline),
                 label: const Text('Hapus Semua'),
               ),
-              if (_savedNotice != null) Text(_savedNotice!, style: const TextStyle(color: Colors.green)),
+              if (_savedNotice != null)
+                Text(
+                  _savedNotice!,
+                  style: const TextStyle(color: Colors.green),
+                ),
             ],
           ),
           const SizedBox(height: 20),
@@ -270,7 +304,8 @@ class _ImportViewState extends State<ImportView> {
             ),
             const SizedBox(height: 12),
           ],
-          if (_errorText != null) Text(_errorText!, style: const TextStyle(color: Colors.red)),
+          if (_errorText != null)
+            Text(_errorText!, style: const TextStyle(color: Colors.red)),
           FilledButton(
             onPressed: _startBatch,
             child: const Padding(

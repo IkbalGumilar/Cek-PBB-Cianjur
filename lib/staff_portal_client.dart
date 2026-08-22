@@ -32,7 +32,11 @@ class MonitoringTableResult {
   final List<List<String>> rows;
   final String? errorMessage;
 
-  const MonitoringTableResult({this.headers = const [], this.rows = const [], this.errorMessage});
+  const MonitoringTableResult({
+    this.headers = const [],
+    this.rows = const [],
+    this.errorMessage,
+  });
 }
 
 /// Satu opsi pada dropdown filter Bank (dimuat dinamis dari server, bukan
@@ -123,8 +127,13 @@ class KolektifListResult {
 /// dirapatkan supaya terbaca wajar; nama yang memang bersuku kata banyak
 /// ("CIKIDANGBAYABANG") dibiarkan apa adanya.
 String rapikanNamaWilayah(String nama) {
-  final potongan = nama.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
-  if (potongan.length > 1 && potongan.every((p) => p.length == 1)) return potongan.join();
+  final potongan = nama
+      .trim()
+      .split(RegExp(r'\s+'))
+      .where((p) => p.isNotEmpty)
+      .toList();
+  if (potongan.length > 1 && potongan.every((p) => p.length == 1))
+    return potongan.join();
   return nama.trim();
 }
 
@@ -183,9 +192,12 @@ class KolektifMemberListResult {
 
   /// Total seluruh anggota — halaman aslinya juga menghitung ini sendiri di
   /// kaki tabel (`footerCallback`), bukan mengambilnya dari server.
-  int get totalPokok => members.fold(0, (a, m) => a + parseAngkaServer(m.pokok));
-  int get totalDenda => members.fold(0, (a, m) => a + parseAngkaServer(m.denda));
-  int get totalBayar => members.fold(0, (a, m) => a + parseAngkaServer(m.total));
+  int get totalPokok =>
+      members.fold(0, (a, m) => a + parseAngkaServer(m.pokok));
+  int get totalDenda =>
+      members.fold(0, (a, m) => a + parseAngkaServer(m.denda));
+  int get totalBayar =>
+      members.fold(0, (a, m) => a + parseAngkaServer(m.total));
 }
 
 /// Satu pilihan kelurahan pada form Tambah Group.
@@ -314,7 +326,10 @@ class StaffPortalClient {
   Future<void> _ensureCookieManager() async {
     if (_cookieManagerAttached) return;
     final dir = await getApplicationSupportDirectory();
-    final jar = PersistCookieJar(ignoreExpires: true, storage: FileStorage('${dir.path}/staff_portal_cookies'));
+    final jar = PersistCookieJar(
+      ignoreExpires: true,
+      storage: FileStorage('${dir.path}/staff_portal_cookies'),
+    );
     _dio.interceptors.add(CookieManager(jar));
     _cookieManagerAttached = true;
   }
@@ -329,7 +344,10 @@ class StaffPortalClient {
   Future<bool> hasActiveSession() async {
     await _ensureCookieManager();
     try {
-      final response = await _dio.get<String>('/main.php', options: Options(responseType: ResponseType.plain));
+      final response = await _dio.get<String>(
+        '/main.php',
+        options: Options(responseType: ResponseType.plain),
+      );
       final html = response.data ?? '';
       return html.contains('id="user-menu"') && html.contains('logout');
     } catch (_) {
@@ -368,7 +386,10 @@ class StaffPortalClient {
   /// submit.
   Future<Uint8List> fetchLoginCaptcha() async {
     await _ensureCookieManager();
-    await _dio.get<String>('/main.php', options: Options(responseType: ResponseType.plain));
+    await _dio.get<String>(
+      '/main.php',
+      options: Options(responseType: ResponseType.plain),
+    );
     final response = await _dio.get<List<int>>(
       '/captcha2.php',
       options: Options(responseType: ResponseType.bytes),
@@ -408,7 +429,9 @@ class StaffPortalClient {
     final page = await _followAndRead(response);
     return StaffLoginResult(
       needsMfa: false,
-      errorMessage: _extractErrorMessage(page) ?? 'Login gagal — periksa username, password, dan kode verifikasi.',
+      errorMessage:
+          _extractErrorMessage(page) ??
+          'Login gagal — periksa username, password, dan kode verifikasi.',
     );
   }
 
@@ -425,21 +448,27 @@ class StaffPortalClient {
     );
 
     final location = response.headers.value('location');
-    if (response.statusCode == 302 && (location == null || !location.contains('mfa.php'))) {
+    if (response.statusCode == 302 &&
+        (location == null || !location.contains('mfa.php'))) {
       return const StaffMfaResult(success: true);
     }
 
     final page = await _followAndRead(response);
     return StaffMfaResult(
       success: false,
-      errorMessage: _extractErrorMessage(page) ?? 'Kode verifikasi salah atau sudah kedaluwarsa.',
+      errorMessage:
+          _extractErrorMessage(page) ??
+          'Kode verifikasi salah atau sudah kedaluwarsa.',
     );
   }
 
   Future<String> _followAndRead(Response<String> response) async {
     final location = response.headers.value('location');
     if (location == null) return response.data ?? '';
-    final next = await _dio.get<String>(_normalizeLocation(location), options: Options(responseType: ResponseType.plain));
+    final next = await _dio.get<String>(
+      _normalizeLocation(location),
+      options: Options(responseType: ResponseType.plain),
+    );
     return next.data ?? '';
   }
 
@@ -449,7 +478,8 @@ class StaffPortalClient {
   /// paket dio) — tanpa garis miring, hasilnya jadi satu host rusak
   /// (`cianjurkab.v-tax.idmain.php`) yang gagal di-DNS-lookup.
   String _normalizeLocation(String location) {
-    if (location.startsWith('http://') || location.startsWith('https://')) return location;
+    if (location.startsWith('http://') || location.startsWith('https://'))
+      return location;
     return location.startsWith('/') ? location : '/$location';
   }
 
@@ -481,7 +511,10 @@ class StaffPortalClient {
   Future<String?> _ensurePageQ23() async {
     if (_pageQ23 != null) return _pageQ23;
     final html = await _ensureMonitoringPage();
-    _pageQ23 = StaffPortalTokenExtractor.extractLoadQ(html, 'onSubmitSudahBayar');
+    _pageQ23 = StaffPortalTokenExtractor.extractLoadQ(
+      html,
+      'onSubmitSudahBayar',
+    );
     return _pageQ23;
   }
 
@@ -492,10 +525,14 @@ class StaffPortalClient {
   }) async {
     final html = await _ensureMonitoringPage();
     final q = StaffPortalTokenExtractor.extractLoadQ(html, jsFunctionName);
-    final funcMode = StaffPortalTokenExtractor.extractFuncMode(html, jsFunctionName);
+    final funcMode = StaffPortalTokenExtractor.extractFuncMode(
+      html,
+      jsFunctionName,
+    );
     if (q == null || funcMode == null) {
       return const MonitoringTableResult(
-        errorMessage: 'Gagal membaca token halaman Monitoring — sesi mungkin sudah berakhir, '
+        errorMessage:
+            'Gagal membaca token halaman Monitoring — sesi mungkin sudah berakhir, '
             'coba buka ulang menu Monitoring (login ulang kalau diminta).',
       );
     }
@@ -503,7 +540,10 @@ class StaffPortalClient {
       '/main.php',
       queryParameters: {'q': q},
       data: {'query': query, ...params, 'funcMode': funcMode},
-      options: Options(contentType: Headers.formUrlEncodedContentType, responseType: ResponseType.plain),
+      options: Options(
+        contentType: Headers.formUrlEncodedContentType,
+        responseType: ResponseType.plain,
+      ),
     );
     return _parseGenericTable(response.data ?? '');
   }
@@ -738,7 +778,9 @@ class StaffPortalClient {
   }
 
   /// Tab "Rangking Realisasi" — replika `showRangkingRealisasi()`.
-  Future<MonitoringTableResult> fetchRangkingRealisasi({String bukuFilter = '123'}) {
+  Future<MonitoringTableResult> fetchRangkingRealisasi({
+    String bukuFilter = '123',
+  }) {
     return _fetchTab(
       jsFunctionName: 'showRangkingRealisasi',
       query: 'Ranking_Realisasi',
@@ -760,12 +802,18 @@ class StaffPortalClient {
     if (_bankOptionsCache != null) return _bankOptionsCache!;
     final html = await _ensureMonitoringPage();
     final q = await _ensurePageQ23();
-    final funcMode = StaffPortalTokenExtractor.extractFuncMode(html, 'showBank');
+    final funcMode = StaffPortalTokenExtractor.extractFuncMode(
+      html,
+      'showBank',
+    );
     if (q == null || funcMode == null) return const [];
     final response = await _dio.post<String>(
       '/main.php',
       data: {'q': q, 'config_filter_bank': '1', 'funcMode': funcMode},
-      options: Options(contentType: Headers.formUrlEncodedContentType, responseType: ResponseType.plain),
+      options: Options(
+        contentType: Headers.formUrlEncodedContentType,
+        responseType: ResponseType.plain,
+      ),
     );
     final options = _parseBankJson(response.data ?? '');
     _bankOptionsCache = options;
@@ -779,7 +827,10 @@ class StaffPortalClient {
       if (list is! List) return const [];
       return list
           .whereType<Map>()
-          .map((m) => BankOption(id: '${m['CDC_B_ID']}', name: '${m['CDC_B_NAME']}'))
+          .map(
+            (m) =>
+                BankOption(id: '${m['CDC_B_ID']}', name: '${m['CDC_B_NAME']}'),
+          )
           .toList();
     } on FormatException {
       return const [];
@@ -794,21 +845,35 @@ class StaffPortalClient {
     final tables = document.querySelectorAll('table');
     if (tables.isEmpty) {
       final text = document.body?.text.trim();
-      return MonitoringTableResult(errorMessage: (text == null || text.isEmpty) ? 'Tidak ada data.' : text);
+      return MonitoringTableResult(
+        errorMessage: (text == null || text.isEmpty) ? 'Tidak ada data.' : text,
+      );
     }
-    tables.sort((a, b) => b.querySelectorAll('td').length.compareTo(a.querySelectorAll('td').length));
+    tables.sort(
+      (a, b) => b
+          .querySelectorAll('td')
+          .length
+          .compareTo(a.querySelectorAll('td').length),
+    );
     final table = tables.first;
     final trs = table.querySelectorAll('tr');
-    if (trs.isEmpty) return const MonitoringTableResult(errorMessage: 'Tidak ada data.');
+    if (trs.isEmpty)
+      return const MonitoringTableResult(errorMessage: 'Tidak ada data.');
 
-    final headers = trs.first.querySelectorAll('th, td').map((c) => c.text.trim()).toList();
+    final headers = trs.first
+        .querySelectorAll('th, td')
+        .map((c) => c.text.trim())
+        .toList();
     final rows = trs
         .skip(1)
-        .map((tr) => tr.querySelectorAll('td').map((c) => c.text.trim()).toList())
+        .map(
+          (tr) => tr.querySelectorAll('td').map((c) => c.text.trim()).toList(),
+        )
         .where((r) => r.isNotEmpty)
         .toList();
 
-    if (rows.isEmpty) return const MonitoringTableResult(errorMessage: 'Tidak ada data.');
+    if (rows.isEmpty)
+      return const MonitoringTableResult(errorMessage: 'Tidak ada data.');
     return MonitoringTableResult(headers: headers, rows: rows);
   }
 
@@ -839,16 +904,22 @@ class StaffPortalClient {
   /// dropdown `#data-kelurahan-group-2` memang dirender server apa adanya.
   Future<KolektifFormOptions> fetchKolektifFormOptions() async {
     final html = await _ensureKolektifPage();
-    final kecamatan = StaffPortalTokenExtractor.extractKolektifKecamatanCode(html);
+    final kecamatan = StaffPortalTokenExtractor.extractKolektifKecamatanCode(
+      html,
+    );
     if (kecamatan == null) {
       return const KolektifFormOptions(
-        errorMessage: 'Gagal membaca wilayah dari halaman Pembayaran Kolektif — coba buka ulang menunya.',
+        errorMessage:
+            'Gagal membaca wilayah dari halaman Pembayaran Kolektif — coba buka ulang menunya.',
       );
     }
 
     final document = html_parser.parse(html);
     final options = <KolektifKelurahan>[];
-    for (final selector in ['select#data-kelurahan-group-2', 'select#data-kelurahan']) {
+    for (final selector in [
+      'select#data-kelurahan-group-2',
+      'select#data-kelurahan',
+    ]) {
       for (final option in document.querySelectorAll('$selector option')) {
         final code = option.attributes['value']?.trim() ?? '';
         if (code.isEmpty) continue;
@@ -860,7 +931,8 @@ class StaffPortalClient {
 
     if (options.isEmpty) {
       return const KolektifFormOptions(
-        errorMessage: 'Daftar kelurahan tidak ditemukan di halaman Pembayaran Kolektif.',
+        errorMessage:
+            'Daftar kelurahan tidak ditemukan di halaman Pembayaran Kolektif.',
       );
     }
 
@@ -868,8 +940,10 @@ class StaffPortalClient {
       kecamatanCode: kecamatan,
       kecamatanName: await _fetchKecamatanName(html, kecamatan),
       kelurahan: options,
-      bisaTambah: StaffPortalTokenExtractor.extractTambahGroupFuncMode(html) != null,
-      bisaHapus: StaffPortalTokenExtractor.extractHapusGroupFuncMode(html) != null &&
+      bisaTambah:
+          StaffPortalTokenExtractor.extractTambahGroupFuncMode(html) != null,
+      bisaHapus:
+          StaffPortalTokenExtractor.extractHapusGroupFuncMode(html) != null &&
           StaffPortalTokenExtractor.extractGlobalQ(html) != null,
     );
   }
@@ -881,7 +955,11 @@ class StaffPortalClient {
   /// menampilkan kode wilayah apa adanya, dan yang dikirim ke server saat
   /// menyimpan grup tetap kodenya.
   Future<String> _fetchKecamatanName(String html, String code) async {
-    final funcMode = StaffPortalTokenExtractor.extractFuncMode(html, 'showKecamatanAll', window: 600);
+    final funcMode = StaffPortalTokenExtractor.extractFuncMode(
+      html,
+      'showKecamatanAll',
+      window: 600,
+    );
     if (funcMode == null) return '';
     try {
       final response = await _dio.post<String>(
@@ -890,7 +968,10 @@ class StaffPortalClient {
         // aslinya (`data: {id: "3205", funcMode: funcMode}`). Aplikasi ini
         // memang khusus Cianjur — lihat juga baseUrl & prefix NOP.
         data: {'id': '3205', 'funcMode': funcMode},
-        options: Options(contentType: Headers.formUrlEncodedContentType, responseType: ResponseType.plain),
+        options: Options(
+          contentType: Headers.formUrlEncodedContentType,
+          responseType: ResponseType.plain,
+        ),
       );
       final decoded = jsonDecode(response.data ?? '');
       if (decoded is! Map || decoded['msg'] is! List) return '';
@@ -953,11 +1034,14 @@ class StaffPortalClient {
     required String kelurahanCode,
   }) {
     if (editGroupId.trim().isEmpty) {
-      return Future.value(const KolektifActionResult(
-        success: false,
-        message: 'ID grup tidak terbaca, jadi tidak ada yang diubah. '
-            '(Melanjutkan tanpa ID justru akan membuat grup baru.)',
-      ));
+      return Future.value(
+        const KolektifActionResult(
+          success: false,
+          message:
+              'ID grup tidak terbaca, jadi tidak ada yang diubah. '
+              '(Melanjutkan tanpa ID justru akan membuat grup baru.)',
+        ),
+      );
     }
     return _simpanKolektifGroup(
       editGroupId: editGroupId.trim(),
@@ -985,7 +1069,8 @@ class StaffPortalClient {
     if (funcMode == null || userId == null) {
       return KolektifActionResult(
         success: false,
-        message: 'Token halaman Pembayaran Kolektif tidak terbaca, jadi grup TIDAK '
+        message:
+            'Token halaman Pembayaran Kolektif tidak terbaca, jadi grup TIDAK '
             '${editGroupId.isEmpty ? 'dibuat' : 'diubah'}. '
             'Sesi mungkin sudah berakhir — masuk ulang lalu coba lagi.',
       );
@@ -1005,7 +1090,10 @@ class StaffPortalClient {
         'data-kelurahan-group': kelurahanCode,
         'funcMode': funcMode,
       },
-      options: Options(contentType: Headers.formUrlEncodedContentType, responseType: ResponseType.plain),
+      options: Options(
+        contentType: Headers.formUrlEncodedContentType,
+        responseType: ResponseType.plain,
+      ),
     );
     _kolektifHtml = null;
     return _parseKolektifActionJson(response.data ?? '');
@@ -1050,11 +1138,15 @@ class StaffPortalClient {
     if (groupId.trim().isEmpty) {
       return const KolektifActionResult(
         success: false,
-        message: 'ID grup tidak terbaca dari daftar, jadi tidak ada yang dihapus.',
+        message:
+            'ID grup tidak terbaca dari daftar, jadi tidak ada yang dihapus.',
       );
     }
     if (alasan.trim().isEmpty) {
-      return const KolektifActionResult(success: false, message: 'Alasan penghapusan wajib diisi.');
+      return const KolektifActionResult(
+        success: false,
+        message: 'Alasan penghapusan wajib diisi.',
+      );
     }
 
     final html = await _ensureKolektifPage(forceReload: true);
@@ -1063,7 +1155,8 @@ class StaffPortalClient {
     if (q == null || funcMode == null) {
       return const KolektifActionResult(
         success: false,
-        message: 'Token halaman Pembayaran Kolektif tidak terbaca, jadi grup TIDAK dihapus. '
+        message:
+            'Token halaman Pembayaran Kolektif tidak terbaca, jadi grup TIDAK dihapus. '
             'Sesi mungkin sudah berakhir — masuk ulang lalu coba lagi.',
       );
     }
@@ -1071,7 +1164,10 @@ class StaffPortalClient {
     final response = await _dio.post<String>(
       '/main.php',
       data: {'q': q, 'id': groupId, 'alasan': alasan, 'funcMode': funcMode},
-      options: Options(contentType: Headers.formUrlEncodedContentType, responseType: ResponseType.plain),
+      options: Options(
+        contentType: Headers.formUrlEncodedContentType,
+        responseType: ResponseType.plain,
+      ),
     );
     _kolektifHtml = null;
     return _parseKolektifActionJson(response.data ?? '');
@@ -1104,7 +1200,8 @@ class StaffPortalClient {
     final funcMode = StaffPortalTokenExtractor.extractListAnggotaFuncMode(html);
     if (funcMode == null) {
       return const KolektifMemberListResult(
-        errorMessage: 'Gagal membaca token daftar anggota — coba buka ulang menu Pembayaran Kolektif.',
+        errorMessage:
+            'Gagal membaca token daftar anggota — coba buka ulang menu Pembayaran Kolektif.',
       );
     }
 
@@ -1141,12 +1238,16 @@ class StaffPortalClient {
     try {
       final decoded = jsonDecode(body);
       if (decoded is! Map || decoded['data'] is! List) {
-        return const KolektifMemberListResult(errorMessage: 'Format respons daftar anggota tidak dikenali.');
+        return const KolektifMemberListResult(
+          errorMessage: 'Format respons daftar anggota tidak dikenali.',
+        );
       }
       final members = (decoded['data'] as List).whereType<List>().map((row) {
         String cell(int i) => i < row.length ? _stripHtml('${row[i]}') : '';
         final checkbox = row.isNotEmpty
-            ? html_parser.parseFragment('${row[0]}').querySelector('input[value]')
+            ? html_parser
+                  .parseFragment('${row[0]}')
+                  .querySelector('input[value]')
             : null;
         return KolektifMember(
           nop: checkbox?.attributes['value']?.trim().isNotEmpty == true
@@ -1165,12 +1266,15 @@ class StaffPortalClient {
         );
       }).toList();
       if (members.isEmpty) {
-        return const KolektifMemberListResult(errorMessage: 'Grup ini belum punya anggota.');
+        return const KolektifMemberListResult(
+          errorMessage: 'Grup ini belum punya anggota.',
+        );
       }
       return KolektifMemberListResult(members: members);
     } on FormatException {
       return const KolektifMemberListResult(
-        errorMessage: 'Gagal membaca daftar anggota — format respons tidak sesuai dugaan.',
+        errorMessage:
+            'Gagal membaca daftar anggota — format respons tidak sesuai dugaan.',
       );
     }
   }
@@ -1194,7 +1298,8 @@ class StaffPortalClient {
     if (nop.trim().isEmpty) {
       return const KolektifActionResult(
         success: false,
-        message: 'NOP wajib diisi. Menambahkan seluruh NOP sekelurahan sekaligus tidak disediakan di aplikasi ini.',
+        message:
+            'NOP wajib diisi. Menambahkan seluruh NOP sekelurahan sekaligus tidak disediakan di aplikasi ini.',
       );
     }
 
@@ -1204,7 +1309,8 @@ class StaffPortalClient {
     if (funcMode == null || userId == null) {
       return const KolektifActionResult(
         success: false,
-        message: 'Token halaman Pembayaran Kolektif tidak terbaca, jadi TIDAK ada NOP yang ditambahkan. '
+        message:
+            'Token halaman Pembayaran Kolektif tidak terbaca, jadi TIDAK ada NOP yang ditambahkan. '
             'Sesi mungkin sudah berakhir — masuk ulang lalu coba lagi.',
       );
     }
@@ -1228,7 +1334,10 @@ class StaffPortalClient {
         'blok2': '',
         'funcMode': funcMode,
       },
-      options: Options(contentType: Headers.formUrlEncodedContentType, responseType: ResponseType.plain),
+      options: Options(
+        contentType: Headers.formUrlEncodedContentType,
+        responseType: ResponseType.plain,
+      ),
     );
     _kolektifHtml = null;
     return _parseKolektifActionJson(response.data ?? '');
@@ -1267,7 +1376,9 @@ class StaffPortalClient {
     Duration jeda = const Duration(milliseconds: 250),
   }) async {
     if (nopList.isEmpty) {
-      return const HasilImporNop(errorFatal: 'Tidak ada NOP yang bisa dikirim.');
+      return const HasilImporNop(
+        errorFatal: 'Tidak ada NOP yang bisa dikirim.',
+      );
     }
 
     final html = await _ensureKolektifPage(forceReload: true);
@@ -1275,7 +1386,8 @@ class StaffPortalClient {
     final userId = StaffPortalTokenExtractor.extractKolektifUserId(html);
     if (funcMode == null || userId == null) {
       return const HasilImporNop(
-        errorFatal: 'Token halaman Pembayaran Kolektif tidak terbaca, jadi TIDAK ada NOP yang dikirim. '
+        errorFatal:
+            'Token halaman Pembayaran Kolektif tidak terbaca, jadi TIDAK ada NOP yang dikirim. '
             'Sesi mungkin sudah berakhir — masuk ulang lalu coba lagi.',
       );
     }
@@ -1306,7 +1418,10 @@ class StaffPortalClient {
             'blok2': '',
             'funcMode': funcMode,
           },
-          options: Options(contentType: Headers.formUrlEncodedContentType, responseType: ResponseType.plain),
+          options: Options(
+            contentType: Headers.formUrlEncodedContentType,
+            responseType: ResponseType.plain,
+          ),
         );
         hasil = _parseKolektifActionJson(response.data ?? '');
       } on DioException catch (e) {
@@ -1314,14 +1429,18 @@ class StaffPortalClient {
         // bisa jadi sudah masuk sebelum jawabannya hilang. Karena itu dicatat
         // sebagai "perlu diperiksa", bukan sebagai gagal.
         gagalBeruntun++;
-        item.add(ItemImporNop(
-          nop: nop,
-          status: StatusImporNop.perluDiperiksa,
-          pesan: 'Koneksi terputus sebelum jawaban server sampai, jadi belum pasti masuk atau tidak. '
-              '(${e.type.name})',
-        ));
+        item.add(
+          ItemImporNop(
+            nop: nop,
+            status: StatusImporNop.perluDiperiksa,
+            pesan:
+                'Koneksi terputus sebelum jawaban server sampai, jadi belum pasti masuk atau tidak. '
+                '(${e.type.name})',
+          ),
+        );
         if (gagalBeruntun >= 3) {
-          errorFatal = 'Koneksi gagal tiga kali berturut-turut, jadi sisa NOP tidak dikirim. '
+          errorFatal =
+              'Koneksi gagal tiga kali berturut-turut, jadi sisa NOP tidak dikirim. '
               'Periksa daftar anggota lalu ulangi untuk NOP yang belum masuk.';
           break;
         }
@@ -1334,18 +1453,24 @@ class StaffPortalClient {
       // Diteruskan pun sisanya cuma menembakkan permintaan sia-sia ke server
       // pemda, jadi berhenti di sini.
       if (!hasil.responsDikenali) {
-        errorFatal = 'Server berhenti menjawab dalam format yang dikenali di NOP ke-${i + 1} — '
+        errorFatal =
+            'Server berhenti menjawab dalam format yang dikenali di NOP ke-${i + 1} — '
             'biasanya berarti sesi login sudah berakhir. Sisa NOP TIDAK dikirim. '
             'Masuk ulang, periksa daftar anggota, lalu ulangi untuk yang belum masuk.';
         break;
       }
 
       gagalBeruntun = 0;
-      item.add(ItemImporNop(
-        nop: nop,
-        status: klasifikasiHasilTambahNop(success: hasil.success, pesan: hasil.message),
-        pesan: hasil.message,
-      ));
+      item.add(
+        ItemImporNop(
+          nop: nop,
+          status: klasifikasiHasilTambahNop(
+            success: hasil.success,
+            pesan: hasil.message,
+          ),
+          pesan: hasil.message,
+        ),
+      );
       onProgress?.call(i + 1, nopList.length);
       if (i < nopList.length - 1) await Future<void>.delayed(jeda);
     }
@@ -1362,15 +1487,21 @@ class StaffPortalClient {
     required List<KolektifMember> members,
   }) async {
     if (members.isEmpty) {
-      return const KolektifActionResult(success: false, message: 'Silakan pilih data terlebih dahulu.');
+      return const KolektifActionResult(
+        success: false,
+        message: 'Silakan pilih data terlebih dahulu.',
+      );
     }
 
     final html = await _ensureKolektifPage(forceReload: true);
-    final funcMode = StaffPortalTokenExtractor.extractHapusAnggotaFuncMode(html);
+    final funcMode = StaffPortalTokenExtractor.extractHapusAnggotaFuncMode(
+      html,
+    );
     if (funcMode == null) {
       return const KolektifActionResult(
         success: false,
-        message: 'Token halaman Pembayaran Kolektif tidak terbaca, jadi TIDAK ada anggota yang dihapus. '
+        message:
+            'Token halaman Pembayaran Kolektif tidak terbaca, jadi TIDAK ada anggota yang dihapus. '
             'Sesi mungkin sudah berakhir — masuk ulang lalu coba lagi.',
       );
     }
@@ -1383,7 +1514,10 @@ class StaffPortalClient {
         ],
         'funcMode': funcMode,
       },
-      options: Options(contentType: Headers.formUrlEncodedContentType, responseType: ResponseType.plain),
+      options: Options(
+        contentType: Headers.formUrlEncodedContentType,
+        responseType: ResponseType.plain,
+      ),
     );
     _kolektifHtml = null;
     return _parseKolektifActionJson(response.data ?? '');
@@ -1409,10 +1543,13 @@ class StaffPortalClient {
     } on FormatException {
       // Bukan JSON — jatuh ke penanganan di bawah.
     }
-    final cuplikan = trimmed.length > 300 ? '${trimmed.substring(0, 300)}…' : trimmed;
+    final cuplikan = trimmed.length > 300
+        ? '${trimmed.substring(0, 300)}…'
+        : trimmed;
     return KolektifActionResult(
       success: false,
-      message: 'Server menjawab dengan format yang tidak dikenali, jadi hasilnya belum pasti. '
+      message:
+          'Server menjawab dengan format yang tidak dikenali, jadi hasilnya belum pasti. '
           'Periksa dulu daftar grup sebelum mencoba lagi.\n\nJawaban server:\n$cuplikan',
       rawBody: trimmed,
       responsDikenali: false,
@@ -1447,11 +1584,16 @@ class StaffPortalClient {
     String tglAkhir = '',
   }) async {
     final html = await _ensureKolektifPage();
-    final funcMode = StaffPortalTokenExtractor.extractFuncMode(html, 'reloadDataGroup', window: 800);
+    final funcMode = StaffPortalTokenExtractor.extractFuncMode(
+      html,
+      'reloadDataGroup',
+      window: 800,
+    );
     final userId = StaffPortalTokenExtractor.extractKolektifUserId(html);
     if (funcMode == null || userId == null) {
       return const KolektifListResult(
-        errorMessage: 'Gagal membaca token halaman Pembayaran Kolektif — coba buka ulang menunya.',
+        errorMessage:
+            'Gagal membaca token halaman Pembayaran Kolektif — coba buka ulang menunya.',
       );
     }
 
@@ -1499,13 +1641,17 @@ class StaffPortalClient {
     try {
       final decoded = jsonDecode(body);
       if (decoded is! Map || decoded['data'] is! List) {
-        return const KolektifListResult(errorMessage: 'Format respons daftar grup tidak dikenali.');
+        return const KolektifListResult(
+          errorMessage: 'Format respons daftar grup tidak dikenali.',
+        );
       }
       final rows = (decoded['data'] as List).whereType<List>();
       final groups = rows.map((row) {
         String cell(int i) => i < row.length ? _stripHtml('${row[i]}') : '';
         final aksi = _parseKolektifAksiCell(row.isNotEmpty ? '${row[0]}' : '');
-        final kel = _parseKolektifKelurahanCell(row.length > 8 ? '${row[8]}' : '');
+        final kel = _parseKolektifKelurahanCell(
+          row.length > 8 ? '${row[8]}' : '',
+        );
         return KolektifGroup(
           id: aksi.id,
           statusCode: aksi.statusCode,
@@ -1525,10 +1671,14 @@ class StaffPortalClient {
           tanggalKadaluarsa: cell(10),
         );
       }).toList();
-      if (groups.isEmpty) return const KolektifListResult(errorMessage: 'Tidak ada data.');
+      if (groups.isEmpty)
+        return const KolektifListResult(errorMessage: 'Tidak ada data.');
       return KolektifListResult(groups: groups);
     } on FormatException {
-      return const KolektifListResult(errorMessage: 'Gagal membaca daftar grup — format respons tidak sesuai dugaan.');
+      return const KolektifListResult(
+        errorMessage:
+            'Gagal membaca daftar grup — format respons tidak sesuai dugaan.',
+      );
     }
   }
 
@@ -1540,24 +1690,39 @@ class StaffPortalClient {
   /// Kelola Member memakai `group-id` (strip), tombol Hapus memakai
   /// `group_id` (garis bawah). Keduanya berisi ID yang sama, jadi dua-duanya
   /// dicoba.
-  ({String id, String statusCode, bool canDelete, bool canEdit, bool canPrintSurat})
-      _parseKolektifAksiCell(String cellHtml) {
+  ({
+    String id,
+    String statusCode,
+    bool canDelete,
+    bool canEdit,
+    bool canPrintSurat,
+  })
+  _parseKolektifAksiCell(String cellHtml) {
     if (cellHtml.isEmpty) {
-      return (id: '', statusCode: '', canDelete: false, canEdit: false, canPrintSurat: false);
+      return (
+        id: '',
+        statusCode: '',
+        canDelete: false,
+        canEdit: false,
+        canPrintSurat: false,
+      );
     }
     final fragment = html_parser.parseFragment(cellHtml);
-    final id = (fragment.querySelector('[group-id]')?.attributes['group-id'] ??
-            fragment.querySelector('[group_id]')?.attributes['group_id'] ??
-            '')
-        .trim();
-    final statusCode = fragment.querySelector('[status]')?.attributes['status'] ?? '';
+    final id =
+        (fragment.querySelector('[group-id]')?.attributes['group-id'] ??
+                fragment.querySelector('[group_id]')?.attributes['group_id'] ??
+                '')
+            .trim();
+    final statusCode =
+        fragment.querySelector('[status]')?.attributes['status'] ?? '';
     final punyaId = id.isNotEmpty;
     return (
       id: id,
       statusCode: statusCode.trim(),
       canDelete: punyaId && fragment.querySelector('.btn-delete-group') != null,
       canEdit: punyaId && fragment.querySelector('.btn-edit-group') != null,
-      canPrintSurat: punyaId && fragment.querySelector('.btn-cetak-info-group') != null,
+      canPrintSurat:
+          punyaId && fragment.querySelector('.btn-cetak-info-group') != null,
     );
   }
 
@@ -1570,9 +1735,11 @@ class StaffPortalClient {
     final fragment = html_parser.parseFragment(cellHtml);
     final nama = fragment.querySelector('.nm-kel')?.text.trim();
     final kode = fragment.querySelector('.kd-kel')?.text.trim();
-    if (nama != null || kode != null) return (nama: nama ?? '', kode: kode ?? '');
+    if (nama != null || kode != null)
+      return (nama: nama ?? '', kode: kode ?? '');
     return (nama: _stripHtml(cellHtml), kode: '');
   }
 
-  String _stripHtml(String value) => (html_parser.parseFragment(value).text ?? value).trim();
+  String _stripHtml(String value) =>
+      (html_parser.parseFragment(value).text ?? value).trim();
 }

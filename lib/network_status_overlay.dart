@@ -7,7 +7,11 @@ class _StatusConfig {
   final IconData icon;
   final Color color;
 
-  const _StatusConfig({required this.label, required this.icon, required this.color});
+  const _StatusConfig({
+    required this.label,
+    required this.icon,
+    required this.color,
+  });
 }
 
 const _statusConfigs = {
@@ -56,18 +60,29 @@ class NetworkStatusOverlay extends StatelessWidget {
                   duration: const Duration(milliseconds: 250),
                   opacity: visible ? 1 : 0,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 10,
+                    ),
                     decoration: BoxDecoration(
                       color: config?.color ?? Colors.transparent,
                       borderRadius: BorderRadius.circular(24),
                       boxShadow: const [
-                        BoxShadow(color: Colors.black38, blurRadius: 10, offset: Offset(0, 4)),
+                        BoxShadow(
+                          color: Colors.black38,
+                          blurRadius: 10,
+                          offset: Offset(0, 4),
+                        ),
                       ],
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(config?.icon ?? Icons.circle, color: Colors.white, size: 18),
+                        Icon(
+                          config?.icon ?? Icons.circle,
+                          color: Colors.white,
+                          size: 18,
+                        ),
                         const SizedBox(width: 8),
                         Flexible(
                           child: Text(

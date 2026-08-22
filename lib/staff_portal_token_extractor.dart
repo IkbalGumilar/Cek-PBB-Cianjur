@@ -14,7 +14,11 @@ class StaffPortalTokenExtractor {
   /// diuji lewat fixture asli, `showModelRealisasi1` misalnya baru menaruh
   /// token-nya di karakter ke-2041 dari awal fungsi karena banyak deklarasi
   /// variabel & validasi sebelum baris `.load(...)`.
-  static String? extractLoadQ(String html, String jsFunctionName, {int window = 3000}) {
+  static String? extractLoadQ(
+    String html,
+    String jsFunctionName, {
+    int window = 3000,
+  }) {
     final name = RegExp.escape(jsFunctionName);
     final match = RegExp(
       'function\\s+$name\\s*\\([^)]*\\)[\\s\\S]{0,$window}?main\\.php\\?q=([A-Za-z0-9+/=]+)',
@@ -30,7 +34,11 @@ class StaffPortalTokenExtractor {
   ///   - var assignment:  `var funcMode = 'XXXX'`  (dipakai `reloadDataGroup` Kolektif)
   ///   - string concat:   `"&funcMode=" + 'XXXX'`  (dipakai `showBank`)
   /// Ketiganya dicoba lewat satu pola gabungan.
-  static String? extractFuncMode(String html, String jsFunctionName, {int window = 4000}) {
+  static String? extractFuncMode(
+    String html,
+    String jsFunctionName, {
+    int window = 4000,
+  }) {
     final name = RegExp.escape(jsFunctionName);
     final match = RegExp(
       "function\\s+$name\\s*\\([^)]*\\)[\\s\\S]{0,$window}?(?:funcMode\\s*[:=]\\s*|\"&funcMode=\"\\s*\\+\\s*)'([^']+)'",

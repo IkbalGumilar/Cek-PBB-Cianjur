@@ -142,12 +142,18 @@ class _KolektifImportScreenState extends State<KolektifImportScreen> {
             'Dikirim satu per satu, perkiraan $_perkiraanWaktu. Bisa dihentikan di tengah jalan; '
             'yang sudah masuk tetap bisa dihapus lagi selama grup masih Draft.'
             '${adaSingkatan ? '\n\nCatatan: sebagian NOP berasal dari singkatan, jadi awalan wilayahnya '
-                'dilengkapi dari kelurahan grup ini. Pastikan daftarnya sudah benar.' : ''}',
+                      'dilengkapi dari kelurahan grup ini. Pastikan daftarnya sudah benar.' : ''}',
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Kirim')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Kirim'),
+          ),
         ],
       ),
     );
@@ -179,7 +185,8 @@ class _KolektifImportScreenState extends State<KolektifImportScreen> {
       );
     } on Exception catch (e) {
       hasil = HasilImporNop(
-        errorFatal: 'Pengiriman berhenti karena kesalahan tak terduga, jadi hasilnya belum pasti. '
+        errorFatal:
+            'Pengiriman berhenti karena kesalahan tak terduga, jadi hasilnya belum pasti. '
             'Periksa dulu daftar anggota sebelum mengulang.\n\n$e',
       );
     }
@@ -215,14 +222,18 @@ class _KolektifImportScreenState extends State<KolektifImportScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   LinearProgressIndicator(
-                    value: _siapKirim.isEmpty ? null : nilai / _siapKirim.length,
+                    value: _siapKirim.isEmpty
+                        ? null
+                        : nilai / _siapKirim.length,
                   ),
                   const SizedBox(height: 12),
                   Text('$nilai dari ${_siapKirim.length} NOP'),
                   if (_batal)
                     const Padding(
                       padding: EdgeInsets.only(top: 8),
-                      child: Text('Menghentikan setelah NOP yang sedang berjalan selesai…'),
+                      child: Text(
+                        'Menghentikan setelah NOP yang sedang berjalan selesai…',
+                      ),
                     ),
                 ],
               ),
@@ -248,21 +259,24 @@ class _KolektifImportScreenState extends State<KolektifImportScreen> {
     final tahap = <({String judul, String keterangan, List<String> nop, Color? warna})>[
       (
         judul: 'Ditambahkan',
-        keterangan: 'NOP berikut ketemu, tagihannya belum bayar, dan sudah masuk jadi anggota grup '
+        keterangan:
+            'NOP berikut ketemu, tagihannya belum bayar, dan sudah masuk jadi anggota grup '
             '"${widget.group.namaGroup}".',
         nop: [for (final i in hasil.ditambahkan) i.nop],
         warna: Colors.green.shade700,
       ),
       (
         judul: 'Sudah Bayar — Tidak Dimasukkan',
-        keterangan: 'NOP berikut ketemu, tapi tagihan tahun ${widget.tahunPajak} sudah lunas, '
+        keterangan:
+            'NOP berikut ketemu, tapi tagihan tahun ${widget.tahunPajak} sudah lunas, '
             'jadi tidak dimasukkan ke grup.',
         nop: [for (final i in hasil.sudahBayar) i.nop],
         warna: null,
       ),
       (
         judul: 'Tidak Ditemukan — Tidak Dimasukkan',
-        keterangan: 'NOP berikut tidak ada di data server untuk tahun ${widget.tahunPajak}, '
+        keterangan:
+            'NOP berikut tidak ada di data server untuk tahun ${widget.tahunPajak}, '
             'jadi tidak dimasukkan. Biasanya karena salah tulis atau salah kelurahan.',
         nop: [for (final i in hasil.tidakDitemukan) i.nop],
         warna: null,
@@ -270,9 +284,13 @@ class _KolektifImportScreenState extends State<KolektifImportScreen> {
       if (hasil.perluDiperiksa.isNotEmpty)
         (
           judul: 'Perlu Diperiksa',
-          keterangan: 'Server menjawab hal lain untuk NOP berikut. Jawabannya ditampilkan apa adanya '
+          keterangan:
+              'Server menjawab hal lain untuk NOP berikut. Jawabannya ditampilkan apa adanya '
               'supaya tidak salah tafsir — periksa daftar anggota untuk memastikan.',
-          nop: [for (final i in hasil.perluDiperiksa) '${i.nop} — ${i.pesan ?? 'tanpa keterangan'}'],
+          nop: [
+            for (final i in hasil.perluDiperiksa)
+              '${i.nop} — ${i.pesan ?? 'tanpa keterangan'}',
+          ],
           warna: Theme.of(context).colorScheme.error,
         ),
     ];
@@ -299,9 +317,15 @@ class _KolektifImportScreenState extends State<KolektifImportScreen> {
                   Text(t.keterangan),
                   const SizedBox(height: 12),
                   if (t.nop.isEmpty)
-                    const Text('Tidak ada.', style: TextStyle(color: Colors.grey))
+                    const Text(
+                      'Tidak ada.',
+                      style: TextStyle(color: Colors.grey),
+                    )
                   else
-                    SelectableText(t.nop.join('\n'), style: const TextStyle(fontFamily: 'monospace')),
+                    SelectableText(
+                      t.nop.join('\n'),
+                      style: const TextStyle(fontFamily: 'monospace'),
+                    ),
                 ],
               ),
             ),
@@ -323,13 +347,19 @@ class _KolektifImportScreenState extends State<KolektifImportScreen> {
       ..writeln('Berkas: ${widget.namaBerkas}')
       ..writeln('Tahun pajak ${widget.tahunPajak} · ${widget.namaBuku}')
       ..writeln();
-    void bagian(String judul, List<ItemImporNop> item, {bool pakaiPesan = false}) {
+    void bagian(
+      String judul,
+      List<ItemImporNop> item, {
+      bool pakaiPesan = false,
+    }) {
       b.writeln('$judul (${item.length}):');
       if (item.isEmpty) {
         b.writeln('  -');
       } else {
         for (final i in item) {
-          b.writeln('  ${i.nop}${pakaiPesan ? ' — ${i.pesan ?? 'tanpa keterangan'}' : ''}');
+          b.writeln(
+            '  ${i.nop}${pakaiPesan ? ' — ${i.pesan ?? 'tanpa keterangan'}' : ''}',
+          );
         }
       }
       b.writeln();
@@ -352,12 +382,16 @@ class _KolektifImportScreenState extends State<KolektifImportScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Hasil Pengiriman', style: Theme.of(context).textTheme.titleSmall),
+            Text(
+              'Hasil Pengiriman',
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
             const SizedBox(height: 8),
             _barisAngka('Ditambahkan', hasil.ditambahkan.length),
             _barisAngka('Sudah bayar', hasil.sudahBayar.length),
             _barisAngka('Tidak ditemukan', hasil.tidakDitemukan.length),
-            if (hasil.perluDiperiksa.isNotEmpty) _barisAngka('Perlu diperiksa', hasil.perluDiperiksa.length),
+            if (hasil.perluDiperiksa.isNotEmpty)
+              _barisAngka('Perlu diperiksa', hasil.perluDiperiksa.length),
             if (hasil.dibatalkan)
               const Padding(
                 padding: EdgeInsets.only(top: 8),
@@ -372,24 +406,29 @@ class _KolektifImportScreenState extends State<KolektifImportScreen> {
                 ),
               ),
             const SizedBox(height: 8),
-            Row(children: [
-              TextButton.icon(
-                onPressed: () => _tampilkanNotifBerurutan(hasil),
-                icon: const Icon(Icons.replay),
-                label: const Text('Lihat Lagi'),
-              ),
-              const SizedBox(width: 8),
-              TextButton.icon(
-                onPressed: () async {
-                  await Clipboard.setData(ClipboardData(text: _ringkasan(hasil)));
-                  if (!mounted) return;
-                  ScaffoldMessenger.of(context)
-                      .showSnackBar(const SnackBar(content: Text('Ringkasan disalin.')));
-                },
-                icon: const Icon(Icons.copy_all_outlined),
-                label: const Text('Salin'),
-              ),
-            ]),
+            Row(
+              children: [
+                TextButton.icon(
+                  onPressed: () => _tampilkanNotifBerurutan(hasil),
+                  icon: const Icon(Icons.replay),
+                  label: const Text('Lihat Lagi'),
+                ),
+                const SizedBox(width: 8),
+                TextButton.icon(
+                  onPressed: () async {
+                    await Clipboard.setData(
+                      ClipboardData(text: _ringkasan(hasil)),
+                    );
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Ringkasan disalin.')),
+                    );
+                  },
+                  icon: const Icon(Icons.copy_all_outlined),
+                  label: const Text('Salin'),
+                ),
+              ],
+            ),
           ],
         ),
       ),
@@ -397,14 +436,18 @@ class _KolektifImportScreenState extends State<KolektifImportScreen> {
   }
 
   Widget _barisAngka(String label, int nilai) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 2),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [Text(label), Text('$nilai NOP')],
-        ),
-      );
+    padding: const EdgeInsets.symmetric(vertical: 2),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [Text(label), Text('$nilai NOP')],
+    ),
+  );
 
-  Widget _daftarLipat(String judul, List<BarisBerkasNop> baris, String keterangan) {
+  Widget _daftarLipat(
+    String judul,
+    List<BarisBerkasNop> baris,
+    String keterangan,
+  ) {
     if (baris.isEmpty) return const SizedBox.shrink();
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
@@ -448,7 +491,10 @@ class _KolektifImportScreenState extends State<KolektifImportScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Text(widget.namaBerkas, style: Theme.of(context).textTheme.titleMedium),
+                    Text(
+                      widget.namaBerkas,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
                     const SizedBox(height: 4),
                     Text(
                       '${widget.group.namaGroup} · Tahun ${widget.tahunPajak} · ${widget.namaBuku}',
@@ -460,7 +506,10 @@ class _KolektifImportScreenState extends State<KolektifImportScreen> {
                       Card(
                         margin: const EdgeInsets.only(bottom: 8),
                         color: Theme.of(context).colorScheme.errorContainer,
-                        child: Padding(padding: const EdgeInsets.all(12), child: Text(p)),
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Text(p),
+                        ),
                       ),
 
                     if (bacaan?.errorMessage != null)
@@ -477,13 +526,20 @@ class _KolektifImportScreenState extends State<KolektifImportScreen> {
                         initialValue: _kolomPilihan,
                         decoration: const InputDecoration(
                           labelText: 'Kolom NOP',
-                          helperText: 'Kalau kolom yang terpilih bukan kolom NOP, ganti di sini.',
+                          helperText:
+                              'Kalau kolom yang terpilih bukan kolom NOP, ganti di sini.',
                           helperMaxLines: 2,
                           border: OutlineInputBorder(),
                         ),
                         items: [
                           for (var i = 0; i < bacaan!.namaKolom.length; i++)
-                            DropdownMenuItem(value: i, child: Text(bacaan.namaKolom[i], overflow: TextOverflow.ellipsis)),
+                            DropdownMenuItem(
+                              value: i,
+                              child: Text(
+                                bacaan.namaKolom[i],
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
                         ],
                         onChanged: _mengirim
                             ? null
@@ -519,7 +575,11 @@ class _KolektifImportScreenState extends State<KolektifImportScreen> {
                       _sudahAda,
                       'Tidak dikirim ulang karena sudah jadi anggota tahun ${widget.tahunPajak}.',
                     ),
-                    _daftarLipat('Ganda di dalam berkas — dilewati', _ganda, 'Hanya kemunculan pertama yang dikirim.'),
+                    _daftarLipat(
+                      'Ganda di dalam berkas — dilewati',
+                      _ganda,
+                      'Hanya kemunculan pertama yang dikirim.',
+                    ),
                     _daftarLipat(
                       'Tidak terbaca — dilewati',
                       bacaan?.tidakTerbaca ?? const [],
@@ -537,8 +597,11 @@ class _KolektifImportScreenState extends State<KolektifImportScreen> {
                         ),
                         if (_siapKirim.length > _tampil)
                           TextButton(
-                            onPressed: () => setState(() => _tampil = _siapKirim.length),
-                            child: Text('Tampilkan Semua (${_siapKirim.length})'),
+                            onPressed: () =>
+                                setState(() => _tampil = _siapKirim.length),
+                            child: Text(
+                              'Tampilkan Semua (${_siapKirim.length})',
+                            ),
                           ),
                       ],
                     ),
@@ -561,7 +624,10 @@ class _KolektifImportScreenState extends State<KolektifImportScreen> {
                               for (final b in tampil)
                                 '${b.nop}${b.dariSingkatan ? '   (dari ${b.asli})' : ''}',
                             ].join('\n'),
-                            style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+                            style: const TextStyle(
+                              fontFamily: 'monospace',
+                              fontSize: 12,
+                            ),
                           ),
                         ),
                       ),
@@ -577,10 +643,14 @@ class _KolektifImportScreenState extends State<KolektifImportScreen> {
 
                     const SizedBox(height: 16),
                     FilledButton.icon(
-                      onPressed: _mengirim || _siapKirim.isEmpty ? null : _kirim,
+                      onPressed: _mengirim || _siapKirim.isEmpty
+                          ? null
+                          : _kirim,
                       icon: const Icon(Icons.cloud_upload_outlined),
                       label: Text(
-                        _siapKirim.isEmpty ? 'Tidak Ada yang Dikirim' : 'Cari & Tambah ${_siapKirim.length} NOP',
+                        _siapKirim.isEmpty
+                            ? 'Tidak Ada yang Dikirim'
+                            : 'Cari & Tambah ${_siapKirim.length} NOP',
                       ),
                     ),
 

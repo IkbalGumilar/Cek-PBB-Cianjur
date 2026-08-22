@@ -39,7 +39,11 @@ Future<int?> pickDusunDialog(
                     RadioListTile<int>(
                       contentPadding: EdgeInsets.zero,
                       title: Text(dusun.label),
-                      subtitle: Text(dusun.bloks.isEmpty ? 'Belum ada data blok' : '${dusun.bloks.length} blok'),
+                      subtitle: Text(
+                        dusun.bloks.isEmpty
+                            ? 'Belum ada data blok'
+                            : '${dusun.bloks.length} blok',
+                      ),
                       value: dusun.number,
                     ),
                 ],

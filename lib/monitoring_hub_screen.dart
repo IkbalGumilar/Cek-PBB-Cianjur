@@ -15,7 +15,11 @@ class MonitoringHubScreen extends StatefulWidget {
   final StaffPortalClient client;
   final ThemeController themeController;
 
-  const MonitoringHubScreen({super.key, required this.client, required this.themeController});
+  const MonitoringHubScreen({
+    super.key,
+    required this.client,
+    required this.themeController,
+  });
 
   @override
   State<MonitoringHubScreen> createState() => _MonitoringHubScreenState();
@@ -37,7 +41,9 @@ class _MonitoringHubScreenState extends State<MonitoringHubScreen> {
   void _openSettings() {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => SettingsScreen(themeController: widget.themeController)),
+      MaterialPageRoute(
+        builder: (_) => SettingsScreen(themeController: widget.themeController),
+      ),
     );
   }
 
@@ -49,14 +55,21 @@ class _MonitoringHubScreenState extends State<MonitoringHubScreen> {
         foregroundColor: Colors.white,
         title: const Text('Monitoring'),
         actions: [
-          IconButton(onPressed: _openSettings, icon: const Icon(Icons.settings), tooltip: 'Pengaturan'),
+          IconButton(
+            onPressed: _openSettings,
+            icon: const Icon(Icons.settings),
+            tooltip: 'Pengaturan',
+          ),
           IconButton(
             onPressed: _loggingOut ? null : _logout,
             icon: _loggingOut
                 ? const SizedBox(
                     height: 18,
                     width: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
                   )
                 : const Icon(Icons.logout),
             tooltip: 'Keluar dari Portal Staf',
@@ -70,11 +83,15 @@ class _MonitoringHubScreenState extends State<MonitoringHubScreen> {
             _HubMenuTile(
               icon: Icons.map_outlined,
               title: 'Monitoring Wilayah',
-              subtitle: '7 tab: Sudah/Belum Bayar, Realisasi, Piutang, Sudah/Belum Bayar Kolektif, Rangking Realisasi',
+              subtitle:
+                  '7 tab: Sudah/Belum Bayar, Realisasi, Piutang, Sudah/Belum Bayar Kolektif, Rangking Realisasi',
               onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => MonitoringWilayahScreen(client: widget.client, themeController: widget.themeController),
+                  builder: (_) => MonitoringWilayahScreen(
+                    client: widget.client,
+                    themeController: widget.themeController,
+                  ),
                 ),
               ),
             ),
@@ -86,7 +103,10 @@ class _MonitoringHubScreenState extends State<MonitoringHubScreen> {
               onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => PembayaranKolektifScreen(client: widget.client, themeController: widget.themeController),
+                  builder: (_) => PembayaranKolektifScreen(
+                    client: widget.client,
+                    themeController: widget.themeController,
+                  ),
                 ),
               ),
             ),

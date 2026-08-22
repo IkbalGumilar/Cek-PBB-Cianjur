@@ -18,25 +18,41 @@ void main() {
   late String kolektifAksiHtml;
 
   setUpAll(() {
-    monitoringHtml = File('test/fixtures/monitoring_wilayah.html').readAsStringSync();
-    kolektifHtml = File('test/fixtures/pembayaran_kolektif.html').readAsStringSync();
-    kolektifAksiHtml = File('test/fixtures/pembayaran_kolektif_aksi.html').readAsStringSync();
+    monitoringHtml = File(
+      'test/fixtures/monitoring_wilayah.html',
+    ).readAsStringSync();
+    kolektifHtml = File(
+      'test/fixtures/pembayaran_kolektif.html',
+    ).readAsStringSync();
+    kolektifAksiHtml = File(
+      'test/fixtures/pembayaran_kolektif_aksi.html',
+    ).readAsStringSync();
   });
 
   group('Monitoring Wilayah — extractLoadQ', () {
     final cases = {
-      'onSubmitSudahBayar': 'eydhJzonYVBCQicsICdtJzonbU1vbml0b3JpbmdXaWxheWFoVjMnLCAncyc6JzIzJywndWlkJzondTQ2OCd9',
-      'onSubmitBelumBayar': 'eydhJzonYVBCQicsICdtJzonbU1vbml0b3JpbmdXaWxheWFoVjMnLCAncyc6JzIzJywndWlkJzondTQ2OCd9',
-      'showModelRealisasi1': 'eydhJzonYVBCQicsICdtJzonbU1vbml0b3JpbmdXaWxheWFoVjMnLCAncyc6JzMnLCd1aWQnOid1NDY4Jywnc3JjaCc6Jyd9',
-      'showModelPiutang': 'eydhJzonYVBCQicsICdtJzonbU1vbml0b3JpbmdXaWxheWFoVjMnLCAncyc6JzMnLCd1aWQnOid1NDY4Jywnc3JjaCc6Jyd9',
-      'onSubmitSudahBayarKolektif': 'eydhJzonYVBCQicsICdtJzonbU1vbml0b3JpbmdXaWxheWFoVjMnLCAncyc6JzIzJywndWlkJzondTQ2OCd9',
-      'onSubmitBelumBayarKolektif': 'eydhJzonYVBCQicsICdtJzonbU1vbml0b3JpbmdXaWxheWFoVjMnLCAncyc6JzIzJywndWlkJzondTQ2OCd9',
-      'showRangkingRealisasi': 'eydhJzonYVBCQicsICdtJzonbU1vbml0b3JpbmdXaWxheWFoVjMnLCAncyc6JzUnLCd1aWQnOid1NDY4Jywnc3JjaCc6Jyd9',
+      'onSubmitSudahBayar':
+          'eydhJzonYVBCQicsICdtJzonbU1vbml0b3JpbmdXaWxheWFoVjMnLCAncyc6JzIzJywndWlkJzondTQ2OCd9',
+      'onSubmitBelumBayar':
+          'eydhJzonYVBCQicsICdtJzonbU1vbml0b3JpbmdXaWxheWFoVjMnLCAncyc6JzIzJywndWlkJzondTQ2OCd9',
+      'showModelRealisasi1':
+          'eydhJzonYVBCQicsICdtJzonbU1vbml0b3JpbmdXaWxheWFoVjMnLCAncyc6JzMnLCd1aWQnOid1NDY4Jywnc3JjaCc6Jyd9',
+      'showModelPiutang':
+          'eydhJzonYVBCQicsICdtJzonbU1vbml0b3JpbmdXaWxheWFoVjMnLCAncyc6JzMnLCd1aWQnOid1NDY4Jywnc3JjaCc6Jyd9',
+      'onSubmitSudahBayarKolektif':
+          'eydhJzonYVBCQicsICdtJzonbU1vbml0b3JpbmdXaWxheWFoVjMnLCAncyc6JzIzJywndWlkJzondTQ2OCd9',
+      'onSubmitBelumBayarKolektif':
+          'eydhJzonYVBCQicsICdtJzonbU1vbml0b3JpbmdXaWxheWFoVjMnLCAncyc6JzIzJywndWlkJzondTQ2OCd9',
+      'showRangkingRealisasi':
+          'eydhJzonYVBCQicsICdtJzonbU1vbml0b3JpbmdXaWxheWFoVjMnLCAncyc6JzUnLCd1aWQnOid1NDY4Jywnc3JjaCc6Jyd9',
     };
 
     for (final entry in cases.entries) {
       test('${entry.key} → q token ditemukan & cocok', () {
-        final q = StaffPortalTokenExtractor.extractLoadQ(monitoringHtml, entry.key);
+        final q = StaffPortalTokenExtractor.extractLoadQ(
+          monitoringHtml,
+          entry.key,
+        );
         expect(q, entry.value);
       });
     }
@@ -64,25 +80,50 @@ void main() {
 
     for (final entry in cases.entries) {
       test('${entry.key} → funcMode token ditemukan & cocok', () {
-        final funcMode = StaffPortalTokenExtractor.extractFuncMode(monitoringHtml, entry.key);
+        final funcMode = StaffPortalTokenExtractor.extractFuncMode(
+          monitoringHtml,
+          entry.key,
+        );
         expect(funcMode, entry.value);
       });
     }
   });
 
-  test('fungsi yang tidak ada di halaman → null, bukan salah ambil dari fungsi lain', () {
-    expect(StaffPortalTokenExtractor.extractLoadQ(monitoringHtml, 'fungsiTidakAda'), isNull);
-    expect(StaffPortalTokenExtractor.extractFuncMode(monitoringHtml, 'fungsiTidakAda'), isNull);
-  });
+  test(
+    'fungsi yang tidak ada di halaman → null, bukan salah ambil dari fungsi lain',
+    () {
+      expect(
+        StaffPortalTokenExtractor.extractLoadQ(
+          monitoringHtml,
+          'fungsiTidakAda',
+        ),
+        isNull,
+      );
+      expect(
+        StaffPortalTokenExtractor.extractFuncMode(
+          monitoringHtml,
+          'fungsiTidakAda',
+        ),
+        isNull,
+      );
+    },
+  );
 
   group('Pembayaran Kolektif', () {
     test('extractGlobalQ menemukan token q global', () {
       final q = StaffPortalTokenExtractor.extractGlobalQ(kolektifHtml);
-      expect(q, 'eydhJzonYVBCQicsICdtJzonbTE3OScsICd1JzonTUFOREVfQk9CT0pPTkcnLCAndWlkJzondTQ2OCd9');
+      expect(
+        q,
+        'eydhJzonYVBCQicsICdtJzonbTE3OScsICd1JzonTUFOREVfQk9CT0pPTkcnLCAndWlkJzondTQ2OCd9',
+      );
     });
 
     test('extractFuncMode menemukan funcMode reloadDataGroup', () {
-      final funcMode = StaffPortalTokenExtractor.extractFuncMode(kolektifHtml, 'reloadDataGroup', window: 800);
+      final funcMode = StaffPortalTokenExtractor.extractFuncMode(
+        kolektifHtml,
+        'reloadDataGroup',
+        window: 800,
+      );
       expect(
         funcMode,
         'OUdObTJ0OHhFeC8vYW10NTNtZFY3QjlyOHpQYjA4SHMxYlhzUm5lTXRXNWRCWTB1V2djRENnZVRQMnJhMThQNVk1TDE4bG5jQnV6czUyWVVNK2F2MXc9PTo6TgKXPGtZPWED62APtMML1Q==',
@@ -90,7 +131,9 @@ void main() {
     });
 
     test('extractKolektifUserId menemukan userID dari URL ajax DataTables', () {
-      final userId = StaffPortalTokenExtractor.extractKolektifUserId(kolektifHtml);
+      final userId = StaffPortalTokenExtractor.extractKolektifUserId(
+        kolektifHtml,
+      );
       expect(userId, 'u468');
     });
   });
@@ -100,58 +143,111 @@ void main() {
   /// milik pemda. Jadi seluruh pengambilan tokennya dikunci lewat test ini
   /// dulu, terhadap struktur halaman aslinya.
   group('Pembayaran Kolektif — aksi Tambah & Hapus Group', () {
-    test('extractTambahGroupFuncMode mengambil token tambahGroup (var funMode)', () {
-      final funcMode = StaffPortalTokenExtractor.extractTambahGroupFuncMode(kolektifAksiHtml);
-      expect(funcMode, 'UExBQ0VIT0xERVJfVEFNQkFIX0dST1VQ=::mm+nn/oo==');
-    });
+    test(
+      'extractTambahGroupFuncMode mengambil token tambahGroup (var funMode)',
+      () {
+        final funcMode = StaffPortalTokenExtractor.extractTambahGroupFuncMode(
+          kolektifAksiHtml,
+        );
+        expect(funcMode, 'UExBQ0VIT0xERVJfVEFNQkFIX0dST1VQ=::mm+nn/oo==');
+      },
+    );
 
-    test('extractTambahGroupFuncMode TIDAK tertukar dengan token finalkan()', () {
-      // `finalkan()` ada persis sesudah `tambahGroup()` dan memakai
-      // `var funcMode`, sementara `tambahGroup()` memakai `var funMode`.
-      // Kalau sampai tertukar, tombol Simpan akan memfinalkan grup —
-      // membuat kode bayar sungguhan yang tidak bisa dibatalkan.
-      final funcMode = StaffPortalTokenExtractor.extractTambahGroupFuncMode(kolektifAksiHtml);
-      expect(funcMode, isNot('UExBQ0VIT0xERVJfRklOQUxLQU4=::pp+qq/rr=='));
-    });
+    test(
+      'extractTambahGroupFuncMode TIDAK tertukar dengan token finalkan()',
+      () {
+        // `finalkan()` ada persis sesudah `tambahGroup()` dan memakai
+        // `var funcMode`, sementara `tambahGroup()` memakai `var funMode`.
+        // Kalau sampai tertukar, tombol Simpan akan memfinalkan grup —
+        // membuat kode bayar sungguhan yang tidak bisa dibatalkan.
+        final funcMode = StaffPortalTokenExtractor.extractTambahGroupFuncMode(
+          kolektifAksiHtml,
+        );
+        expect(funcMode, isNot('UExBQ0VIT0xERVJfRklOQUxLQU4=::pp+qq/rr=='));
+      },
+    );
 
-    test('extractFuncMode generik memang tidak aman dipakai untuk tambahGroup', () {
-      // Ini alasan extractTambahGroupFuncMode harus ada: pola generiknya
-      // melewati batas fungsi dan menangkap token milik finalkan().
-      final salah = StaffPortalTokenExtractor.extractFuncMode(kolektifAksiHtml, 'tambahGroup');
-      expect(salah, 'UExBQ0VIT0xERVJfRklOQUxLQU4=::pp+qq/rr==');
-    });
+    test(
+      'extractFuncMode generik memang tidak aman dipakai untuk tambahGroup',
+      () {
+        // Ini alasan extractTambahGroupFuncMode harus ada: pola generiknya
+        // melewati batas fungsi dan menangkap token milik finalkan().
+        final salah = StaffPortalTokenExtractor.extractFuncMode(
+          kolektifAksiHtml,
+          'tambahGroup',
+        );
+        expect(salah, 'UExBQ0VIT0xERVJfRklOQUxLQU4=::pp+qq/rr==');
+      },
+    );
 
-    test('extractHapusGroupFuncMode mengambil token handler #btn-confirm-delete-group', () {
-      final funcMode = StaffPortalTokenExtractor.extractHapusGroupFuncMode(kolektifAksiHtml);
-      expect(funcMode, 'UExBQ0VIT0xERVJfSEFQVVNfR1JPVVA=::gg+hh/ii==');
-    });
+    test(
+      'extractHapusGroupFuncMode mengambil token handler #btn-confirm-delete-group',
+      () {
+        final funcMode = StaffPortalTokenExtractor.extractHapusGroupFuncMode(
+          kolektifAksiHtml,
+        );
+        expect(funcMode, 'UExBQ0VIT0xERVJfSEFQVVNfR1JPVVA=::gg+hh/ii==');
+      },
+    );
 
-    test('extractHapusGroupFuncMode tidak tertukar dengan .btn-return / .btn-reaktivasi', () {
-      final funcMode = StaffPortalTokenExtractor.extractHapusGroupFuncMode(kolektifAksiHtml);
-      expect(funcMode, isNot('UExBQ0VIT0xERVJfQlROX1JFVFVSTg==::aa+bb/cc=='));
-      expect(funcMode, isNot('UExBQ0VIT0xERVJfQlROX1JFQUtUSVZBU0k=::dd+ee/ff=='));
-    });
+    test(
+      'extractHapusGroupFuncMode tidak tertukar dengan .btn-return / .btn-reaktivasi',
+      () {
+        final funcMode = StaffPortalTokenExtractor.extractHapusGroupFuncMode(
+          kolektifAksiHtml,
+        );
+        expect(funcMode, isNot('UExBQ0VIT0xERVJfQlROX1JFVFVSTg==::aa+bb/cc=='));
+        expect(
+          funcMode,
+          isNot('UExBQ0VIT0xERVJfQlROX1JFQUtUSVZBU0k=::dd+ee/ff=='),
+        );
+      },
+    );
 
     test('extractKolektifKecamatanCode menemukan kode kecamatan akun', () {
-      expect(StaffPortalTokenExtractor.extractKolektifKecamatanCode(kolektifAksiHtml), '3205200');
+      expect(
+        StaffPortalTokenExtractor.extractKolektifKecamatanCode(
+          kolektifAksiHtml,
+        ),
+        '3205200',
+      );
     });
 
-    test('funcMode showKecamatanAll (dipakai untuk ambil NAMA kecamatan) tidak tertukar', () {
-      // Ini cuma pembacaan daftar kecamatan, tapi tetap sebuah POST ke
-      // main.php — jadi tokennya wajib benar-benar milik showKecamatanAll.
-      final funcMode =
-          StaffPortalTokenExtractor.extractFuncMode(kolektifAksiHtml, 'showKecamatanAll', window: 600);
-      expect(funcMode, 'UExBQ0VIT0xERVJfU0hPV19LRUNBTUFUQU4=::jj+kk/ll==');
-    });
+    test(
+      'funcMode showKecamatanAll (dipakai untuk ambil NAMA kecamatan) tidak tertukar',
+      () {
+        // Ini cuma pembacaan daftar kecamatan, tapi tetap sebuah POST ke
+        // main.php — jadi tokennya wajib benar-benar milik showKecamatanAll.
+        final funcMode = StaffPortalTokenExtractor.extractFuncMode(
+          kolektifAksiHtml,
+          'showKecamatanAll',
+          window: 600,
+        );
+        expect(funcMode, 'UExBQ0VIT0xERVJfU0hPV19LRUNBTUFUQU4=::jj+kk/ll==');
+      },
+    );
 
     test('halaman tanpa blok aksi → null, bukan token asal ambil', () {
-      const html = '<html><body><script>var funcMode = "lain";</script></body></html>';
-      expect(StaffPortalTokenExtractor.extractTambahGroupFuncMode(html), isNull);
+      const html =
+          '<html><body><script>var funcMode = "lain";</script></body></html>';
+      expect(
+        StaffPortalTokenExtractor.extractTambahGroupFuncMode(html),
+        isNull,
+      );
       expect(StaffPortalTokenExtractor.extractHapusGroupFuncMode(html), isNull);
-      expect(StaffPortalTokenExtractor.extractKolektifKecamatanCode(html), isNull);
-      expect(StaffPortalTokenExtractor.extractListAnggotaFuncMode(html), isNull);
+      expect(
+        StaffPortalTokenExtractor.extractKolektifKecamatanCode(html),
+        isNull,
+      );
+      expect(
+        StaffPortalTokenExtractor.extractListAnggotaFuncMode(html),
+        isNull,
+      );
       expect(StaffPortalTokenExtractor.extractCariNopFuncMode(html), isNull);
-      expect(StaffPortalTokenExtractor.extractHapusAnggotaFuncMode(html), isNull);
+      expect(
+        StaffPortalTokenExtractor.extractHapusAnggotaFuncMode(html),
+        isNull,
+      );
     });
   });
 
@@ -163,23 +259,45 @@ void main() {
       );
     });
 
-    test('extractCariNopFuncMode mengambil token cariNOP, bukan cariNOPCSV', () {
-      final funcMode = StaffPortalTokenExtractor.extractCariNopFuncMode(kolektifAksiHtml);
-      expect(funcMode, 'UExBQ0VIT0xERVJfQ0FSSV9OT1A=::v1+v2/v3==');
-      expect(funcMode, isNot('UExBQ0VIT0xERVJfQ0FSSV9OT1BfQ1NW==::u1+u2/u3=='));
-    });
+    test(
+      'extractCariNopFuncMode mengambil token cariNOP, bukan cariNOPCSV',
+      () {
+        final funcMode = StaffPortalTokenExtractor.extractCariNopFuncMode(
+          kolektifAksiHtml,
+        );
+        expect(funcMode, 'UExBQ0VIT0xERVJfQ0FSSV9OT1A=::v1+v2/v3==');
+        expect(
+          funcMode,
+          isNot('UExBQ0VIT0xERVJfQ0FSSV9OT1BfQ1NW==::u1+u2/u3=='),
+        );
+      },
+    );
 
-    test('extractHapusAnggotaFuncMode mengambil token #btn-delete-all, bukan yang -temp', () {
-      final funcMode = StaffPortalTokenExtractor.extractHapusAnggotaFuncMode(kolektifAksiHtml);
-      expect(funcMode, 'UExBQ0VIT0xERVJfSEFQVVNfQU5HR09UQQ==::s1+s2/s3==');
-      expect(funcMode, isNot('UExBQ0VIT0xERVJfSEFQVVNfVEVNUA==::t1+t2/t3=='));
-    });
+    test(
+      'extractHapusAnggotaFuncMode mengambil token #btn-delete-all, bukan yang -temp',
+      () {
+        final funcMode = StaffPortalTokenExtractor.extractHapusAnggotaFuncMode(
+          kolektifAksiHtml,
+        );
+        expect(funcMode, 'UExBQ0VIT0xERVJfSEFQVVNfQU5HR09UQQ==::s1+s2/s3==');
+        expect(funcMode, isNot('UExBQ0VIT0xERVJfSEFQVVNfVEVNUA==::t1+t2/t3=='));
+      },
+    );
 
     test('token Kelola Anggota tidak pernah sama dengan token Finalkan', () {
       const finalkan = 'UExBQ0VIT0xERVJfRklOQUxLQU4=::pp+qq/rr==';
-      expect(StaffPortalTokenExtractor.extractListAnggotaFuncMode(kolektifAksiHtml), isNot(finalkan));
-      expect(StaffPortalTokenExtractor.extractCariNopFuncMode(kolektifAksiHtml), isNot(finalkan));
-      expect(StaffPortalTokenExtractor.extractHapusAnggotaFuncMode(kolektifAksiHtml), isNot(finalkan));
+      expect(
+        StaffPortalTokenExtractor.extractListAnggotaFuncMode(kolektifAksiHtml),
+        isNot(finalkan),
+      );
+      expect(
+        StaffPortalTokenExtractor.extractCariNopFuncMode(kolektifAksiHtml),
+        isNot(finalkan),
+      );
+      expect(
+        StaffPortalTokenExtractor.extractHapusAnggotaFuncMode(kolektifAksiHtml),
+        isNot(finalkan),
+      );
     });
   });
 }

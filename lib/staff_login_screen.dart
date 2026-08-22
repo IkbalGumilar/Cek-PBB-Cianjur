@@ -17,7 +17,11 @@ class StaffLoginScreen extends StatefulWidget {
   final StaffPortalClient client;
   final ThemeController themeController;
 
-  const StaffLoginScreen({super.key, required this.client, required this.themeController});
+  const StaffLoginScreen({
+    super.key,
+    required this.client,
+    required this.themeController,
+  });
 
   @override
   State<StaffLoginScreen> createState() => _StaffLoginScreenState();
@@ -83,7 +87,10 @@ class _StaffLoginScreenState extends State<StaffLoginScreen> {
     final captcha = _captchaController.text.trim();
 
     if (username.isEmpty || password.isEmpty || captcha.isEmpty) {
-      setState(() => _errorText = 'Username, password, dan kode verifikasi wajib diisi.');
+      setState(
+        () =>
+            _errorText = 'Username, password, dan kode verifikasi wajib diisi.',
+      );
       return;
     }
 
@@ -93,15 +100,25 @@ class _StaffLoginScreenState extends State<StaffLoginScreen> {
     });
 
     try {
-      final result = await widget.client.login(username: username, password: password, captchaCode: captcha);
+      final result = await widget.client.login(
+        username: username,
+        password: password,
+        captchaCode: captcha,
+      );
       if (!mounted) return;
       if (result.needsMfa) {
-        await StaffCredentialsStore.instance.save(username: username, password: password);
+        await StaffCredentialsStore.instance.save(
+          username: username,
+          password: password,
+        );
         if (!mounted) return;
         await Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => StaffMfaScreen(client: widget.client, themeController: widget.themeController),
+            builder: (_) => StaffMfaScreen(
+              client: widget.client,
+              themeController: widget.themeController,
+            ),
           ),
         );
       } else {
@@ -128,7 +145,10 @@ class _StaffLoginScreenState extends State<StaffLoginScreen> {
             children: [
               TextField(
                 controller: _usernameController,
-                decoration: const InputDecoration(labelText: 'Username', border: OutlineInputBorder()),
+                decoration: const InputDecoration(
+                  labelText: 'Username',
+                  border: OutlineInputBorder(),
+                ),
               ),
               const SizedBox(height: 12),
               TextField(
@@ -138,8 +158,13 @@ class _StaffLoginScreenState extends State<StaffLoginScreen> {
                   labelText: 'Password',
                   border: const OutlineInputBorder(),
                   suffixIcon: IconButton(
-                    icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
-                    onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                    icon: Icon(
+                      _obscurePassword
+                          ? Icons.visibility_off
+                          : Icons.visibility,
+                    ),
+                    onPressed: () =>
+                        setState(() => _obscurePassword = !_obscurePassword),
                   ),
                 ),
               ),
@@ -151,11 +176,13 @@ class _StaffLoginScreenState extends State<StaffLoginScreen> {
                         child: CircularProgressIndicator(),
                       )
                     : _captchaBytes != null
-                        ? Container(
-                            decoration: BoxDecoration(border: Border.all(color: Colors.grey)),
-                            child: Image.memory(_captchaBytes!, height: 84),
-                          )
-                        : const Text('Captcha belum dimuat'),
+                    ? Container(
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.grey),
+                        ),
+                        child: Image.memory(_captchaBytes!, height: 84),
+                      )
+                    : const Text('Captcha belum dimuat'),
               ),
               const SizedBox(height: 8),
               Center(
@@ -181,7 +208,10 @@ class _StaffLoginScreenState extends State<StaffLoginScreen> {
                     ? const SizedBox(
                         height: 20,
                         width: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
                       )
                     : const Text('Login'),
               ),

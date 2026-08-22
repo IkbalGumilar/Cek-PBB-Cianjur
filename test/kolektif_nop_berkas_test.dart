@@ -24,9 +24,21 @@ void main() {
     });
 
     test('singkatan 5-7 angka dilengkapi awalan kelurahan grup', () {
-      expect(uraikanSatuNop('17154', kelurahanCode: kel).nop, '${kel}0170154' '0');
-      expect(uraikanSatuNop('172836', kelurahanCode: kel).nop, '${kel}0172836' '0');
-      expect(uraikanSatuNop('0172836', kelurahanCode: kel).nop, '${kel}0172836' '0');
+      expect(
+        uraikanSatuNop('17154', kelurahanCode: kel).nop,
+        '${kel}0170154'
+        '0',
+      );
+      expect(
+        uraikanSatuNop('172836', kelurahanCode: kel).nop,
+        '${kel}0172836'
+        '0',
+      );
+      expect(
+        uraikanSatuNop('0172836', kelurahanCode: kel).nop,
+        '${kel}0172836'
+        '0',
+      );
       expect(uraikanSatuNop('17154', kelurahanCode: kel).dariSingkatan, isTrue);
     });
 
@@ -42,18 +54,26 @@ void main() {
       expect(uraikanSatuNop('-', kelurahanCode: kel).nop, isNull);
     });
 
-    test('tanpa kode kelurahan, singkatan ditolak — bukan diteruskan setengah jadi', () {
-      // Awalan kosong berarti NOP-nya tidak bisa dilengkapi. Meloloskannya
-      // sama dengan mengirim NOP milik entah siapa.
-      expect(uraikanSatuNop('17154', kelurahanCode: '').nop, isNull);
-    });
+    test(
+      'tanpa kode kelurahan, singkatan ditolak — bukan diteruskan setengah jadi',
+      () {
+        // Awalan kosong berarti NOP-nya tidak bisa dilengkapi. Meloloskannya
+        // sama dengan mengirim NOP milik entah siapa.
+        expect(uraikanSatuNop('17154', kelurahanCode: '').nop, isNull);
+      },
+    );
   });
 
   group('uraikanNopKolektif', () {
     test('beberapa NOP dipisah koma', () {
       final h = uraikanNopKolektif('172836, 172850', kelurahanCode: kel);
       expect(h.error, isNull);
-      expect(h.nop, ['${kel}0172836' '0', '${kel}0172850' '0']);
+      expect(h.nop, [
+        '${kel}0172836'
+            '0',
+        '${kel}0172850'
+            '0',
+      ]);
     });
 
     test('satu entri salah membatalkan seluruh isian', () {
@@ -117,15 +137,17 @@ void main() {
     test('berjudul NOP, baris judul masuk "tidak terbaca" bukan terkirim', () {
       final hasil = bacaBerkasNop(
         namaBerkas: 'daftar.csv',
-        bytes: teks('NOP,NAMA\n320520000401701540,ASEP\n320520000401702850,OPIK\n'),
+        bytes: teks(
+          'NOP,NAMA\n320520000401701540,ASEP\n320520000401702850,OPIK\n',
+        ),
         kelurahanCode: kel,
       );
       expect(hasil.errorMessage, isNull);
       expect(hasil.kolomNop, 0);
-      expect([for (final b in hasil.terbaca) b.nop], [
-        '320520000401701540',
-        '320520000401702850',
-      ]);
+      expect(
+        [for (final b in hasil.terbaca) b.nop],
+        ['320520000401701540', '320520000401702850'],
+      );
       expect(hasil.tidakTerbaca.single.asli, 'NOP');
     });
 
@@ -144,7 +166,9 @@ void main() {
     test('pemisah titik koma (CSV Excel Indonesia) ikut terbaca', () {
       final hasil = bacaBerkasNop(
         namaBerkas: 'idn.csv',
-        bytes: teks('NOP;NAMA\n320520000401701540;ASEP\n320520000401702850;OPIK\n'),
+        bytes: teks(
+          'NOP;NAMA\n320520000401701540;ASEP\n320520000401702850;OPIK\n',
+        ),
         kelurahanCode: kel,
       );
       expect(hasil.kolomNop, 0);
@@ -168,7 +192,11 @@ void main() {
         kelurahanCode: kel,
       );
       expect(hasil.terbaca.every((b) => b.dariSingkatan), isTrue);
-      expect(hasil.terbaca.first.nop, '${kel}0172836' '0');
+      expect(
+        hasil.terbaca.first.nop,
+        '${kel}0172836'
+        '0',
+      );
     });
 
     test('nomor baris menunjuk baris asli di berkas', () {
@@ -181,13 +209,24 @@ void main() {
       expect(hasil.terbaca.map((b) => b.nomorBaris), [2, 4]);
     });
 
-    test('berkas kosong dilaporkan, bukan menghasilkan daftar kosong diam-diam', () {
-      final hasil = bacaBerkasNop(namaBerkas: 'kosong.csv', bytes: teks(''), kelurahanCode: kel);
-      expect(hasil.errorMessage, isNotNull);
-    });
+    test(
+      'berkas kosong dilaporkan, bukan menghasilkan daftar kosong diam-diam',
+      () {
+        final hasil = bacaBerkasNop(
+          namaBerkas: 'kosong.csv',
+          bytes: teks(''),
+          kelurahanCode: kel,
+        );
+        expect(hasil.errorMessage, isNotNull);
+      },
+    );
 
     test('format berkas yang tidak didukung ditolak dengan jelas', () {
-      final hasil = bacaBerkasNop(namaBerkas: 'daftar.pdf', bytes: teks('apa saja'), kelurahanCode: kel);
+      final hasil = bacaBerkasNop(
+        namaBerkas: 'daftar.pdf',
+        bytes: teks('apa saja'),
+        kelurahanCode: kel,
+      );
       expect(hasil.errorMessage, contains('belum didukung'));
     });
   });
@@ -219,13 +258,25 @@ void main() {
         'SPPT sudah lunas',
         'Tagihan telah dibayar',
       ]) {
-        expect(klasifikasiHasilTambahNop(success: false, pesan: p), StatusImporNop.sudahBayar, reason: p);
+        expect(
+          klasifikasiHasilTambahNop(success: false, pesan: p),
+          StatusImporNop.sudahBayar,
+          reason: p,
+        );
       }
     });
 
     test('pesan tidak ketemu digolongkan tidak ditemukan', () {
-      for (final p in ['NOP tidak ditemukan', 'Data tidak terdaftar', 'NOP tidak valid']) {
-        expect(klasifikasiHasilTambahNop(success: false, pesan: p), StatusImporNop.tidakDitemukan, reason: p);
+      for (final p in [
+        'NOP tidak ditemukan',
+        'Data tidak terdaftar',
+        'NOP tidak valid',
+      ]) {
+        expect(
+          klasifikasiHasilTambahNop(success: false, pesan: p),
+          StatusImporNop.tidakDitemukan,
+          reason: p,
+        );
       }
     });
 
@@ -233,22 +284,33 @@ void main() {
       // Menebak di sini berarti memberi tahu staf sesuatu yang belum tentu
       // benar tentang data pajak orang. Lebih baik ditampilkan apa adanya.
       expect(
-        klasifikasiHasilTambahNop(success: false, pesan: 'Group sudah difinalkan'),
+        klasifikasiHasilTambahNop(
+          success: false,
+          pesan: 'Group sudah difinalkan',
+        ),
         StatusImporNop.perluDiperiksa,
       );
-      expect(klasifikasiHasilTambahNop(success: false, pesan: null), StatusImporNop.perluDiperiksa);
-      expect(klasifikasiHasilTambahNop(success: false, pesan: ''), StatusImporNop.perluDiperiksa);
+      expect(
+        klasifikasiHasilTambahNop(success: false, pesan: null),
+        StatusImporNop.perluDiperiksa,
+      );
+      expect(
+        klasifikasiHasilTambahNop(success: false, pesan: ''),
+        StatusImporNop.perluDiperiksa,
+      );
     });
   });
 
   group('HasilImporNop', () {
     test('memilah item per golongan', () {
-      const hasil = HasilImporNop(item: [
-        ItemImporNop(nop: '1', status: StatusImporNop.ditambahkan),
-        ItemImporNop(nop: '2', status: StatusImporNop.sudahBayar),
-        ItemImporNop(nop: '3', status: StatusImporNop.ditambahkan),
-        ItemImporNop(nop: '4', status: StatusImporNop.tidakDitemukan),
-      ]);
+      const hasil = HasilImporNop(
+        item: [
+          ItemImporNop(nop: '1', status: StatusImporNop.ditambahkan),
+          ItemImporNop(nop: '2', status: StatusImporNop.sudahBayar),
+          ItemImporNop(nop: '3', status: StatusImporNop.ditambahkan),
+          ItemImporNop(nop: '4', status: StatusImporNop.tidakDitemukan),
+        ],
+      );
       expect(hasil.ditambahkan.length, 2);
       expect(hasil.sudahBayar.single.nop, '2');
       expect(hasil.tidakDitemukan.single.nop, '4');

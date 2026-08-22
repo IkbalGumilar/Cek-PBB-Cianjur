@@ -26,7 +26,13 @@ class _TabSudahBayarKolektifState extends State<TabSudahBayarKolektif> {
 
   @override
   void dispose() {
-    for (final c in [_tglAwal, _tglAkhir, _kodeBayarKolektif, _namaGrup, _namaKolektor]) {
+    for (final c in [
+      _tglAwal,
+      _tglAkhir,
+      _kodeBayarKolektif,
+      _namaGrup,
+      _namaKolektor,
+    ]) {
       c.dispose();
     }
     super.dispose();
@@ -34,7 +40,11 @@ class _TabSudahBayarKolektifState extends State<TabSudahBayarKolektif> {
 
   Future<void> _tampilkan() async {
     if (_tglAwal.text.isEmpty || _tglAkhir.text.isEmpty) {
-      setState(() => _result = const MonitoringTableResult(errorMessage: 'Tanggal Pembayaran wajib diisi.'));
+      setState(
+        () => _result = const MonitoringTableResult(
+          errorMessage: 'Tanggal Pembayaran wajib diisi.',
+        ),
+      );
       return;
     }
     setState(() {
@@ -53,7 +63,11 @@ class _TabSudahBayarKolektifState extends State<TabSudahBayarKolektif> {
       setState(() => _result = result);
     } catch (e) {
       if (!mounted) return;
-      setState(() => _result = MonitoringTableResult(errorMessage: 'Gagal memuat data: $e'));
+      setState(
+        () => _result = MonitoringTableResult(
+          errorMessage: 'Gagal memuat data: $e',
+        ),
+      );
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -68,25 +82,69 @@ class _TabSudahBayarKolektifState extends State<TabSudahBayarKolektif> {
         children: [
           const WilayahBadge(),
           const MonitoringSectionTitle('Tanggal Pembayaran'),
-          Row(children: [
-            Expanded(child: MonitoringDateField(label: 'Awal', controller: _tglAwal, required: true)),
-            const SizedBox(width: 8),
-            Expanded(child: MonitoringDateField(label: 'Akhir', controller: _tglAkhir, required: true)),
-          ]),
+          Row(
+            children: [
+              Expanded(
+                child: MonitoringDateField(
+                  label: 'Awal',
+                  controller: _tglAwal,
+                  required: true,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: MonitoringDateField(
+                  label: 'Akhir',
+                  controller: _tglAkhir,
+                  required: true,
+                ),
+              ),
+            ],
+          ),
           const MonitoringSectionTitle('Filter lainnya (opsional)'),
-          TextField(controller: _kodeBayarKolektif, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Kode Bayar Kolektif', border: OutlineInputBorder())),
+          TextField(
+            controller: _kodeBayarKolektif,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(
+              labelText: 'Kode Bayar Kolektif',
+              border: OutlineInputBorder(),
+            ),
+          ),
           const SizedBox(height: 12),
-          TextField(controller: _namaGrup, decoration: const InputDecoration(labelText: 'Nama Grup', border: OutlineInputBorder())),
+          TextField(
+            controller: _namaGrup,
+            decoration: const InputDecoration(
+              labelText: 'Nama Grup',
+              border: OutlineInputBorder(),
+            ),
+          ),
           const SizedBox(height: 12),
-          TextField(controller: _namaKolektor, decoration: const InputDecoration(labelText: 'Nama Kolektor', border: OutlineInputBorder())),
+          TextField(
+            controller: _namaKolektor,
+            decoration: const InputDecoration(
+              labelText: 'Nama Kolektor',
+              border: OutlineInputBorder(),
+            ),
+          ),
           const SizedBox(height: 20),
           FilledButton(
             onPressed: _loading ? null : _tampilkan,
             child: _loading
-                ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                ? const SizedBox(
+                    height: 20,
+                    width: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
                 : const Text('Tampilkan'),
           ),
-          MonitoringResultView(result: _result, loading: false, reportTitle: 'Sudah Bayar Kolektif'),
+          MonitoringResultView(
+            result: _result,
+            loading: false,
+            reportTitle: 'Sudah Bayar Kolektif',
+          ),
         ],
       ),
     );

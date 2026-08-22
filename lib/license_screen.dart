@@ -23,7 +23,8 @@ class LicenseScreen extends StatefulWidget {
 }
 
 class _LicenseScreenState extends State<LicenseScreen> {
-  late final Future<Map<String, List<LicenseParagraph>>> _future = _loadLicensesByPackage();
+  late final Future<Map<String, List<LicenseParagraph>>> _future =
+      _loadLicensesByPackage();
 
   Future<Map<String, List<LicenseParagraph>>> _loadLicensesByPackage() async {
     final map = <String, List<LicenseParagraph>>{};
@@ -43,7 +44,8 @@ class _LicenseScreenState extends State<LicenseScreen> {
         future: _future,
         builder: (context, snapshot) {
           final data = snapshot.data;
-          if (data == null) return const Center(child: CircularProgressIndicator());
+          if (data == null)
+            return const Center(child: CircularProgressIndicator());
           final packages = data.keys.toList()..sort();
           return ListView.builder(
             itemCount: packages.length,
@@ -54,7 +56,10 @@ class _LicenseScreenState extends State<LicenseScreen> {
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => _PackageLicenseScreen(packageName: name, paragraphs: data[name]!),
+                    builder: (_) => _PackageLicenseScreen(
+                      packageName: name,
+                      paragraphs: data[name]!,
+                    ),
                   ),
                 ),
               );
@@ -70,7 +75,10 @@ class _PackageLicenseScreen extends StatefulWidget {
   final String packageName;
   final List<LicenseParagraph> paragraphs;
 
-  const _PackageLicenseScreen({required this.packageName, required this.paragraphs});
+  const _PackageLicenseScreen({
+    required this.packageName,
+    required this.paragraphs,
+  });
 
   @override
   State<_PackageLicenseScreen> createState() => _PackageLicenseScreenState();
@@ -97,10 +105,15 @@ class _PackageLicenseScreenState extends State<_PackageLicenseScreen> {
         children: [
           for (final paragraph in widget.paragraphs)
             Padding(
-              padding: EdgeInsets.only(left: paragraph.indent > 0 ? paragraph.indent * 16.0 : 0, bottom: 12),
+              padding: EdgeInsets.only(
+                left: paragraph.indent > 0 ? paragraph.indent * 16.0 : 0,
+                bottom: 12,
+              ),
               child: Text(
                 paragraph.text,
-                textAlign: paragraph.indent == LicenseParagraph.centeredIndent ? TextAlign.center : TextAlign.start,
+                textAlign: paragraph.indent == LicenseParagraph.centeredIndent
+                    ? TextAlign.center
+                    : TextAlign.start,
               ),
             ),
           if (isHidden) ...[

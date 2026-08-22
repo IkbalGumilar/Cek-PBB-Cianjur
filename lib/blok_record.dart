@@ -23,7 +23,8 @@ class BlokRecord {
 
   /// Nilai numerik dari [jumlahPbb] (mis. "Rp. 51.425" -> 51425), dipakai
   /// untuk mengurutkan berdasarkan jumlah bayar PBB.
-  int get jumlahPbbValue => int.tryParse(jumlahPbb.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+  int get jumlahPbbValue =>
+      int.tryParse(jumlahPbb.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
 
   /// NOP+tahun mengidentifikasi satu baris pembayaran secara unik (satu NOP
   /// bisa punya beberapa baris untuk tahun yang berbeda-beda).

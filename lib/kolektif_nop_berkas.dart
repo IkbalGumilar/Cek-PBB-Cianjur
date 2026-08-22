@@ -71,8 +71,10 @@ class BacaanBerkasNop {
     this.errorMessage,
   });
 
-  List<BarisBerkasNop> get terbaca => baris.where((b) => b.nop != null).toList();
-  List<BarisBerkasNop> get tidakTerbaca => baris.where((b) => b.nop == null).toList();
+  List<BarisBerkasNop> get terbaca =>
+      baris.where((b) => b.nop != null).toList();
+  List<BarisBerkasNop> get tidakTerbaca =>
+      baris.where((b) => b.nop == null).toList();
 }
 
 /// Uraikan satu isian jadi NOP 18 angka.
@@ -87,7 +89,11 @@ class BacaanBerkasNop {
 }) {
   final digits = mentah.replaceAll(RegExp(r'[^0-9]'), '');
   if (digits.isEmpty) {
-    return (nop: null, alasan: 'Tidak ada angka di baris ini.', dariSingkatan: false);
+    return (
+      nop: null,
+      alasan: 'Tidak ada angka di baris ini.',
+      dariSingkatan: false,
+    );
   }
   if (digits.length == 18) {
     return (nop: digits, alasan: null, dariSingkatan: false);
@@ -96,11 +102,16 @@ class BacaanBerkasNop {
     final blokLen = digits.length == 7 ? 3 : 2;
     final blok = digits.substring(0, blokLen).padLeft(3, '0');
     final wilayah = digits.substring(blokLen).padLeft(4, '0');
-    return (nop: '$kelurahanCode$blok${wilayah}0', alasan: null, dariSingkatan: true);
+    return (
+      nop: '$kelurahanCode$blok${wilayah}0',
+      alasan: null,
+      dariSingkatan: true,
+    );
   }
   return (
     nop: null,
-    alasan: '${digits.length} angka — perlu 18 angka lengkap, atau singkatan blok+nomor wilayah 5–7 angka.',
+    alasan:
+        '${digits.length} angka — perlu 18 angka lengkap, atau singkatan blok+nomor wilayah 5–7 angka.',
     dariSingkatan: false,
   );
 }
@@ -119,7 +130,8 @@ class BacaanBerkasNop {
     if (satu.nop == null) {
       return (
         nop: const <String>[],
-        error: '"${mentah.trim()}" belum bisa dikenali sebagai NOP.\n\n'
+        error:
+            '"${mentah.trim()}" belum bisa dikenali sebagai NOP.\n\n'
             'Isi salah satu dari:\n'
             '• NOP lengkap 18 angka, atau\n'
             '• singkatan blok + nomor wilayah 5–7 angka (contoh: 17154 → blok 017, nomor 0154).\n\n'
@@ -129,7 +141,10 @@ class BacaanBerkasNop {
     hasil.add(satu.nop!);
   }
   if (hasil.isEmpty) {
-    return (nop: const <String>[], error: 'Belum ada NOP yang bisa dibaca dari isian itu.');
+    return (
+      nop: const <String>[],
+      error: 'Belum ada NOP yang bisa dibaca dari isian itu.',
+    );
   }
   return (nop: hasil, error: null);
 }
@@ -187,17 +202,25 @@ BacaanBerkasNop bacaBerkasNop({
 }) {
   final tabel = _bacaTabel(namaBerkas, bytes);
   if (tabel.error != null) {
-    return BacaanBerkasNop(errorMessage: tabel.error, peringatan: tabel.peringatan);
+    return BacaanBerkasNop(
+      errorMessage: tabel.error,
+      peringatan: tabel.peringatan,
+    );
   }
   if (tabel.baris.isEmpty) {
     return BacaanBerkasNop(
-      errorMessage: 'Berkas "$namaBerkas" kosong — tidak ada baris yang bisa dibaca.',
+      errorMessage:
+          'Berkas "$namaBerkas" kosong — tidak ada baris yang bisa dibaca.',
       peringatan: tabel.peringatan,
     );
   }
 
-  final jumlahKolom = tabel.baris.fold<int>(0, (a, b) => b.length > a ? b.length : a);
-  final kolom = kolomPaksa ?? tebakKolomNop(tabel.baris, kelurahanCode: kelurahanCode);
+  final jumlahKolom = tabel.baris.fold<int>(
+    0,
+    (a, b) => b.length > a ? b.length : a,
+  );
+  final kolom =
+      kolomPaksa ?? tebakKolomNop(tabel.baris, kelurahanCode: kelurahanCode);
   final namaKolom = _namaKolom(tabel.baris.first, jumlahKolom);
 
   if (kolom < 0 || kolom >= jumlahKolom) {
@@ -205,7 +228,8 @@ BacaanBerkasNop bacaBerkasNop({
       namaKolom: namaKolom,
       kolomNop: -1,
       peringatan: tabel.peringatan,
-      errorMessage: 'Tidak ada kolom di "$namaBerkas" yang isinya terbaca sebagai NOP. '
+      errorMessage:
+          'Tidak ada kolom di "$namaBerkas" yang isinya terbaca sebagai NOP. '
           'Pilih kolomnya sendiri, atau pastikan berkasnya memuat NOP 18 angka.',
     );
   }
@@ -216,13 +240,15 @@ BacaanBerkasNop bacaBerkasNop({
     final asli = kolom < row.length ? row[kolom].trim() : '';
     if (asli.isEmpty) continue;
     final satu = uraikanSatuNop(asli, kelurahanCode: kelurahanCode);
-    baris.add(BarisBerkasNop(
-      nomorBaris: i + 1,
-      asli: asli,
-      nop: satu.nop,
-      alasan: satu.alasan,
-      dariSingkatan: satu.dariSingkatan,
-    ));
+    baris.add(
+      BarisBerkasNop(
+        nomorBaris: i + 1,
+        asli: asli,
+        nop: satu.nop,
+        alasan: satu.alasan,
+        dariSingkatan: satu.dariSingkatan,
+      ),
+    );
   }
 
   return BacaanBerkasNop(
@@ -241,10 +267,14 @@ List<String> _namaKolom(List<String> barisPertama, int jumlahKolom) {
   // Ada huruf = baris judul. Sengaja tidak memakai "bukan angka murni":
   // nominal seperti "87,453" juga bukan angka murni, dan baris data pertama
   // yang tersamar jadi judul berarti satu NOP hilang tanpa jejak.
-  final terlihatJudul = barisPertama.any((c) => RegExp(r'[A-Za-z]').hasMatch(c));
+  final terlihatJudul = barisPertama.any(
+    (c) => RegExp(r'[A-Za-z]').hasMatch(c),
+  );
   return [
     for (var i = 0; i < jumlahKolom; i++)
-      terlihatJudul && i < barisPertama.length && barisPertama[i].trim().isNotEmpty
+      terlihatJudul &&
+              i < barisPertama.length &&
+              barisPertama[i].trim().isNotEmpty
           ? '${i + 1}. ${barisPertama[i].trim()}'
           : 'Kolom ${i + 1}',
   ];
@@ -261,11 +291,13 @@ class _Tabel {
 _Tabel _bacaTabel(String namaBerkas, Uint8List bytes) {
   final lower = namaBerkas.toLowerCase();
   try {
-    if (lower.endsWith('.xlsx') || lower.endsWith('.xls')) return _bacaExcel(bytes);
+    if (lower.endsWith('.xlsx') || lower.endsWith('.xls'))
+      return _bacaExcel(bytes);
     if (lower.endsWith('.csv')) return _bacaCsv(bytes);
     if (lower.endsWith('.txt')) return _bacaTeks(bytes);
     return _Tabel(
-      error: 'Format berkas "$namaBerkas" belum didukung. Pakai CSV, Excel (.xlsx/.xls), atau teks (.txt).',
+      error:
+          'Format berkas "$namaBerkas" belum didukung. Pakai CSV, Excel (.xlsx/.xls), atau teks (.txt).',
     );
   } on Exception catch (e) {
     return _Tabel(error: 'Berkas "$namaBerkas" gagal dibaca: $e');
@@ -286,7 +318,8 @@ _Tabel _bacaCsv(Uint8List bytes) {
   final rows = Csv().decode(_keTeks(bytes));
   return _Tabel(
     baris: [
-      for (final row in rows.take(maksBarisBerkas)) [for (final sel in row) '${sel ?? ''}'.trim()],
+      for (final row in rows.take(maksBarisBerkas))
+        [for (final sel in row) '${sel ?? ''}'.trim()],
     ],
   );
 }
@@ -304,7 +337,9 @@ _Tabel _bacaTeks(Uint8List bytes) {
 _Tabel _bacaExcel(Uint8List bytes) {
   final workbook = Excel.decodeBytes(bytes);
   if (workbook.tables.isEmpty) {
-    return const _Tabel(error: 'Berkas Excel ini tidak punya lembar kerja yang bisa dibaca.');
+    return const _Tabel(
+      error: 'Berkas Excel ini tidak punya lembar kerja yang bisa dibaca.',
+    );
   }
   final sheet = workbook.tables[workbook.tables.keys.first]!;
 
@@ -353,7 +388,9 @@ String _selKeTeks(CellValue? nilai) {
       // ("3.2052e+17"); kalau itu dibersihkan dari non-angka, hasilnya jadi
       // deretan digit yang bukan NOP. Bilangan bulat ditulis penuh.
       final v = nilai.value;
-      return v == v.roundToDouble() && v.abs() < 1e21 ? v.toStringAsFixed(0) : v.toString();
+      return v == v.roundToDouble() && v.abs() < 1e21
+          ? v.toStringAsFixed(0)
+          : v.toString();
     default:
       return nilai.toString().trim();
   }
@@ -406,11 +443,15 @@ const _frasaTidakDitemukan = [
 /// dugaan atas bahasa sistem aslinya, jadi salah golong sangat mungkin —
 /// dan salah golong yang diam-diam lebih berbahaya daripada satu golongan
 /// tambahan yang isinya apa adanya.
-StatusImporNop klasifikasiHasilTambahNop({required bool success, String? pesan}) {
+StatusImporNop klasifikasiHasilTambahNop({
+  required bool success,
+  String? pesan,
+}) {
   if (success) return StatusImporNop.ditambahkan;
   final teks = (pesan ?? '').toLowerCase();
   if (teks.isEmpty) return StatusImporNop.perluDiperiksa;
-  if (_frasaTidakDitemukan.any(teks.contains)) return StatusImporNop.tidakDitemukan;
+  if (_frasaTidakDitemukan.any(teks.contains))
+    return StatusImporNop.tidakDitemukan;
   if (_frasaSudahBayar.any(teks.contains)) return StatusImporNop.sudahBayar;
   return StatusImporNop.perluDiperiksa;
 }
@@ -438,12 +479,19 @@ class HasilImporNop {
   /// jadi dikirim sama sekali (sesi habis, jaringan putus berulang).
   final String? errorFatal;
 
-  const HasilImporNop({this.item = const [], this.dibatalkan = false, this.errorFatal});
+  const HasilImporNop({
+    this.item = const [],
+    this.dibatalkan = false,
+    this.errorFatal,
+  });
 
-  List<ItemImporNop> ofStatus(StatusImporNop s) => item.where((i) => i.status == s).toList();
+  List<ItemImporNop> ofStatus(StatusImporNop s) =>
+      item.where((i) => i.status == s).toList();
 
   List<ItemImporNop> get ditambahkan => ofStatus(StatusImporNop.ditambahkan);
   List<ItemImporNop> get sudahBayar => ofStatus(StatusImporNop.sudahBayar);
-  List<ItemImporNop> get tidakDitemukan => ofStatus(StatusImporNop.tidakDitemukan);
-  List<ItemImporNop> get perluDiperiksa => ofStatus(StatusImporNop.perluDiperiksa);
+  List<ItemImporNop> get tidakDitemukan =>
+      ofStatus(StatusImporNop.tidakDitemukan);
+  List<ItemImporNop> get perluDiperiksa =>
+      ofStatus(StatusImporNop.perluDiperiksa);
 }

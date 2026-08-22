@@ -66,14 +66,25 @@ class _MonitoringResultViewState extends State<MonitoringResultView> {
     if (format == null) return;
     setState(() => _busy = true);
     try {
-      final bytes = await MonitoringResultExporter.build(format, result, widget.reportTitle);
-      final fileName = MonitoringResultExporter.fileName(format, widget.reportTitle);
+      final bytes = await MonitoringResultExporter.build(
+        format,
+        result,
+        widget.reportTitle,
+      );
+      final fileName = MonitoringResultExporter.fileName(
+        format,
+        widget.reportTitle,
+      );
       final location = await DownloadHelper.saveBytes(bytes, fileName);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Tersimpan di $location')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Tersimpan di $location')));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal mengunduh: $e')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Gagal mengunduh: $e')));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -84,12 +95,25 @@ class _MonitoringResultViewState extends State<MonitoringResultView> {
     if (format == null) return;
     setState(() => _busy = true);
     try {
-      final bytes = await MonitoringResultExporter.build(format, result, widget.reportTitle);
-      final fileName = MonitoringResultExporter.fileName(format, widget.reportTitle);
-      await NativeFileHelper.shareBytes(bytes: bytes, fileName: fileName, mimeType: DownloadHelper.mimeTypeFor(fileName));
+      final bytes = await MonitoringResultExporter.build(
+        format,
+        result,
+        widget.reportTitle,
+      );
+      final fileName = MonitoringResultExporter.fileName(
+        format,
+        widget.reportTitle,
+      );
+      await NativeFileHelper.shareBytes(
+        bytes: bytes,
+        fileName: fileName,
+        mimeType: DownloadHelper.mimeTypeFor(fileName),
+      );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal membagikan: $e')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Gagal membagikan: $e')));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -98,17 +122,26 @@ class _MonitoringResultViewState extends State<MonitoringResultView> {
   Future<void> _cetak(MonitoringTableResult result) async {
     setState(() => _busy = true);
     try {
-      final bytes = await MonitoringResultExporter.build(MonitoringExportFormat.pdf, result, widget.reportTitle);
+      final bytes = await MonitoringResultExporter.build(
+        MonitoringExportFormat.pdf,
+        result,
+        widget.reportTitle,
+      );
       if (!mounted) return;
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => DocumentPreviewScreen(pdfBytes: bytes, fileName: '${widget.reportTitle}.pdf'),
+          builder: (_) => DocumentPreviewScreen(
+            pdfBytes: bytes,
+            fileName: '${widget.reportTitle}.pdf',
+          ),
         ),
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal menyiapkan cetakan: $e')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Gagal menyiapkan cetakan: $e')));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -127,7 +160,10 @@ class _MonitoringResultViewState extends State<MonitoringResultView> {
     if (result.errorMessage != null) {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 16),
-        child: Text(result.errorMessage!, style: const TextStyle(color: Colors.red)),
+        child: Text(
+          result.errorMessage!,
+          style: const TextStyle(color: Colors.red),
+        ),
       );
     }
     if (result.rows.isEmpty) {
@@ -147,7 +183,12 @@ class _MonitoringResultViewState extends State<MonitoringResultView> {
         children: [
           Row(
             children: [
-              Expanded(child: Text('${result.rows.length} data', style: Theme.of(context).textTheme.titleSmall)),
+              Expanded(
+                child: Text(
+                  '${result.rows.length} data',
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+              ),
               IconButton(
                 onPressed: _busy ? null : () => _unduh(result),
                 icon: const Icon(Icons.download_outlined),
@@ -168,9 +209,14 @@ class _MonitoringResultViewState extends State<MonitoringResultView> {
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: DataTable(
-              columns: [for (final h in result.headers) DataColumn(label: Text(h))],
+              columns: [
+                for (final h in result.headers) DataColumn(label: Text(h)),
+              ],
               rows: [
-                for (final row in visibleRows) DataRow(cells: [for (final cell in row) DataCell(Text(cell))]),
+                for (final row in visibleRows)
+                  DataRow(
+                    cells: [for (final cell in row) DataCell(Text(cell))],
+                  ),
               ],
             ),
           ),
@@ -180,7 +226,9 @@ class _MonitoringResultViewState extends State<MonitoringResultView> {
               child: Center(
                 child: OutlinedButton(
                   onPressed: () => setState(() => _visibleCount += _pageSize),
-                  child: Text('Muat 10 Data Lagi (sisa ${result.rows.length - _visibleCount})'),
+                  child: Text(
+                    'Muat 10 Data Lagi (sisa ${result.rows.length - _visibleCount})',
+                  ),
                 ),
               ),
             ),

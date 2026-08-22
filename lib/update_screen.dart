@@ -31,7 +31,9 @@ class _UpdateScreenState extends State<UpdateScreen> {
   String get _downloadFileName {
     final url = widget.info.apkDownloadUrl;
     final urlName = url.split('/').last;
-    return urlName.contains('.') ? urlName : 'CekPBBCianjur-${widget.info.version}';
+    return urlName.contains('.')
+        ? urlName
+        : 'CekPBBCianjur-${widget.info.version}';
   }
 
   Future<void> _downloadAndInstall() async {
@@ -41,7 +43,8 @@ class _UpdateScreenState extends State<UpdateScreen> {
       _error = null;
     });
     try {
-      final file = _downloadedFile ??
+      final file =
+          _downloadedFile ??
           await ApkInstaller.download(
             widget.info.apkDownloadUrl,
             fileName: _downloadFileName,
@@ -78,10 +81,24 @@ class _UpdateScreenState extends State<UpdateScreen> {
     setState(() => _stage = _Stage.downloaded);
   }
 
-  String _formatSize(int bytes) => '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+  String _formatSize(int bytes) =>
+      '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
 
   String _formatDate(DateTime date) {
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'Mei',
+      'Jun',
+      'Jul',
+      'Agu',
+      'Sep',
+      'Okt',
+      'Nov',
+      'Des',
+    ];
     return '${date.day} ${months[date.month - 1]} ${date.year}';
   }
 
@@ -105,7 +122,10 @@ class _UpdateScreenState extends State<UpdateScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Versi ${info.version} tersedia', style: Theme.of(context).textTheme.titleLarge),
+                        Text(
+                          'Versi ${info.version} tersedia',
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
                         Text(
                           '${_formatSize(info.apkSize)} · Dirilis ${_formatDate(info.publishedAt)}',
                           style: Theme.of(context).textTheme.bodySmall,
@@ -116,13 +136,18 @@ class _UpdateScreenState extends State<UpdateScreen> {
                 ],
               ),
               const SizedBox(height: 24),
-              Text('Catatan Pembaruan', style: Theme.of(context).textTheme.titleMedium),
+              Text(
+                'Catatan Pembaruan',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
               const SizedBox(height: 8),
               Card(
                 child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: SelectableText(
-                    info.changelog.isNotEmpty ? info.changelog : 'Tidak ada catatan pembaruan untuk rilis ini.',
+                    info.changelog.isNotEmpty
+                        ? info.changelog
+                        : 'Tidak ada catatan pembaruan untuk rilis ini.',
                   ),
                 ),
               ),
@@ -159,12 +184,20 @@ class _UpdateScreenState extends State<UpdateScreen> {
                   label: const Text('Pasang Sekarang'),
                 ),
               ] else if (_stage == _Stage.downloading) ...[
-                LinearProgressIndicator(value: _progress > 0 ? _progress : null),
+                LinearProgressIndicator(
+                  value: _progress > 0 ? _progress : null,
+                ),
                 const SizedBox(height: 8),
-                Text('Mengunduh... ${(_progress * 100).toStringAsFixed(0)}%', textAlign: TextAlign.center),
+                Text(
+                  'Mengunduh... ${(_progress * 100).toStringAsFixed(0)}%',
+                  textAlign: TextAlign.center,
+                ),
               ] else if (_stage == _Stage.downloaded) ...[
                 if (_canSelfInstall)
-                  const Text('Berkas sudah diunduh, menunggu konfirmasi instal...', textAlign: TextAlign.center)
+                  const Text(
+                    'Berkas sudah diunduh, menunggu konfirmasi instal...',
+                    textAlign: TextAlign.center,
+                  )
                 else
                   Card(
                     color: Colors.green.withValues(alpha: 0.12),
@@ -180,7 +213,9 @@ class _UpdateScreenState extends State<UpdateScreen> {
                             style: const TextStyle(fontWeight: FontWeight.bold),
                           ),
                           const SizedBox(height: 8),
-                          const Text('Jalankan/ekstrak berkas ini sendiri untuk memasang pembaruan.'),
+                          const Text(
+                            'Jalankan/ekstrak berkas ini sendiri untuk memasang pembaruan.',
+                          ),
                         ],
                       ),
                     ),
@@ -189,7 +224,9 @@ class _UpdateScreenState extends State<UpdateScreen> {
                 FilledButton.icon(
                   onPressed: _downloadAndInstall,
                   icon: const Icon(Icons.download),
-                  label: Text(_canSelfInstall ? 'Unduh & Pasang' : 'Unduh Pembaruan'),
+                  label: Text(
+                    _canSelfInstall ? 'Unduh & Pasang' : 'Unduh Pembaruan',
+                  ),
                 ),
               ],
             ],

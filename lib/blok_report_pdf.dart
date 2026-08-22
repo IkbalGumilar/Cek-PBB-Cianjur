@@ -9,7 +9,11 @@ import 'tagihan_result.dart' show formatRupiah;
 /// Membuat PDF laporan data blok. [records] harus sudah diurutkan sebelum
 /// dipanggil (laporan selalu urut blok lalu nomor wilayah menaik).
 class BlokReportPdf {
-  static Future<Uint8List> build(List<BlokRecord> records, {String? tahun, int totalPbb = 0}) async {
+  static Future<Uint8List> build(
+    List<BlokRecord> records, {
+    String? tahun,
+    int totalPbb = 0,
+  }) async {
     final doc = pw.Document();
     final judul = (tahun == null || tahun.isEmpty)
         ? 'Laporan Data Blok - Semua Tahun'
@@ -21,13 +25,32 @@ class BlokReportPdf {
         build: (context) => [
           pw.Header(level: 0, text: judul),
           pw.TableHelper.fromTextArray(
-            headers: const ['Blok', 'No. Wilayah', 'Nama WP', 'NOP', 'Tahun', 'Tanggal Bayar', 'Jumlah PBB'],
+            headers: const [
+              'Blok',
+              'No. Wilayah',
+              'Nama WP',
+              'NOP',
+              'Tahun',
+              'Tanggal Bayar',
+              'Jumlah PBB',
+            ],
             data: [
               for (final r in records)
-                [r.blok, r.wilayah, r.namaWajibPajak, r.nop, r.tahunBayar, r.tanggalBayar, r.jumlahPbb],
+                [
+                  r.blok,
+                  r.wilayah,
+                  r.namaWajibPajak,
+                  r.nop,
+                  r.tahunBayar,
+                  r.tanggalBayar,
+                  r.jumlahPbb,
+                ],
             ],
             cellStyle: const pw.TextStyle(fontSize: 8),
-            headerStyle: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold),
+            headerStyle: pw.TextStyle(
+              fontSize: 8,
+              fontWeight: pw.FontWeight.bold,
+            ),
             cellAlignment: pw.Alignment.centerLeft,
           ),
           pw.SizedBox(height: 12),

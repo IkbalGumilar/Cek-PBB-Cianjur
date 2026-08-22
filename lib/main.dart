@@ -60,9 +60,12 @@ class _CekPbbAppState extends State<CekPbbApp> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     ConnectivityMonitor.instance.start();
-    unawaited(BlokBackupScheduler.instance.runIfNeeded(
-      exportCsv: (fileName) => BlokDataStore.instance.exportCsv(fileName: fileName),
-    ));
+    unawaited(
+      BlokBackupScheduler.instance.runIfNeeded(
+        exportCsv: (fileName) =>
+            BlokDataStore.instance.exportCsv(fileName: fileName),
+      ),
+    );
   }
 
   @override
@@ -93,7 +96,11 @@ class _CekPbbAppState extends State<CekPbbApp> with WidgetsBindingObserver {
   }
 
   ThemeData _amoledTheme() {
-    final base = ThemeData(colorSchemeSeed: kHeaderGreen, useMaterial3: true, brightness: Brightness.dark);
+    final base = ThemeData(
+      colorSchemeSeed: kHeaderGreen,
+      useMaterial3: true,
+      brightness: Brightness.dark,
+    );
     return base.copyWith(
       scaffoldBackgroundColor: Colors.black,
       canvasColor: Colors.black,
@@ -110,19 +117,22 @@ class _CekPbbAppState extends State<CekPbbApp> with WidgetsBindingObserver {
         return MaterialApp(
           title: 'Cek PBB Cianjur',
           debugShowCheckedModeBanner: false,
-          theme: ThemeData(colorSchemeSeed: kHeaderGreen, useMaterial3: true, brightness: Brightness.light),
+          theme: ThemeData(
+            colorSchemeSeed: kHeaderGreen,
+            useMaterial3: true,
+            brightness: Brightness.light,
+          ),
           darkTheme: mode == AppThemeMode.amoled
               ? _amoledTheme()
-              : ThemeData(colorSchemeSeed: kHeaderGreen, useMaterial3: true, brightness: Brightness.dark),
+              : ThemeData(
+                  colorSchemeSeed: kHeaderGreen,
+                  useMaterial3: true,
+                  brightness: Brightness.dark,
+                ),
           themeMode: _flutterThemeMode(mode),
           home: MainShell(themeController: _themeController),
           builder: (context, child) {
-            return Stack(
-              children: [
-                ?child,
-                const NetworkStatusOverlay(),
-              ],
-            );
+            return Stack(children: [?child, const NetworkStatusOverlay()]);
           },
         );
       },

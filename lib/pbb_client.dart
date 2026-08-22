@@ -20,7 +20,13 @@ class PbbResult {
   final String? tanggalBayar;
   final String? jumlahPbb;
 
-  PbbResult(this.status, this.rawText, {this.namaWajibPajak, this.tanggalBayar, this.jumlahPbb});
+  PbbResult(
+    this.status,
+    this.rawText, {
+    this.namaWajibPajak,
+    this.tanggalBayar,
+    this.jumlahPbb,
+  });
 }
 
 class CaptchaError implements Exception {
@@ -30,6 +36,7 @@ class CaptchaError implements Exception {
 }
 
 const _captchaErrorKeywords = [
+  'kode verifikasi harus benar',
   'kode verifikasi salah',
   'verifikasi salah',
   'captcha salah',
@@ -112,6 +119,11 @@ class PbbClient {
     return _parseTagihan(response.data ?? '');
   }
 
+  TagihanResult parseTagihanResponse(String html) => _parseTagihan(html);
+
+  PbbResult classifyStatusBayarResponse(String html) =>
+      _classifyStatusBayar(html);
+
   void _throwIfCaptchaError(String text) {
     final lowered = text.toLowerCase();
     for (final kw in _captchaErrorKeywords) {
@@ -123,18 +135,29 @@ class PbbClient {
 
   PbbResult _classifyStatusBayar(String html) {
     final document = html_parser.parse(html);
-    final text = document.body?.text ?? '';
+    final text = _responseText(document);
     _throwIfCaptchaError(text);
     final lowered = text.toLowerCase();
+
+    final inactiveMessage = _inactiveSpptMessage(lowered);
+    if (inactiveMessage != null) {
+      return PbbResult(inactiveMessage, text);
+    }
 
     if (lowered.contains('data tidak ditemukan')) {
       return PbbResult('Belum Bayar (Data Tidak Ditemukan)', text);
     }
 
-    final nama = _extractColumn(document, (h) => h.contains('nama wajib pajak'));
+    final nama = _extractColumn(
+      document,
+      (h) => h.contains('nama wajib pajak'),
+    );
     final jumlahPbb = _extractColumn(document, (h) => h == 'pbb');
 
-    final match = RegExp(r'lunas\s+([\d\-:\s]+)', caseSensitive: false).firstMatch(text);
+    final match = RegExp(
+      r'lunas\s+([\d\-:\s]+)',
+      caseSensitive: false,
+    ).firstMatch(text);
     if (match != null) {
       final tanggal = match.group(1)!.trim();
       return PbbResult(
@@ -146,32 +169,49 @@ class PbbClient {
       );
     }
     if (lowered.contains('lunas')) {
-      return PbbResult('Sudah Bayar (LUNAS)', text, namaWajibPajak: nama, jumlahPbb: jumlahPbb);
+      return PbbResult(
+        'Sudah Bayar (LUNAS)',
+        text,
+        namaWajibPajak: nama,
+        jumlahPbb: jumlahPbb,
+      );
     }
 
-    return PbbResult('Perlu Cek Manual (status tidak dikenali)', text, namaWajibPajak: nama);
+    return PbbResult(
+      'Perlu Cek Manual (status tidak dikenali)',
+      text,
+      namaWajibPajak: nama,
+    );
   }
 
   /// Ambil isi kolom pertama dari baris data pertama pada tabel hasil, dicari
   /// lewat header yang cocok dengan [matchesHeader] (dibandingkan dalam huruf
   /// kecil). Dipakai untuk kolom "Nama Wajib Pajak" dan "PBB" pada tabel hasil
   /// Cek Status Bayar.
-  String? _extractColumn(Document document, bool Function(String header) matchesHeader) {
+  String? _extractColumn(
+    Document document,
+    bool Function(String header) matchesHeader,
+  ) {
     final table = _findResultTable(document);
     if (table == null) return null;
 
-    final headerCells = table
-        .querySelector('tr')
-        ?.querySelectorAll('th, td')
-        .map((c) => c.text.trim().toLowerCase())
-        .toList() ?? [];
+    final headerCells =
+        table
+            .querySelector('tr')
+            ?.querySelectorAll('th, td')
+            .map((c) => c.text.trim().toLowerCase())
+            .toList() ??
+        [];
     final col = headerCells.indexWhere(matchesHeader);
     if (col == -1) return null;
 
     final dataRows = table.querySelectorAll('tr').skip(1).toList();
     if (dataRows.isEmpty) return null;
 
-    final cells = dataRows.first.querySelectorAll('td').map((c) => c.text.trim()).toList();
+    final cells = dataRows.first
+        .querySelectorAll('td')
+        .map((c) => c.text.trim())
+        .toList();
     if (col >= cells.length) return null;
 
     final value = cells[col];
@@ -180,10 +220,20 @@ class PbbClient {
 
   TagihanResult _parseTagihan(String html) {
     final document = html_parser.parse(html);
-    final text = document.body?.text ?? '';
+    final text = _responseText(document);
     _throwIfCaptchaError(text);
 
-    if (text.toLowerCase().contains('tidak ditemukan') || text.toLowerCase().contains('data tidak ada')) {
+    final inactiveMessage = _inactiveSpptMessage(text.toLowerCase());
+    if (inactiveMessage != null) {
+      return TagihanResult.message(
+        inactiveMessage,
+        text,
+        inactiveUntilYear: _inactiveSpptYear(text.toLowerCase()),
+      );
+    }
+
+    if (text.toLowerCase().contains('tidak ditemukan') ||
+        text.toLowerCase().contains('data tidak ada')) {
       return TagihanResult.notFound(text);
     }
 
@@ -192,11 +242,13 @@ class PbbClient {
       return TagihanResult.notFound(text);
     }
 
-    final headerCells = table
-        .querySelector('tr')
-        ?.querySelectorAll('th, td')
-        .map((c) => c.text.trim().toLowerCase())
-        .toList() ?? [];
+    final headerCells =
+        table
+            .querySelector('tr')
+            ?.querySelectorAll('th, td')
+            .map((c) => c.text.trim().toLowerCase())
+            .toList() ??
+        [];
 
     int findColumn(List<String> keywords) {
       for (var i = 0; i < headerCells.length; i++) {
@@ -220,10 +272,14 @@ class PbbClient {
     var totalKurangBayar = '';
 
     for (final tr in dataRows) {
-      final cells = tr.querySelectorAll('td').map((c) => c.text.trim()).toList();
+      final cells = tr
+          .querySelectorAll('td')
+          .map((c) => c.text.trim())
+          .toList();
       if (cells.isEmpty) continue;
 
-      String cellAt(int idx) => (idx >= 0 && idx < cells.length) ? cells[idx] : '';
+      String cellAt(int idx) =>
+          (idx >= 0 && idx < cells.length) ? cells[idx] : '';
 
       final nama = cellAt(namaCol);
       final tahun = cellAt(tahunCol);
@@ -241,14 +297,16 @@ class PbbClient {
       if (tahun.isEmpty) continue;
 
       if (nama.isNotEmpty) namaWajibPajak = nama;
-      rows.add(TagihanYearRow(
-        tahun: tahun,
-        pbb: pbb,
-        denda: denda,
-        kurangBayar: kurang,
-        statusBayar: cellAt(statusCol),
-        paymentCodeVa: _extractPaymentCodeVa(tr),
-      ));
+      rows.add(
+        TagihanYearRow(
+          tahun: tahun,
+          pbb: pbb,
+          denda: denda,
+          kurangBayar: kurang,
+          statusBayar: cellAt(statusCol),
+          paymentCodeVa: _extractPaymentCodeVa(tr),
+        ),
+      );
     }
 
     if (rows.isEmpty) {
@@ -266,25 +324,50 @@ class PbbClient {
     );
   }
 
+  String _responseText(Document document) =>
+      (document.body?.text ?? '').replaceAll(RegExp(r'\s+'), ' ').trim();
+
+  String? _inactiveSpptMessage(String loweredText) {
+    if (!loweredText.contains('aktif sampai dengan tahun')) return null;
+
+    final year = _inactiveSpptYear(loweredText);
+    return year == null || year.isEmpty
+        ? 'SPPT tidak aktif. Silakan datang ke kantor Bapenda untuk menerbitkan SPPT terbaru.'
+        : 'SPPT tidak aktif dari tahun $year. Silakan datang ke kantor Bapenda untuk menerbitkan SPPT terbaru.';
+  }
+
+  String? _inactiveSpptYear(String loweredText) => RegExp(
+    r'aktif sampai dengan tahun\s*(\d{4})?',
+  ).firstMatch(loweredText)?.group(1);
+
   /// Ambil kode bayar VA dari tombol "Payment VA" pada baris tabel [tr],
   /// contoh: onclick="confirmVA(0, '2026','1261179232')" -> '1261179232'.
   /// Server tidak mencantumkan kode ini di teks kolom manapun, hanya di
   /// attribute onclick, jadi harus digali dari HTML mentah baris tersebut.
   String? _extractPaymentCodeVa(Element tr) {
-    final button = tr.querySelectorAll('button').firstWhere(
+    final button = tr
+        .querySelectorAll('button')
+        .firstWhere(
           (b) => (b.attributes['onclick'] ?? '').startsWith('confirmVA('),
           orElse: () => Element.tag('button'),
         );
     final onclick = button.attributes['onclick'];
     if (onclick == null) return null;
-    final match = RegExp(r"confirmVA\(\s*\d+\s*,\s*'[^']*'\s*,\s*'([^']*)'\s*\)").firstMatch(onclick);
+    final match = RegExp(
+      r"confirmVA\(\s*\d+\s*,\s*'[^']*'\s*,\s*'([^']*)'\s*\)",
+    ).firstMatch(onclick);
     return match?.group(1);
   }
 
   Element? _findResultTable(Document document) {
     final tables = document.querySelectorAll('table');
     if (tables.isEmpty) return null;
-    tables.sort((a, b) => b.querySelectorAll('td').length.compareTo(a.querySelectorAll('td').length));
+    tables.sort(
+      (a, b) => b
+          .querySelectorAll('td')
+          .length
+          .compareTo(a.querySelectorAll('td').length),
+    );
     return tables.first;
   }
 
@@ -310,7 +393,10 @@ class PbbClient {
   /// Ambil bytes PDF "Bukti Bayar" (STTS) untuk satu NOP+tahun, mereplikasi
   /// tombol cetak di kolom STTS hasil Cek Status Bayar
   /// (JS: printPDF -> stts-pdf-pbb.php).
-  Future<Uint8List> fetchBuktiBayarPdf({required String nop, required String tahun}) async {
+  Future<Uint8List> fetchBuktiBayarPdf({
+    required String nop,
+    required String tahun,
+  }) async {
     final response = await _dio.get<List<int>>(
       'https://cektagihan.cianjurkab.v-tax.id/stts-pdf-pbb.php',
       queryParameters: {
@@ -327,12 +413,17 @@ class PbbClient {
   Uint8List _requirePdfBytes(Response<List<int>> response) {
     final contentType = response.headers.value('content-type') ?? '';
     if (!contentType.toLowerCase().contains('pdf')) {
-      throw Exception('Server tidak mengembalikan PDF (sesi mungkin sudah habis, coba cek ulang).');
+      throw Exception(
+        'Server tidak mengembalikan PDF (sesi mungkin sudah habis, coba cek ulang).',
+      );
     }
     return Uint8List.fromList(response.data!);
   }
 
-  Future<QrisResult> generateQrisPbb({required String nop, required String tahun}) async {
+  Future<QrisResult> generateQrisPbb({
+    required String nop,
+    required String tahun,
+  }) async {
     final response = await _dio.post<String>(
       'https://cektagihan.cianjurkab.v-tax.id/svcGenerateQrcode.php',
       data: {
@@ -361,7 +452,9 @@ class PbbClient {
             'NOP ini untuk tahun $tahun sudah pernah generate VA. Silakan gunakan pembayaran VA.',
           );
         }
-        throw QrisGenerationError('Terjadi kesalahan sistem, silakan dicoba beberapa saat lagi.');
+        throw QrisGenerationError(
+          'Terjadi kesalahan sistem, silakan dicoba beberapa saat lagi.',
+        );
       }
     } on FormatException {
       // Bukan JSON -> respons sukses berupa HTML berisi QR code, lanjut parse di bawah.
@@ -408,11 +501,14 @@ class PbbClient {
         );
       }
       final rcm = json is Map ? json['rcm'] as String? : null;
-      throw VaGenerationError(rcm ?? 'Terjadi kesalahan sistem, silakan dicoba beberapa saat lagi.');
+      throw VaGenerationError(
+        rcm ?? 'Terjadi kesalahan sistem, silakan dicoba beberapa saat lagi.',
+      );
     }
 
     final data = json['data'] as Map;
-    final amountValue = num.tryParse(data['trx_amount'].toString())?.round() ?? 0;
+    final amountValue =
+        num.tryParse(data['trx_amount'].toString())?.round() ?? 0;
     return VaResult(
       virtualAccount: data['virtual_account'].toString(),
       customerName: data['customer_name'].toString(),
@@ -422,13 +518,19 @@ class PbbClient {
   }
 
   QrisResult _parseQrisHtml(String html) {
-    final imageMatch = RegExp(r'data:image/png;base64,([A-Za-z0-9+/=]+)').firstMatch(html);
+    final imageMatch = RegExp(
+      r'data:image/png;base64,([A-Za-z0-9+/=]+)',
+    ).firstMatch(html);
     if (imageMatch == null) {
       throw QrisGenerationError('Gagal membaca QRIS dari respons server.');
     }
 
     final document = html_parser.parse(html);
-    final texts = document.querySelectorAll('div').map((d) => d.text.trim()).where((t) => t.isNotEmpty).toList();
+    final texts = document
+        .querySelectorAll('div')
+        .map((d) => d.text.trim())
+        .where((t) => t.isNotEmpty)
+        .toList();
 
     String findText(bool Function(String) matcher, String fallback) =>
         texts.firstWhere(matcher, orElse: () => fallback);

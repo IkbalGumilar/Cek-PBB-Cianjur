@@ -19,7 +19,15 @@ enum BlokExportFormat {
   const BlokExportFormat(this.label, this.extension);
 }
 
-const _reportHeader = ['Blok', 'Nomor Wilayah', 'Nama WP', 'NOP', 'Tahun Bayar', 'Tanggal Bayar', 'Jumlah PBB'];
+const _reportHeader = [
+  'Blok',
+  'Nomor Wilayah',
+  'Nama WP',
+  'NOP',
+  'Tahun Bayar',
+  'Tanggal Bayar',
+  'Jumlah PBB',
+];
 
 /// Membangun berkas laporan data blok (CSV/Excel/PDF) dari daftar record yang
 /// sama — dipakai bareng oleh aksi Unduh, Bagikan, dan Cetak di layar Buku
@@ -45,8 +53,24 @@ class BlokReportExporter {
     final rows = <List<String>>[
       _reportHeader,
       for (final r in records)
-        [r.blok, r.wilayah, r.namaWajibPajak, r.nop, r.tahunBayar, r.tanggalBayar, r.jumlahPbb],
-      ['', '', '', '', '', 'Total Keseluruhan', formatRupiah(formatRibuan(totalPbb))],
+        [
+          r.blok,
+          r.wilayah,
+          r.namaWajibPajak,
+          r.nop,
+          r.tahunBayar,
+          r.tanggalBayar,
+          r.jumlahPbb,
+        ],
+      [
+        '',
+        '',
+        '',
+        '',
+        '',
+        'Total Keseluruhan',
+        formatRupiah(formatRibuan(totalPbb)),
+      ],
     ];
     return Uint8List.fromList(utf8.encode(Csv().encode(rows)));
   }
@@ -78,7 +102,11 @@ class BlokReportExporter {
     return Uint8List.fromList(excel.encode()!);
   }
 
-  static String fileName(BlokExportFormat format, {String? tahun, String prefix = 'laporan_data_blok'}) {
+  static String fileName(
+    BlokExportFormat format, {
+    String? tahun,
+    String prefix = 'laporan_data_blok',
+  }) {
     final tahunPart = (tahun == null || tahun.isEmpty) ? 'semua_tahun' : tahun;
     return '${prefix}_${tahunPart}_${DateTime.now().millisecondsSinceEpoch}.${format.extension}';
   }

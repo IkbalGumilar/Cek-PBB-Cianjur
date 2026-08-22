@@ -20,6 +20,8 @@ import 'wilayah_kerja_store.dart';
 class CheckFormView extends StatefulWidget {
   final CheckMode mode;
   final VoidCallback onImportPressed;
+  final void Function(String blok, String wilayah, String tahun)?
+  onOpenStatusBayar;
   final String? initialBlok;
   final String? initialWilayah;
   final String? initialTahun;
@@ -28,6 +30,7 @@ class CheckFormView extends StatefulWidget {
     super.key,
     required this.mode,
     required this.onImportPressed,
+    this.onOpenStatusBayar,
     this.initialBlok,
     this.initialWilayah,
     this.initialTahun,
@@ -55,9 +58,15 @@ class _CheckFormViewState extends State<CheckFormView> {
   @override
   void initState() {
     super.initState();
-    if (widget.initialBlok != null) _blokController.text = widget.initialBlok!;
-    if (widget.initialWilayah != null) _wilayahController.text = widget.initialWilayah!;
-    if (widget.initialTahun != null) _tahunController.text = widget.initialTahun!;
+    if (widget.initialBlok != null) {
+      _blokController.text = widget.initialBlok!;
+    }
+    if (widget.initialWilayah != null) {
+      _wilayahController.text = widget.initialWilayah!;
+    }
+    if (widget.initialTahun != null) {
+      _tahunController.text = widget.initialTahun!;
+    }
     _loadCaptcha();
   }
 
@@ -90,24 +99,35 @@ class _CheckFormViewState extends State<CheckFormView> {
     });
     try {
       final bytes = await _client.fetchCaptchaImage(widget.mode);
+      if (!mounted) return;
       setState(() => _captchaBytes = bytes);
     } catch (e) {
+      if (!mounted) return;
       setState(() => _errorText = 'Gagal ambil captcha: $e');
     } finally {
-      setState(() {
-        _loadingCaptcha = false;
-        _ready = true;
-      });
+      if (mounted) {
+        setState(() {
+          _loadingCaptcha = false;
+          _ready = true;
+        });
+      }
     }
   }
 
   Future<void> _submit() async {
-    final nop = buildNop(blok: _blokController.text, wilayah: _wilayahController.text);
+    final nop = buildNop(
+      blok: _blokController.text,
+      wilayah: _wilayahController.text,
+    );
     final tahun = _tahunController.text.trim();
     final captcha = _captchaController.text.trim();
 
-    if (nop.isEmpty || captcha.isEmpty || (widget.mode == CheckMode.statusBayar && tahun.isEmpty)) {
-      setState(() => _errorText = 'Lengkapi dulu semua field yang wajib diisi.');
+    if (nop.isEmpty ||
+        captcha.isEmpty ||
+        (widget.mode == CheckMode.statusBayar && tahun.isEmpty)) {
+      setState(
+        () => _errorText = 'Lengkapi dulu semua field yang wajib diisi.',
+      );
       return;
     }
 
@@ -120,13 +140,23 @@ class _CheckFormViewState extends State<CheckFormView> {
 
     try {
       if (widget.mode == CheckMode.statusBayar) {
-        final result = await _client.checkStatusBayar(nop: nop, tahun: tahun, captchaCode: captcha);
+        final result = await _client.checkStatusBayar(
+          nop: nop,
+          tahun: tahun,
+          captchaCode: captcha,
+        );
+        if (!mounted) return;
         setState(() => _statusBayarResult = result);
         if (result.status.startsWith('Sudah Bayar')) {
           await _recordIfInWilayah(nop: nop, tahun: tahun, result: result);
+          if (!mounted) return;
         }
       } else {
-        final result = await _client.checkTagihan(nop: nop, captchaCode: captcha);
+        final result = await _client.checkTagihan(
+          nop: nop,
+          captchaCode: captcha,
+        );
+        if (!mounted) return;
         setState(() => _tagihanResult = result);
       }
       // Kode captcha yang barusan dipakai (baik hasilnya ada data atau tidak)
@@ -135,13 +165,17 @@ class _CheckFormViewState extends State<CheckFormView> {
       _captchaController.clear();
       await _loadCaptcha();
     } on CaptchaError catch (e) {
+      if (!mounted) return;
       setState(() => _errorText = e.message);
       _captchaController.clear();
+      await Future<void>.delayed(const Duration(seconds: 1));
+      if (!mounted) return;
       await _loadCaptcha();
     } catch (e) {
+      if (!mounted) return;
       setState(() => _errorText = 'Gagal cek: $e');
     } finally {
-      setState(() => _submitting = false);
+      if (mounted) setState(() => _submitting = false);
     }
   }
 
@@ -176,20 +210,27 @@ class _CheckFormViewState extends State<CheckFormView> {
               'Blok ini tidak termasuk wilayah kerja Anda, jadi hasil cek ini tidak akan dicatat '
               'ke Buku Catatan Blok. Pengecekan & pembayaran tetap bisa dilanjutkan seperti biasa.',
             ),
-            actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Mengerti'))],
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Mengerti'),
+              ),
+            ],
           ),
         );
         return;
       }
     }
 
-    await BlokDataStore.instance.upsert(BlokRecord(
-      nop: nop,
-      namaWajibPajak: result.namaWajibPajak ?? '',
-      tahunBayar: tahun,
-      tanggalBayar: result.tanggalBayar ?? '',
-      jumlahPbb: result.jumlahPbb ?? '',
-    ));
+    await BlokDataStore.instance.upsert(
+      BlokRecord(
+        nop: nop,
+        namaWajibPajak: result.namaWajibPajak ?? '',
+        tahunBayar: tahun,
+        tanggalBayar: result.tanggalBayar ?? '',
+        jumlahPbb: result.jumlahPbb ?? '',
+      ),
+    );
   }
 
   @override
@@ -223,7 +264,11 @@ class _CheckFormViewState extends State<CheckFormView> {
               Expanded(
                 child: TextField(
                   controller: _blokController,
-                  decoration: const InputDecoration(labelText: 'Blok', border: OutlineInputBorder(), counterText: ''),
+                  decoration: const InputDecoration(
+                    labelText: 'Blok',
+                    border: OutlineInputBorder(),
+                    counterText: '',
+                  ),
                   keyboardType: TextInputType.number,
                   maxLength: 3,
                 ),
@@ -261,20 +306,28 @@ class _CheckFormViewState extends State<CheckFormView> {
             const SizedBox(height: 12),
             TextField(
               controller: _tahunController,
-              decoration: const InputDecoration(labelText: 'Tahun Pajak', border: OutlineInputBorder()),
+              decoration: const InputDecoration(
+                labelText: 'Tahun Pajak',
+                border: OutlineInputBorder(),
+              ),
               keyboardType: TextInputType.number,
             ),
           ],
           const SizedBox(height: 16),
           Center(
             child: _loadingCaptcha
-                ? const Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator())
+                ? const Padding(
+                    padding: EdgeInsets.all(24),
+                    child: CircularProgressIndicator(),
+                  )
                 : _captchaBytes != null
-                    ? Container(
-                        decoration: BoxDecoration(border: Border.all(color: Colors.grey)),
-                        child: Image.memory(_captchaBytes!, height: 84),
-                      )
-                    : const Text('Captcha belum dimuat'),
+                ? Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey),
+                    ),
+                    child: Image.memory(_captchaBytes!, height: 84),
+                  )
+                : const Text('Captcha belum dimuat'),
           ),
           const SizedBox(height: 8),
           Center(
@@ -287,7 +340,10 @@ class _CheckFormViewState extends State<CheckFormView> {
           const SizedBox(height: 8),
           TextField(
             controller: _captchaController,
-            decoration: const InputDecoration(labelText: 'Kode Verifikasi', border: OutlineInputBorder()),
+            decoration: const InputDecoration(
+              labelText: 'Kode Verifikasi',
+              border: OutlineInputBorder(),
+            ),
           ),
           const SizedBox(height: 16),
           FilledButton(
@@ -296,24 +352,35 @@ class _CheckFormViewState extends State<CheckFormView> {
                 ? const SizedBox(
                     height: 20,
                     width: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
                   )
                 : const Text('Cek'),
           ),
           const SizedBox(height: 16),
-          if (_errorText != null) Text(_errorText!, style: const TextStyle(color: Colors.red)),
+          if (_errorText != null)
+            Text(_errorText!, style: const TextStyle(color: Colors.red)),
           if (_statusBayarResult != null)
             _StatusBayarResultCard(
               result: _statusBayarResult!,
-              nop: buildNop(blok: _blokController.text, wilayah: _wilayahController.text),
+              nop: buildNop(
+                blok: _blokController.text,
+                wilayah: _wilayahController.text,
+              ),
               tahun: _tahunController.text.trim(),
               client: _client,
             ),
           if (_tagihanResult != null)
             _TagihanResultCard(
               result: _tagihanResult!,
-              nop: buildNop(blok: _blokController.text, wilayah: _wilayahController.text),
+              nop: buildNop(
+                blok: _blokController.text,
+                wilayah: _wilayahController.text,
+              ),
               client: _client,
+              onOpenStatusBayar: widget.onOpenStatusBayar,
             ),
         ],
       ),
@@ -350,7 +417,10 @@ class _StatusBayarResultCard extends StatelessWidget {
           'Bukti Bayar (${result.namaWajibPajak ?? nop}) No. (${nopBlok(nop)}) (${nopWilayah(nop)}) ($tahun).pdf';
       Navigator.push(
         context,
-        MaterialPageRoute(builder: (_) => DocumentPreviewScreen(pdfBytes: bytes, fileName: fileName)),
+        MaterialPageRoute(
+          builder: (_) =>
+              DocumentPreviewScreen(pdfBytes: bytes, fileName: fileName),
+        ),
       );
     } catch (e) {
       if (!context.mounted) return;
@@ -360,7 +430,12 @@ class _StatusBayarResultCard extends StatelessWidget {
         builder: (_) => AlertDialog(
           title: const Text('Gagal'),
           content: Text('Gagal memuat PDF: $e'),
-          actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('OK'))],
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK'),
+            ),
+          ],
         ),
       );
     }
@@ -369,13 +444,21 @@ class _StatusBayarResultCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      color: _isPaid ? Colors.green.withValues(alpha: 0.12) : Colors.orange.withValues(alpha: 0.12),
+      color: _isPaid
+          ? Colors.green.withValues(alpha: 0.12)
+          : Colors.orange.withValues(alpha: 0.12),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Row(
           children: [
             Expanded(
-              child: Text(result.status, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              child: Text(
+                result.status,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
             ),
             if (_isPaid)
               IconButton(
@@ -394,14 +477,24 @@ class _TagihanResultCard extends StatelessWidget {
   final TagihanResult result;
   final String nop;
   final PbbClient client;
+  final void Function(String blok, String wilayah, String tahun)?
+  onOpenStatusBayar;
 
-  const _TagihanResultCard({required this.result, required this.nop, required this.client});
+  const _TagihanResultCard({
+    required this.result,
+    required this.nop,
+    required this.client,
+    this.onOpenStatusBayar,
+  });
 
   Future<void> _payWithQris(BuildContext context, String tahun) async {
     final agreed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('PEMBAYARAN QRIS PBB KABUPATEN CIANJUR', textAlign: TextAlign.center),
+        title: const Text(
+          'PEMBAYARAN QRIS PBB KABUPATEN CIANJUR',
+          textAlign: TextAlign.center,
+        ),
         content: const Text(
           '1. Pembayaran QRIS berlaku selama 1 jam\n'
           '2. Pembayaran dapat dilakukan melalui penyedia pembayaran QRIS\n'
@@ -409,8 +502,14 @@ class _TagihanResultCard extends StatelessWidget {
           '4. QRIS tersebut hanya berlaku untuk 1 x pembayaran',
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Setuju')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Setuju'),
+          ),
         ],
       ),
     );
@@ -429,7 +528,9 @@ class _TagihanResultCard extends StatelessWidget {
       Navigator.pop(context);
       Navigator.push(
         context,
-        MaterialPageRoute(builder: (_) => QrisViewScreen(result: qris, nop: nop, tahun: tahun)),
+        MaterialPageRoute(
+          builder: (_) => QrisViewScreen(result: qris, nop: nop, tahun: tahun),
+        ),
       );
     } on QrisGenerationError catch (e) {
       if (!context.mounted) return;
@@ -445,14 +546,20 @@ class _TagihanResultCard extends StatelessWidget {
   Future<void> _payWithVa(BuildContext context, TagihanYearRow row) async {
     final paymentCode = row.paymentCodeVa;
     if (paymentCode == null) {
-      _showError(context, 'Pembayaran VA tidak tersedia untuk tahun ${row.tahun}.');
+      _showError(
+        context,
+        'Pembayaran VA tidak tersedia untuk tahun ${row.tahun}.',
+      );
       return;
     }
 
     final agreed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('PEMBAYARAN VIRTUAL ACCOUNT BANK BJB', textAlign: TextAlign.center),
+        title: const Text(
+          'PEMBAYARAN VIRTUAL ACCOUNT BANK BJB',
+          textAlign: TextAlign.center,
+        ),
         content: const Text(
           '1. Pembayaran VA berlaku selama 1 jam\n'
           '2. Pembayaran dapat dilakukan melalui penyedia pembayaran VA\n'
@@ -460,8 +567,14 @@ class _TagihanResultCard extends StatelessWidget {
           '4. VA tersebut hanya berlaku untuk 1 x pembayaran',
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Setuju')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Setuju'),
+          ),
         ],
       ),
     );
@@ -475,13 +588,22 @@ class _TagihanResultCard extends StatelessWidget {
     );
 
     try {
-      final va = await client.generateVaPbb(nop: nop, tahun: row.tahun, paymentCode: paymentCode);
+      final va = await client.generateVaPbb(
+        nop: nop,
+        tahun: row.tahun,
+        paymentCode: paymentCode,
+      );
       if (!context.mounted) return;
       Navigator.pop(context);
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => VaViewScreen(result: va, nop: nop, tahun: row.tahun, paymentCode: paymentCode),
+          builder: (_) => VaViewScreen(
+            result: va,
+            nop: nop,
+            tahun: row.tahun,
+            paymentCode: paymentCode,
+          ),
         ),
       );
     } on VaGenerationError catch (e) {
@@ -509,7 +631,10 @@ class _TagihanResultCard extends StatelessWidget {
           'Tagihan PBB (${result.namaWajibPajak}) No. (${nopBlok(nop)}) (${nopWilayah(nop)}).pdf';
       Navigator.push(
         context,
-        MaterialPageRoute(builder: (_) => DocumentPreviewScreen(pdfBytes: bytes, fileName: fileName)),
+        MaterialPageRoute(
+          builder: (_) =>
+              DocumentPreviewScreen(pdfBytes: bytes, fileName: fileName),
+        ),
       );
     } catch (e) {
       if (!context.mounted) return;
@@ -524,13 +649,50 @@ class _TagihanResultCard extends StatelessWidget {
       builder: (_) => AlertDialog(
         title: const Text('Gagal'),
         content: Text(message),
-        actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('OK'))],
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+        ],
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    if (result.serverMessage != null) {
+      return Card(
+        color: Colors.orange.withValues(alpha: 0.12),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                result.serverMessage!,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              if (result.inactiveUntilYear != null && onOpenStatusBayar != null)
+                TextButton(
+                  onPressed: () => onOpenStatusBayar!(
+                    nopBlok(nop),
+                    nopWilayah(nop),
+                    result.inactiveUntilYear!,
+                  ),
+                  child: Text(
+                    '[Cek status bayar tahun ${result.inactiveUntilYear}]',
+                  ),
+                ),
+            ],
+          ),
+        ),
+      );
+    }
+
     if (result.notFound) {
       return Card(
         color: Colors.green.withValues(alpha: 0.12),
@@ -554,7 +716,10 @@ class _TagihanResultCard extends StatelessWidget {
               children: [
                 if (result.namaWajibPajak.isNotEmpty)
                   Expanded(
-                    child: Text(result.namaWajibPajak, style: Theme.of(context).textTheme.titleMedium),
+                    child: Text(
+                      result.namaWajibPajak,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
                   ),
                 OutlinedButton.icon(
                   onPressed: () => _previewTagihan(context),
@@ -579,12 +744,16 @@ class _TagihanResultCard extends StatelessWidget {
                   if (Platform.isAndroid) const DataColumn(label: Text('VA')),
                 ],
                 rows: result.rows
-                    .map((r) => DataRow(cells: [
+                    .map(
+                      (r) => DataRow(
+                        cells: [
                           DataCell(Text(r.tahun)),
                           DataCell(Text(formatRupiah(r.pbb))),
                           DataCell(Text(formatRupiah(r.denda))),
                           DataCell(Text(formatRupiah(r.kurangBayar))),
-                          DataCell(Text(r.statusBayar.isEmpty ? '-' : r.statusBayar)),
+                          DataCell(
+                            Text(r.statusBayar.isEmpty ? '-' : r.statusBayar),
+                          ),
                           DataCell(
                             FilledButton(
                               onPressed: () => _payWithQris(context, r.tahun),
@@ -600,7 +769,9 @@ class _TagihanResultCard extends StatelessWidget {
                                       child: const Text('Bayar VA'),
                                     ),
                             ),
-                        ]))
+                        ],
+                      ),
+                    )
                     .toList(),
               ),
             ),

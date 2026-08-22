@@ -11,7 +11,13 @@ import 'blok_record.dart';
 import 'download_helper.dart';
 
 const _dataFileName = 'blok_data.csv';
-const _csvHeader = ['Nama WP', 'NOP', 'Tahun Bayar', 'Tanggal Bayar', 'Jumlah PBB'];
+const _csvHeader = [
+  'Nama WP',
+  'NOP',
+  'Tahun Bayar',
+  'Tanggal Bayar',
+  'Jumlah PBB',
+];
 const _backupExtension = '.bak';
 
 /// Penyimpanan lokal "Buku Catatan Blok" — daftar NOP yang sudah terkonfirmasi
@@ -53,13 +59,15 @@ class BlokDataStore {
       if (row.length < 4) continue;
       final nop = row[1].toString().trim();
       if (nop.length != 18) continue;
-      records.add(BlokRecord(
-        namaWajibPajak: row[0].toString().trim(),
-        nop: nop,
-        tahunBayar: row[2].toString().trim(),
-        tanggalBayar: row[3].toString().trim(),
-        jumlahPbb: row.length > 4 ? row[4].toString().trim() : '',
-      ));
+      records.add(
+        BlokRecord(
+          namaWajibPajak: row[0].toString().trim(),
+          nop: nop,
+          tahunBayar: row[2].toString().trim(),
+          tanggalBayar: row[3].toString().trim(),
+          jumlahPbb: row.length > 4 ? row[4].toString().trim() : '',
+        ),
+      );
     }
     return records;
   }
@@ -67,7 +75,8 @@ class BlokDataStore {
   Future<void> _persist(List<BlokRecord> records) async {
     final rows = <List<String>>[
       _csvHeader,
-      for (final r in records) [r.namaWajibPajak, r.nop, r.tahunBayar, r.tanggalBayar, r.jumlahPbb],
+      for (final r in records)
+        [r.namaWajibPajak, r.nop, r.tahunBayar, r.tanggalBayar, r.jumlahPbb],
     ];
     final file = await _dataFile();
     await file.writeAsString(Csv().encode(rows));
@@ -104,7 +113,11 @@ class BlokDataStore {
     return bloks;
   }
 
-  Future<List<BlokRecord>> byBlok(String blok, {String? tahun, BlokSortBy sortBy = BlokSortBy.blokWilayah}) async {
+  Future<List<BlokRecord>> byBlok(
+    String blok, {
+    String? tahun,
+    BlokSortBy sortBy = BlokSortBy.blokWilayah,
+  }) async {
     var records = (await loadAll()).where((r) => r.blok == blok).toList();
     if (tahun != null && tahun.isNotEmpty) {
       records = records.where((r) => r.tahunBayar == tahun).toList();
@@ -120,7 +133,9 @@ class BlokDataStore {
     String? tahun,
     BlokSortBy sortBy = BlokSortBy.blokWilayah,
   }) async {
-    var records = (await loadAll()).where((r) => whitelist.contains(r.blok)).toList();
+    var records = (await loadAll())
+        .where((r) => whitelist.contains(r.blok))
+        .toList();
     if (tahun != null && tahun.isNotEmpty) {
       records = records.where((r) => r.tahunBayar == tahun).toList();
     }
@@ -160,12 +175,14 @@ class BlokDataStore {
     final records = await forReport();
     final rows = <List<String>>[
       _csvHeader,
-      for (final r in records) [r.namaWajibPajak, r.nop, r.tahunBayar, r.tanggalBayar, r.jumlahPbb],
+      for (final r in records)
+        [r.namaWajibPajak, r.nop, r.tahunBayar, r.tanggalBayar, r.jumlahPbb],
     ];
     final csvBytes = Uint8List.fromList(utf8.encode(Csv().encode(rows)));
     final identity = await BackupCrypto.currentIdentity();
     final encrypted = BackupCrypto.encryptForIdentity(identity, csvBytes);
-    final base = fileName ?? 'backup_data_blok_${DateTime.now().millisecondsSinceEpoch}';
+    final base =
+        fileName ?? 'backup_data_blok_${DateTime.now().millisecondsSinceEpoch}';
     return DownloadHelper.saveBytes(encrypted, '$base$_backupExtension');
   }
 
@@ -177,12 +194,24 @@ class BlokDataStore {
     final rows = <List<String>>[
       ['Blok', 'Nomor Wilayah', ..._csvHeader],
       for (final r in records)
-        [r.blok, r.wilayah, r.namaWajibPajak, r.nop, r.tahunBayar, r.tanggalBayar, r.jumlahPbb],
+        [
+          r.blok,
+          r.wilayah,
+          r.namaWajibPajak,
+          r.nop,
+          r.tahunBayar,
+          r.tanggalBayar,
+          r.jumlahPbb,
+        ],
     ];
     final content = Csv().encode(rows);
     final tahunPart = (tahun == null || tahun.isEmpty) ? 'semua_tahun' : tahun;
-    final fileName = 'laporan_data_blok_${tahunPart}_${DateTime.now().millisecondsSinceEpoch}.csv';
-    return DownloadHelper.saveBytes(Uint8List.fromList(utf8.encode(content)), fileName);
+    final fileName =
+        'laporan_data_blok_${tahunPart}_${DateTime.now().millisecondsSinceEpoch}.csv';
+    return DownloadHelper.saveBytes(
+      Uint8List.fromList(utf8.encode(content)),
+      fileName,
+    );
   }
 
   /// Restore: gabungkan (upsert) isi berkas backup terenkripsi (.bak) ke data
@@ -196,7 +225,9 @@ class BlokDataStore {
     final fileBytes = await File(path).readAsBytes();
     final identities = await BackupCrypto.allowedRestoreIdentities();
     final decrypted = BackupCrypto.tryDecrypt(fileBytes, identities);
-    final content = decrypted != null ? utf8.decode(decrypted) : _legacyPlainCsv(fileBytes);
+    final content = decrypted != null
+        ? utf8.decode(decrypted)
+        : _legacyPlainCsv(fileBytes);
     if (content == null) {
       throw const BackupAccessDeniedException(
         'Berkas ini bukan backup untuk wilayah/mode Anda saat ini (kunci tidak cocok) — impor dibatalkan.',

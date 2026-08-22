@@ -13,7 +13,8 @@ class ConnectivityMonitor {
   ConnectivityMonitor._();
   static final instance = ConnectivityMonitor._();
 
-  static const _targetUrl = 'https://cektagihan.cianjurkab.v-tax.id/portlet.php';
+  static const _targetUrl =
+      'https://cektagihan.cianjurkab.v-tax.id/portlet.php';
   static const _probeUrl = 'https://www.gstatic.com/generate_204';
   static const _slowThreshold = Duration(seconds: 3);
   static const _checkInterval = Duration(seconds: 20);
@@ -26,7 +27,9 @@ class ConnectivityMonitor {
   bool _checking = false;
 
   void start() {
-    _subscription = Connectivity().onConnectivityChanged.listen((_) => _check());
+    _subscription = Connectivity().onConnectivityChanged.listen(
+      (_) => _check(),
+    );
     _timer = Timer.periodic(_checkInterval, (_) => _check());
     // Ditunda sebentar supaya tidak rebutan koneksi dengan permintaan
     // captcha yang juga jalan otomatis saat layar pertama dibuka.

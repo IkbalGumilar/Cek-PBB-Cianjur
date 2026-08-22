@@ -8,7 +8,12 @@ class QrisViewScreen extends StatefulWidget {
   final String nop;
   final String tahun;
 
-  const QrisViewScreen({super.key, required this.result, required this.nop, required this.tahun});
+  const QrisViewScreen({
+    super.key,
+    required this.result,
+    required this.nop,
+    required this.tahun,
+  });
 
   @override
   State<QrisViewScreen> createState() => _QrisViewScreenState();
@@ -59,8 +64,14 @@ class _QrisViewScreenState extends State<QrisViewScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text('NOP: ${widget.nop}', style: Theme.of(context).textTheme.titleMedium),
-                Text('Tahun Pajak: ${widget.tahun}', style: Theme.of(context).textTheme.titleMedium),
+                Text(
+                  'NOP: ${widget.nop}',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                Text(
+                  'Tahun Pajak: ${widget.tahun}',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
                 const SizedBox(height: 24),
                 Container(
                   padding: const EdgeInsets.all(16),
@@ -69,17 +80,27 @@ class _QrisViewScreenState extends State<QrisViewScreen> {
                     border: Border.all(color: Colors.grey.shade300),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Image.memory(widget.result.qrImageBytes, width: 260, height: 260),
+                  child: Image.memory(
+                    widget.result.qrImageBytes,
+                    width: 260,
+                    height: 260,
+                  ),
                 ),
                 const SizedBox(height: 24),
                 Text(
                   widget.result.amount,
-                  style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Text('ID Transaksi: ${widget.result.transactionId}'),
                 const SizedBox(height: 4),
-                Text(widget.result.expiredAt, style: const TextStyle(color: Colors.red)),
+                Text(
+                  widget.result.expiredAt,
+                  style: const TextStyle(color: Colors.red),
+                ),
                 const SizedBox(height: 24),
                 const Text(
                   'Scan QR ini pakai aplikasi dompet digital/mobile banking yang mendukung QRIS.\n'

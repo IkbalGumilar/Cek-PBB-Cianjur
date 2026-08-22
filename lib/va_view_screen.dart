@@ -59,13 +59,19 @@ class _VaViewScreenState extends State<VaViewScreen> {
     }
   }
 
-  Future<void> _copyAndNotify(String text, String label, {bool unlockBankApps = false}) async {
+  Future<void> _copyAndNotify(
+    String text,
+    String label, {
+    bool unlockBankApps = false,
+  }) async {
     await Clipboard.setData(ClipboardData(text: text));
     if (!mounted) return;
     if (unlockBankApps && !_bankAppsUnlocked) {
       setState(() => _bankAppsUnlocked = true);
     }
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$label disalin.')));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('$label disalin.')));
   }
 
   Future<void> _openBankApp(BankApp app) async {
@@ -73,9 +79,9 @@ class _VaViewScreenState extends State<VaViewScreen> {
     final opened = await BankLauncher.launch(app);
     if (!mounted) return;
     if (!opened) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal membuka ${app.label}.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Gagal membuka ${app.label}.')));
     }
   }
 
@@ -90,8 +96,14 @@ class _VaViewScreenState extends State<VaViewScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text('NOP: ${widget.nop}', style: Theme.of(context).textTheme.titleMedium),
-              Text('Tahun Pajak: ${widget.tahun}', style: Theme.of(context).textTheme.titleMedium),
+              Text(
+                'NOP: ${widget.nop}',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              Text(
+                'Tahun Pajak: ${widget.tahun}',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
               const SizedBox(height: 24),
               Card(
                 child: Padding(
@@ -99,11 +111,18 @@ class _VaViewScreenState extends State<VaViewScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Nomor Virtual Account (Bank BJB)', style: Theme.of(context).textTheme.labelLarge),
+                      Text(
+                        'Nomor Virtual Account (Bank BJB)',
+                        style: Theme.of(context).textTheme.labelLarge,
+                      ),
                       const SizedBox(height: 4),
                       SelectableText(
                         result.virtualAccount,
-                        style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: 1),
+                        style: const TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1,
+                        ),
                       ),
                       const SizedBox(height: 12),
                       FilledButton.icon(
@@ -124,10 +143,16 @@ class _VaViewScreenState extends State<VaViewScreen> {
               const SizedBox(height: 4),
               Text(
                 'Jumlah: Rp. ${result.amount}',
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               const SizedBox(height: 4),
-              Text('Masa Berlaku VA: ${result.expiredAt}', style: const TextStyle(color: Colors.red)),
+              Text(
+                'Masa Berlaku VA: ${result.expiredAt}',
+                style: const TextStyle(color: Colors.red),
+              ),
               const SizedBox(height: 24),
               Card(
                 color: Colors.blue.withValues(alpha: 0.12),
@@ -143,16 +168,21 @@ class _VaViewScreenState extends State<VaViewScreen> {
                       const SizedBox(height: 12),
                       Row(
                         children: [
-                          Expanded(child: Text('Kode Bank: $_kodeBankAntarBank')),
+                          Expanded(
+                            child: Text('Kode Bank: $_kodeBankAntarBank'),
+                          ),
                           TextButton(
-                            onPressed: () => _copyAndNotify(_kodeBankAntarBank, 'Kode Bank'),
+                            onPressed: () =>
+                                _copyAndNotify(_kodeBankAntarBank, 'Kode Bank'),
                             child: const Text('Salin'),
                           ),
                         ],
                       ),
                       Row(
                         children: [
-                          Expanded(child: Text('Kode Bayar: ${widget.paymentCode}')),
+                          Expanded(
+                            child: Text('Kode Bayar: ${widget.paymentCode}'),
+                          ),
                           TextButton(
                             onPressed: () => _copyAndNotify(
                               widget.paymentCode,
@@ -168,7 +198,10 @@ class _VaViewScreenState extends State<VaViewScreen> {
                 ),
               ),
               const SizedBox(height: 24),
-              Text('Buka Aplikasi Bank', style: Theme.of(context).textTheme.titleMedium),
+              Text(
+                'Buka Aplikasi Bank',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
               const SizedBox(height: 4),
               if (!_bankAppsUnlocked)
                 Text(
@@ -177,19 +210,30 @@ class _VaViewScreenState extends State<VaViewScreen> {
                 ),
               const SizedBox(height: 8),
               if (_loadingBankApps)
-                const Center(child: Padding(padding: EdgeInsets.all(8), child: CircularProgressIndicator()))
+                const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(8),
+                    child: CircularProgressIndicator(),
+                  ),
+                )
               else if (_bankApps.isEmpty)
-                const Text('Tidak ada aplikasi bank/e-wallet yang terdeteksi di perangkat ini.')
+                const Text(
+                  'Tidak ada aplikasi bank/e-wallet yang terdeteksi di perangkat ini.',
+                )
               else
                 Wrap(
                   spacing: 16,
                   runSpacing: 12,
-                  children: _bankApps.map((app) => _BankAppTile(
-                        app: app,
-                        iconBytes: _icons[app.packageName],
-                        enabled: _bankAppsUnlocked,
-                        onTap: () => _openBankApp(app),
-                      )).toList(),
+                  children: _bankApps
+                      .map(
+                        (app) => _BankAppTile(
+                          app: app,
+                          iconBytes: _icons[app.packageName],
+                          enabled: _bankAppsUnlocked,
+                          onTap: () => _openBankApp(app),
+                        ),
+                      )
+                      .toList(),
                 ),
             ],
           ),

@@ -17,5 +17,6 @@ class TaxRecord {
   });
 
   bool get isChecked => status.isNotEmpty;
-  bool get isPaid => status.startsWith('Sudah Bayar') || status.startsWith('Lunas');
+  bool get isPaid =>
+      status.startsWith('Sudah Bayar') || status.startsWith('Lunas');
 }

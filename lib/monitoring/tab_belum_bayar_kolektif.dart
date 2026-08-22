@@ -26,7 +26,13 @@ class _TabBelumBayarKolektifState extends State<TabBelumBayarKolektif> {
 
   @override
   void dispose() {
-    for (final c in [_tglCutoffBelumBayar, _tglCutoffKadaluarsa, _kodeBayarKolektif, _namaGrup, _namaKolektor]) {
+    for (final c in [
+      _tglCutoffBelumBayar,
+      _tglCutoffKadaluarsa,
+      _kodeBayarKolektif,
+      _namaGrup,
+      _namaKolektor,
+    ]) {
       c.dispose();
     }
     super.dispose();
@@ -34,11 +40,19 @@ class _TabBelumBayarKolektifState extends State<TabBelumBayarKolektif> {
 
   Future<void> _tampilkan() async {
     if (_tglCutoffBelumBayar.text.isEmpty) {
-      setState(() => _result = const MonitoringTableResult(errorMessage: 'Tanggal Cutoff Belum Bayar wajib diisi.'));
+      setState(
+        () => _result = const MonitoringTableResult(
+          errorMessage: 'Tanggal Cutoff Belum Bayar wajib diisi.',
+        ),
+      );
       return;
     }
     if (_tglCutoffKadaluarsa.text.isEmpty) {
-      setState(() => _result = const MonitoringTableResult(errorMessage: 'Tanggal Cutoff Kadaluarsa wajib diisi.'));
+      setState(
+        () => _result = const MonitoringTableResult(
+          errorMessage: 'Tanggal Cutoff Kadaluarsa wajib diisi.',
+        ),
+      );
       return;
     }
     setState(() {
@@ -57,7 +71,11 @@ class _TabBelumBayarKolektifState extends State<TabBelumBayarKolektif> {
       setState(() => _result = result);
     } catch (e) {
       if (!mounted) return;
-      setState(() => _result = MonitoringTableResult(errorMessage: 'Gagal memuat data: $e'));
+      setState(
+        () => _result = MonitoringTableResult(
+          errorMessage: 'Gagal memuat data: $e',
+        ),
+      );
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -72,25 +90,69 @@ class _TabBelumBayarKolektifState extends State<TabBelumBayarKolektif> {
         children: [
           const WilayahBadge(),
           const MonitoringSectionTitle('Tanggal Cutoff'),
-          Row(children: [
-            Expanded(child: MonitoringDateField(label: 'Belum Bayar', controller: _tglCutoffBelumBayar, required: true)),
-            const SizedBox(width: 8),
-            Expanded(child: MonitoringDateField(label: 'Kadaluarsa', controller: _tglCutoffKadaluarsa, required: true)),
-          ]),
+          Row(
+            children: [
+              Expanded(
+                child: MonitoringDateField(
+                  label: 'Belum Bayar',
+                  controller: _tglCutoffBelumBayar,
+                  required: true,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: MonitoringDateField(
+                  label: 'Kadaluarsa',
+                  controller: _tglCutoffKadaluarsa,
+                  required: true,
+                ),
+              ),
+            ],
+          ),
           const MonitoringSectionTitle('Filter lainnya (opsional)'),
-          TextField(controller: _kodeBayarKolektif, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Kode Bayar Kolektif', border: OutlineInputBorder())),
+          TextField(
+            controller: _kodeBayarKolektif,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(
+              labelText: 'Kode Bayar Kolektif',
+              border: OutlineInputBorder(),
+            ),
+          ),
           const SizedBox(height: 12),
-          TextField(controller: _namaGrup, decoration: const InputDecoration(labelText: 'Nama Grup', border: OutlineInputBorder())),
+          TextField(
+            controller: _namaGrup,
+            decoration: const InputDecoration(
+              labelText: 'Nama Grup',
+              border: OutlineInputBorder(),
+            ),
+          ),
           const SizedBox(height: 12),
-          TextField(controller: _namaKolektor, decoration: const InputDecoration(labelText: 'Nama Kolektor', border: OutlineInputBorder())),
+          TextField(
+            controller: _namaKolektor,
+            decoration: const InputDecoration(
+              labelText: 'Nama Kolektor',
+              border: OutlineInputBorder(),
+            ),
+          ),
           const SizedBox(height: 20),
           FilledButton(
             onPressed: _loading ? null : _tampilkan,
             child: _loading
-                ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                ? const SizedBox(
+                    height: 20,
+                    width: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
                 : const Text('Tampilkan'),
           ),
-          MonitoringResultView(result: _result, loading: false, reportTitle: 'Belum Bayar Kolektif'),
+          MonitoringResultView(
+            result: _result,
+            loading: false,
+            reportTitle: 'Belum Bayar Kolektif',
+          ),
         ],
       ),
     );

@@ -23,7 +23,11 @@ class StaffMfaScreen extends StatefulWidget {
   final StaffPortalClient client;
   final ThemeController themeController;
 
-  const StaffMfaScreen({super.key, required this.client, required this.themeController});
+  const StaffMfaScreen({
+    super.key,
+    required this.client,
+    required this.themeController,
+  });
 
   @override
   State<StaffMfaScreen> createState() => _StaffMfaScreenState();
@@ -67,7 +71,10 @@ class _StaffMfaScreenState extends State<StaffMfaScreen> {
         const SnackBar(content: Text('Gagal membuka Google Authenticator.')),
       );
     } else {
-      await launchUrl(_authenticatorPlayStoreUrl, mode: LaunchMode.externalApplication);
+      await launchUrl(
+        _authenticatorPlayStoreUrl,
+        mode: LaunchMode.externalApplication,
+      );
     }
   }
 
@@ -98,14 +105,22 @@ class _StaffMfaScreenState extends State<StaffMfaScreen> {
           builder: (ctx) => AlertDialog(
             title: const Text('Login Berhasil'),
             content: const Text('Anda berhasil masuk ke Portal Staf.'),
-            actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK'))],
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('OK'),
+              ),
+            ],
           ),
         );
         if (!mounted) return;
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-            builder: (_) => MonitoringHubScreen(client: widget.client, themeController: widget.themeController),
+            builder: (_) => MonitoringHubScreen(
+              client: widget.client,
+              themeController: widget.themeController,
+            ),
           ),
         );
       } else {
@@ -131,7 +146,9 @@ class _StaffMfaScreenState extends State<StaffMfaScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Text('Masukkan kode yang telah dibuat di aplikasi Google Authenticator'),
+              const Text(
+                'Masukkan kode yang telah dibuat di aplikasi Google Authenticator',
+              ),
               const SizedBox(height: 16),
               TextField(
                 controller: _otpController,
@@ -150,7 +167,10 @@ class _StaffMfaScreenState extends State<StaffMfaScreen> {
                     ? const SizedBox(
                         height: 20,
                         width: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
                       )
                     : const Text('Verifikasi'),
               ),
@@ -181,7 +201,11 @@ class _AuthenticatorAppTile extends StatelessWidget {
   final Uint8List? iconBytes;
   final VoidCallback onTap;
 
-  const _AuthenticatorAppTile({required this.installed, required this.iconBytes, required this.onTap});
+  const _AuthenticatorAppTile({
+    required this.installed,
+    required this.iconBytes,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -195,7 +219,12 @@ class _AuthenticatorAppTile extends StatelessWidget {
             ClipRRect(
               borderRadius: BorderRadius.circular(8),
               child: iconBytes != null
-                  ? Image.memory(iconBytes!, width: 32, height: 32, fit: BoxFit.cover)
+                  ? Image.memory(
+                      iconBytes!,
+                      width: 32,
+                      height: 32,
+                      fit: BoxFit.cover,
+                    )
                   : Container(
                       width: 32,
                       height: 32,

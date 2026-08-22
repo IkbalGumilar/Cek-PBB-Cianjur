@@ -60,7 +60,12 @@ class _DeveloperCard extends StatelessWidget {
           children: [
             CircleAvatar(radius: 32, child: Icon(Icons.person, size: 32)),
             SizedBox(width: 16),
-            Expanded(child: Text('Cek PBB Cianjur', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18))),
+            Expanded(
+              child: Text(
+                'Cek PBB Cianjur',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+              ),
+            ),
           ],
         ),
       );
@@ -75,28 +80,44 @@ class _DeveloperCard extends StatelessWidget {
         final avatarUrl = data?['avatar_url'] as String?;
 
         return InkWell(
-          onTap: () => launchUrl(_githubProfileUrl, mode: LaunchMode.externalApplication),
+          onTap: () => launchUrl(
+            _githubProfileUrl,
+            mode: LaunchMode.externalApplication,
+          ),
           child: Padding(
             padding: const EdgeInsets.all(24),
             child: Row(
               children: [
                 CircleAvatar(
                   radius: 32,
-                  backgroundImage: avatarUrl != null ? NetworkImage(avatarUrl) : null,
-                  child: avatarUrl == null ? const Icon(Icons.person, size: 32) : null,
+                  backgroundImage: avatarUrl != null
+                      ? NetworkImage(avatarUrl)
+                      : null,
+                  child: avatarUrl == null
+                      ? const Icon(Icons.person, size: 32)
+                      : null,
                 ),
                 const SizedBox(width: 16),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                      Text(
+                        name,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 18,
+                        ),
+                      ),
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           const FaIcon(FontAwesomeIcons.github, size: 14),
                           const SizedBox(width: 6),
-                          Text('@$_githubUsername', style: Theme.of(context).textTheme.bodyMedium),
+                          Text(
+                            '@$_githubUsername',
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
                         ],
                       ),
                       if (bio != null && bio.isNotEmpty) ...[
@@ -209,7 +230,11 @@ class _BlokDataSectionState extends State<_BlokDataSection> {
   /// (dari wilayah sebelumnya), tanya dulu mau di-backup atau langsung
   /// dihapus — data lama sudah tidak relevan untuk wilayah yang baru.
   Future<void> _changeWilayah() async {
-    final chosen = await pickDusunDialog(context, allowSkip: false, currentDusun: _selectedDusun);
+    final chosen = await pickDusunDialog(
+      context,
+      allowSkip: false,
+      currentDusun: _selectedDusun,
+    );
     if (chosen == null || chosen == _selectedDusun) return;
 
     final hasData = (_totalCount ?? 0) > 0;
@@ -230,9 +255,18 @@ class _BlokDataSectionState extends State<_BlokDataSection> {
           'sekarang (data lama sudah tidak relevan untuk wilayah yang baru).',
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, 'batal'), child: const Text('Batal')),
-          TextButton(onPressed: () => Navigator.pop(ctx, 'ganti'), child: const Text('Ganti Saja')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, 'backup'), child: const Text('Backup Dulu')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, 'batal'),
+            child: const Text('Batal'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, 'ganti'),
+            child: const Text('Ganti Saja'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, 'backup'),
+            child: const Text('Backup Dulu'),
+          ),
         ],
       ),
     );
@@ -266,21 +300,24 @@ class _BlokDataSectionState extends State<_BlokDataSection> {
     try {
       final location = await BlokDataStore.instance.exportCsv();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Backup tersimpan di $location')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Backup tersimpan di $location')));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal membuat backup: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Gagal membuat backup: $e')));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
 
   Future<void> _importRestore() async {
-    final files = await FilePicker.pickFiles(type: FileType.custom, allowedExtensions: ['bak', 'csv']);
+    final files = await FilePicker.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['bak', 'csv'],
+    );
     if (files.isEmpty || files.first.path == null) return;
 
     if (!mounted) return;
@@ -291,12 +328,15 @@ class _BlokDataSectionState extends State<_BlokDataSection> {
         content: Text(
           _isOperator
               ? 'Laporan dari "${files.first.name}" akan digabungkan ke data operator (baris dengan '
-                  'NOP+tahun yang sama akan ditimpa).'
+                    'NOP+tahun yang sama akan ditimpa).'
               : 'Data dari "${files.first.name}" akan digabungkan dengan data blok yang sudah '
-                  'ada di aplikasi ini (baris dengan NOP+tahun yang sama akan ditimpa).',
+                    'ada di aplikasi ini (baris dengan NOP+tahun yang sama akan ditimpa).',
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal'),
+          ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
             child: Text(_isOperator ? 'Terima' : 'Impor'),
@@ -311,14 +351,14 @@ class _BlokDataSectionState extends State<_BlokDataSection> {
       final count = await BlokDataStore.instance.importCsv(files.first.path!);
       await _refreshCount();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('$count baris berhasil diimpor.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('$count baris berhasil diimpor.')));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal impor: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Gagal impor: $e')));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -337,8 +377,8 @@ class _BlokDataSectionState extends State<_BlokDataSection> {
             _totalCount == null
                 ? 'Memuat data tersimpan...'
                 : '$_totalCount NOP "Sudah Bayar" tersimpan di perangkat ini, terisi otomatis '
-                    'setiap kali Cek Status Bayar berhasil. Lihat di tombol buku catatan pada '
-                    'menu cek.',
+                      'setiap kali Cek Status Bayar berhasil. Lihat di tombol buku catatan pada '
+                      'menu cek.',
           ),
           const SizedBox(height: 8),
           ListTile(
@@ -355,15 +395,19 @@ class _BlokDataSectionState extends State<_BlokDataSection> {
           ),
           ListTile(
             contentPadding: EdgeInsets.zero,
-            leading: Icon(_isOperator ? Icons.inbox_outlined : Icons.download_outlined),
-            title: Text(_isOperator ? 'Terima Laporan Dusun' : 'Impor Data (Restore)'),
+            leading: Icon(
+              _isOperator ? Icons.inbox_outlined : Icons.download_outlined,
+            ),
+            title: Text(
+              _isOperator ? 'Terima Laporan Dusun' : 'Impor Data (Restore)',
+            ),
             subtitle: Text(
               _isOperator
                   ? 'Impor berkas backup (.bak) yang dikirim kepala dusun — hanya laporan asli '
-                      'dari dusun (atau backup Operator) yang bisa dibuka, digabungkan ke data '
-                      'operator, semua blok otomatis tercatat.'
+                        'dari dusun (atau backup Operator) yang bisa dibuka, digabungkan ke data '
+                        'operator, semua blok otomatis tercatat.'
                   : 'Muat data blok dari berkas backup (.bak) milik wilayah ini sendiri — berkas '
-                      'dari wilayah lain otomatis ditolak.',
+                        'dari wilayah lain otomatis ditolak.',
             ),
             trailing: const Icon(Icons.chevron_right),
             enabled: !_busy,
@@ -382,15 +426,19 @@ class _BlokDataSectionState extends State<_BlokDataSection> {
             Text(
               _selectedDusun == null
                   ? 'Belum ada wilayah kerja dipilih — hasil "Sudah Bayar" tidak akan dicatat ke '
-                      'Buku Catatan Blok sampai Anda memilih dusun.'
+                        'Buku Catatan Blok sampai Anda memilih dusun.'
                   : 'Wilayah kerja saat ini: Dusun $_selectedDusun. Blok di luar dusun ini tetap '
-                      'bisa dicek & dibayar, hanya saja tidak dicatat.',
+                        'bisa dicek & dibayar, hanya saja tidak dicatat.',
             ),
             const SizedBox(height: 8),
             ListTile(
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.map_outlined),
-              title: Text(_selectedDusun == null ? 'Pilih Wilayah Kerja' : 'Ganti Wilayah Kerja'),
+              title: Text(
+                _selectedDusun == null
+                    ? 'Pilih Wilayah Kerja'
+                    : 'Ganti Wilayah Kerja',
+              ),
               trailing: const Icon(Icons.chevron_right),
               enabled: !_busy,
               onTap: _changeWilayah,
@@ -425,19 +473,27 @@ class _ShareAppSectionState extends State<_ShareAppSection> {
         final message = location != null
             ? 'APK tersimpan di $location'
             : 'Share sheet dibuka. Gagal menyimpan salinan ke folder Dokumen.';
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(message)));
       } else {
-        await Clipboard.setData(const ClipboardData(text: UpdateChecker.releasesPageUrl));
+        await Clipboard.setData(
+          const ClipboardData(text: UpdateChecker.releasesPageUrl),
+        );
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Link unduhan aplikasi disalin, tinggal tempel & bagikan.')),
+          const SnackBar(
+            content: Text(
+              'Link unduhan aplikasi disalin, tinggal tempel & bagikan.',
+            ),
+          ),
         );
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal membagikan aplikasi: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Gagal membagikan aplikasi: $e')));
     } finally {
       if (mounted) setState(() => _sharing = false);
     }
@@ -450,23 +506,34 @@ class _ShareAppSectionState extends State<_ShareAppSection> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Bagikan Aplikasi', style: Theme.of(context).textTheme.titleMedium),
+          Text(
+            'Bagikan Aplikasi',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
           const SizedBox(height: 8),
           Text(
             Platform.isAndroid
                 ? 'Aplikasi ini belum ada di Play Store, jadi diinstal manual. Berkas APK-nya akan '
-                    'disimpan ke penyimpanan internal (folder Dokumen) dan bisa langsung dibagikan '
-                    'lewat WhatsApp, Quick Share, Bluetooth, atau aplikasi lain.'
+                      'disimpan ke penyimpanan internal (folder Dokumen) dan bisa langsung dibagikan '
+                      'lewat WhatsApp, Quick Share, Bluetooth, atau aplikasi lain.'
                 : 'Bagikan link halaman unduhan aplikasi ini (bukan berkas langsung), supaya penerima '
-                    'bisa mengunduh sendiri versi yang sesuai dengan sistem operasinya.',
+                      'bisa mengunduh sendiri versi yang sesuai dengan sistem operasinya.',
           ),
           const SizedBox(height: 8),
           ListTile(
             contentPadding: EdgeInsets.zero,
             leading: _sharing
-                ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
+                ? const SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
                 : Icon(Platform.isAndroid ? Icons.share : Icons.link),
-            title: Text(Platform.isAndroid ? 'Bagikan Aplikasi (APK)' : 'Salin Link Aplikasi'),
+            title: Text(
+              Platform.isAndroid
+                  ? 'Bagikan Aplikasi (APK)'
+                  : 'Salin Link Aplikasi',
+            ),
             trailing: const Icon(Icons.chevron_right),
             onTap: _sharing ? null : _shareApp,
           ),
@@ -493,14 +560,21 @@ class _AboutSectionState extends State<_AboutSection> {
       if (!mounted) return;
       if (info == null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Aplikasi sudah menggunakan versi terbaru.')),
+          const SnackBar(
+            content: Text('Aplikasi sudah menggunakan versi terbaru.'),
+          ),
         );
         return;
       }
-      await Navigator.push(context, MaterialPageRoute(builder: (_) => UpdateScreen(info: info)));
+      await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => UpdateScreen(info: info)),
+      );
     } on UpdateCheckError catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.message)));
     } finally {
       if (mounted) setState(() => _checking = false);
     }
@@ -513,7 +587,10 @@ class _AboutSectionState extends State<_AboutSection> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Tentang Aplikasi', style: Theme.of(context).textTheme.titleMedium),
+          Text(
+            'Tentang Aplikasi',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
           const SizedBox(height: 8),
           const Text(
             'Cek PBB Cianjur membantu perangkat desa mengecek tagihan dan status pembayaran '
@@ -536,7 +613,11 @@ class _AboutSectionState extends State<_AboutSection> {
           ListTile(
             contentPadding: EdgeInsets.zero,
             leading: _checking
-                ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
+                ? const SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
                 : const Icon(Icons.system_update_outlined),
             title: const Text('Periksa Pembaruan'),
             trailing: const Icon(Icons.chevron_right),
@@ -547,7 +628,10 @@ class _AboutSectionState extends State<_AboutSection> {
             leading: const Icon(Icons.description_outlined),
             title: const Text('Lisensi Open Source'),
             trailing: const Icon(Icons.chevron_right),
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const LicenseScreen())),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const LicenseScreen()),
+            ),
           ),
         ],
       ),

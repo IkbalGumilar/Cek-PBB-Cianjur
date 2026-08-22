@@ -12,13 +12,9 @@ class ResultScreen extends StatelessWidget {
     final messenger = ScaffoldMessenger.of(context);
     try {
       final location = await ResultExporter.saveCsv(records);
-      messenger.showSnackBar(
-        SnackBar(content: Text('Tersimpan di $location')),
-      );
+      messenger.showSnackBar(SnackBar(content: Text('Tersimpan di $location')));
     } catch (e) {
-      messenger.showSnackBar(
-        SnackBar(content: Text('Gagal menyimpan: $e')),
-      );
+      messenger.showSnackBar(SnackBar(content: Text('Gagal menyimpan: $e')));
     }
   }
 
@@ -26,8 +22,12 @@ class ResultScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final sudahBayar = records.where((r) => r.isPaid).length;
     final belumBayar = records.where((r) => r.isChecked && !r.isPaid).length;
-    final downloadAttempted = records.where((r) => r.buktiBayarDownloaded != null).length;
-    final downloadFailed = records.where((r) => r.buktiBayarDownloaded == false).length;
+    final downloadAttempted = records
+        .where((r) => r.buktiBayarDownloaded != null)
+        .length;
+    final downloadFailed = records
+        .where((r) => r.buktiBayarDownloaded == false)
+        .length;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Hasil Pengecekan')),
@@ -63,8 +63,8 @@ class ResultScreen extends StatelessWidget {
                       ? 'Bukti bayar berhasil diunduh untuk $downloadAttempted NOP.'
                       : 'Bukti bayar diunduh untuk $downloadAttempted NOP, $downloadFailed di antaranya gagal.',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: downloadFailed == 0 ? Colors.green : Colors.orange,
-                      ),
+                    color: downloadFailed == 0 ? Colors.green : Colors.orange,
+                  ),
                 ),
               ],
               const SizedBox(height: 16),
@@ -89,7 +89,9 @@ class ResultScreen extends StatelessWidget {
                               r.buktiBayarDownloaded == true
                                   ? Icons.download_done
                                   : Icons.download_for_offline_outlined,
-                              color: r.buktiBayarDownloaded == true ? Colors.green : Colors.orange,
+                              color: r.buktiBayarDownloaded == true
+                                  ? Colors.green
+                                  : Colors.orange,
                             ),
                     );
                   },

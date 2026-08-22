@@ -24,7 +24,9 @@ class ApkInstaller {
     required String fileName,
     void Function(int received, int total)? onProgress,
   }) async {
-    final dir = Platform.isAndroid ? await getTemporaryDirectory() : await _desktopDownloadsFolder();
+    final dir = Platform.isAndroid
+        ? await getTemporaryDirectory()
+        : await _desktopDownloadsFolder();
     final file = File('${dir.path}/$fileName');
     await Dio().download(
       url,
@@ -53,7 +55,9 @@ class ApkInstaller {
       throw Exception('Pembaruan otomatis hanya tersedia di Android.');
     }
     try {
-      final status = await _channel.invokeMethod<String>('installApk', {'filePath': filePath});
+      final status = await _channel.invokeMethod<String>('installApk', {
+        'filePath': filePath,
+      });
       return status ?? 'OPENED';
     } on PlatformException catch (e) {
       throw Exception('Gagal membuka installer: ${e.message ?? e.code}');

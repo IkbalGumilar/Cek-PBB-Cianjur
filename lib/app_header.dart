@@ -136,7 +136,11 @@ class _LogoAndName extends StatelessWidget {
               ),
               child: const Text(
                 'OPERATOR',
-                style: TextStyle(color: Colors.black, fontSize: 10, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                  color: Colors.black,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
           ),
@@ -182,7 +186,10 @@ class _ModeMenu extends StatelessWidget {
         label: const Text('Monitoring'),
         selected: false,
         onSelected: (_) => onMonitoringPressed(),
-        labelStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        labelStyle: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.bold,
+        ),
         backgroundColor: kHeaderGreen.withValues(alpha: 0.4),
         side: const BorderSide(color: Colors.white70),
       ),

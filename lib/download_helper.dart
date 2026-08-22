@@ -30,11 +30,15 @@ class DownloadHelper {
     if (lower.endsWith('.xlsx')) {
       return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
     }
-    if (lower.endsWith('.apk')) return 'application/vnd.android.package-archive';
+    if (lower.endsWith('.apk'))
+      return 'application/vnd.android.package-archive';
     return 'application/octet-stream';
   }
 
-  static Future<String> _saveToDownloadsDesktop(Uint8List bytes, String fileName) async {
+  static Future<String> _saveToDownloadsDesktop(
+    Uint8List bytes,
+    String fileName,
+  ) async {
     final downloadsDir = await getDownloadsDirectory();
     if (downloadsDir == null) {
       throw Exception('Folder Downloads tidak ditemukan di perangkat ini.');

@@ -25,12 +25,18 @@ class _TabRangkingRealisasiState extends State<TabRangkingRealisasi> {
       _result = null;
     });
     try {
-      final result = await widget.client.fetchRangkingRealisasi(bukuFilter: _bukuFilter);
+      final result = await widget.client.fetchRangkingRealisasi(
+        bukuFilter: _bukuFilter,
+      );
       if (!mounted) return;
       setState(() => _result = result);
     } catch (e) {
       if (!mounted) return;
-      setState(() => _result = MonitoringTableResult(errorMessage: 'Gagal memuat data: $e'));
+      setState(
+        () => _result = MonitoringTableResult(
+          errorMessage: 'Gagal memuat data: $e',
+        ),
+      );
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -47,7 +53,10 @@ class _TabRangkingRealisasiState extends State<TabRangkingRealisasi> {
           const MonitoringSectionTitle('Buku'),
           DropdownButtonFormField<String>(
             initialValue: _bukuFilter,
-            decoration: const InputDecoration(labelText: 'Buku', border: OutlineInputBorder()),
+            decoration: const InputDecoration(
+              labelText: 'Buku',
+              border: OutlineInputBorder(),
+            ),
             items: const [
               DropdownMenuItem(value: '1', child: Text('Buku 1')),
               DropdownMenuItem(value: '12', child: Text('Buku 1, 2')),
@@ -62,10 +71,21 @@ class _TabRangkingRealisasiState extends State<TabRangkingRealisasi> {
           FilledButton(
             onPressed: _loading ? null : _tampilkan,
             child: _loading
-                ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                ? const SizedBox(
+                    height: 20,
+                    width: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
                 : const Text('Tampilkan'),
           ),
-          MonitoringResultView(result: _result, loading: false, reportTitle: 'Rangking Realisasi'),
+          MonitoringResultView(
+            result: _result,
+            loading: false,
+            reportTitle: 'Rangking Realisasi',
+          ),
         ],
       ),
     );

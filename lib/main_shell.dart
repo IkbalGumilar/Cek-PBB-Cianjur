@@ -59,7 +59,8 @@ class _MainShellState extends State<MainShell> {
   // saklar tersembunyi di layar Lisensi (lihat license_screen.dart) dan
   // aplikasi restart sendiri.
   Future<void> _maybeShowOperatorWelcome() async {
-    final justEnabled = await OperatorModeStore.instance.consumeJustEnabledFlag();
+    final justEnabled = await OperatorModeStore.instance
+        .consumeJustEnabledFlag();
     if (!justEnabled || !mounted) return;
     await showDialog<void>(
       context: context,
@@ -70,7 +71,12 @@ class _MainShellState extends State<MainShell> {
           'tanpa batasan wilayah kerja. Status ini permanen di perangkat ini — tidak bisa '
           'kembali jadi petugas wilayah kecuali data aplikasi dihapus.',
         ),
-        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Mengerti'))],
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Mengerti'),
+          ),
+        ],
       ),
     );
   }
@@ -100,13 +106,17 @@ class _MainShellState extends State<MainShell> {
         leading: const Icon(Icons.system_update),
         actions: [
           TextButton(
-            onPressed: () => ScaffoldMessenger.of(context).hideCurrentMaterialBanner(),
+            onPressed: () =>
+                ScaffoldMessenger.of(context).hideCurrentMaterialBanner(),
             child: const Text('Nanti'),
           ),
           FilledButton(
             onPressed: () {
               ScaffoldMessenger.of(context).hideCurrentMaterialBanner();
-              Navigator.push(context, MaterialPageRoute(builder: (_) => UpdateScreen(info: info)));
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => UpdateScreen(info: info)),
+              );
             },
             child: const Text('Lihat'),
           ),
@@ -122,6 +132,17 @@ class _MainShellState extends State<MainShell> {
       _prefillBlok = null;
       _prefillWilayah = null;
       _prefillTahun = null;
+    });
+  }
+
+  void _openStatusBayar(String blok, String wilayah, String tahun) {
+    setState(() {
+      _mode = CheckMode.statusBayar;
+      _view = _ActiveView.check;
+      _prefillBlok = blok;
+      _prefillWilayah = wilayah;
+      _prefillTahun = tahun;
+      _formNonce += 1;
     });
   }
 
@@ -149,8 +170,14 @@ class _MainShellState extends State<MainShell> {
       context,
       MaterialPageRoute(
         builder: (_) => alreadyLoggedIn
-            ? MonitoringHubScreen(client: client, themeController: widget.themeController)
-            : StaffLoginScreen(client: client, themeController: widget.themeController),
+            ? MonitoringHubScreen(
+                client: client,
+                themeController: widget.themeController,
+              )
+            : StaffLoginScreen(
+                client: client,
+                themeController: widget.themeController,
+              ),
       ),
     );
   }
@@ -190,12 +217,15 @@ class _MainShellState extends State<MainShell> {
               key: ValueKey('$_mode-$_formNonce'),
               mode: _mode,
               onImportPressed: _openImport,
+              onOpenStatusBayar: _openStatusBayar,
               initialBlok: _prefillBlok,
               initialWilayah: _prefillWilayah,
               initialTahun: _prefillTahun,
             )
           : _ImportWithBack(mode: _mode, onBack: _backToCheck),
-      floatingActionButton: _view == _ActiveView.check ? _BukuCatatanButton(onPressed: _openBukuCatatan) : null,
+      floatingActionButton: _view == _ActiveView.check
+          ? _BukuCatatanButton(onPressed: _openBukuCatatan)
+          : null,
     );
   }
 }
@@ -240,11 +270,16 @@ class _ImportWithBack extends StatelessWidget {
           child: Row(
             children: [
               IconButton(onPressed: onBack, icon: const Icon(Icons.arrow_back)),
-              Text('Import File - ${mode.label}', style: Theme.of(context).textTheme.titleMedium),
+              Text(
+                'Import File - ${mode.label}',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
             ],
           ),
         ),
-        Expanded(child: ImportView(key: ValueKey(mode), mode: mode)),
+        Expanded(
+          child: ImportView(key: ValueKey(mode), mode: mode),
+        ),
       ],
     );
   }

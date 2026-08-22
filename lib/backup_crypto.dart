@@ -41,7 +41,10 @@ class BackupCrypto {
   /// sendiri — berkas wilayah lain atau berkas Operator otomatis gagal.
   static Future<List<String>> allowedRestoreIdentities() async {
     if (await OperatorModeStore.instance.isEnabled()) {
-      return [operatorIdentity(), for (final d in dusunList) dusunIdentity(d.number)];
+      return [
+        operatorIdentity(),
+        for (final d in dusunList) dusunIdentity(d.number),
+      ];
     }
     final dusun = await WilayahKerjaStore.instance.selectedDusun();
     return [dusun == null ? _unassignedIdentity : dusunIdentity(dusun)];
@@ -54,8 +57,13 @@ class BackupCrypto {
 
   static Uint8List encryptForIdentity(String identity, Uint8List plainBytes) {
     final iv = enc.IV.fromSecureRandom(16);
-    final encrypter = enc.Encrypter(enc.AES(_keyFor(identity), mode: enc.AESMode.cbc));
-    final marked = Uint8List.fromList([...utf8.encode(_plaintextMarker), ...plainBytes]);
+    final encrypter = enc.Encrypter(
+      enc.AES(_keyFor(identity), mode: enc.AESMode.cbc),
+    );
+    final marked = Uint8List.fromList([
+      ...utf8.encode(_plaintextMarker),
+      ...plainBytes,
+    ]);
     final encrypted = encrypter.encryptBytes(marked, iv: iv);
     return Uint8List.fromList([..._magic, ...iv.bytes, ...encrypted.bytes]);
   }
@@ -77,8 +85,12 @@ class BackupCrypto {
 
     for (final identity in identities) {
       try {
-        final encrypter = enc.Encrypter(enc.AES(_keyFor(identity), mode: enc.AESMode.cbc));
-        final decrypted = Uint8List.fromList(encrypter.decryptBytes(encrypted, iv: iv));
+        final encrypter = enc.Encrypter(
+          enc.AES(_keyFor(identity), mode: enc.AESMode.cbc),
+        );
+        final decrypted = Uint8List.fromList(
+          encrypter.decryptBytes(encrypted, iv: iv),
+        );
         if (decrypted.length < markerBytes.length) continue;
         var matches = true;
         for (var i = 0; i < markerBytes.length; i++) {

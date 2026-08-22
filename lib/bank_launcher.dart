@@ -53,12 +53,17 @@ class BankLauncher {
     // Android, lihat CheckFormView), jadi keluar duluan di sini.
     if (!Platform.isAndroid) return [];
     try {
-      final packageNames = _candidateBankApps.map((a) => a.packageName).toList();
-      final installed = await _channel.invokeMethod<List<Object?>>('checkInstalledApps', {
-        'packageNames': packageNames,
-      });
+      final packageNames = _candidateBankApps
+          .map((a) => a.packageName)
+          .toList();
+      final installed = await _channel.invokeMethod<List<Object?>>(
+        'checkInstalledApps',
+        {'packageNames': packageNames},
+      );
       final installedSet = (installed ?? []).map((e) => e.toString()).toSet();
-      return _candidateBankApps.where((a) => installedSet.contains(a.packageName)).toList();
+      return _candidateBankApps
+          .where((a) => installedSet.contains(a.packageName))
+          .toList();
     } on PlatformException {
       return [];
     }
@@ -74,9 +79,12 @@ class BankLauncher {
   static Future<bool> isInstalled(String packageName) async {
     if (!Platform.isAndroid) return false;
     try {
-      final installed = await _channel.invokeMethod<List<Object?>>('checkInstalledApps', {
-        'packageNames': [packageName],
-      });
+      final installed = await _channel.invokeMethod<List<Object?>>(
+        'checkInstalledApps',
+        {
+          'packageNames': [packageName],
+        },
+      );
       return (installed ?? []).map((e) => e.toString()).contains(packageName);
     } on PlatformException {
       return false;
@@ -88,7 +96,9 @@ class BankLauncher {
   static Future<bool> launchPackage(String packageName) async {
     if (!Platform.isAndroid) return false;
     try {
-      final ok = await _channel.invokeMethod<bool>('launchApp', {'packageName': packageName});
+      final ok = await _channel.invokeMethod<bool>('launchApp', {
+        'packageName': packageName,
+      });
       return ok ?? false;
     } on PlatformException {
       return false;
@@ -100,7 +110,9 @@ class BankLauncher {
   static Future<Uint8List?> getAppIcon(String packageName) async {
     if (!Platform.isAndroid) return null;
     try {
-      return await _channel.invokeMethod<Uint8List>('getAppIcon', {'packageName': packageName});
+      return await _channel.invokeMethod<Uint8List>('getAppIcon', {
+        'packageName': packageName,
+      });
     } on PlatformException {
       return null;
     }

@@ -1,8 +1,20 @@
 const nopPrefix = '3205200004';
 
 const nopShortcutExamples = [
-  ('17154', '3205200004' '017' '0154' '0'),
-  ('300584', '3205200004' '030' '0584' '0'),
+  (
+    '17154',
+    '3205200004'
+        '017'
+        '0154'
+        '0',
+  ),
+  (
+    '300584',
+    '3205200004'
+        '030'
+        '0584'
+        '0',
+  ),
 ];
 
 /// Expands a shorthand NOP entry into the full 18-digit NOP for this desa.
@@ -39,7 +51,9 @@ String buildNop({required String blok, required String wilayah}) {
 
 /// Segmen blok (3 digit) dari NOP lengkap 18 digit, dipakai untuk membedakan
 /// dokumen antar wajib pajak yang kebetulan bernama sama.
-String nopBlok(String fullNop) => fullNop.length == 18 ? fullNop.substring(10, 13) : '';
+String nopBlok(String fullNop) =>
+    fullNop.length == 18 ? fullNop.substring(10, 13) : '';
 
 /// Segmen nomor wilayah (4 digit) dari NOP lengkap 18 digit.
-String nopWilayah(String fullNop) => fullNop.length == 18 ? fullNop.substring(13, 17) : '';
+String nopWilayah(String fullNop) =>
+    fullNop.length == 18 ? fullNop.substring(13, 17) : '';

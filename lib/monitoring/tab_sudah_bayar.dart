@@ -35,8 +35,17 @@ class _TabSudahBayarState extends State<TabSudahBayar> {
   @override
   void dispose() {
     for (final c in [
-      _tglAwal, _tglAkhir, _tahunAwal, _tahunAkhir, _nop, _namaWp,
-      _kodeBayarIndividu, _kodeBayarKolektif, _va, _qris, _operator,
+      _tglAwal,
+      _tglAkhir,
+      _tahunAwal,
+      _tahunAkhir,
+      _nop,
+      _namaWp,
+      _kodeBayarIndividu,
+      _kodeBayarKolektif,
+      _va,
+      _qris,
+      _operator,
     ]) {
       c.dispose();
     }
@@ -45,7 +54,11 @@ class _TabSudahBayarState extends State<TabSudahBayar> {
 
   Future<void> _tampilkan() async {
     if (_tglAwal.text.isEmpty || _tglAkhir.text.isEmpty) {
-      setState(() => _result = const MonitoringTableResult(errorMessage: 'Tanggal Pembayaran wajib diisi.'));
+      setState(
+        () => _result = const MonitoringTableResult(
+          errorMessage: 'Tanggal Pembayaran wajib diisi.',
+        ),
+      );
       return;
     }
     setState(() {
@@ -74,7 +87,11 @@ class _TabSudahBayarState extends State<TabSudahBayar> {
       setState(() => _result = result);
     } catch (e) {
       if (!mounted) return;
-      setState(() => _result = MonitoringTableResult(errorMessage: 'Gagal memuat data: $e'));
+      setState(
+        () => _result = MonitoringTableResult(
+          errorMessage: 'Gagal memuat data: $e',
+        ),
+      );
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -89,47 +106,161 @@ class _TabSudahBayarState extends State<TabSudahBayar> {
         children: [
           const WilayahBadge(),
           const MonitoringSectionTitle('Tanggal Pembayaran'),
-          Row(children: [
-            Expanded(child: MonitoringDateField(label: 'Awal', controller: _tglAwal, required: true)),
-            const SizedBox(width: 8),
-            Expanded(child: MonitoringDateField(label: 'Akhir', controller: _tglAkhir, required: true)),
-          ]),
+          Row(
+            children: [
+              Expanded(
+                child: MonitoringDateField(
+                  label: 'Awal',
+                  controller: _tglAwal,
+                  required: true,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: MonitoringDateField(
+                  label: 'Akhir',
+                  controller: _tglAkhir,
+                  required: true,
+                ),
+              ),
+            ],
+          ),
           const MonitoringSectionTitle('Tahun Pajak (opsional)'),
-          Row(children: [
-            Expanded(child: TextField(controller: _tahunAwal, keyboardType: TextInputType.number, maxLength: 4, decoration: const InputDecoration(labelText: 'Awal', border: OutlineInputBorder(), counterText: ''))),
-            const SizedBox(width: 8),
-            Expanded(child: TextField(controller: _tahunAkhir, keyboardType: TextInputType.number, maxLength: 4, decoration: const InputDecoration(labelText: 'Akhir', border: OutlineInputBorder(), counterText: ''))),
-          ]),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _tahunAwal,
+                  keyboardType: TextInputType.number,
+                  maxLength: 4,
+                  decoration: const InputDecoration(
+                    labelText: 'Awal',
+                    border: OutlineInputBorder(),
+                    counterText: '',
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: TextField(
+                  controller: _tahunAkhir,
+                  keyboardType: TextInputType.number,
+                  maxLength: 4,
+                  decoration: const InputDecoration(
+                    labelText: 'Akhir',
+                    border: OutlineInputBorder(),
+                    counterText: '',
+                  ),
+                ),
+              ),
+            ],
+          ),
           const MonitoringSectionTitle('Filter lainnya (opsional)'),
-          BukuDropdown(value: _buku, onChanged: (v) => setState(() => _buku = v)),
+          BukuDropdown(
+            value: _buku,
+            onChanged: (v) => setState(() => _buku = v),
+          ),
           const SizedBox(height: 12),
-          BankDropdown(client: widget.client, value: _bank, onChanged: (v) => setState(() => _bank = v)),
+          BankDropdown(
+            client: widget.client,
+            value: _bank,
+            onChanged: (v) => setState(() => _bank = v),
+          ),
           const SizedBox(height: 12),
-          TextField(controller: _nop, decoration: const InputDecoration(labelText: 'NOP', border: OutlineInputBorder())),
+          TextField(
+            controller: _nop,
+            decoration: const InputDecoration(
+              labelText: 'NOP',
+              border: OutlineInputBorder(),
+            ),
+          ),
           const SizedBox(height: 12),
-          TextField(controller: _namaWp, decoration: const InputDecoration(labelText: 'Nama WP', border: OutlineInputBorder())),
+          TextField(
+            controller: _namaWp,
+            decoration: const InputDecoration(
+              labelText: 'Nama WP',
+              border: OutlineInputBorder(),
+            ),
+          ),
           const SizedBox(height: 12),
-          TextField(controller: _operator, decoration: const InputDecoration(labelText: 'Petugas Pembayaran', border: OutlineInputBorder())),
+          TextField(
+            controller: _operator,
+            decoration: const InputDecoration(
+              labelText: 'Petugas Pembayaran',
+              border: OutlineInputBorder(),
+            ),
+          ),
           const SizedBox(height: 12),
-          Row(children: [
-            Expanded(child: TextField(controller: _kodeBayarIndividu, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Kode Bayar Individu', border: OutlineInputBorder()))),
-            const SizedBox(width: 8),
-            Expanded(child: TextField(controller: _kodeBayarKolektif, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Kode Bayar Kolektif', border: OutlineInputBorder()))),
-          ]),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _kodeBayarIndividu,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Kode Bayar Individu',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: TextField(
+                  controller: _kodeBayarKolektif,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Kode Bayar Kolektif',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 12),
-          Row(children: [
-            Expanded(child: TextField(controller: _va, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'VA', border: OutlineInputBorder()))),
-            const SizedBox(width: 8),
-            Expanded(child: TextField(controller: _qris, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'QRIS', border: OutlineInputBorder()))),
-          ]),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _va,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'VA',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: TextField(
+                  controller: _qris,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'QRIS',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 20),
           FilledButton(
             onPressed: _loading ? null : _tampilkan,
             child: _loading
-                ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                ? const SizedBox(
+                    height: 20,
+                    width: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
                 : const Text('Tampilkan'),
           ),
-          MonitoringResultView(result: _result, loading: false, reportTitle: 'Sudah Bayar'),
+          MonitoringResultView(
+            result: _result,
+            loading: false,
+            reportTitle: 'Sudah Bayar',
+          ),
         ],
       ),
     );

@@ -30,10 +30,21 @@ void main() {
     test('total satu grup nyata sesuai kaki tabel aslinya', () {
       // 10 baris pertama grup "IKBAL 4" beserta totalnya (Rp 590,540.00).
       const totalPerBaris = [
-        '87,453', '63,767', '63,767', '51,425', '63,767',
-        '76,109', '81,900', '29,520', '59,400', '13,432',
+        '87,453',
+        '63,767',
+        '63,767',
+        '51,425',
+        '63,767',
+        '76,109',
+        '81,900',
+        '29,520',
+        '59,400',
+        '13,432',
       ];
-      final jumlah = totalPerBaris.fold<int>(0, (a, b) => a + parseAngkaServer(b));
+      final jumlah = totalPerBaris.fold<int>(
+        0,
+        (a, b) => a + parseAngkaServer(b),
+      );
       expect(jumlah, parseAngkaServer('590,540.00'));
     });
   });
