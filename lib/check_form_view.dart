@@ -2,12 +2,15 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
 
 import 'blok_data_store.dart';
 import 'blok_record.dart';
 import 'check_mode.dart';
 import 'document_preview_screen.dart';
 import 'nop_helper.dart';
+import 'nop_scanner.dart';
 import 'operator_mode_store.dart';
 import 'pbb_client.dart';
 import 'qris_result.dart';
@@ -42,13 +45,17 @@ class CheckFormView extends StatefulWidget {
 
 class _CheckFormViewState extends State<CheckFormView> {
   final _client = PbbClient();
+  final _nopScanner = NopScanner();
   final _blokController = TextEditingController();
   final _wilayahController = TextEditingController();
   final _tahunController = TextEditingController(text: '2026');
   final _captchaController = TextEditingController();
+  final _captchaFocusNode = FocusNode();
+  final _scrollController = ScrollController();
 
   Uint8List? _captchaBytes;
   bool _loadingCaptcha = false;
+  bool _scanningOcr = false;
   bool _ready = false;
   bool _submitting = false;
   PbbResult? _statusBayarResult;
@@ -58,12 +65,8 @@ class _CheckFormViewState extends State<CheckFormView> {
   @override
   void initState() {
     super.initState();
-    if (widget.initialBlok != null) {
-      _blokController.text = widget.initialBlok!;
-    }
-    if (widget.initialWilayah != null) {
-      _wilayahController.text = widget.initialWilayah!;
-    }
+    _blokController.text = widget.initialBlok ?? '';
+    _wilayahController.text = widget.initialWilayah ?? '';
     if (widget.initialTahun != null) {
       _tahunController.text = widget.initialTahun!;
     }
@@ -89,7 +92,207 @@ class _CheckFormViewState extends State<CheckFormView> {
     _wilayahController.dispose();
     _tahunController.dispose();
     _captchaController.dispose();
+    _captchaFocusNode.dispose();
+    _scrollController.dispose();
     super.dispose();
+  }
+
+  /// Pindai gambar (kamera atau galeri) lalu isi kolom Blok & Nomor Wilayah
+  /// dari NOP pertama yang berhasil dikenali OCR.
+  Future<void> _scanAndFill() async {
+    // Pilih sumber gambar
+    final source = await showDialog<ImageSource>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('Scan NOP dari Dokumen'),
+        children: [
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(ctx, ImageSource.camera),
+            child: const ListTile(
+              leading: Icon(Icons.camera_alt_outlined),
+              title: Text('Kamera'),
+            ),
+          ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(ctx, ImageSource.gallery),
+            child: const ListTile(
+              leading: Icon(Icons.photo_library_outlined),
+              title: Text('Galeri'),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (source == null || !mounted) return;
+
+    setState(() {
+      _scanningOcr = true;
+      _errorText = null;
+    });
+    try {
+      final nops = await _nopScanner.scan(source: source);
+      if (!mounted) return;
+      if (nops == null || nops.isEmpty) {
+        setState(() => _errorText = 'NOP tidak ditemukan pada dokumen.');
+        return;
+      }
+
+      if (nops.length == 1) {
+        final nop = nops.first;
+        final blok = nopBlok(nop);
+        final wilayah = nopWilayah(nop);
+        _blokController.text = int.tryParse(blok)?.toString() ?? blok;
+        _wilayahController.text = int.tryParse(wilayah)?.toString() ?? wilayah;
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('NOP berhasil dideteksi: $nop')),
+        );
+      } else {
+        if (widget.mode == CheckMode.tagihan) {
+          final selectedNop = await showDialog<String>(
+            context: context,
+            builder: (ctx) {
+              String? tempSelected;
+              return StatefulBuilder(
+                builder: (context, setState) {
+                  return AlertDialog(
+                    title: const Text('Pilih NOP'),
+                    content: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Lebih dari 1 NOP ditemukan dari dokumen.\n'
+                          'Pilih NOP mana yang ingin Anda cek:',
+                        ),
+                        const SizedBox(height: 12),
+                        Container(
+                          width: 300,
+                          height: 200,
+                          decoration: BoxDecoration(
+                            border: Border.all(
+                              color: Theme.of(context).dividerColor,
+                            ),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: ListView.builder(
+                            itemCount: nops.length,
+                            itemBuilder: (context, index) {
+                              final n = nops[index];
+                              return RadioListTile<String>(
+                                value: n,
+                                groupValue: tempSelected,
+                                title: Text(
+                                  '${index + 1}. $n',
+                                  style: const TextStyle(fontSize: 14),
+                                ),
+                                contentPadding: const EdgeInsets.only(
+                                  left: 8,
+                                  right: 8,
+                                ),
+                                onChanged: (value) {
+                                  setState(() => tempSelected = value);
+                                },
+                              );
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx, null),
+                        child: const Text('Batal'),
+                      ),
+                      FilledButton(
+                        onPressed: tempSelected == null
+                            ? null
+                            : () => Navigator.pop(ctx, tempSelected),
+                        child: const Text('Lanjutkan'),
+                      ),
+                    ],
+                  );
+                },
+              );
+            },
+          );
+          if (!mounted) return;
+          if (selectedNop != null) {
+            final blok = nopBlok(selectedNop);
+            final wilayah = nopWilayah(selectedNop);
+            _blokController.text = int.tryParse(blok)?.toString() ?? blok;
+            _wilayahController.text = int.tryParse(wilayah)?.toString() ?? wilayah;
+            
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('NOP dipilih: $selectedNop')),
+            );
+          }
+        } else {
+          // Di mode Status Bayar, tawarkan pindah ke Cek Massal
+          final checkMassal = await showDialog<bool>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: const Text('Lebih dari 1 NOP Ditemukan'),
+              content: Text(
+                'Ada ${nops.length} NOP yang berhasil dibaca dari dokumen.\n\n'
+                'Apakah Anda ingin memasukkan semuanya ke menu "Cek Massal / Import" '
+                'untuk dicek secara kolektif?',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Tidak, pakai NOP pertama saja'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text('Ya, cek kolektif'),
+                ),
+              ],
+            ),
+          );
+          if (!mounted) return;
+
+          if (checkMassal == true) {
+            // Tambahkan ke file draft NOP untuk ImportView
+            final dir = await getApplicationDocumentsDirectory();
+            final file = File('${dir.path}/draft_nop.txt');
+            final existing = await file.exists() ? await file.readAsString() : '';
+            final existingSet = existing
+                .split(RegExp(r'[,\n\r]+'))
+                .map((e) => e.trim())
+                .where((e) => e.isNotEmpty)
+                .toSet();
+
+            final toAdd = nops.where((n) => !existingSet.contains(n)).toList();
+            if (toAdd.isNotEmpty) {
+              final newContent =
+                  [existing.trim(), ...toAdd].where((e) => e.isNotEmpty).join('\n');
+              await file.writeAsString(newContent);
+            }
+            
+            widget.onImportPressed();
+          } else if (checkMassal == false) {
+            final nop = nops.first;
+            final blok = nopBlok(nop);
+            final wilayah = nopWilayah(nop);
+            _blokController.text = int.tryParse(blok)?.toString() ?? blok;
+            _wilayahController.text = int.tryParse(wilayah)?.toString() ?? wilayah;
+            
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  'Dipakai NOP pertama: $nop',
+                ),
+              ),
+            );
+          }
+        }
+      }
+    } catch (e) {
+      if (mounted) setState(() => _errorText = 'Gagal scan: $e');
+    } finally {
+      if (mounted) setState(() => _scanningOcr = false);
+    }
   }
 
   Future<void> _loadCaptcha() async {
@@ -115,6 +318,8 @@ class _CheckFormViewState extends State<CheckFormView> {
   }
 
   Future<void> _submit() async {
+    FocusScope.of(context).unfocus(); // Singkirkan keyboard saat mulai cek
+
     final nop = buildNop(
       blok: _blokController.text,
       wilayah: _wilayahController.text,
@@ -159,11 +364,21 @@ class _CheckFormViewState extends State<CheckFormView> {
         if (!mounted) return;
         setState(() => _tagihanResult = result);
       }
-      // Kode captcha yang barusan dipakai (baik hasilnya ada data atau tidak)
-      // sudah tidak berlaku lagi di sisi server, jadi harus diganti sebelum
-      // NOP berikutnya bisa dicek.
+      
       _captchaController.clear();
       await _loadCaptcha();
+      
+      if (!mounted) return;
+      // Scroll ke bawah otomatis setelah hasil muncul
+      Future.delayed(const Duration(milliseconds: 100), () {
+        if (mounted && _scrollController.hasClients) {
+          _scrollController.animateTo(
+            _scrollController.position.maxScrollExtent,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOut,
+          );
+        }
+      });
     } on CaptchaError catch (e) {
       if (!mounted) return;
       setState(() => _errorText = e.message);
@@ -171,6 +386,7 @@ class _CheckFormViewState extends State<CheckFormView> {
       await Future<void>.delayed(const Duration(seconds: 1));
       if (!mounted) return;
       await _loadCaptcha();
+      if (mounted) _captchaFocusNode.requestFocus(); // Munculkan keyboard lagi kalau captcha salah
     } catch (e) {
       if (!mounted) return;
       setState(() => _errorText = 'Gagal cek: $e');
@@ -254,6 +470,7 @@ class _CheckFormViewState extends State<CheckFormView> {
     final isTagihan = widget.mode == CheckMode.tagihan;
 
     return SingleChildScrollView(
+      controller: _scrollController,
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -286,6 +503,22 @@ class _CheckFormViewState extends State<CheckFormView> {
                   maxLength: 4,
                 ),
               ),
+              const SizedBox(width: 8),
+              // Tombol scan OCR — tersedia di semua mode
+              _scanningOcr
+                  ? const Padding(
+                      padding: EdgeInsets.all(12),
+                      child: SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    )
+                  : IconButton.filledTonal(
+                      onPressed: _scanAndFill,
+                      icon: const Icon(Icons.document_scanner_outlined),
+                      tooltip: 'Scan NOP dari dokumen',
+                    ),
               if (!isTagihan) ...[
                 const SizedBox(width: 8),
                 IconButton.filledTonal(
@@ -340,6 +573,7 @@ class _CheckFormViewState extends State<CheckFormView> {
           const SizedBox(height: 8),
           TextField(
             controller: _captchaController,
+            focusNode: _captchaFocusNode,
             decoration: const InputDecoration(
               labelText: 'Kode Verifikasi',
               border: OutlineInputBorder(),

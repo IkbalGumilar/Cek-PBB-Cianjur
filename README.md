@@ -21,6 +21,7 @@ Aplikasi untuk membantu staf desa/kelurahan di Kabupaten Cianjur mengecek dan me
 - **Cetak STTS/SPPT & Bukti Bayar** — unduh/pratinjau bukti bayar dalam bentuk PDF
 - **Pembayaran QRIS** — generate kode QRIS dinamis per NOP + tahun (berlaku 1 jam, sekali pakai), tersedia di semua platform
 - **Pembayaran Virtual Account (VA) Bank BJB** — *khusus Android* — generate nomor VA, salin ke clipboard, dan buka langsung aplikasi m-banking/e-wallet yang terpasang di HP (ikon aplikasi diambil langsung dari sistem, bukan aset yang dibundel)
+- **Scan NOP lewat Kamera/Galeri (OCR)** — *khusus Android* — pindai gambar STTS/SPPT atau dokumen pajak menggunakan OCR (pengenalan teks otomatis di perangkat, tanpa butuh internet) untuk mengisi NOP tanpa perlu mengetik manual. Mendukung deteksi cerdas untuk satu atau banyak NOP sekaligus, tersedia di layar utama (Cek Tagihan / Status Bayar) maupun layar Import.
 - **Cek Massal (Import)** — cek banyak NOP sekaligus dari teks tempel atau berkas (.txt/.csv/.xlsx/.xls), hasil pembayaran otomatis tercatat ke Buku Catatan Blok
 - **Buku Catatan Blok** — rekap pembayaran per blok/wilayah kerja, dengan filter tahun & urutan, cetak ulang bukti bayar, hapus baris yang salah tercatat, total otomatis, dan ekspor ke PDF/Excel/CSV
 - **Backup harian otomatis** — kalau ada data baru, dibackup otomatis setiap hari ke berkas terenkripsi

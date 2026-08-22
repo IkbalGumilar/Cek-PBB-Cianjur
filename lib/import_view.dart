@@ -153,36 +153,67 @@ class _ImportViewState extends State<ImportView> {
   }
 
   Future<void> _addScannedNops(List<String> nops) async {
-    final confirmed = await _confirmScannedNops(nops);
-    if (!mounted || confirmed != true) return;
+    // Cek duplikat sebelum konfirmasi — hanya NOP yang belum ada di kolom teks
+    // (dari ketikan manual maupun hasil scan sebelumnya) yang akan ditambahkan.
     final existing = FileImporter.importFromText(
       _textController.text,
     ).map((record) => record.nop).toSet();
     final additions = nops.where((nop) => !existing.contains(nop)).toList();
+    final duplicateCount = nops.length - additions.length;
+
     if (additions.isEmpty) {
-      setState(() => _savedNotice = 'Semua NOP hasil scan sudah ada.');
+      setState(
+        () => _savedNotice =
+            'Semua ${nops.length} NOP hasil scan sudah ada di daftar.',
+      );
       return;
     }
+
+    final confirmed = await _confirmScannedNops(
+      additions,
+      duplicateCount: duplicateCount,
+    );
+    if (!mounted || confirmed != true) return;
 
     final currentText = _textController.text.trim();
     _textController.text = [
       currentText,
       ...additions,
     ].where((value) => value.isNotEmpty).join('\n');
-    setState(() => _savedNotice = '${additions.length} NOP ditambahkan.');
+
+    final notice = StringBuffer('${additions.length} NOP ditambahkan.');
+    if (duplicateCount > 0) {
+      notice.write(' $duplicateCount duplikat dilewati.');
+    }
+    setState(() => _savedNotice = notice.toString());
   }
 
-  Future<bool?> _confirmScannedNops(List<String> nops) {
+  Future<bool?> _confirmScannedNops(
+    List<String> nops, {
+    int duplicateCount = 0,
+  }) {
     return showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('${nops.length} NOP ditemukan'),
+        title: Text('${nops.length} NOP akan ditambahkan'),
         content: ConstrainedBox(
           constraints: const BoxConstraints(maxHeight: 280),
           child: SingleChildScrollView(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: [for (final nop in nops) SelectableText(nop)],
+              children: [
+                if (duplicateCount > 0) ...[
+                  Text(
+                    '$duplicateCount NOP dilewati karena sudah ada.',
+                    style: const TextStyle(
+                      color: Colors.orange,
+                      fontSize: 12,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+                for (final nop in nops) SelectableText(nop),
+              ],
             ),
           ),
         ),

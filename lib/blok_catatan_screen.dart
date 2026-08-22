@@ -399,6 +399,7 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
                             // dipasang ulang, dan initialValue yang baru benar-benar kepakai.
                             key: ValueKey('blok-dropdown-$_selectedWilayah'),
                             initialValue: _selectedBlok,
+                            isExpanded: true,
                             decoration: const InputDecoration(
                               labelText: 'Blok',
                               border: OutlineInputBorder(),
@@ -406,12 +407,18 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
                             items: [
                               const DropdownMenuItem(
                                 value: _semuaBlokValue,
-                                child: Text('Semua Blok (Wilayah Kerja)'),
+                                child: Text(
+                                  'Semua Blok',
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ),
                               for (final b in _bloks)
                                 DropdownMenuItem(
                                   value: b,
-                                  child: Text('Blok ${int.parse(b)}'),
+                                  child: Text(
+                                    'Blok ${int.parse(b)}',
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
                                 ),
                             ],
                             onChanged: _pilihBlok,
@@ -421,6 +428,7 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
                         Expanded(
                           child: DropdownButtonFormField<String?>(
                             initialValue: _selectedTahun,
+                            isExpanded: true,
                             decoration: const InputDecoration(
                               labelText: 'Tahun',
                               border: OutlineInputBorder(),
