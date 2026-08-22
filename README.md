@@ -24,7 +24,7 @@ Aplikasi untuk membantu staf desa/kelurahan di Kabupaten Cianjur mengecek dan me
 - **Cek Massal (Import)** — cek banyak NOP sekaligus dari teks tempel atau berkas (.txt/.csv/.xlsx/.xls), hasil pembayaran otomatis tercatat ke Buku Catatan Blok
 - **Buku Catatan Blok** — rekap pembayaran per blok/wilayah kerja, dengan filter tahun & urutan, cetak ulang bukti bayar, hapus baris yang salah tercatat, total otomatis, dan ekspor ke PDF/Excel/CSV
 - **Backup harian otomatis** — kalau ada data baru, dibackup otomatis setiap hari ke berkas terenkripsi
-- **Monitoring (Portal Staf)** — khusus staf berakun Portal Staf (`cianjurkab.v-tax.id`): login + verifikasi MFA, lihat Monitoring Wilayah (Sudah/Belum Bayar, Realisasi, Piutang, Sudah/Belum Bayar Kolektif, Rangking Realisasi) dan daftar Pembayaran Kolektif, dengan hasil yang bisa diunduh/dibagikan/dicetak sebagai PDF/Excel/CSV — lihat [Monitoring (Portal Staf)](#8-monitoring-portal-staf)
+- **Monitoring (Portal Staf)** — khusus staf berakun Portal Staf (`cianjurkab.v-tax.id`): login + verifikasi MFA, lihat Monitoring Wilayah (Sudah/Belum Bayar, Realisasi, Piutang, Sudah/Belum Bayar Kolektif, Rangking Realisasi) dan kelola Pembayaran Kolektif (lihat daftar, tambah grup, kelola anggota, hapus grup), dengan hasil yang bisa diunduh/dibagikan/dicetak sebagai PDF/Excel/CSV — lihat [Monitoring (Portal Staf)](#8-monitoring-portal-staf)
 - **Periksa Pembaruan dalam aplikasi** — cek versi terbaru dari rilis GitHub lengkap dengan catatan pembaruannya, lihat [Pembaruan Aplikasi](#pembaruan-aplikasi)
 - Semua dokumen (hasil cek, bukti bayar, laporan, backup) tersimpan di satu folder: `Dokumen/Cek PBB Cianjur` (Android) atau `Downloads/Cek PBB Cianjur` (Windows/Linux)
 
@@ -111,7 +111,36 @@ Hasil tabel setiap tab ditampilkan 10 baris dulu, dengan tombol **Muat 10 Data L
 - **Bagikan** *(khusus Android)* — kirim langsung lewat share sheet dalam format yang sama.
 - **Cetak** — buka pratinjau PDF hasilnya, bisa langsung dicetak/dibagikan/diunduh dari layar pratinjau itu.
 
-**Pembayaran Kolektif** — daftar grup pembayaran kolektif (read-only): filter Bulan, Status, Tahun, Tanggal Awal/Akhir. Menu ini sengaja belum punya Tambah/Ubah/Hapus Group, Kelola Anggota, Finalkan, atau Generate VA — semua itu mengubah data pembayaran asli di server pemerintah, jadi belum dibuat sampai ada kebutuhan & konfirmasi lebih lanjut.
+**Pembayaran Kolektif** — daftar grup pembayaran kolektif: filter Bulan, Status, Tahun, Tanggal Awal/Akhir. Selain melihat daftar, tersedia dua aksi:
+
+Ketuk baris grup untuk membuka aksinya (tabelnya lebar dan harus digeser mendatar, jadi aksi tidak ditaruh di kolom paling kiri yang gampang hilang dari layar):
+
+- **Tambah Group** — buat grup baru (Nama Group, Keterangan, Kolektor, No HP Kolektor, Kecamatan, Kelurahan). Grup baru berstatus **Draft**.
+- **Ubah Group** — ubah nama, keterangan, kolektor, atau no HP. Kecamatan & Kelurahan dikunci saat mengubah, sama seperti di sistem aslinya.
+- **Kelola Anggota** — tambah NOP ke grup (diketik atau diunggah dari berkas) dan keluarkan NOP yang terlanjur masuk. Hanya bisa diubah selama grup berstatus **Draft**; di luar itu daftarnya hanya bisa dilihat.
+- **Cetak Surat Pengantar** — buka dokumen resmi grup langsung dari server (muncul untuk grup yang sudah final atau sudah dibayar).
+- **Hapus Group** — hanya muncul pada grup yang memang masih boleh dihapus (Draft atau Expired). Wajib mengisi **Alasan Penghapusan**.
+
+Semua tombol aksi itu **hanya muncul kalau sistem aslinya juga memunculkannya** untuk grup tersebut — aplikasi membaca tombol apa saja yang dirender server, bukan menyimpulkan sendiri dari statusnya.
+
+Di layar **Kelola Anggota**: NOP boleh ditulis lengkap 18 angka atau disingkat blok+nomor wilayah 5–7 angka (contoh `17154` → blok 017 nomor 0154), dipisah koma kalau lebih dari satu — sebelum terkirim, layar konfirmasi menampilkan NOP lengkap hasil uraiannya untuk dicocokkan. Daftarnya tampil 10 baris dulu dengan tombol **Muat 10 Data Lagi**, atau tombol **Ke Bawah** untuk langsung membuka semuanya dan melompat ke bagian bawah. Di paling bawah ada **Total Keseluruhan** (Pokok, Denda, Total Bayar) yang selalu dihitung dari seluruh anggota, bukan hanya baris yang sedang terlihat. Hasilnya bisa **Unduh / Bagikan / Cetak** sebagai PDF/Excel/CSV, lengkap dengan baris totalnya.
+
+**Unggah Berkas (CSV/Excel)** — daftar NOP juga bisa diambil dari berkas `.csv`, `.xlsx`, `.xls`, atau `.txt` (sistem aslinya hanya menerima CSV). Berkasnya dibaca di aplikasi, bukan dikirim mentah ke server, sehingga sebelum ada yang terkirim Anda lebih dulu melihat:
+
+- kolom mana yang dipakai sebagai NOP (ditebak otomatis, bisa diganti sendiri);
+- daftar **NOP 18 angka** yang benar-benar akan dikirim — termasuk tanda untuk NOP yang berasal dari singkatan, karena awalan wilayahnya dilengkapi dari kelurahan grup;
+- NOP yang dilewati: **sudah jadi anggota**, **ganda di dalam berkas**, atau **tidak terbaca** (baris judul kolom ikut ke sini);
+- peringatan kalau berkas Excel menyimpan NOP sebagai angka — Excel hanya menyimpan 15 angka pertama dengan tepat, jadi digit belakang NOP 18 angka bisa sudah berubah di berkasnya.
+
+NOP dikirim satu per satu dengan indikator kemajuan dan tombol **Hentikan**. Setelah selesai, hasilnya dilaporkan **satu golongan per notifikasi, berurutan** — bukan digabung jadi satu pesan: (1) **Ditambahkan**, (2) **Sudah Bayar — Tidak Dimasukkan**, (3) **Tidak Ditemukan — Tidak Dimasukkan**, masing-masing dengan daftar NOP-nya. Kalau server menjawab hal di luar ketiga golongan itu, muncul notifikasi keempat **Perlu Diperiksa** berisi jawaban server apa adanya — sengaja tidak dipaksa masuk salah satu golongan di atas. Ringkasannya bisa dilihat ulang dan disalin dari kartu hasil.
+
+Tahun pajak dan buku yang dipakai adalah yang tertulis di layar Kelola Anggota, berlaku untuk seluruh isi berkas.
+
+**Tambah Group** dan **Hapus Group** tidak bisa dibatalkan: grup yang dibuat tercatat di server pemerintah, dan penghapusan tercatat permanen di *Log History Penghapusan* lengkap dengan alasan serta nama akun yang menghapus. Karena itu alurnya sengaja dibuat dua langkah — isi form dulu, lalu muncul layar konfirmasi yang menampilkan persis apa yang akan dikirim sebelum ada yang benar-benar terkirim. Menambah/mengeluarkan anggota dan mengubah data grup sebaliknya masih bisa diperbaiki selama grup Draft, jadi cukup satu konfirmasi.
+
+Saat menghapus grup, **Alasan Penghapusan** bisa dipilih dari beberapa alasan siap pakai yang langsung mengisi kolomnya (dan masih bisa disunting) — alasan itu tersimpan permanen di log pemerintah, jadi kalimat yang seragam lebih berguna daripada ketikan seadanya.
+
+Yang **tidak** tersedia di aplikasi: **Finalkan** dan **Generate VA** (keduanya menerbitkan kode bayar sungguhan), serta penambahan **massal** — di sistem aslinya, mengosongkan kolom NOP lalu menekan tambah akan memasukkan seluruh NOP yang belum bayar di satu kelurahan sekaligus; aplikasi ini selalu mengirim NOP yang tertulis, termasuk lewat unggah berkas, sehingga jalur itu tertutup.
 
 ## Pembaruan Aplikasi
 

@@ -74,8 +74,11 @@ class MonitoringResultExporter {
     return doc.save();
   }
 
-  static String fileName(MonitoringExportFormat format, String title) {
-    final slug = title.toLowerCase().replaceAll(' ', '_');
-    return 'monitoring_${slug}_${DateTime.now().millisecondsSinceEpoch}.${format.extension}';
+  /// [prefix] memisahkan berkas antar-modul yang sama-sama memakai pengekspor
+  /// ini (mis. `monitoring_…` vs `anggota_…`), supaya berkas unduhan tidak
+  /// tercampur di folder Dokumen.
+  static String fileName(MonitoringExportFormat format, String title, {String prefix = 'monitoring'}) {
+    final slug = title.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '_').replaceAll(RegExp(r'^_|_$'), '');
+    return '${prefix}_${slug}_${DateTime.now().millisecondsSinceEpoch}.${format.extension}';
   }
 }

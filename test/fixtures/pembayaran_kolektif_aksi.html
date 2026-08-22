@@ -1,0 +1,339 @@
+<!--
+  Potongan VERBATIM (struktur & urutannya) dari halaman Pembayaran Kolektif
+  `main.php?param=YT1hUEJCJm09bTE3OQ==`: bagian aksi Tambah Group, Hapus Group,
+  dan Kelola Anggota.
+
+  Nilai token `q`/`funcMode`/`funMode` di sini SENGAJA diganti placeholder:
+  token asli terikat sesi login akun staf, jadi tidak boleh ikut tersimpan di
+  repo. Yang diuji fixture ini adalah POSISI token (extractor mengambil dari
+  fungsi/handler yang benar), bukan isinya — bentuk placeholder tetap dibuat
+  menyerupai aslinya (base64 + '/', '+', '=', ':') supaya regex-nya teruji
+  terhadap karakter yang sama.
+
+  URUTAN blok di bawah ini dipertahankan persis seperti halaman aslinya, karena
+  justru urutan itulah jebakannya. Ada tiga pasangan yang bersebelahan dan
+  nyaris identik:
+    * `#btn-delete-all`  ←→ `#btn-delete-all-temp`
+    * `cariNOPCSV()`     ←→ `cariNOP()`
+    * `tambahGroup()`    ←→ `finalkan()`
+  Ditambah `.btn-return` & `.btn-reaktivasi` yang bentuk ajax-nya sama persis
+  dengan aksi hapus group.
+-->
+
+<!-- Form "Tambah Ke Group". Urutan field di sini menentukan urutan hasil
+     $("#form-cari").serialize() yang dikirim cariNOP(). `berkas` (input file)
+     dan tombol type=button TIDAK ikut terserialisasi oleh jQuery. -->
+<form id="form-cari">
+  <input type="hidden" name="userID" id="userID" value="u468">
+  <input type="hidden" name="data-group-id" id="data-group-id">
+  <input type="hidden" name="data-group-name" id="data-group-name">
+  <textarea maxlength="1900" rows="2" id="data-nop" name="data-nop"></textarea>
+  <select name="data-kelurahan" id="data-kelurahan" style="display: none;">
+    <option value="3205200004">BOBOJONG</option>
+  </select>
+  <input type="text" name="data-tahun-pajak" id="data-tahun-pajak" value="2026">
+  <select id="data-buku" name="data-buku">
+    <option value="1">Buku 1</option>
+    <option value="12">Buku 1,2</option>
+    <option value="123">Buku 1,2,3</option>
+    <option value="2">Buku 2</option>
+    <option value="23">Buku 2,3</option>
+    <option value="3">Buku 3</option>
+  </select>
+  <input type="text" name="blok" id="blok" size="10" maxlength="3" placeholder="Blok">
+  <input type="text" name="blok2" id="blok2" size="10" maxlength="3" placeholder="Blok">
+  <input type="file" id="berkas" name="berkas" value="Upload CSV">
+  <input type="button" id="btn-tambah-cari-nop" value="Cari &amp; Tambah ke Draft" onclick="cariNOP()">
+  <input type="button" id="btn-finalkan" value="Finalkan" onclick="finalkan()">
+</form>
+<input id="btn-delete-all" class="btn-delete-place" type="button" value="Hapus Data Terpilih">
+
+<select style="text-transform:uppercase;width: 100%" name="data-kelurahan-group" id="data-kelurahan-group-2">
+  <option value="">PILIH KELURAHAN</option>
+           <option value="3205200004">BOBOJONG</option>
+</select>
+
+<input id="btn-confirm-delete-group" type="button" name="submit" value="Hapus Group">
+
+<script type="text/javascript">
+var IS_ADMIN = '0' == 1;
+var DEFAULT_KECAMATAN = '';
+var DEFAULT_KELURAHAN = '';
+
+var q = 'UExBQ0VIT0xERVJfUV9UT0tFTl9NQU5ERQ==';
+
+   $(document).on("click","#btn-delete-all",function(e){
+      var data = [];
+      $(".nop-member").each(function(e){
+        if ($(this).is(':checked')){
+          var nop = $(this).attr("value");
+          var year = $(this).attr("year");
+          data.push({"nop":nop,"tahun":year});
+        }
+      });
+      var jml = data.length;
+      if (jml<=0){
+        alert(" Silahkan pilih data terlebih dahulu");
+        return false;
+      }
+      var c = confirm("Yakin "+jml+" Data Terpilih ? ");
+      if (!c){
+        return false;
+      }
+       var funcMode = 'UExBQ0VIT0xERVJfSEFQVVNfQU5HR09UQQ==::s1+s2/s3==';
+       var request = $.ajax({
+          url : "main.php",
+          type: "POST",
+          data: {
+            data : data,funcMode : funcMode
+          },
+          dataType: "json"
+      });
+   });
+
+   $(document).on("click","#btn-delete-all-temp",function(e){
+      var data = [];
+      $(".nop-member-temp").each(function(e){
+        if ($(this).is(':checked')){
+          var nop = $(this).attr("value");
+          var year = $(this).attr("year");
+          data.push({"nop":nop,"tahun":year});
+        }
+      });
+       var funcMode = 'UExBQ0VIT0xERVJfSEFQVVNfVEVNUA==::t1+t2/t3==';
+       var request = $.ajax({
+          url : "main.php",
+          type: "POST",
+          data: {
+            data : data
+          },
+          dataType: "json"
+      });
+   });
+
+     $(document).on("click",".btn-return",function(e){
+      var group_id = $(this).attr("group-id");
+      var kdbayar = $(this).attr("kodebayar");
+      var c = confirm("Yakin mengubah status group ini menjadi draft ? ");
+      if (!c){
+        return false;
+      }
+       var funcMode = 'UExBQ0VIT0xERVJfQlROX1JFVFVSTg==::aa+bb/cc==';
+       var request = $.ajax({
+          url : "main.php",
+          type: "POST",
+          data: "q="+q+"&id="+group_id+"&kdbayar="+kdbayar+"&funcMode="+funcMode,
+          dataType: "json"
+      });
+   });
+   $(document).on("click",".btn-reaktivasi",function(e){
+      var group_id = $(this).attr("group-id");
+      var c = confirm("Yakin Reaktivasi Group ini ? ");
+      if (!c){
+        return false;
+      }
+       var funcMode = 'UExBQ0VIT0xERVJfQlROX1JFQUtUSVZBU0k=::dd+ee/ff==';
+       var request = $.ajax({
+          url : "main.php",
+          type: "POST",
+          data: "q="+q+"&id="+group_id+"&funcMode="+funcMode,
+          dataType: "json"
+      });
+   });
+
+   $(document).on("click","#btn-confirm-delete-group",function(e){
+      var group_id = $("#delete-group-id").val();
+      var alasan = $("#delete-group-alasan").val();
+
+      if (alasan.trim() == "") {
+        alert("Mohon isi alasan penghapusan terlebih dahulu!");
+        return false;
+      }
+
+      var c = confirm("Yakin Hapus Group ? ");
+      if (!c){
+        return false;
+      }
+
+      var funcMode = 'UExBQ0VIT0xERVJfSEFQVVNfR1JPVVA=::gg+hh/ii==';
+      var i= $(".btn-delete-group[group_id='"+group_id+"']");
+      var request = $.ajax({
+          url : "main.php",
+          type: "POST",
+          data: "q="+q+"&id="+group_id+"&alasan="+encodeURIComponent(alasan)+"&funcMode="+funcMode,
+          dataType: "json",
+          success: function (data) {
+            if (data.success){
+              myTable.row( i.parents('tr') ).remove().draw();
+              myTable.draw();
+            }else{
+              alert(data.message || "Terjadi kesalahan saat menghapus group");
+            }
+          }
+      });
+   });
+
+     function showKecamatanAll() {
+        var funcMode = 'UExBQ0VIT0xERVJfU0hPV19LRUNBTUFUQU4=::jj+kk/ll==';
+        var request = $.ajax({
+            url: "main.php",
+            type: "POST",
+            data: {id: "3205",funcMode: funcMode},
+            dataType: "json",
+            success: function (data) {
+                var idRole = 'rmKelurahan';
+                var myKecamatan = '3205200';
+            }
+        });
+    }
+
+   function cariNOPCSV(){
+    if (!$("#berkas").val()==0) {
+      upload();
+      var data = $("#form-cari").serialize();
+      var funcMode = 'UExBQ0VIT0xERVJfQ0FSSV9OT1BfQ1NW==::u1+u2/u3==';
+      var request = $.ajax({
+        url : "main.php",
+        type: "POST",
+        data: data+"&funcMode="+funcMode,
+        dataType: "json"
+      });
+    } else {
+      alert('Pilih terlebih dahulu file csv yang akan di upload');
+    }
+   }
+
+    function cariNOP(){
+          var nop = $("#data-nop").val();
+
+          var kelurahan = $("#data-kelurahan option:selected ").text();
+          var buku = $("#data-buku option:selected ").text();
+
+          var data = $("#form-cari").serialize();
+          if (nop.trim()==""){
+            if($("#btn-check-nop").is(':checked')){
+              alert("Untuk melakukan Multiple Tahun Tagihan Harap isi 1 NOP terlebih dahulu.");
+              return false;
+            }
+
+             var c = confirm(" Yakin Menambahkan seluruh NOP di Kelurahan "+kelurahan+" , "+buku+" , Tahun Pajak "+$("#data-tahun-pajak").val()+" yang belum bayar ? ");
+              if (!c){
+                return false;
+              }
+              $("#data-nop").val("");
+              $("#data-nop").removeAttr("value");
+          }else{
+            if($("#btn-check-nop").is(':checked')){
+              if (nop.includes(',')) {
+                    alert("Untuk melakukan Multiple Tahun Tagihan Harap hanya isi 1 NOP saja.");
+                    return false;
+              }
+              var c = confirm("Yakin menambahkan seluruh tagihan NOP "+nop+" yang belum bayar ? ");
+              if (!c){
+                return false;
+              }
+            }
+          }
+          var funcMode = 'UExBQ0VIT0xERVJfQ0FSSV9OT1A=::v1+v2/v3==';
+          var request = $.ajax({
+            url : "main.php",
+            type: "POST",
+            data: data+"&funcMode="+funcMode,
+            dataType: "json"
+        });
+    }
+
+    function tambahGroup(){
+      var data = $("#form-tambah-group").serialize();
+      var groupNama = $("#data-nama-group").val();
+      var groupKeterangan = $("#data-keterangan-group").val();
+      var groupKolektor = $("#data-nama-kolektor").val();
+      var groupKolektorHP = $("#data-no-kolektor").val();
+      var groupKelurahan = $("#data-kelurahan-group-2").val();
+      if (groupNama==""){
+        alert("Nama Group Tidak Boleh Kosong");
+        exit;
+      }
+      if (groupKeterangan==""){
+        alert("Keterangan Group Tidak Boleh Kosong");
+        exit;
+      }
+      if (groupKolektor==""){
+        alert("Kolektor Group Tidak Boleh Kosong");
+        exit;
+      }
+      if (groupKolektorHP==""){
+        alert("No HP Kolektor Tidak Boleh Kosong");
+        exit;
+      }
+      if (groupKelurahan==""){
+        alert("Kelurahan Tidak Boleh Kosong");
+        exit;
+      }
+
+          var funMode = 'UExBQ0VIT0xERVJfVEFNQkFIX0dST1VQ=::mm+nn/oo==';
+          var request = $.ajax({
+            url : "main.php",
+            type: "POST",
+            data: data+"&funcMode="+funMode,
+            dataType: "json",
+            success: function (data) {
+              if (data.success==true){
+                reloadDataGroup();
+                $("#form-add-group").hide();
+              }else{
+                alert(data.message);
+              }
+            },error:function(data){
+                alert("Terjadi Kesalahan, Silahkan coba beberapa saat lagi ");
+            }
+        });
+    }
+    function finalkan(){
+      var c = confirm("Yakin  Finalkan  ? ");
+      if (!c){
+        return false;
+      }
+
+      var group_id = $("#data-group-id").val();
+      var user_id = $("#userID").val();
+      var funcMode = 'UExBQ0VIT0xERVJfRklOQUxLQU4=::pp+qq/rr==';
+          var request = $.ajax({
+            url : "main.php",
+            type: "POST",
+            data: "id="+group_id+"&userID="+user_id+"&funcMode="+funcMode,
+            dataType: "json"
+        });
+    }
+
+    function getGroupData(group_id,status){
+      $(".section-checkFailedUpload").hide();
+      $("#data-group-id").val(group_id);
+
+          if (myTableMember){
+            myTableMember.destroy();
+          }
+          $(".loader").show();
+          checkFailedUploadNOP();
+          var funcMode = 'UExBQ0VIT0xERVJfTElTVF9BTkdHT1RB==::w1+w2/w3==';
+          myTableMember =  $('#myTableMember').DataTable({
+            "order": [[ 1, "asc" ]],
+            "processing": true,
+            "serverSide": true,
+            "lengthMenu": [10, 25, 50, 100, 500, 1000],
+            "ajax" : "main.php?status="+status+"&group_id="+group_id+"&funcMode="+funcMode,
+            columns:[
+             { title:"Aksi", "searchable":false, "type":"html", "index":0, 'name':'' },
+             { title:"NOP", "searchable":true, "type":"html", "index":1, 'name':'NOP' },
+             { title:"Tahun Pajak", "searchable":true, "type":"html", "index":2, 'name':'SPPT_TAHUN_PAJAK' },
+             { title:"Tanggal Jatuh Tempo", "searchable":false, "type":"html", "index":3, 'name':'SPPT_TANGGAL_JATUH_TEMPO' },
+             { title:"Nama WP", "searchable":true, "type":"html", "index":4, 'name':'WP_NAMA' },
+             { title:"Kecamatan", "searchable":true, "type":"html", "index":5, 'name':'OP_KECAMATAN' },
+             { title:"Kelurahan", "searchable":true, "type":"html", "index":6, 'name':'OP_KELURAHAN' },
+             { title:"Pokok", "searchable":true, "type":"html", "index":7, 'name':'SPPT_PBB_HARUS_DIBAYAR' },
+             { title:"Denda", "searchable":false, "type":"html", "index":8, 'name':'test' },
+             { title:"Total", "searchable":false, "type":"html", "index":9, 'name':'test' }
+          ]
+          });
+    }
+</script>
