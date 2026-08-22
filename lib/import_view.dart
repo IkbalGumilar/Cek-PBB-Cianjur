@@ -1,13 +1,16 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'batch_check_screen.dart';
 import 'check_mode.dart';
 import 'file_importer.dart';
 import 'nop_helper.dart';
+import 'nop_scanner.dart';
 import 'tax_record.dart';
 
 const _draftFileName = 'draft_nop.txt';
@@ -30,6 +33,7 @@ class ImportView extends StatefulWidget {
 class _ImportViewState extends State<ImportView> {
   final _tahunController = TextEditingController(text: '2026');
   final _textController = TextEditingController();
+  final _nopScanner = NopScanner();
 
   String? _fileName;
   List<TaxRecord> _records = [];
@@ -41,6 +45,9 @@ class _ImportViewState extends State<ImportView> {
   void initState() {
     super.initState();
     _loadDraft();
+    if (Platform.isAndroid) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _recoverLostScan());
+    }
   }
 
   @override
@@ -58,14 +65,139 @@ class _ImportViewState extends State<ImportView> {
   Future<void> _loadDraft() async {
     final file = await _draftFile();
     if (await file.exists()) {
-      _textController.text = await file.readAsString();
+      final content = await file.readAsString();
+      if (mounted) _textController.text = content;
     }
   }
 
   Future<void> _saveDraft() async {
     final file = await _draftFile();
     await file.writeAsString(_textController.text);
-    setState(() => _savedNotice = 'Tersimpan.');
+    if (mounted) setState(() => _savedNotice = 'Tersimpan.');
+  }
+
+  Future<void> _recoverLostScan() async {
+    try {
+      final nops = await _nopScanner.recoverLostScan();
+      if (!mounted || nops == null || nops.isEmpty) return;
+      await _addScannedNops(nops);
+    } catch (e) {
+      if (mounted) setState(() => _errorText = 'Gagal memulihkan scan: $e');
+    }
+  }
+
+  Future<void> _scanDocument() async {
+    if (!Platform.isAndroid) {
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Scan Dokumen'),
+          content: const Text(
+            'Scan dengan kamera atau galeri saat ini tersedia di Android.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Mengerti'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    final source = await showDialog<ImageSource>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('Scan NOP'),
+        children: [
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(ctx, ImageSource.camera),
+            child: const ListTile(
+              leading: Icon(Icons.camera_alt_outlined),
+              title: Text('Kamera'),
+            ),
+          ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(ctx, ImageSource.gallery),
+            child: const ListTile(
+              leading: Icon(Icons.photo_library_outlined),
+              title: Text('Galeri'),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (source == null || !mounted) return;
+
+    setState(() {
+      _loading = true;
+      _errorText = null;
+      _savedNotice = null;
+    });
+    try {
+      final nops = await _nopScanner.scan(source: source);
+      if (!mounted || nops == null || nops.isEmpty) {
+        if (mounted) {
+          setState(() => _errorText = 'NOP tidak ditemukan pada dokumen.');
+        }
+        return;
+      }
+
+      await _addScannedNops(nops);
+    } catch (e) {
+      if (mounted) setState(() => _errorText = 'Gagal scan dokumen: $e');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _addScannedNops(List<String> nops) async {
+    final confirmed = await _confirmScannedNops(nops);
+    if (!mounted || confirmed != true) return;
+    final existing = FileImporter.importFromText(
+      _textController.text,
+    ).map((record) => record.nop).toSet();
+    final additions = nops.where((nop) => !existing.contains(nop)).toList();
+    if (additions.isEmpty) {
+      setState(() => _savedNotice = 'Semua NOP hasil scan sudah ada.');
+      return;
+    }
+
+    final currentText = _textController.text.trim();
+    _textController.text = [
+      currentText,
+      ...additions,
+    ].where((value) => value.isNotEmpty).join('\n');
+    setState(() => _savedNotice = '${additions.length} NOP ditambahkan.');
+  }
+
+  Future<bool?> _confirmScannedNops(List<String> nops) {
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('${nops.length} NOP ditemukan'),
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 280),
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [for (final nop in nops) SelectableText(nop)],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Tambahkan'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _pickFile() async {
@@ -79,6 +211,7 @@ class _ImportViewState extends State<ImportView> {
         type: FileType.custom,
         allowedExtensions: ['txt', 'csv', 'xlsx', 'xls'],
       );
+      if (!mounted) return;
       if (files.isEmpty || files.first.path == null) {
         setState(() => _loading = false);
         return;
@@ -86,14 +219,15 @@ class _ImportViewState extends State<ImportView> {
 
       final path = files.first.path!;
       final records = await FileImporter.importFrom(path);
+      if (!mounted) return;
       setState(() {
         _fileName = files.first.name;
         _records = records;
       });
     } catch (e) {
-      setState(() => _errorText = 'Gagal baca file: $e');
+      if (mounted) setState(() => _errorText = 'Gagal baca file: $e');
     } finally {
-      setState(() => _loading = false);
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -279,6 +413,11 @@ class _ImportViewState extends State<ImportView> {
                 onPressed: _saveDraft,
                 icon: const Icon(Icons.save_outlined),
                 label: const Text('Simpan'),
+              ),
+              OutlinedButton.icon(
+                onPressed: _loading ? null : _scanDocument,
+                icon: const Icon(Icons.document_scanner_outlined),
+                label: const Text('Scan'),
               ),
               OutlinedButton.icon(
                 onPressed: _clearNotes,

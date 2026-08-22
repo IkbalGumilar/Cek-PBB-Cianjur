@@ -53,6 +53,8 @@ dependencies:
   encrypt: ^5.0.3
   crypto: ^3.0.6
   flutter_secure_storage: ^11.0.0
+  image_picker: ^1.2.3
+  google_mlkit_text_recognition: ^0.17.1
 
 dev_dependencies:
   flutter_test:

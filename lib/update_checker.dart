@@ -37,8 +37,9 @@ class UpdateChecker {
     final lastCheckedMs = prefs.getInt(_lastCheckedKey);
     if (lastCheckedMs != null) {
       final lastChecked = DateTime.fromMillisecondsSinceEpoch(lastCheckedMs);
-      if (DateTime.now().difference(lastChecked) < _autoCheckInterval)
+      if (DateTime.now().difference(lastChecked) < _autoCheckInterval) {
         return null;
+      }
     }
     try {
       return await checkForUpdate();
@@ -54,10 +55,11 @@ class UpdateChecker {
 
     final currentVersion = (await PackageInfo.fromPlatform()).version;
 
-    final Response<Map<String, dynamic>> response;
+    final Response<List<dynamic>> response;
     try {
-      response = await Dio().get<Map<String, dynamic>>(
-        'https://api.github.com/repos/$_githubOwner/$_githubRepo/releases/latest',
+      response = await Dio().get<List<dynamic>>(
+        'https://api.github.com/repos/$_githubOwner/$_githubRepo/releases',
+        queryParameters: {'per_page': 100},
         options: Options(
           sendTimeout: const Duration(seconds: 10),
           receiveTimeout: const Duration(seconds: 10),
@@ -71,20 +73,37 @@ class UpdateChecker {
       );
     }
 
-    final data = response.data;
-    if (data == null) return null;
+    final releases = (response.data ?? const [])
+        .whereType<Map<String, dynamic>>()
+        .where((release) => release['draft'] != true)
+        .toList();
+    if (releases.isEmpty) return null;
+
+    var data = releases.first;
+    for (final release in releases.skip(1)) {
+      final releaseVersion = _versionFromTag(release['tag_name']);
+      final selectedVersion = _versionFromTag(data['tag_name']);
+      if (releaseVersion != null &&
+          (selectedVersion == null ||
+              isNewerVersion(releaseVersion, selectedVersion))) {
+        data = release;
+      }
+    }
 
     final tagName = data['tag_name'] as String? ?? '';
     final latestVersion = tagName.replaceFirst(RegExp(r'^v'), '');
-    if (latestVersion.isEmpty || !_isNewer(latestVersion, currentVersion))
+    if (latestVersion.isEmpty ||
+        !isNewerVersion(latestVersion, currentVersion)) {
       return null;
+    }
 
     final assets = ((data['assets'] as List?) ?? const [])
         .map((e) => e as Map<String, dynamic>)
         .toList();
     final asset = _findAssetForPlatform(assets);
-    if (asset == null)
+    if (asset == null) {
       return null; // rilis ada tapi belum dilampiri berkas untuk platform ini
+    }
 
     return UpdateInfo(
       version: latestVersion,
@@ -143,20 +162,39 @@ class UpdateChecker {
     return null;
   }
 
-  static bool _isNewer(String latest, String current) {
+  static String? _versionFromTag(Object? tag) {
+    if (tag is! String) return null;
+    final version = tag.replaceFirst(RegExp(r'^v'), '');
+    return RegExp(r'^\d+\.\d+\.\d+(?:-alpha\.\d+)?$').hasMatch(version)
+        ? version
+        : null;
+  }
+
+  static bool isNewerVersion(String latest, String current) {
     final l = _parseVersion(latest);
     final c = _parseVersion(current);
     for (var i = 0; i < 3; i++) {
       if (l[i] != c[i]) return l[i] > c[i];
     }
-    return false;
+
+    final latestPrerelease = l[3];
+    final currentPrerelease = c[3];
+    if (latestPrerelease == currentPrerelease) return false;
+    if (latestPrerelease == -1) return true;
+    if (currentPrerelease == -1) return false;
+    return latestPrerelease > currentPrerelease;
   }
 
   static List<int> _parseVersion(String version) {
-    final parts = version.split('.');
-    return List.generate(
-      3,
-      (i) => i < parts.length ? int.tryParse(parts[i]) ?? 0 : 0,
-    );
+    final match = RegExp(
+      r'^(\d+)\.(\d+)\.(\d+)(?:-alpha\.(\d+))?$',
+    ).firstMatch(version);
+    if (match == null) return [0, 0, 0, 0];
+    return [
+      int.parse(match.group(1)!),
+      int.parse(match.group(2)!),
+      int.parse(match.group(3)!),
+      match.group(4) == null ? -1 : int.parse(match.group(4)!),
+    ];
   }
 }
