@@ -25,8 +25,7 @@ import 'tagihan_result.dart' show formatRupiah;
 ///
 /// Yang SENGAJA tidak dibawa ke sini:
 ///
-///  * **Finalkan** — mengunci grup dan menerbitkan kode bayar sungguhan.
-///  * **Generate VA** — sama, membuat nomor virtual account asli.
+///  * **Generate VA** — membuat nomor virtual account asli.
 ///  * Penambahan **MASSAL** (di halaman asli, mengosongkan kolom NOP lalu
 ///    menekan "Cari & Tambah ke Draft" akan memasukkan SELURUH NOP yang belum
 ///    bayar di satu kelurahan sekaligus). Aplikasi ini selalu mengirim NOP
@@ -61,6 +60,7 @@ class _KelolaAnggotaScreenState extends State<KelolaAnggotaScreen> {
 
   bool _loading = false;
   bool _aksiBerjalan = false;
+  bool _finalkanPerluVerifikasi = false;
   KolektifMemberListResult? _result;
   final _terpilih = <String>{};
   int _tampil = _pageSize;
@@ -481,6 +481,49 @@ class _KelolaAnggotaScreenState extends State<KelolaAnggotaScreen> {
     await _muat();
   }
 
+  Future<void> _finalkan() async {
+    final lanjut = await _konfirmasi(
+      judul: 'Finalkan grup ini?',
+      isi:
+          'Grup "${widget.group.namaGroup}" akan dikunci dan server akan '
+          'menerbitkan kode bayar. Aksi ini tidak dapat dibatalkan.',
+      labelAksi: 'Finalkan',
+      warna: Theme.of(context).colorScheme.primary,
+    );
+    if (lanjut != true || !mounted) return;
+
+    setState(() => _aksiBerjalan = true);
+    KolektifActionResult hasil;
+    try {
+      hasil = await widget.client.finalkanKolektifGroup(
+        groupId: widget.group.id,
+      );
+    } catch (e) {
+      hasil = KolektifActionResult(
+        success: false,
+        message:
+            'Koneksi terputus saat menunggu jawaban server, jadi hasilnya '
+            'belum pasti. Periksa status grup sebelum mencoba lagi.\n\n$e',
+        responsDikenali: false,
+      );
+    } finally {
+      if (mounted) setState(() => _aksiBerjalan = false);
+    }
+
+    if (!mounted) return;
+    if (!hasil.responsDikenali) {
+      setState(() => _finalkanPerluVerifikasi = true);
+    }
+    if (hasil.success) {
+      Navigator.pop(context, true);
+    } else {
+      _pesan(
+        'Grup tidak jadi difinalkan',
+        hasil.message ?? 'Server menolak tanpa keterangan.',
+      );
+    }
+  }
+
   Future<bool?> _konfirmasi({
     required String judul,
     required String isi,
@@ -824,6 +867,19 @@ class _KelolaAnggotaScreenState extends State<KelolaAnggotaScreen> {
                             _result!.totalBayar,
                             tebal: true,
                           ),
+                          if (_bisaDiubah) ...[
+                            const SizedBox(height: 12),
+                            SizedBox(
+                              width: double.infinity,
+                              child: FilledButton.icon(
+                                onPressed: sibuk || _finalkanPerluVerifikasi
+                                    ? null
+                                    : _finalkan,
+                                icon: const Icon(Icons.lock_outline),
+                                label: const Text('Finalkan'),
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ),

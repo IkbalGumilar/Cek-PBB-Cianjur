@@ -93,6 +93,13 @@ class StaffPortalTokenExtractor {
   /// yang sama-sama mengirim `q`+`id`+`funcMode`. Untuk memastikan tidak
   /// tertukar, baris `data:` pengirimnya wajib ikut cocok — hanya aksi hapus
   /// yang membawa parameter `&alasan=`.
+  static String? extractFinalkanFuncMode(String html) {
+    final match = RegExp(
+      r"""function\s+finalkan\s*\([^)]*\)\s*\{[\s\S]{0,1000}?var\s+funcMode\s*=\s*'([^']+)'\s*;[\s\S]{0,600}?data\s*:\s*"id="\s*\+\s*group_id\s*\+\s*"&userID="\s*\+\s*user_id\s*\+\s*"&funcMode="\s*\+\s*funcMode""",
+    ).firstMatch(html);
+    return match?.group(1);
+  }
+
   static String? extractHapusGroupFuncMode(String html) {
     final match = RegExp(
       r"""on\s*\(\s*"click"\s*,\s*"#btn-confirm-delete-group"[\s\S]{0,1500}?var\s+funcMode\s*=\s*'([^']+)'\s*;[\s\S]{0,600}?data\s*:\s*"q="\s*\+\s*q\s*\+\s*"&id="\s*\+\s*group_id\s*\+\s*"&alasan="\s*\+\s*encodeURIComponent""",

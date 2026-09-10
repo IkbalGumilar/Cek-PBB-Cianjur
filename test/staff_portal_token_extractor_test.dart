@@ -167,6 +167,13 @@ void main() {
       },
     );
 
+    test('extractFinalkanFuncMode mengambil token finalkan()', () {
+      final funcMode = StaffPortalTokenExtractor.extractFinalkanFuncMode(
+        kolektifAksiHtml,
+      );
+      expect(funcMode, 'UExBQ0VIT0xERVJfRklOQUxLQU4=::pp+qq/rr==');
+    });
+
     test(
       'extractFuncMode generik memang tidak aman dipakai untuk tambahGroup',
       () {

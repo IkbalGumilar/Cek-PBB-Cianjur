@@ -612,8 +612,8 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
             children: [
               const Text(
                 'Daftar grup pembayaran kolektif. Bisa tambah grup, kelola anggota (tambah/keluarkan '
-                'NOP) pada grup Draft, dan hapus grup. Finalkan serta Generate VA tidak tersedia di '
-                'sini karena menerbitkan kode bayar sungguhan.',
+                'NOP) pada grup Draft, hapus grup, serta Finalkan dari layar Kelola Anggota. '
+                'Generate VA belum tersedia karena menerbitkan kode bayar sungguhan.',
                 style: TextStyle(fontStyle: FontStyle.italic),
               ),
               const SizedBox(height: 16),

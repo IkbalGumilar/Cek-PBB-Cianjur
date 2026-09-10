@@ -141,7 +141,7 @@ Tahun pajak dan buku yang dipakai adalah yang tertulis di layar Kelola Anggota, 
 
 Saat menghapus grup, **Alasan Penghapusan** bisa dipilih dari beberapa alasan siap pakai yang langsung mengisi kolomnya (dan masih bisa disunting) — alasan itu tersimpan permanen di log pemerintah, jadi kalimat yang seragam lebih berguna daripada ketikan seadanya.
 
-Yang **tidak** tersedia di aplikasi: **Finalkan** dan **Generate VA** (keduanya menerbitkan kode bayar sungguhan), serta penambahan **massal** — di sistem aslinya, mengosongkan kolom NOP lalu menekan tambah akan memasukkan seluruh NOP yang belum bayar di satu kelurahan sekaligus; aplikasi ini selalu mengirim NOP yang tertulis, termasuk lewat unggah berkas, sehingga jalur itu tertutup.
+**Finalkan** tersedia dari bawah ringkasan Total Bayar pada layar Kelola Anggota. Aksi ini mengunci grup dan menerbitkan kode bayar sungguhan, sehingga selalu meminta konfirmasi. Yang **tidak** tersedia di aplikasi adalah **Generate VA** serta penambahan **massal** — di sistem aslinya, mengosongkan kolom NOP lalu menekan tambah akan memasukkan seluruh NOP yang belum bayar di satu kelurahan sekaligus; aplikasi ini selalu mengirim NOP yang tertulis, termasuk lewat unggah berkas, sehingga jalur itu tertutup.
 
 ## Pembaruan Aplikasi
 

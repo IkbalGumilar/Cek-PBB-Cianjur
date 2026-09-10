@@ -50,9 +50,10 @@ class BankOption {
 
 /// Satu baris grup pada modul Pembayaran Kolektif (`m179`) — BEDA modul dari
 /// Monitoring Wilayah (`mMonitoringWilayahV3`). Yang bisa diubah dari sini
-/// hanya BUAT grup ([StaffPortalClient.createKolektifGroup]) dan HAPUS grup
-/// ([StaffPortalClient.deleteKolektifGroup]); Kelola Member, Finalkan, dan
-/// Generate VA sengaja tidak dibuat karena membuat kode bayar sungguhan.
+/// hanya BUAT grup ([StaffPortalClient.createKolektifGroup]), HAPUS grup
+/// ([StaffPortalClient.deleteKolektifGroup]), dan FINALKAN grup
+/// ([StaffPortalClient.finalkanKolektifGroup]); Generate VA sengaja tidak
+/// dibuat karena membuat kode bayar sungguhan.
 class KolektifGroup {
   /// `CPM_CG_ID` dari kolom Aksi — wajib untuk aksi hapus.
   final String id;
@@ -1052,6 +1053,45 @@ class StaffPortalClient {
       kecamatanCode: kecamatanCode,
       kelurahanCode: kelurahanCode,
     );
+  }
+
+  /// FINALKAN grup kolektif — replika fungsi `finalkan()` pada halaman asli.
+  ///
+  /// Aksi ini mengunci grup dan menerbitkan kode bayar, sehingga token dibaca
+  /// ulang dari halaman terbaru dan ID/user dikirim persis seperti AJAX asli.
+  Future<KolektifActionResult> finalkanKolektifGroup({
+    required String groupId,
+  }) async {
+    if (groupId.trim().isEmpty) {
+      return const KolektifActionResult(
+        success: false,
+        message:
+            'ID grup tidak terbaca dari daftar, jadi grup tidak difinalkan.',
+      );
+    }
+
+    final html = await _ensureKolektifPage(forceReload: true);
+    final userId = StaffPortalTokenExtractor.extractKolektifUserId(html);
+    final funcMode = StaffPortalTokenExtractor.extractFinalkanFuncMode(html);
+    if (userId == null || funcMode == null) {
+      return const KolektifActionResult(
+        success: false,
+        message:
+            'Token Finalkan tidak terbaca, jadi grup TIDAK difinalkan. '
+            'Sesi mungkin sudah berakhir — masuk ulang lalu coba lagi.',
+      );
+    }
+
+    final response = await _dio.post<String>(
+      '/main.php',
+      data: {'id': groupId.trim(), 'userID': userId, 'funcMode': funcMode},
+      options: Options(
+        contentType: Headers.formUrlEncodedContentType,
+        responseType: ResponseType.plain,
+      ),
+    );
+    _kolektifHtml = null;
+    return _parseKolektifActionJson(response.data ?? '');
   }
 
   Future<KolektifActionResult> _simpanKolektifGroup({
