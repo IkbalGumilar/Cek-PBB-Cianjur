@@ -12,6 +12,8 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
   final ThemeController themeController;
   final bool isOperator;
   final VoidCallback onMonitoringPressed;
+  final VoidCallback onDesilPressed;
+  final bool desilSelected;
 
   const AppHeader({
     super.key,
@@ -19,6 +21,8 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
     required this.onModeChanged,
     required this.themeController,
     required this.onMonitoringPressed,
+    required this.onDesilPressed,
+    this.desilSelected = false,
     this.isOperator = false,
   });
 
@@ -47,6 +51,8 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
               activeMode: activeMode,
               onModeChanged: onModeChanged,
               onMonitoringPressed: onMonitoringPressed,
+              onDesilPressed: onDesilPressed,
+              desilSelected: desilSelected,
             );
             final settingsButton = IconButton(
               onPressed: () => _openSettings(context),
@@ -154,18 +160,22 @@ class _ModeMenu extends StatelessWidget {
   final CheckMode activeMode;
   final ValueChanged<CheckMode> onModeChanged;
   final VoidCallback onMonitoringPressed;
+  final VoidCallback onDesilPressed;
+  final bool desilSelected;
 
   const _ModeMenu({
     required this.activeMode,
     required this.onModeChanged,
     required this.onMonitoringPressed,
+    required this.onDesilPressed,
+    required this.desilSelected,
   });
 
   @override
   Widget build(BuildContext context) {
     final chips = <Widget>[
       ...CheckMode.values.map((mode) {
-        final selected = mode == activeMode;
+        final selected = !desilSelected && mode == activeMode;
         return ChoiceChip(
           label: Text(mode.label),
           selected: selected,
@@ -188,6 +198,18 @@ class _ModeMenu extends StatelessWidget {
         onSelected: (_) => onMonitoringPressed(),
         labelStyle: const TextStyle(
           color: Colors.white,
+          fontWeight: FontWeight.bold,
+        ),
+        backgroundColor: kHeaderGreen.withValues(alpha: 0.4),
+        side: const BorderSide(color: Colors.white70),
+      ),
+      ChoiceChip(
+        label: const Text('Cek Desil'),
+        selected: desilSelected,
+        onSelected: (_) => onDesilPressed(),
+        selectedColor: Colors.white,
+        labelStyle: TextStyle(
+          color: desilSelected ? kHeaderGreen : Colors.white,
           fontWeight: FontWeight.bold,
         ),
         backgroundColor: kHeaderGreen.withValues(alpha: 0.4),

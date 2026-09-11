@@ -5,6 +5,7 @@ import 'blok_catatan_screen.dart';
 import 'blok_data_store.dart';
 import 'check_form_view.dart';
 import 'check_mode.dart';
+import 'desil/desil_view.dart';
 import 'import_view.dart';
 import 'monitoring_hub_screen.dart';
 import 'operator_mode_store.dart';
@@ -16,7 +17,7 @@ import 'update_screen.dart';
 import 'wilayah_kerja_picker.dart';
 import 'wilayah_kerja_store.dart';
 
-enum _ActiveView { check, import }
+enum _ActiveView { check, import, desil }
 
 class MainShell extends StatefulWidget {
   final ThemeController themeController;
@@ -211,6 +212,8 @@ class _MainShellState extends State<MainShell> {
         themeController: widget.themeController,
         isOperator: _isOperator,
         onMonitoringPressed: _openMonitoring,
+        onDesilPressed: () => setState(() => _view = _ActiveView.desil),
+        desilSelected: _view == _ActiveView.desil,
       ),
       body: _view == _ActiveView.check
           ? CheckFormView(
@@ -222,6 +225,8 @@ class _MainShellState extends State<MainShell> {
               initialWilayah: _prefillWilayah,
               initialTahun: _prefillTahun,
             )
+          : _view == _ActiveView.desil
+          ? const DesilView()
           : _ImportWithBack(mode: _mode, onBack: _backToCheck),
       floatingActionButton: _view == _ActiveView.check
           ? _BukuCatatanButton(onPressed: _openBukuCatatan)

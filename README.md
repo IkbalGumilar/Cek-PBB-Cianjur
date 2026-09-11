@@ -26,6 +26,7 @@ Aplikasi untuk membantu staf desa/kelurahan di Kabupaten Cianjur mengecek dan me
 - **Buku Catatan Blok** — rekap pembayaran per blok/wilayah kerja, dengan filter tahun & urutan, cetak ulang bukti bayar, hapus baris yang salah tercatat, total otomatis, dan ekspor ke PDF/Excel/CSV
 - **Backup harian otomatis** — kalau ada data baru, dibackup otomatis setiap hari ke berkas terenkripsi
 - **Monitoring (Portal Staf)** — khusus staf berakun Portal Staf (`cianjurkab.v-tax.id`): login + verifikasi MFA, lihat Monitoring Wilayah (Sudah/Belum Bayar, Realisasi, Piutang, Sudah/Belum Bayar Kolektif, Rangking Realisasi) dan kelola Pembayaran Kolektif (lihat daftar, tambah grup, kelola anggota, hapus grup), dengan hasil yang bisa diunduh/dibagikan/dicetak sebagai PDF/Excel/CSV — lihat [Monitoring (Portal Staf)](#8-monitoring-portal-staf)
+- **Cek Desil & Bansos** — cek data DTSEN Kemensos dengan NIK 16 digit dan captcha, lalu lihat desil serta status Sembako, PKH, PBI-JK, dan KPD
 - **Periksa Pembaruan dalam aplikasi** — cek versi terbaru dari rilis GitHub lengkap dengan catatan pembaruannya, lihat [Pembaruan Aplikasi](#pembaruan-aplikasi)
 - Semua dokumen (hasil cek, bukti bayar, laporan, backup) tersimpan di satu folder: `Dokumen/Cek PBB Cianjur` (Android) atau `Downloads/Cek PBB Cianjur` (Windows/Linux)
 
