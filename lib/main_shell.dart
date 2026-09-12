@@ -7,6 +7,7 @@ import 'check_form_view.dart';
 import 'check_mode.dart';
 import 'desil/desil_view.dart';
 import 'import_view.dart';
+import 'kendaraan/kendaraan_view.dart';
 import 'monitoring_hub_screen.dart';
 import 'operator_mode_store.dart';
 import 'staff_login_screen.dart';
@@ -17,7 +18,7 @@ import 'update_screen.dart';
 import 'wilayah_kerja_picker.dart';
 import 'wilayah_kerja_store.dart';
 
-enum _ActiveView { check, import, desil }
+enum _ActiveView { check, import, desil, kendaraan }
 
 class MainShell extends StatefulWidget {
   final ThemeController themeController;
@@ -213,7 +214,9 @@ class _MainShellState extends State<MainShell> {
         isOperator: _isOperator,
         onMonitoringPressed: _openMonitoring,
         onDesilPressed: () => setState(() => _view = _ActiveView.desil),
+        onKendaraanPressed: () => setState(() => _view = _ActiveView.kendaraan),
         desilSelected: _view == _ActiveView.desil,
+        kendaraanSelected: _view == _ActiveView.kendaraan,
       ),
       body: _view == _ActiveView.check
           ? CheckFormView(
@@ -227,6 +230,8 @@ class _MainShellState extends State<MainShell> {
             )
           : _view == _ActiveView.desil
           ? const DesilView()
+          : _view == _ActiveView.kendaraan
+          ? const KendaraanView()
           : _ImportWithBack(mode: _mode, onBack: _backToCheck),
       floatingActionButton: _view == _ActiveView.check
           ? _BukuCatatanButton(onPressed: _openBukuCatatan)

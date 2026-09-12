@@ -13,7 +13,9 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
   final bool isOperator;
   final VoidCallback onMonitoringPressed;
   final VoidCallback onDesilPressed;
+  final VoidCallback onKendaraanPressed;
   final bool desilSelected;
+  final bool kendaraanSelected;
 
   const AppHeader({
     super.key,
@@ -22,7 +24,9 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
     required this.themeController,
     required this.onMonitoringPressed,
     required this.onDesilPressed,
+    required this.onKendaraanPressed,
     this.desilSelected = false,
+    this.kendaraanSelected = false,
     this.isOperator = false,
   });
 
@@ -52,7 +56,9 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
               onModeChanged: onModeChanged,
               onMonitoringPressed: onMonitoringPressed,
               onDesilPressed: onDesilPressed,
+              onKendaraanPressed: onKendaraanPressed,
               desilSelected: desilSelected,
+              kendaraanSelected: kendaraanSelected,
             );
             final settingsButton = IconButton(
               onPressed: () => _openSettings(context),
@@ -161,21 +167,26 @@ class _ModeMenu extends StatelessWidget {
   final ValueChanged<CheckMode> onModeChanged;
   final VoidCallback onMonitoringPressed;
   final VoidCallback onDesilPressed;
+  final VoidCallback onKendaraanPressed;
   final bool desilSelected;
+  final bool kendaraanSelected;
 
   const _ModeMenu({
     required this.activeMode,
     required this.onModeChanged,
     required this.onMonitoringPressed,
     required this.onDesilPressed,
+    required this.onKendaraanPressed,
     required this.desilSelected,
+    required this.kendaraanSelected,
   });
 
   @override
   Widget build(BuildContext context) {
     final chips = <Widget>[
       ...CheckMode.values.map((mode) {
-        final selected = !desilSelected && mode == activeMode;
+        final selected =
+            !desilSelected && !kendaraanSelected && mode == activeMode;
         return ChoiceChip(
           label: Text(mode.label),
           selected: selected,
@@ -198,6 +209,18 @@ class _ModeMenu extends StatelessWidget {
         onSelected: (_) => onMonitoringPressed(),
         labelStyle: const TextStyle(
           color: Colors.white,
+          fontWeight: FontWeight.bold,
+        ),
+        backgroundColor: kHeaderGreen.withValues(alpha: 0.4),
+        side: const BorderSide(color: Colors.white70),
+      ),
+      ChoiceChip(
+        label: const Text('Cek Kendaraan'),
+        selected: kendaraanSelected,
+        onSelected: (_) => onKendaraanPressed(),
+        selectedColor: Colors.white,
+        labelStyle: TextStyle(
+          color: kendaraanSelected ? kHeaderGreen : Colors.white,
           fontWeight: FontWeight.bold,
         ),
         backgroundColor: kHeaderGreen.withValues(alpha: 0.4),

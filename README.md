@@ -26,7 +26,8 @@ Aplikasi untuk membantu staf desa/kelurahan di Kabupaten Cianjur mengecek dan me
 - **Buku Catatan Blok** — rekap pembayaran per blok/wilayah kerja, dengan filter tahun & urutan, cetak ulang bukti bayar, hapus baris yang salah tercatat, total otomatis, dan ekspor ke PDF/Excel/CSV
 - **Backup harian otomatis** — kalau ada data baru, dibackup otomatis setiap hari ke berkas terenkripsi
 - **Monitoring (Portal Staf)** — khusus staf berakun Portal Staf (`cianjurkab.v-tax.id`): login + verifikasi MFA, lihat Monitoring Wilayah (Sudah/Belum Bayar, Realisasi, Piutang, Sudah/Belum Bayar Kolektif, Rangking Realisasi) dan kelola Pembayaran Kolektif (lihat daftar, tambah grup, kelola anggota, hapus grup), dengan hasil yang bisa diunduh/dibagikan/dicetak sebagai PDF/Excel/CSV — lihat [Monitoring (Portal Staf)](#8-monitoring-portal-staf)
-- **Cek Desil & Bansos** — cek data DTSEN Kemensos dengan NIK 16 digit dan captcha, lalu lihat desil serta status Sembako, PKH, PBI-JK, dan KPD
+- **Cek Desil & Bansos** — cek data DTSEN Kemensos dengan NIK 16 digit dan captcha, lalu lihat desil serta status Sembako, PKH, PBI-JK, dan KPD. NIK bisa diketik manual atau dipindai dari KTP/KK memakai OCR lokal *khusus Android*; gambar tidak dikirim ke Claude atau layanan OCR cloud.
+- **Cek Kendaraan (Eksperimental)** — cek informasi kendaraan dan rincian PKB/PNBP Jawa Barat dari tab **Cek Kendaraan** di sebelah Monitoring. Form mengikuti format layanan resmi (huruf depan, angka, huruf belakang) dan hasil ditampilkan dalam kartu kendaraan, masa pajak, serta biaya. Plat dapat dipindai dengan OCR lokal di Android/iOS; gambar tidak dikirim ke cloud. Akses data kendaraan masih bergantung pada jaringan yang dapat menjangkau layanan BAPENDA atau relay pengembangan.
 - **Periksa Pembaruan dalam aplikasi** — cek versi terbaru dari rilis GitHub lengkap dengan catatan pembaruannya, lihat [Pembaruan Aplikasi](#pembaruan-aplikasi)
 - Semua dokumen (hasil cek, bukti bayar, laporan, backup) tersimpan di satu folder: `Dokumen/Cek PBB Cianjur` (Android) atau `Downloads/Cek PBB Cianjur` (Windows/Linux)
 
@@ -143,6 +144,37 @@ Tahun pajak dan buku yang dipakai adalah yang tertulis di layar Kelola Anggota, 
 Saat menghapus grup, **Alasan Penghapusan** bisa dipilih dari beberapa alasan siap pakai yang langsung mengisi kolomnya (dan masih bisa disunting) — alasan itu tersimpan permanen di log pemerintah, jadi kalimat yang seragam lebih berguna daripada ketikan seadanya.
 
 **Finalkan** tersedia dari bawah ringkasan Total Bayar pada layar Kelola Anggota. Aksi ini mengunci grup dan menerbitkan kode bayar sungguhan, sehingga selalu meminta konfirmasi. Yang **tidak** tersedia di aplikasi adalah **Generate VA** serta penambahan **massal** — di sistem aslinya, mengosongkan kolom NOP lalu menekan tambah akan memasukkan seluruh NOP yang belum bayar di satu kelurahan sekaligus; aplikasi ini selalu mengirim NOP yang tertulis, termasuk lewat unggah berkas, sehingga jalur itu tertutup.
+
+### 9. Cek Desil & Bansos
+
+Pilih chip **Cek Desil** di header, lalu isi NIK 16 digit dan captcha dari layanan resmi Kemensos.
+
+- Kolom NIK hanya menerima angka dan menampilkan peringatan jika belum tepat 16 digit.
+- Setelah digit ke-16 selesai diketik, fokus berpindah otomatis ke kolom captcha. Menekan Enter pada NIK yang belum lengkap juga menampilkan peringatan yang sama.
+- Tombol **Scan NIK** memakai OCR lokal di perangkat Android. Foto KTP, KK, atau dokumen lain tidak diunggah ke internet.
+- OCR membaca kandidat angka yang mirip, termasuk koreksi karakter seperti `d/b/o/q/s/l` dan angka yang dapat tertukar. Kandidat diberi peringkat berdasarkan konteks tulisan NIK serta struktur tanggal NIK.
+- Jika hasil OCR hanya menghasilkan satu kandidat, NIK langsung diisi. Jika beberapa kandidat masih mungkin, pilih angka yang sesuai pada dialog **Pilih NIK**. NIK hasil OCR diberi peringatan kuning agar dicocokkan lagi dengan dokumen asli.
+- Menekan **Cari Data** menghapus peringatan OCR. Jika captcha salah atau kedaluwarsa, captcha diperbarui dan keyboard dibuka kembali. Jika data tidak ditemukan atau layanan mengalami gangguan, captcha tetap diperbarui tetapi keyboard tidak dipaksa terbuka supaya pesan hasil tetap terlihat.
+- Jika captcha kurang jelas, tekan **Ganti Captcha**. Hasil yang berhasil menampilkan desil, status Sembako, PKH, PBI-JK, dan KPD.
+
+OCR NIK menggunakan Google ML Kit yang tersedia pada Android/iOS. Karena aplikasi ini saat ini merilis Android, Windows, dan Linux, OCR NIK digunakan di Android; pada Windows/Linux NIK tetap dapat dimasukkan secara manual.
+
+### 10. Cek Kendaraan Bermotor (Eksperimental)
+
+Pilih chip **Cek Kendaraan**, isi tiga bagian nomor polisi, pilih warna TNKB, lalu tekan **Lihat Info**. Format yang dikirim ke layanan resmi adalah `F 6456 DFG` untuk input `F / 6456 / DGF`.
+
+Modul ini memakai endpoint PKB yang dipanggil halaman resmi BAPENDA dan menampilkan data kendaraan, masa berlaku pajak/STNK, rincian PKB/PNBP, total, serta keterangan pembayaran. Pesan **Data kendaraan tidak ditemukan**, batas permintaan, dan gangguan jaringan dibedakan agar tindakan pengguna jelas. Jika jaringan perangkat tidak dapat menjangkau endpoint lama, aplikasi menyediakan fallback **WhatsApp Bapenda** dan **Portal Jabar**.
+
+Tombol **Scan Plat (OCR offline)** dapat membaca format kode wilayah, angka, dan huruf belakang dari foto kamera atau galeri. Jika hasil OCR memiliki lebih dari satu kemungkinan, pilih plat yang sesuai pada dialog. OCR juga memperkirakan permukaan TNKB hitam atau putih; keduanya dipetakan ke kategori kendaraan pribadi (`kd_plat=1`) dan hasilnya selalu diberi peringatan untuk diperiksa ulang. Pada Windows/Linux, isi nomor polisi secara manual karena Google ML Kit tidak menyediakan mesin OCR lokal untuk desktop pada modul ini.
+
+Halaman web yang disimpan sebagai HTML adalah snapshot aplikasi React. Snapshot tersebut memuat konfigurasi autentikasi publik di JavaScript dan reCAPTCHA hanya dipakai untuk mengaktifkan tombol web; tokennya tidak dikirim pada request data PKB. Aplikasi tidak menyimpan token captcha atau mengunggahnya lewat Dio.
+
+Untuk menguji perangkat yang tidak dapat menjangkau host API lama, tersedia relay
+lokal khusus pengembangan di `tool/kendaraan_relay.py`. Jalankan relay di komputer,
+lalu hubungkan portnya dengan `adb reverse tcp:8787 tcp:8787` dan build debug dengan
+`--dart-define=KENDARAAN_API_BASE_URL=http://127.0.0.1:8787`. Relay hanya mendengar
+di localhost dan tidak boleh dipasang sebagai layanan publik; build biasa tetap
+menggunakan endpoint resmi.
 
 ## Pembaruan Aplikasi
 
