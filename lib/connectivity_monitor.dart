@@ -17,7 +17,8 @@ class ConnectivityMonitor {
       'https://cektagihan.cianjurkab.v-tax.id/portlet.php';
   static const _probeUrl = 'https://www.gstatic.com/generate_204';
   static const _slowThreshold = Duration(seconds: 3);
-  static const _checkInterval = Duration(seconds: 20);
+  static const _normalCheckInterval = Duration(seconds: 90);
+  static const _retryCheckInterval = Duration(seconds: 30);
 
   final status = ValueNotifier<NetworkStatus>(NetworkStatus.normal);
 
@@ -25,21 +26,52 @@ class ConnectivityMonitor {
   Timer? _timer;
   StreamSubscription<List<ConnectivityResult>>? _subscription;
   bool _checking = false;
+  bool _isPaused = false;
 
   void start() {
-    _subscription = Connectivity().onConnectivityChanged.listen(
+    _isPaused = false;
+    _subscription ??= Connectivity().onConnectivityChanged.listen(
       (_) => _check(),
     );
-    _timer = Timer.periodic(_checkInterval, (_) => _check());
+    _scheduleNextCheck(_normalCheckInterval);
     // Ditunda sebentar supaya tidak rebutan koneksi dengan permintaan
     // captcha yang juga jalan otomatis saat layar pertama dibuka.
-    Future.delayed(const Duration(seconds: 3), _check);
+    Future.delayed(const Duration(seconds: 3), () {
+      if (!_isPaused) _check();
+    });
+  }
+
+  /// Pause polling saat aplikasi masuk ke background agar tidak memboroskan
+  /// baterai dan kuota data untuk ping server yang tidak terlihat pengguna.
+  void pause() {
+    _isPaused = true;
+    _timer?.cancel();
+    _timer = null;
+  }
+
+  /// Resume polling saat aplikasi kembali ke foreground.
+  void resume() {
+    if (!_isPaused) return;
+    _isPaused = false;
+    checkNow();
+    _scheduleNextCheck(_normalCheckInterval);
+  }
+
+  void _scheduleNextCheck(Duration interval) {
+    _timer?.cancel();
+    _timer = Timer(interval, () {
+      if (!_isPaused) {
+        _check();
+      }
+    });
   }
 
   void dispose() {
     _timer?.cancel();
+    _timer = null;
     _subscription?.cancel();
-    status.dispose();
+    _subscription = null;
+    status.value = NetworkStatus.normal;
   }
 
   /// Paksa cek ulang sekarang juga — dipanggil saat app kembali ke
@@ -49,21 +81,30 @@ class ConnectivityMonitor {
   void checkNow() => unawaited(_check());
 
   Future<void> _check() async {
-    if (_checking) return;
+    if (_checking || _isPaused) return;
     _checking = true;
     try {
       final connectivity = await Connectivity().checkConnectivity();
-      if (connectivity.contains(ConnectivityResult.none)) {
+      if (connectivity.contains(ConnectivityResult.none) ||
+          connectivity.isEmpty) {
         status.value = NetworkStatus.noInternet;
+        _scheduleNextCheck(_retryCheckInterval);
         return;
       }
 
       if (!await _probe(_probeUrl)) {
         status.value = NetworkStatus.noInternet;
+        _scheduleNextCheck(_retryCheckInterval);
         return;
       }
 
-      status.value = await _probeTarget();
+      final targetStatus = await _probeTarget();
+      status.value = targetStatus;
+      if (targetStatus == NetworkStatus.serverError) {
+        _scheduleNextCheck(_retryCheckInterval);
+      } else {
+        _scheduleNextCheck(_normalCheckInterval);
+      }
     } finally {
       _checking = false;
     }

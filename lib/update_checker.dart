@@ -165,7 +165,7 @@ class UpdateChecker {
   static String? _versionFromTag(Object? tag) {
     if (tag is! String) return null;
     final version = tag.replaceFirst(RegExp(r'^v'), '');
-    return RegExp(r'^\d+\.\d+\.\d+(?:-alpha\.\d+)?$').hasMatch(version)
+    return RegExp(r'^\d+\.\d+\.\d+(?:-(?:alpha|beta)(?:\.?\d+)?)?$').hasMatch(version)
         ? version
         : null;
   }
@@ -187,14 +187,26 @@ class UpdateChecker {
 
   static List<int> _parseVersion(String version) {
     final match = RegExp(
-      r'^(\d+)\.(\d+)\.(\d+)(?:-alpha\.(\d+))?$',
+      r'^(\d+)\.(\d+)\.(\d+)(?:-(alpha|beta)(?:\.?(\d+))?)?$',
     ).firstMatch(version);
     if (match == null) return [0, 0, 0, 0];
+
+    final stage = match.group(4);
+    final numStr = match.group(5);
+    final prereleaseNum = numStr != null ? int.parse(numStr) : 0;
+
+    int prereleaseRank = -1;
+    if (stage == 'alpha') {
+      prereleaseRank = 1000 + prereleaseNum;
+    } else if (stage == 'beta') {
+      prereleaseRank = 2000 + prereleaseNum;
+    }
+
     return [
       int.parse(match.group(1)!),
       int.parse(match.group(2)!),
       int.parse(match.group(3)!),
-      match.group(4) == null ? -1 : int.parse(match.group(4)!),
+      prereleaseRank,
     ];
   }
 }

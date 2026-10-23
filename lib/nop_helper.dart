@@ -57,3 +57,11 @@ String nopBlok(String fullNop) =>
 /// Segmen nomor wilayah (4 digit) dari NOP lengkap 18 digit.
 String nopWilayah(String fullNop) =>
     fullNop.length == 18 ? fullNop.substring(13, 17) : '';
+
+/// Memformat 18 digit NOP menjadi format resmi standar Bapenda:
+/// 32.05.200.004.026-0038.0
+String formatNop(String nop) {
+  final d = nop.replaceAll(RegExp(r'[^0-9]'), '');
+  if (d.length != 18) return nop;
+  return '${d.substring(0, 2)}.${d.substring(2, 4)}.${d.substring(4, 7)}.${d.substring(7, 10)}.${d.substring(10, 13)}-${d.substring(13, 17)}.${d.substring(17, 18)}';
+}

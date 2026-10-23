@@ -20,4 +20,15 @@ void main() {
       isFalse,
     );
   });
+
+  test('menganggap versi beta lebih baru daripada alpha', () {
+    expect(
+      UpdateChecker.isNewerVersion('0.1.0-beta', '0.1.0-alpha.5'),
+      isTrue,
+    );
+    expect(
+      UpdateChecker.isNewerVersion('0.1.0-beta.2', '0.1.0-beta.1'),
+      isTrue,
+    );
+  });
 }

@@ -28,6 +28,8 @@ class CheckFormView extends StatefulWidget {
   final String? initialBlok;
   final String? initialWilayah;
   final String? initialTahun;
+  final ScrollController? scrollController;
+  final PbbClient? client;
 
   const CheckFormView({
     super.key,
@@ -37,6 +39,8 @@ class CheckFormView extends StatefulWidget {
     this.initialBlok,
     this.initialWilayah,
     this.initialTahun,
+    this.scrollController,
+    this.client,
   });
 
   @override
@@ -44,14 +48,15 @@ class CheckFormView extends StatefulWidget {
 }
 
 class _CheckFormViewState extends State<CheckFormView> {
-  final _client = PbbClient();
+  late final PbbClient _client;
   final _nopScanner = NopScanner();
   final _blokController = TextEditingController();
   final _wilayahController = TextEditingController();
   final _tahunController = TextEditingController(text: '2026');
   final _captchaController = TextEditingController();
   final _captchaFocusNode = FocusNode();
-  final _scrollController = ScrollController();
+  late final ScrollController _scrollController =
+      widget.scrollController ?? ScrollController();
 
   Uint8List? _captchaBytes;
   bool _loadingCaptcha = false;
@@ -65,6 +70,7 @@ class _CheckFormViewState extends State<CheckFormView> {
   @override
   void initState() {
     super.initState();
+    _client = widget.client ?? PbbClient();
     _blokController.text = widget.initialBlok ?? '';
     _wilayahController.text = widget.initialWilayah ?? '';
     if (widget.initialTahun != null) {
@@ -77,6 +83,9 @@ class _CheckFormViewState extends State<CheckFormView> {
   void didUpdateWidget(CheckFormView oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.mode != widget.mode) {
+      if (_scrollController.hasClients) {
+        _scrollController.jumpTo(0);
+      }
       setState(() {
         _statusBayarResult = null;
         _tagihanResult = null;
@@ -93,7 +102,9 @@ class _CheckFormViewState extends State<CheckFormView> {
     _tahunController.dispose();
     _captchaController.dispose();
     _captchaFocusNode.dispose();
-    _scrollController.dispose();
+    if (widget.scrollController == null) {
+      _scrollController.dispose();
+    }
     super.dispose();
   }
 
@@ -317,6 +328,18 @@ class _CheckFormViewState extends State<CheckFormView> {
     }
   }
 
+  void _scrollAfterResult() {
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (mounted && _scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
   Future<void> _submit() async {
     FocusScope.of(context).unfocus(); // Singkirkan keyboard saat mulai cek
 
@@ -325,17 +348,25 @@ class _CheckFormViewState extends State<CheckFormView> {
       wilayah: _wilayahController.text,
     );
     final tahun = _tahunController.text.trim();
-    final captcha = _captchaController.text.trim();
+    final manualCaptcha = _captchaController.text.trim();
 
     if (nop.isEmpty ||
-        captcha.isEmpty ||
-        (widget.mode == CheckMode.statusBayar && tahun.isEmpty)) {
+        (widget.mode == CheckMode.statusBayar && tahun.isEmpty) ||
+        manualCaptcha.isEmpty) {
       setState(
         () => _errorText = 'Lengkapi dulu semua field yang wajib diisi.',
       );
       return;
     }
 
+    await _submitManual(nop: nop, tahun: tahun, captcha: manualCaptcha);
+  }
+
+  Future<void> _submitManual({
+    required String nop,
+    required String tahun,
+    required String captcha,
+  }) async {
     setState(() {
       _submitting = true;
       _errorText = null;
@@ -364,21 +395,10 @@ class _CheckFormViewState extends State<CheckFormView> {
         if (!mounted) return;
         setState(() => _tagihanResult = result);
       }
-      
+
       _captchaController.clear();
       await _loadCaptcha();
-      
-      if (!mounted) return;
-      // Scroll ke bawah otomatis setelah hasil muncul
-      Future.delayed(const Duration(milliseconds: 100), () {
-        if (mounted && _scrollController.hasClients) {
-          _scrollController.animateTo(
-            _scrollController.position.maxScrollExtent,
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeOut,
-          );
-        }
-      });
+      _scrollAfterResult();
     } on CaptchaError catch (e) {
       if (!mounted) return;
       setState(() => _errorText = e.message);
@@ -386,7 +406,7 @@ class _CheckFormViewState extends State<CheckFormView> {
       await Future<void>.delayed(const Duration(seconds: 1));
       if (!mounted) return;
       await _loadCaptcha();
-      if (mounted) _captchaFocusNode.requestFocus(); // Munculkan keyboard lagi kalau captcha salah
+      if (mounted) _captchaFocusNode.requestFocus();
     } catch (e) {
       if (!mounted) return;
       setState(() => _errorText = 'Gagal cek: $e');
@@ -562,11 +582,11 @@ class _CheckFormViewState extends State<CheckFormView> {
                   )
                 : const Text('Captcha belum dimuat'),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           Center(
             child: TextButton.icon(
-              onPressed: _loadingCaptcha ? null : _loadCaptcha,
-              icon: const Icon(Icons.refresh),
+              onPressed: _loadingCaptcha || _submitting ? null : _loadCaptcha,
+              icon: const Icon(Icons.refresh, size: 18),
               label: const Text('Ganti Captcha'),
             ),
           ),
@@ -574,10 +594,17 @@ class _CheckFormViewState extends State<CheckFormView> {
           TextField(
             controller: _captchaController,
             focusNode: _captchaFocusNode,
+            textInputAction: TextInputAction.go,
+            textCapitalization: TextCapitalization.none,
+            autocorrect: false,
+            enableSuggestions: false,
             decoration: const InputDecoration(
               labelText: 'Kode Verifikasi',
+              hintText: '5-6 huruf captcha',
+              helperText: 'Ketik manual kode verifikasi pada gambar di atas',
               border: OutlineInputBorder(),
             ),
+            onSubmitted: (_) => _submitting ? null : _submit(),
           ),
           const SizedBox(height: 16),
           FilledButton(

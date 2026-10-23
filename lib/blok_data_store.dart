@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:csv/csv.dart';
+import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'backup_crypto.dart';
@@ -30,9 +30,129 @@ class BlokDataStore {
 
   List<BlokRecord>? _cache;
 
+  /// Notifier jumlah total catatan agar UI (seperti badge tombol Buku Catatan)
+  /// dapat merespons secara reaktif tanpa perlu I/O disk ulang.
+  final countNotifier = ValueNotifier<int>(0);
+
+  static const initialDhkpRecords = [
+    BlokRecord(
+      namaWajibPajak: 'SUGENG RAHARJO',
+      nop: '320520000402600340',
+      tahunBayar: '2026',
+      tanggalBayar: '',
+      jumlahPbb: 'Rp 102.378',
+      statusBayar: 'Belum Bayar',
+      namaFoto: '320520000402600340.jpg',
+      isTargetPemda: false,
+      catatan: '',
+      luasBumi: '450 m2',
+      luasBangunan: '120 m2',
+      njopBumi: '82.000,00/m2',
+      njopBangunan: '350.000,00/m2',
+      kecamatan: 'MANDE',
+      kelurahan: 'BOBOJONG',
+      alamatObjek: 'JL PASIR PARAHU',
+      alamatWp: 'KP PASIR PARAHU RT 02/05',
+      rtObjek: '002',
+    ),
+    BlokRecord(
+      namaWajibPajak: 'AHMAD SUHADA',
+      nop: '320520000402600350',
+      tahunBayar: '2026',
+      tanggalBayar: '2026-03-15',
+      jumlahPbb: 'Rp 45.000',
+      statusBayar: 'Sudah Bayar',
+      namaFoto: '320520000402600350.jpg',
+      isTargetPemda: false,
+      catatan: 'Lunas via Bank BJB',
+      luasBumi: '210 m2',
+      luasBangunan: '54 m2',
+      njopBumi: '82.000,00/m2',
+      njopBangunan: '250.000,00/m2',
+      kecamatan: 'MANDE',
+      kelurahan: 'BOBOJONG',
+      alamatObjek: 'JL CIKANGKUNG',
+      alamatWp: 'KP CIKANGKUNG',
+      rtObjek: '018',
+    ),
+    BlokRecord(
+      namaWajibPajak: 'SITI ROHMAH',
+      nop: '320520000402600360',
+      tahunBayar: '2026',
+      tanggalBayar: '',
+      jumlahPbb: 'Rp 85.500',
+      statusBayar: 'Blacklist',
+      namaFoto: '320520000402600360.jpg',
+      isTargetPemda: false,
+      catatan: 'Nunggak 6 tahun sejak 2020. Pemilik tidak di lokasi.',
+      luasBumi: '380 m2',
+      luasBangunan: '0 m2',
+      njopBumi: '82.000,00/m2',
+      njopBangunan: '0,00/m2',
+      kecamatan: 'MANDE',
+      kelurahan: 'BOBOJONG',
+      alamatObjek: 'BLOK PASIR',
+      alamatWp: 'KP PASIR PARAHU',
+      rtObjek: '015',
+    ),
+    BlokRecord(
+      namaWajibPajak: 'DUDI KURNIAWAN',
+      nop: '320520000402600370',
+      tahunBayar: '2026',
+      tanggalBayar: '2026-02-20',
+      jumlahPbb: 'Rp 150.000',
+      statusBayar: 'Sudah Bayar',
+      namaFoto: null,
+      isTargetPemda: false,
+      catatan: '',
+      luasBumi: '600 m2',
+      luasBangunan: '150 m2',
+      njopBumi: '82.000,00/m2',
+      njopBangunan: '400.000,00/m2',
+      kecamatan: 'MANDE',
+      kelurahan: 'BOBOJONG',
+      alamatObjek: 'JL UTAMA BOBOJONG',
+      alamatWp: 'KP BOBOJONG TENGAH',
+      rtObjek: '005',
+    ),
+    BlokRecord(
+      namaWajibPajak: 'H ACEP',
+      nop: '320520000402600380',
+      tahunBayar: '2026',
+      tanggalBayar: '',
+      jumlahPbb: 'Rp 320.000',
+      statusBayar: 'Belum Bayar',
+      namaFoto: '320520000402600380.jpg',
+      isTargetPemda: true,
+      catatan: 'Prioritas Penagihan Target Pemda 2026.',
+      luasBumi: '1438 m2',
+      luasBangunan: '0 m2',
+      njopBumi: '82.000,00/m2',
+      njopBangunan: '0,00/m2',
+      kecamatan: 'MANDE',
+      kelurahan: 'BOBOJONG',
+      alamatObjek: 'JL CIKANGKUNG',
+      alamatWp: 'PASIR PARAHU',
+      rtObjek: '019',
+    ),
+  ];
+
   Future<File> _dataFile() async {
     final dir = await getApplicationDocumentsDirectory();
+    if (!await dir.exists()) {
+      await dir.create(recursive: true);
+    }
     return File('${dir.path}/$_dataFileName');
+  }
+
+  void invalidateCache() {
+    _cache = null;
+  }
+
+  @visibleForTesting
+  void resetForTesting() {
+    _cache = null;
+    countNotifier.value = 0;
   }
 
   Future<List<BlokRecord>> loadAll() async {
@@ -40,12 +160,19 @@ class BlokDataStore {
 
     final file = await _dataFile();
     if (!await file.exists()) {
-      _cache = [];
+      _cache = List<BlokRecord>.from(initialDhkpRecords);
+      countNotifier.value = _cache!.length;
+      await _persist(_cache!);
       return _cache!;
     }
 
     final content = await file.readAsString();
     _cache = _parseCsv(content);
+    if (_cache!.isEmpty) {
+      _cache = List<BlokRecord>.from(initialDhkpRecords);
+      await _persist(_cache!);
+    }
+    countNotifier.value = _cache!.length;
     return _cache!;
   }
 
@@ -59,6 +186,35 @@ class BlokDataStore {
       if (row.length < 4) continue;
       final nop = row[1].toString().trim();
       if (nop.length != 18) continue;
+      final status = row.length > 5 && row[5].toString().trim().isNotEmpty
+          ? row[5].toString().trim()
+          : (row[3].toString().trim().isNotEmpty
+              ? 'Sudah Bayar'
+              : 'Belum Bayar');
+      final namaFoto = row.length > 6 && row[6].toString().trim().isNotEmpty
+          ? row[6].toString().trim()
+          : null;
+      final rawTargetPemda = row.length > 7 ? row[7].toString().trim().toLowerCase() : '';
+      final isTargetPemda = rawTargetPemda == '1' ||
+          rawTargetPemda == 'true' ||
+          rawTargetPemda == 'ya' ||
+          rawTargetPemda == 'yes' ||
+          rawTargetPemda.contains('target') ||
+          rawTargetPemda.contains('pemda');
+      final catatan = row.length > 8 ? row[8].toString().trim() : '';
+      final luasBumi = row.length > 9 ? row[9].toString().trim() : '';
+      final luasBangunan = row.length > 10 ? row[10].toString().trim() : '';
+      final njopBumi = row.length > 11 ? row[11].toString().trim() : '';
+      final njopBangunan = row.length > 12 ? row[12].toString().trim() : '';
+      final kecamatan = row.length > 13 && row[13].toString().trim().isNotEmpty
+          ? row[13].toString().trim()
+          : 'MANDE';
+      final kelurahan = row.length > 14 && row[14].toString().trim().isNotEmpty
+          ? row[14].toString().trim()
+          : 'BOBOJONG';
+      final alamatObjek = row.length > 15 ? row[15].toString().trim() : '';
+      final alamatWp = row.length > 16 ? row[16].toString().trim() : '';
+      final rtObjek = row.length > 17 ? row[17].toString().trim() : '';
       records.add(
         BlokRecord(
           namaWajibPajak: row[0].toString().trim(),
@@ -66,6 +222,19 @@ class BlokDataStore {
           tahunBayar: row[2].toString().trim(),
           tanggalBayar: row[3].toString().trim(),
           jumlahPbb: row.length > 4 ? row[4].toString().trim() : '',
+          statusBayar: status,
+          namaFoto: namaFoto,
+          isTargetPemda: isTargetPemda,
+          catatan: catatan,
+          luasBumi: luasBumi,
+          luasBangunan: luasBangunan,
+          njopBumi: njopBumi,
+          njopBangunan: njopBangunan,
+          kecamatan: kecamatan,
+          kelurahan: kelurahan,
+          alamatObjek: alamatObjek,
+          alamatWp: alamatWp,
+          rtObjek: rtObjek,
         ),
       );
     }
@@ -74,27 +243,75 @@ class BlokDataStore {
 
   Future<void> _persist(List<BlokRecord> records) async {
     final rows = <List<String>>[
-      _csvHeader,
+      [
+        ..._csvHeader,
+        'Status Bayar',
+        'Foto',
+        'Target Pemda',
+        'Catatan',
+        'Luas Bumi',
+        'Luas Bangunan',
+        'NJOP Bumi',
+        'NJOP Bangunan',
+        'Kecamatan',
+        'Kelurahan',
+        'Alamat Objek',
+        'Alamat WP',
+        'RT Objek',
+      ],
       for (final r in records)
-        [r.namaWajibPajak, r.nop, r.tahunBayar, r.tanggalBayar, r.jumlahPbb],
+        [
+          r.namaWajibPajak,
+          r.nop,
+          r.tahunBayar,
+          r.tanggalBayar,
+          r.jumlahPbb,
+          r.statusBayar,
+          r.namaFoto ?? '',
+          r.isTargetPemda ? '1' : '0',
+          r.catatan,
+          r.luasBumi,
+          r.luasBangunan,
+          r.njopBumi,
+          r.njopBangunan,
+          r.kecamatan,
+          r.kelurahan,
+          r.alamatObjek,
+          r.alamatWp,
+          r.rtObjek,
+        ],
     ];
     final file = await _dataFile();
     await file.writeAsString(Csv().encode(rows));
     _cache = records;
+    countNotifier.value = records.length;
   }
 
-  /// Simpan/perbarui satu catatan (upsert berdasar NOP+tahun).
-  Future<void> upsert(BlokRecord record) async {
+  /// Simpan/perbarui beberapa catatan sekaligus (upsert berdasar NOP+tahun).
+  /// Menggunakan indexing Map O(N + M) untuk menghindari bottleneck scan O(N * M).
+  Future<void> upsertAll(Iterable<BlokRecord> newRecords) async {
+    if (newRecords.isEmpty) return;
     final records = List<BlokRecord>.from(await loadAll());
-    final index = records.indexWhere((r) => r.uniqueKey == record.uniqueKey);
-    if (index == -1) {
-      records.add(record);
-    } else {
-      records[index] = record;
+    final keyToIndex = <String, int>{};
+    for (var i = 0; i < records.length; i++) {
+      keyToIndex[records[i].uniqueKey] = i;
+    }
+
+    for (final record in newRecords) {
+      final index = keyToIndex[record.uniqueKey];
+      if (index == null) {
+        keyToIndex[record.uniqueKey] = records.length;
+        records.add(record);
+      } else {
+        records[index] = record;
+      }
     }
     await _persist(records);
     await BlokBackupScheduler.instance.markDirty();
   }
+
+  /// Simpan/perbarui satu catatan (upsert berdasar NOP+tahun).
+  Future<void> upsert(BlokRecord record) => upsertAll([record]);
 
   /// Hapus satu catatan berdasar [BlokRecord.uniqueKey] (NOP+tahun) — dipakai
   /// untuk mengoreksi baris yang salah tercatat (mis. salah impor), beda dari
@@ -142,7 +359,10 @@ class BlokDataStore {
     return sortBlokRecords(records, sortBy);
   }
 
-  Future<int> get totalCount async => (await loadAll()).length;
+  Future<int> get totalCount async {
+    if (_cache != null) return _cache!.length;
+    return (await loadAll()).length;
+  }
 
   /// Hapus seluruh data Buku Catatan Blok — dipakai saat mengganti wilayah
   /// kerja (data lama tidak relevan lagi untuk wilayah yang baru). Backup
@@ -237,17 +457,7 @@ class BlokDataStore {
     final imported = _parseCsv(content);
     if (imported.isEmpty) return 0;
 
-    final records = List<BlokRecord>.from(await loadAll());
-    for (final record in imported) {
-      final index = records.indexWhere((r) => r.uniqueKey == record.uniqueKey);
-      if (index == -1) {
-        records.add(record);
-      } else {
-        records[index] = record;
-      }
-    }
-    await _persist(records);
-    await BlokBackupScheduler.instance.markDirty();
+    await upsertAll(imported);
     return imported.length;
   }
 

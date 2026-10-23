@@ -1,0 +1,163 @@
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:archive/archive.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'package:cek_pbb_app/blok_data_store.dart';
+import 'package:cek_pbb_app/blok_record.dart';
+import 'package:cek_pbb_app/dkhp_package_helper.dart';
+
+void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  late Directory tempDir;
+
+  setUp(() async {
+    SharedPreferences.setMockInitialValues({});
+    tempDir = await Directory.systemTemp.createTemp('dkhp_test_');
+    BlokDataStore.instance.resetForTesting();
+    DhkpPackageHelper.resetForTesting();
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+      const MethodChannel('plugins.flutter.io/path_provider'),
+      (MethodCall methodCall) async {
+        return tempDir.path;
+      },
+    );
+  });
+
+  tearDown(() async {
+    BlokDataStore.instance.resetForTesting();
+    DhkpPackageHelper.resetForTesting();
+    if (await tempDir.exists()) {
+      await tempDir.delete(recursive: true);
+    }
+  });
+
+  test('unpackDkhp mendukung berkas .dkhp terenkripsi AES-256-CBC, Target Pemda, Blacklist, dan Catatan', () async {
+    // 1. Buat records dengan metadata lengkap
+    const recordsToPack = [
+      BlokRecord(
+        namaWajibPajak: 'HJ. ETI ROHAETI',
+        nop: '320520000402600380',
+        tahunBayar: '2026',
+        tanggalBayar: '',
+        jumlahPbb: 'Rp 320.000',
+        statusBayar: 'Belum Bayar',
+        namaFoto: '320520000402600380.jpg',
+        isTargetPemda: true,
+        catatan: 'Prioritas Penagihan Target Pemda 2026.',
+      ),
+      BlokRecord(
+        namaWajibPajak: 'SITI ROHMAH',
+        nop: '320520000402600360',
+        tahunBayar: '2026',
+        tanggalBayar: '',
+        jumlahPbb: 'Rp 85.500',
+        statusBayar: 'Blacklist',
+        namaFoto: '320520000402600360.jpg',
+        isTargetPemda: false,
+        catatan: 'Nunggak 6 tahun sejak 2020.',
+      ),
+    ];
+
+    // Buat foto dummy di direktori temp
+    final photosDir = Directory('${tempDir.path}/input_photos');
+    await photosDir.create();
+    final photoFile1 = File('${photosDir.path}/320520000402600380.jpg');
+    await photoFile1.writeAsBytes([10, 20, 30, 40]);
+    final photoFile2 = File('${photosDir.path}/320520000402600360.jpg');
+    await photoFile2.writeAsBytes([50, 60, 70, 80]);
+
+    // 2. Pack ke berkas .dkhp terenkripsi
+    final packagePath = '${tempDir.path}/paket_rahasia.dkhp';
+    final packedFile = await DhkpPackageHelper.packDkhp(
+      outputPath: packagePath,
+      records: recordsToPack,
+      photosDir: photosDir,
+      encrypt: true,
+    );
+
+    expect(await packedFile.exists(), isTrue);
+    final packedBytes = await packedFile.readAsBytes();
+    expect(DhkpCrypto.isEncrypted(packedBytes), isTrue);
+
+    // 3. Unpack dan verifikasi data
+    final unpackedRecords = await DhkpPackageHelper.unpackDkhp(packagePath);
+
+    expect(unpackedRecords.length, 2);
+
+    // Record 1: Target Pemda
+    final r1 = unpackedRecords[0];
+    expect(r1.nop, '320520000402600380');
+    expect(r1.namaWajibPajak, 'HJ. ETI ROHAETI');
+    expect(r1.isTargetPemda, isTrue);
+    expect(r1.catatan, 'Prioritas Penagihan Target Pemda 2026.');
+    expect(r1.isPaid, isFalse);
+    expect(r1.namaFoto, '320520000402600380.jpg');
+
+    // Record 2: Blacklist
+    final r2 = unpackedRecords[1];
+    expect(r2.nop, '320520000402600360');
+    expect(r2.namaWajibPajak, 'SITI ROHMAH');
+    expect(r2.isTargetPemda, isFalse);
+    expect(r2.isBlacklist, isTrue);
+    expect(r2.catatan, 'Nunggak 6 tahun sejak 2020.');
+
+    // Verifikasi foto tersimpan di folder lokal dhkp_photos
+    final photoFound = await DhkpPackageHelper.findPhotoForNop('320520000402600380');
+    expect(photoFound, isNotNull);
+    expect(await photoFound!.exists(), isTrue);
+  });
+
+  test('unpackDkhp tetap kompatibel dengan berkas .dkhp atau .zip lama (tanpa enkripsi)', () async {
+    final archive = Archive();
+
+    const csvContent = '''Nama WP,NOP,Tahun Bayar,Tanggal Bayar,Jumlah PBB,Status Bayar,Foto,Target Pemda,Catatan
+SUGENG RAHARJO,320520000402600340,2026,,Rp 102.378,Belum Bayar,320520000402600340.jpg,0,
+AHMAD SUHADA,320520000402600350,2026,2026-03-15,Rp 45.000,Sudah Bayar,320520000402600350.jpg,0,Lunas transfer
+''';
+    final csvBytes = utf8.encode(csvContent);
+    archive.addFile(ArchiveFile('data.csv', csvBytes.length, csvBytes));
+
+    final zipBytes = ZipEncoder().encode(archive)!;
+    final packageFile = File('${tempDir.path}/legacy.dkhp');
+    await packageFile.writeAsBytes(zipBytes);
+
+    expect(DhkpCrypto.isEncrypted(zipBytes), isFalse);
+
+    final records = await DhkpPackageHelper.unpackDkhp(packageFile.path);
+    expect(records.length, 2);
+    expect(records[0].nop, '320520000402600340');
+    expect(records[1].catatan, 'Lunas transfer');
+  });
+
+  test('interoperabilitas: paket .dkhp yang dibuat oleh script Python tool/make_dkhp_package.py didekripsi sempurna oleh aplikasi', () async {
+    final csvFile = File('${tempDir.path}/cli_data.csv');
+    await csvFile.writeAsString('''Nama WP,NOP,Tahun Bayar,Tanggal Bayar,Jumlah PBB,Status Bayar,Foto,Target Pemda,Catatan
+KUSNADI,320520000402600390,2026,,Rp 210.000,Belum Bayar,,1,Anomali batas tanah
+''');
+    final outDkhp = '${tempDir.path}/from_python.dkhp';
+    final result = await Process.run('python3', [
+      'tool/make_dkhp_package.py',
+      '--data',
+      csvFile.path,
+      '--output',
+      outDkhp,
+    ]);
+    expect(result.exitCode, 0);
+
+    final fileBytes = await File(outDkhp).readAsBytes();
+    expect(DhkpCrypto.isEncrypted(fileBytes), isTrue);
+
+    final records = await DhkpPackageHelper.unpackDkhp(outDkhp);
+    expect(records.length, 1);
+    expect(records[0].namaWajibPajak, 'KUSNADI');
+    expect(records[0].nop, '320520000402600390');
+    expect(records[0].isTargetPemda, isTrue);
+    expect(records[0].catatan, 'Anomali batas tanah');
+  });
+}

@@ -1,3 +1,4 @@
+import 'dart:developer' as developer;
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -9,19 +10,23 @@ import 'kendaraan_client.dart';
 import 'plat_scanner.dart';
 
 class KendaraanView extends StatefulWidget {
-  const KendaraanView({super.key});
+  const KendaraanView({super.key, this.client, this.scrollController});
+
+  final KendaraanClient? client;
+  final ScrollController? scrollController;
 
   @override
   State<KendaraanView> createState() => _KendaraanViewState();
 }
 
 class _KendaraanViewState extends State<KendaraanView> {
-  final _client = KendaraanClient();
+  late final KendaraanClient _client = widget.client ?? KendaraanClient();
   final _platScanner = PlatScanner();
   final _frontController = TextEditingController();
   final _numberController = TextEditingController();
   final _backController = TextEditingController();
-  final _scrollController = ScrollController();
+  late final ScrollController _scrollController =
+      widget.scrollController ?? ScrollController();
   final _resultTitleKey = GlobalKey();
   final _numberFocus = FocusNode();
   final _backFocus = FocusNode();
@@ -39,7 +44,9 @@ class _KendaraanViewState extends State<KendaraanView> {
     _frontController.dispose();
     _numberController.dispose();
     _backController.dispose();
-    _scrollController.dispose();
+    if (widget.scrollController == null) {
+      _scrollController.dispose();
+    }
     _numberFocus.dispose();
     _backFocus.dispose();
     super.dispose();
@@ -88,7 +95,13 @@ class _KendaraanViewState extends State<KendaraanView> {
           _errorKind = error.kind;
         });
       }
-    } catch (_) {
+    } catch (e, st) {
+      developer.log(
+        'Unexpected error while checking vehicle info',
+        error: e,
+        stackTrace: st,
+        name: 'KendaraanView',
+      );
       if (mounted) {
         setState(() {
           _errorText =

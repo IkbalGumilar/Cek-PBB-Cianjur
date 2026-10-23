@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'app_header.dart';
-import 'blok_record.dart' show formatRibuan;
+import 'currency_format.dart';
 import 'document_preview_screen.dart';
 import 'download_helper.dart';
 import 'kolektif_import_screen.dart';
@@ -11,7 +11,6 @@ import 'kolektif_nop_berkas.dart';
 import 'monitoring/monitoring_result_exporter.dart';
 import 'native_file_helper.dart';
 import 'staff_portal_client.dart';
-import 'tagihan_result.dart' show formatRupiah;
 
 /// Layar "Kelola Anggota" satu grup kolektif — replika modal "Tambah NOP Pada
 /// Group" di halaman asli, dengan tiga aksinya:
@@ -563,7 +562,7 @@ class _KelolaAnggotaScreenState extends State<KelolaAnggotaScreen> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(label, style: gaya),
-          Text(formatRupiah(formatRibuan(nilai)), style: gaya),
+          Text(formatRupiah(nilai), style: gaya),
         ],
       ),
     );

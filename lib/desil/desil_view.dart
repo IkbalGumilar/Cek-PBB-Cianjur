@@ -6,14 +6,16 @@ import 'bansos_client.dart';
 import 'nik_scanner.dart';
 
 class DesilView extends StatefulWidget {
-  const DesilView({super.key});
+  final BansosClient? client;
+
+  const DesilView({super.key, this.client});
 
   @override
-  State<DesilView> createState() => _DesilViewState();
+  State<DesilView> createState() => DesilViewState();
 }
 
-class _DesilViewState extends State<DesilView> {
-  final _client = BansosClient();
+class DesilViewState extends State<DesilView> {
+  late final BansosClient _client = widget.client ?? BansosClient();
   final _nikScanner = NikScanner();
   final _nikController = TextEditingController();
   final _captchaController = TextEditingController();
@@ -270,6 +272,18 @@ class _DesilViewState extends State<DesilView> {
         );
       },
     );
+  }
+
+  /// Menangani tombol back dari perangkat.
+  /// Jika sedang menampilkan hasil pengecekan, kembali dulu ke menu/form awal.
+  /// Mengembalikan true jika event berhasil ditangani (jangan keluar aplikasi).
+  bool handleBack() {
+    if (_result != null) {
+      _reset();
+      _scrollToTop();
+      return true;
+    }
+    return false;
   }
 
   void _reset() {

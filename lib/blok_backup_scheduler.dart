@@ -1,4 +1,4 @@
-import 'package:shared_preferences/shared_preferences.dart';
+import 'base_preferences_store.dart';
 
 /// Backup harian otomatis: dijalankan sekali tiap aplikasi dibuka. Hanya
 /// benar-benar menulis backup kalau (a) belum pernah backup hari ini DAN
@@ -10,7 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// tidak terjadi import melingkar (BlokDataStore juga perlu memanggil
 /// [markDirty] balik) — fungsi ekspornya dioper sebagai parameter dari
 /// pemanggil (lihat main.dart).
-class BlokBackupScheduler {
+class BlokBackupScheduler extends BasePreferencesStore {
   BlokBackupScheduler._();
   static final instance = BlokBackupScheduler._();
 
@@ -18,8 +18,7 @@ class BlokBackupScheduler {
   static const _dirtyKey = 'blok_data_dirty';
 
   Future<void> markDirty() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_dirtyKey, true);
+    await setBool(_dirtyKey, true);
   }
 
   String _dateKey(DateTime date) {
@@ -30,21 +29,20 @@ class BlokBackupScheduler {
   Future<void> runIfNeeded({
     required Future<String> Function(String fileName) exportCsv,
   }) async {
-    final prefs = await SharedPreferences.getInstance();
     final today = _dateKey(DateTime.now());
 
-    if (prefs.getString(_lastBackupDateKey) == today) return;
+    if (await getString(_lastBackupDateKey) == today) return;
 
-    final isDirty = prefs.getBool(_dirtyKey) ?? false;
+    final isDirty = await getBool(_dirtyKey, defaultValue: false);
     if (!isDirty) {
-      await prefs.setString(_lastBackupDateKey, today);
+      await setString(_lastBackupDateKey, today);
       return;
     }
 
     try {
       await exportCsv('backup_harian_$today');
-      await prefs.setString(_lastBackupDateKey, today);
-      await prefs.setBool(_dirtyKey, false);
+      await setString(_lastBackupDateKey, today);
+      await setBool(_dirtyKey, false);
     } catch (_) {
       // Gagal (mis. penyimpanan belum siap saat startup) — coba lagi di
       // kesempatan buka aplikasi berikutnya, jangan tandai tanggal ini

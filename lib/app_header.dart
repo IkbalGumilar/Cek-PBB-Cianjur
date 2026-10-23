@@ -43,8 +43,10 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
 
   @override
   Widget build(BuildContext context) {
+    final primaryColor = Theme.of(context).colorScheme.primary;
+    final onPrimary = Theme.of(context).colorScheme.onPrimary;
     return Material(
-      color: kHeaderGreen,
+      color: primaryColor,
       child: SafeArea(
         bottom: false,
         child: LayoutBuilder(
@@ -62,7 +64,7 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
             );
             final settingsButton = IconButton(
               onPressed: () => _openSettings(context),
-              icon: const Icon(Icons.settings, color: Colors.white),
+              icon: Icon(Icons.settings, color: onPrimary),
               tooltip: 'Pengaturan',
             );
 
@@ -128,10 +130,10 @@ class _LogoAndName extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 12),
-        const Text(
+        Text(
           'Cek PBB Cianjur',
           style: TextStyle(
-            color: Colors.white,
+            color: Theme.of(context).colorScheme.onPrimary,
             fontSize: 18,
             fontWeight: FontWeight.bold,
           ),
@@ -183,6 +185,8 @@ class _ModeMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final primaryColor = Theme.of(context).colorScheme.primary;
+    final onPrimary = Theme.of(context).colorScheme.onPrimary;
     final chips = <Widget>[
       ...CheckMode.values.map((mode) {
         final selected =
@@ -191,13 +195,13 @@ class _ModeMenu extends StatelessWidget {
           label: Text(mode.label),
           selected: selected,
           onSelected: (_) => onModeChanged(mode),
-          selectedColor: Colors.white,
+          selectedColor: onPrimary,
           labelStyle: TextStyle(
-            color: selected ? kHeaderGreen : Colors.white,
+            color: selected ? primaryColor : onPrimary,
             fontWeight: FontWeight.bold,
           ),
-          backgroundColor: kHeaderGreen.withValues(alpha: 0.4),
-          side: const BorderSide(color: Colors.white70),
+          backgroundColor: onPrimary.withValues(alpha: 0.15),
+          side: BorderSide(color: onPrimary.withValues(alpha: 0.5)),
         );
       }),
       // Bukan mode tampilan seperti chip lain — ini navigasi ke alur
@@ -207,36 +211,36 @@ class _ModeMenu extends StatelessWidget {
         label: const Text('Monitoring'),
         selected: false,
         onSelected: (_) => onMonitoringPressed(),
-        labelStyle: const TextStyle(
-          color: Colors.white,
+        labelStyle: TextStyle(
+          color: onPrimary,
           fontWeight: FontWeight.bold,
         ),
-        backgroundColor: kHeaderGreen.withValues(alpha: 0.4),
-        side: const BorderSide(color: Colors.white70),
+        backgroundColor: onPrimary.withValues(alpha: 0.15),
+        side: BorderSide(color: onPrimary.withValues(alpha: 0.5)),
       ),
       ChoiceChip(
         label: const Text('Cek Kendaraan'),
         selected: kendaraanSelected,
         onSelected: (_) => onKendaraanPressed(),
-        selectedColor: Colors.white,
+        selectedColor: onPrimary,
         labelStyle: TextStyle(
-          color: kendaraanSelected ? kHeaderGreen : Colors.white,
+          color: kendaraanSelected ? primaryColor : onPrimary,
           fontWeight: FontWeight.bold,
         ),
-        backgroundColor: kHeaderGreen.withValues(alpha: 0.4),
-        side: const BorderSide(color: Colors.white70),
+        backgroundColor: onPrimary.withValues(alpha: 0.15),
+        side: BorderSide(color: onPrimary.withValues(alpha: 0.5)),
       ),
       ChoiceChip(
         label: const Text('Cek Desil'),
         selected: desilSelected,
         onSelected: (_) => onDesilPressed(),
-        selectedColor: Colors.white,
+        selectedColor: onPrimary,
         labelStyle: TextStyle(
-          color: desilSelected ? kHeaderGreen : Colors.white,
+          color: desilSelected ? primaryColor : onPrimary,
           fontWeight: FontWeight.bold,
         ),
-        backgroundColor: kHeaderGreen.withValues(alpha: 0.4),
-        side: const BorderSide(color: Colors.white70),
+        backgroundColor: onPrimary.withValues(alpha: 0.15),
+        side: BorderSide(color: onPrimary.withValues(alpha: 0.5)),
       ),
     ];
 

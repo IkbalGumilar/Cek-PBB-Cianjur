@@ -1,23 +1,13 @@
-import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:csv/csv.dart';
-import 'package:excel/excel.dart';
-
+import 'base_table_exporter.dart';
 import 'blok_record.dart';
 import 'blok_report_pdf.dart';
 import 'tagihan_result.dart' show formatRupiah;
 
-enum BlokExportFormat {
-  pdf('PDF', 'pdf'),
-  excel('Excel (XLSX)', 'xlsx'),
-  csv('CSV', 'csv');
+export 'base_table_exporter.dart' show AppExportFormat;
 
-  final String label;
-  final String extension;
-
-  const BlokExportFormat(this.label, this.extension);
-}
+typedef BlokExportFormat = AppExportFormat;
 
 const _reportHeader = [
   'Blok',
@@ -27,12 +17,15 @@ const _reportHeader = [
   'Tahun Bayar',
   'Tanggal Bayar',
   'Jumlah PBB',
+  'Status Bayar',
+  'Target Pemda',
+  'Catatan',
 ];
 
 /// Membangun berkas laporan data blok (CSV/Excel/PDF) dari daftar record yang
-/// sama — dipakai bareng oleh aksi Unduh, Bagikan, dan Cetak di layar Buku
-/// Catatan Blok supaya isi & urutan kolomnya selalu konsisten.
-class BlokReportExporter {
+/// sama — mewarisi logika encoding CSV/Excel dan penamaan berkas dari
+/// [BaseTableExporter].
+class BlokReportExporter extends BaseTableExporter {
   static Future<Uint8List> build(
     BlokExportFormat format,
     List<BlokRecord> records, {
@@ -41,17 +34,25 @@ class BlokReportExporter {
     final totalPbb = records.fold<int>(0, (sum, r) => sum + r.jumlahPbbValue);
     switch (format) {
       case BlokExportFormat.csv:
-        return _buildCsv(records, totalPbb);
+        return BaseTableExporter.buildCsvData(
+          _reportHeader,
+          _buildDataRows(records, totalPbb),
+        );
       case BlokExportFormat.excel:
-        return _buildXlsx(records, totalPbb);
+        return BaseTableExporter.buildXlsxData(
+          _reportHeader,
+          _buildDataRows(records, totalPbb),
+        );
       case BlokExportFormat.pdf:
         return BlokReportPdf.build(records, tahun: tahun, totalPbb: totalPbb);
     }
   }
 
-  static Uint8List _buildCsv(List<BlokRecord> records, int totalPbb) {
-    final rows = <List<String>>[
-      _reportHeader,
+  static List<List<String>> _buildDataRows(
+    List<BlokRecord> records,
+    int totalPbb,
+  ) {
+    return [
       for (final r in records)
         [
           r.blok,
@@ -61,6 +62,9 @@ class BlokReportExporter {
           r.tahunBayar,
           r.tanggalBayar,
           r.jumlahPbb,
+          r.statusBayar,
+          r.isTargetPemda ? 'Target Pemda' : '-',
+          r.catatan,
         ],
       [
         '',
@@ -68,38 +72,13 @@ class BlokReportExporter {
         '',
         '',
         '',
+        '',
         'Total Keseluruhan',
-        formatRupiah(formatRibuan(totalPbb)),
+        formatRupiah(totalPbb),
+        '',
+        '',
       ],
     ];
-    return Uint8List.fromList(utf8.encode(Csv().encode(rows)));
-  }
-
-  static Uint8List _buildXlsx(List<BlokRecord> records, int totalPbb) {
-    final excel = Excel.createExcel();
-    final sheet = excel[excel.getDefaultSheet()!];
-    sheet.appendRow(_reportHeader.map(TextCellValue.new).toList());
-    for (final r in records) {
-      sheet.appendRow([
-        TextCellValue(r.blok),
-        TextCellValue(r.wilayah),
-        TextCellValue(r.namaWajibPajak),
-        TextCellValue(r.nop),
-        TextCellValue(r.tahunBayar),
-        TextCellValue(r.tanggalBayar),
-        TextCellValue(r.jumlahPbb),
-      ]);
-    }
-    sheet.appendRow([
-      TextCellValue(''),
-      TextCellValue(''),
-      TextCellValue(''),
-      TextCellValue(''),
-      TextCellValue(''),
-      TextCellValue('Total Keseluruhan'),
-      TextCellValue(formatRupiah(formatRibuan(totalPbb))),
-    ]);
-    return Uint8List.fromList(excel.encode()!);
   }
 
   static String fileName(
@@ -108,6 +87,10 @@ class BlokReportExporter {
     String prefix = 'laporan_data_blok',
   }) {
     final tahunPart = (tahun == null || tahun.isEmpty) ? 'semua_tahun' : tahun;
-    return '${prefix}_${tahunPart}_${DateTime.now().millisecondsSinceEpoch}.${format.extension}';
+    return BaseTableExporter.formatFileName(
+      prefix: prefix,
+      identifier: tahunPart,
+      format: format,
+    );
   }
 }

@@ -1,4 +1,4 @@
-import 'package:shared_preferences/shared_preferences.dart';
+import 'base_preferences_store.dart';
 
 /// Status "Mode Operator" — dipakai kepala desa/koordinator yang menerima
 /// laporan dari semua dusun sekaligus, bukan cuma satu wilayah kerja.
@@ -9,7 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// SharedPreferences perangkat ini saja, tidak pernah ikut ke berkas APK
 /// yang dibagikan maupun ke pembaruan aplikasi, jadi membagikan/memperbarui
 /// aplikasi ke perangkat lain tidak pernah ikut memberi akses operator.
-class OperatorModeStore {
+class OperatorModeStore extends BasePreferencesStore {
   OperatorModeStore._();
   static final instance = OperatorModeStore._();
 
@@ -20,15 +20,13 @@ class OperatorModeStore {
 
   Future<bool> isEnabled() async {
     if (_enabled != null) return _enabled!;
-    final prefs = await SharedPreferences.getInstance();
-    _enabled = prefs.getBool(_enabledKey) ?? false;
+    _enabled = await getBool(_enabledKey, defaultValue: false);
     return _enabled!;
   }
 
   Future<void> enable() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_enabledKey, true);
-    await prefs.setBool(_justEnabledKey, true);
+    await setBool(_enabledKey, true);
+    await setBool(_justEnabledKey, true);
     _enabled = true;
   }
 
@@ -36,9 +34,8 @@ class OperatorModeStore {
   /// Datang Operator" cuma muncul sekali, tepat setelah mode operator baru
   /// diaktifkan & aplikasi restart, tidak muncul lagi di pembukaan berikutnya.
   Future<bool> consumeJustEnabledFlag() async {
-    final prefs = await SharedPreferences.getInstance();
-    final flag = prefs.getBool(_justEnabledKey) ?? false;
-    if (flag) await prefs.remove(_justEnabledKey);
+    final flag = await getBool(_justEnabledKey, defaultValue: false);
+    if (flag) await remove(_justEnabledKey);
     return flag;
   }
 }

@@ -1,10 +1,10 @@
 import 'dart:developer' as developer;
 import 'dart:typed_data';
 
-import 'package:cookie_jar/cookie_jar.dart';
 import 'package:dio/dio.dart';
-import 'package:dio_cookie_manager/dio_cookie_manager.dart';
 import 'package:html/parser.dart' as html_parser;
+
+import '../base_http_client.dart';
 
 enum BansosErrorKind { captcha, notFound, service, network }
 
@@ -100,29 +100,24 @@ class BansosResult {
   }
 }
 
-class BansosClient {
+class BansosClient extends BaseHttpClient {
   static const _baseUrl = 'https://cekbansos.kemensos.go.id';
   String? _csrfToken;
 
-  final Dio _dio = Dio(
-    BaseOptions(
-      connectTimeout: const Duration(seconds: 10),
-      sendTimeout: const Duration(seconds: 10),
-      receiveTimeout: const Duration(seconds: 20),
-      headers: const {
-        'Accept':
-            'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'User-Agent':
-            'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 '
-            '(KHTML, like Gecko) Chrome/131.0 Mobile Safari/537.36',
-      },
-    ),
-  );
-  final CookieJar _cookieJar = CookieJar();
+  Dio get _dio => dio;
 
-  BansosClient() {
-    _dio.interceptors.add(CookieManager(_cookieJar));
-  }
+  BansosClient({Dio? dio})
+      : super(
+          connectTimeout: const Duration(seconds: 10),
+          sendTimeout: const Duration(seconds: 10),
+          receiveTimeout: const Duration(seconds: 20),
+          headers: const {
+            'Accept':
+                'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          },
+          enableCookies: true,
+          customDio: dio,
+        );
 
   Future<Uint8List> fetchCaptchaImage() async {
     try {
@@ -223,17 +218,10 @@ class BansosClient {
   }
 
   static String _networkMessage(DioException error) {
-    return switch (error.type) {
-      DioExceptionType.connectionTimeout =>
-        'Koneksi ke Kemensos terlalu lama. Coba lagi nanti.',
-      DioExceptionType.receiveTimeout =>
-        'Server Kemensos belum merespons. Coba lagi nanti.',
-      DioExceptionType.connectionError =>
-        'Domain Kemensos tidak dapat dihubungi. Periksa internet atau DNS perangkat.',
-      DioExceptionType.badResponse =>
-        'Layanan Kemensos menolak permintaan (${error.response?.statusCode ?? 'tanpa status'}). Coba ulang captcha.',
-      _ => 'Koneksi ke layanan Kemensos gagal. Coba lagi nanti.',
-    };
+    if (error.type == DioExceptionType.badResponse) {
+      return 'Layanan Kemensos menolak permintaan (${error.response?.statusCode ?? 'tanpa status'}). Coba ulang captcha.';
+    }
+    return BaseHttpClient.describeNetworkError(error, serviceName: 'Kemensos');
   }
 
   static void _logNetworkError(String operation, DioException error) {

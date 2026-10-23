@@ -3,9 +3,10 @@ import 'dart:typed_data';
 
 import 'package:cookie_jar/cookie_jar.dart';
 import 'package:dio/dio.dart';
-import 'package:dio_cookie_manager/dio_cookie_manager.dart';
 import 'package:html/dom.dart';
 import 'package:html/parser.dart' as html_parser;
+
+import 'base_http_client.dart';
 
 import 'blok_record.dart' show formatRibuan;
 import 'check_mode.dart';
@@ -45,23 +46,22 @@ const _captchaErrorKeywords = [
   'kode tidak sesuai',
 ];
 
-class PbbClient {
+class PbbClient extends BaseHttpClient {
   static const _baseUrl = 'https://cektagihan.cianjurkab.v-tax.id/portlet.php';
   static const _captchaBaseUrl =
       'https://cektagihan.cianjurkab.v-tax.id/image-2018/securimage_show.php';
 
-  final Dio _dio = Dio(
-    BaseOptions(
-      connectTimeout: const Duration(seconds: 10),
-      sendTimeout: const Duration(seconds: 10),
-      receiveTimeout: const Duration(seconds: 15),
-    ),
-  );
-  final CookieJar _cookieJar = CookieJar();
+  Dio get _dio => dio;
 
-  PbbClient() {
-    _dio.interceptors.add(CookieManager(_cookieJar));
-  }
+  PbbClient({Dio? dio, CookieJar? cookieJar})
+      : super(
+          connectTimeout: const Duration(seconds: 10),
+          sendTimeout: const Duration(seconds: 10),
+          receiveTimeout: const Duration(seconds: 15),
+          enableCookies: true,
+          customCookieJar: cookieJar,
+          customDio: dio,
+        );
 
   Future<Uint8List> fetchCaptchaImage(CheckMode mode) async {
     await _dio.get(_baseUrl);

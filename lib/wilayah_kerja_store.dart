@@ -1,5 +1,4 @@
-import 'package:shared_preferences/shared_preferences.dart';
-
+import 'base_preferences_store.dart';
 import 'dusun_data.dart';
 
 /// Menyimpan dusun mana yang jadi wilayah kerja perangkat ini. Blok yang
@@ -10,7 +9,7 @@ import 'dusun_data.dart';
 /// Kalau belum ada dusun dipilih, hasil "Sudah Bayar" tidak dicatat ke Buku
 /// Catatan Blok sama sekali — pengecekan & pembayaran tetap jalan seperti
 /// biasa, cuma tidak ada riwayat yang tersimpan.
-class WilayahKerjaStore {
+class WilayahKerjaStore extends BasePreferencesStore {
   WilayahKerjaStore._();
   static final instance = WilayahKerjaStore._();
 
@@ -23,9 +22,8 @@ class WilayahKerjaStore {
 
   Future<void> _ensureLoaded() async {
     if (_loaded) return;
-    final prefs = await SharedPreferences.getInstance();
-    _selectedDusun = prefs.getInt(_dusunKey);
-    _asked = prefs.getBool(_askedKey) ?? false;
+    _selectedDusun = await getInt(_dusunKey);
+    _asked = await getBool(_askedKey, defaultValue: false);
     _loaded = true;
   }
 
@@ -45,19 +43,13 @@ class WilayahKerjaStore {
   Future<void> markAsked() async {
     await _ensureLoaded();
     _asked = true;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_askedKey, true);
+    await setBool(_askedKey, true);
   }
 
   Future<void> setSelectedDusun(int? dusunNumber) async {
     await _ensureLoaded();
     _selectedDusun = dusunNumber;
-    final prefs = await SharedPreferences.getInstance();
-    if (dusunNumber == null) {
-      await prefs.remove(_dusunKey);
-    } else {
-      await prefs.setInt(_dusunKey, dusunNumber);
-    }
+    await setInt(_dusunKey, dusunNumber);
   }
 
   /// Blok-blok yang termasuk wilayah kerja sesuai dusun terpilih. Kosong

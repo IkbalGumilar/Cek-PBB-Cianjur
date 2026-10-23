@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'app_header.dart';
 import 'blok_catatan_screen.dart';
@@ -37,11 +40,22 @@ class _MainShellState extends State<MainShell> {
   String? _prefillWilayah;
   String? _prefillTahun;
   bool _isOperator = false;
+  final _checkScrollController = ScrollController();
+  final _kendaraanScrollController = ScrollController();
+  final _desilKey = GlobalKey<DesilViewState>();
 
   @override
   void initState() {
     super.initState();
+    unawaited(BlokDataStore.instance.loadAll());
     WidgetsBinding.instance.addPostFrameCallback((_) => _runStartupChecks());
+  }
+
+  @override
+  void dispose() {
+    _checkScrollController.dispose();
+    _kendaraanScrollController.dispose();
+    super.dispose();
   }
 
   Future<void> _runStartupChecks() async {
@@ -195,47 +209,105 @@ class _MainShellState extends State<MainShell> {
     );
     if (request == null || !mounted) return;
     setState(() {
-      _mode = CheckMode.statusBayar;
+      _mode = request.targetMode;
       _view = _ActiveView.check;
       _prefillBlok = request.blok;
       _prefillWilayah = request.wilayah;
-      _prefillTahun = request.tahun;
+      _prefillTahun =
+          request.targetMode == CheckMode.tagihan ? null : request.tahun;
       _formNonce += 1;
     });
   }
 
+  void _handleBack() {
+    if (_view == _ActiveView.import) {
+      _backToCheck();
+      return;
+    }
+    if (_view == _ActiveView.desil) {
+      final handled = _desilKey.currentState?.handleBack() ?? false;
+      if (handled) return;
+      _exitApp();
+      return;
+    }
+    if (_view == _ActiveView.kendaraan) {
+      if (_kendaraanScrollController.hasClients &&
+          _kendaraanScrollController.offset > 20) {
+        _kendaraanScrollController.animateTo(
+          0,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+        return;
+      }
+      _exitApp();
+      return;
+    }
+    if (_view == _ActiveView.check) {
+      if (_checkScrollController.hasClients &&
+          _checkScrollController.offset > 20) {
+        _checkScrollController.animateTo(
+          0,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+        return;
+      }
+      _exitApp();
+      return;
+    }
+  }
+
+  void _exitApp() {
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    } else {
+      SystemNavigator.pop();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppHeader(
-        activeMode: _mode,
-        onModeChanged: _changeMode,
-        themeController: widget.themeController,
-        isOperator: _isOperator,
-        onMonitoringPressed: _openMonitoring,
-        onDesilPressed: () => setState(() => _view = _ActiveView.desil),
-        onKendaraanPressed: () => setState(() => _view = _ActiveView.kendaraan),
-        desilSelected: _view == _ActiveView.desil,
-        kendaraanSelected: _view == _ActiveView.kendaraan,
-      ),
-      body: _view == _ActiveView.check
-          ? CheckFormView(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        _handleBack();
+      },
+      child: Scaffold(
+        appBar: AppHeader(
+          activeMode: _mode,
+          onModeChanged: _changeMode,
+          themeController: widget.themeController,
+          isOperator: _isOperator,
+          onMonitoringPressed: _openMonitoring,
+          onDesilPressed: () => setState(() => _view = _ActiveView.desil),
+          onKendaraanPressed: () => setState(() => _view = _ActiveView.kendaraan),
+          desilSelected: _view == _ActiveView.desil,
+          kendaraanSelected: _view == _ActiveView.kendaraan,
+        ),
+        body: IndexedStack(
+          index: _view.index,
+          children: [
+            CheckFormView(
               key: ValueKey('$_mode-$_formNonce'),
               mode: _mode,
+              scrollController: _checkScrollController,
               onImportPressed: _openImport,
               onOpenStatusBayar: _openStatusBayar,
               initialBlok: _prefillBlok,
               initialWilayah: _prefillWilayah,
               initialTahun: _prefillTahun,
-            )
-          : _view == _ActiveView.desil
-          ? const DesilView()
-          : _view == _ActiveView.kendaraan
-          ? const KendaraanView()
-          : _ImportWithBack(mode: _mode, onBack: _backToCheck),
-      floatingActionButton: _view == _ActiveView.check
-          ? _BukuCatatanButton(onPressed: _openBukuCatatan)
-          : null,
+            ),
+            _ImportWithBack(mode: _mode, onBack: _backToCheck),
+            DesilView(key: _desilKey),
+            KendaraanView(scrollController: _kendaraanScrollController),
+          ],
+        ),
+        floatingActionButton: _view == _ActiveView.check
+            ? _BukuCatatanButton(onPressed: _openBukuCatatan)
+            : null,
+      ),
     );
   }
 }
@@ -247,17 +319,19 @@ class _BukuCatatanButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<int>(
-      future: BlokDataStore.instance.totalCount,
-      builder: (context, snapshot) {
-        final count = snapshot.data ?? 0;
+    return ValueListenableBuilder<int>(
+      valueListenable: BlokDataStore.instance.countNotifier,
+      builder: (context, count, _) {
         return Badge(
+          alignment: AlignmentDirectional.topStart,
+          offset: const Offset(6, -4),
           label: Text('$count'),
           isLabelVisible: count > 0,
-          child: FloatingActionButton(
+          child: FloatingActionButton.extended(
             onPressed: onPressed,
-            tooltip: 'Buku Catatan Blok',
-            child: const Icon(Icons.menu_book),
+            tooltip: 'Data DHKP',
+            icon: const Icon(Icons.table_chart_outlined),
+            label: const Text('DHKP'),
           ),
         );
       },

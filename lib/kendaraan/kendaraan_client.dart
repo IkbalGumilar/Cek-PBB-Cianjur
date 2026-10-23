@@ -6,6 +6,8 @@ import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
 import 'package:encrypt/encrypt.dart' as encrypt;
 
+import '../base_http_client.dart';
+
 enum KendaraanErrorKind { notFound, rateLimited, network, service }
 
 class KendaraanException implements Exception {
@@ -117,7 +119,7 @@ class KendaraanInfo {
   }
 }
 
-class KendaraanClient {
+class KendaraanClient extends BaseHttpClient {
   static const baseUrl = 'https://sambara-v2.bapenda.jabarprov.go.id';
   // A developer can point the client at a temporary relay with
   // --dart-define=KENDARAAN_API_BASE_URL=... when the device network cannot
@@ -134,20 +136,17 @@ class KendaraanClient {
   static const _aesPassphrase = 'KKIC6ozwsqKXuk+q68GrTn2XdDNdeUAJcq1csvHl4T8=';
   static const _hmacSecret = '8jV2BITnbT3LCXVDd/Sa1P05m9BYvBMqK/zrvI0CvkQ=';
 
-  final Dio _dio;
+  Dio get _dio => dio;
   String? _token;
   Future<String>? _loginInFlight;
 
   KendaraanClient({Dio? dio})
-    : _dio =
-          dio ??
-          Dio(
-            BaseOptions(
-              baseUrl: apiBaseUrl,
-              connectTimeout: const Duration(seconds: 15),
-              receiveTimeout: const Duration(seconds: 15),
-            ),
-          );
+      : super(
+          baseUrl: apiBaseUrl,
+          connectTimeout: const Duration(seconds: 15),
+          receiveTimeout: const Duration(seconds: 15),
+          customDio: dio,
+        );
 
   Future<KendaraanInfo> check({
     required String platDepan,
@@ -167,9 +166,17 @@ class KendaraanClient {
       throw const KendaraanException('Warna TNKB tidak valid.');
     }
 
-    // The source page sends the suffix before the numeric block, e.g.
-    // F WAK6286. This is the API's canonical format.
-    final noPolisi = '$depan $belakang$nomor';
+    // The Sambara Bapenda Jabar backend strictly enforces that `no_polisi` must
+    // be exactly 9 characters long. Shorter or longer values result in validation
+    // errors (code 0001). The 9 characters are structured as:
+    // - Slot 1 (Plat depan, 2 chars): right-padded with space
+    // - Slot 2 (Plat belakang, 3 chars): right-padded with space
+    // - Slot 3 (Nomor angka, 4 chars): right-padded with space
+    final noPolisi = formatNoPolisi(
+      platDepan: depan,
+      angka: nomor,
+      platBelakang: belakang,
+    );
     try {
       var token = await _login();
       var response = await _getInfo(noPolisi, warna, token);
@@ -183,6 +190,23 @@ class KendaraanClient {
       // it for a later search, including when the response is an error.
       _token = null;
     }
+  }
+
+  /// Formats the plate components into the fixed 9-character buffer
+  /// required by the Sambara Bapenda Jabar backend:
+  /// - Slot 1 (Plat depan, 2 chars): right-padded with space
+  /// - Slot 2 (Plat belakang, 3 chars): right-padded with space
+  /// - Slot 3 (Nomor angka, 4 chars): right-padded with space
+  /// Total length is strictly guaranteed to be 9 characters.
+  static String formatNoPolisi({
+    required String platDepan,
+    required String angka,
+    required String platBelakang,
+  }) {
+    final depan = platDepan.trim().toUpperCase().padRight(2, ' ');
+    final belakang = platBelakang.trim().toUpperCase().padRight(3, ' ');
+    final nomor = angka.trim().padRight(4, ' ');
+    return '$depan$belakang$nomor';
   }
 
   Future<String> _login({bool force = false}) {
@@ -280,9 +304,24 @@ class KendaraanClient {
         code: code,
       );
     }
+
+    String? resolvedMessage = message;
+    final detail = body['detail'];
+    if (detail is List && detail.isNotEmpty) {
+      final detailStr = detail
+          .map((e) => e.toString().trim())
+          .where((s) => s.isNotEmpty)
+          .join(', ');
+      if (detailStr.isNotEmpty) {
+        resolvedMessage = (resolvedMessage != null && resolvedMessage.isNotEmpty)
+            ? '$resolvedMessage: $detailStr'
+            : detailStr;
+      }
+    }
+
     return KendaraanException(
-      message?.isNotEmpty == true
-          ? message!
+      resolvedMessage?.isNotEmpty == true
+          ? resolvedMessage!
           : 'Layanan kendaraan gagal merespons.',
       code: code,
     );
@@ -297,6 +336,14 @@ class KendaraanClient {
         kind: KendaraanErrorKind.network,
       );
     }
+    final status = error.response?.statusCode;
+    if (status != null && status >= 500) {
+      return KendaraanException(
+        'Server Samsat/Bapenda sedang bermasalah (HTTP $status). Silakan coba lagi nanti.',
+        kind: KendaraanErrorKind.service,
+        code: status,
+      );
+    }
     return const KendaraanException(
       'Tidak dapat menghubungi layanan kendaraan. Periksa koneksi internet.',
       kind: KendaraanErrorKind.network,
@@ -308,9 +355,22 @@ class KendaraanClient {
     return body['code']?.toString() == '401006';
   }
 
-  static Map<String, dynamic> _map(Object? value) => value is Map
-      ? value.map((key, value) => MapEntry(key.toString(), value))
-      : const <String, dynamic>{};
+  static Map<String, dynamic> _map(Object? value) {
+    if (value is Map) {
+      return value.map((key, value) => MapEntry(key.toString(), value));
+    }
+    if (value is String && value.trim().startsWith('{')) {
+      try {
+        final decoded = jsonDecode(value);
+        if (decoded is Map) {
+          return decoded.map((key, val) => MapEntry(key.toString(), val));
+        }
+      } catch (_) {
+        // Not a valid JSON string map.
+      }
+    }
+    return const <String, dynamic>{};
+  }
 
   static String _nonce() {
     final random = math.Random.secure();

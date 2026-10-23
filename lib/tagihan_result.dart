@@ -1,12 +1,4 @@
-String formatRupiah(String raw) {
-  final trimmed = raw.trim();
-  if (trimmed.isEmpty ||
-      trimmed == '-' ||
-      trimmed.toLowerCase().startsWith('rp')) {
-    return trimmed;
-  }
-  return 'Rp. $trimmed';
-}
+export 'currency_format.dart' show formatRupiah;
 
 class TagihanYearRow {
   final String tahun;

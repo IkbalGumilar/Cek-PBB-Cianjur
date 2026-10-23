@@ -33,6 +33,9 @@ class BlokReportPdf {
               'Tahun',
               'Tanggal Bayar',
               'Jumlah PBB',
+              'Status Bayar',
+              'Target Pemda',
+              'Catatan',
             ],
             data: [
               for (final r in records)
@@ -44,6 +47,9 @@ class BlokReportPdf {
                   r.tahunBayar,
                   r.tanggalBayar,
                   r.jumlahPbb,
+                  r.statusBayar,
+                  r.isTargetPemda ? 'Ya' : '-',
+                  r.catatan,
                 ],
             ],
             cellStyle: const pw.TextStyle(fontSize: 8),
@@ -57,7 +63,7 @@ class BlokReportPdf {
           pw.Align(
             alignment: pw.Alignment.centerRight,
             child: pw.Text(
-              'Total Keseluruhan: ${formatRupiah(formatRibuan(totalPbb))}',
+              'Total Keseluruhan: ${formatRupiah(totalPbb)}',
               style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold),
             ),
           ),

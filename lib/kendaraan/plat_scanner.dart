@@ -5,38 +5,23 @@ import 'dart:ui' as ui;
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../base_ocr_scanner.dart';
+
 /// OCR plat nomor yang diproses sepenuhnya di perangkat.
-class PlatScanner {
-  PlatScanner({ImagePicker? picker}) : _picker = picker ?? ImagePicker();
+class PlatScanner extends BaseOcrScanner<PlatScanResult> {
+  PlatScanner({super.picker});
 
-  final ImagePicker _picker;
-
-  Future<PlatScanResult?> scan({required ImageSource source}) async {
-    final image = await _picker.pickImage(
-      source: source,
-      imageQuality: 100,
-      maxWidth: 2800,
-      maxHeight: 2800,
+  @override
+  Future<PlatScanResult> parseRecognizedText(
+    XFile image,
+    RecognizedText recognizedText,
+  ) async {
+    final candidates = PlatScanParser.extractCandidates(recognizedText.text);
+    final color = await PlatColorDetector.detect(
+      image.readAsBytes,
+      recognizedText.blocks,
     );
-    if (image == null) return null;
-    return scanImage(image);
-  }
-
-  Future<PlatScanResult> scanImage(XFile image) async {
-    final recognizer = TextRecognizer(script: TextRecognitionScript.latin);
-    try {
-      final recognizedText = await recognizer.processImage(
-        InputImage.fromFilePath(image.path),
-      );
-      final candidates = PlatScanParser.extractCandidates(recognizedText.text);
-      final color = await PlatColorDetector.detect(
-        image.readAsBytes,
-        recognizedText.blocks,
-      );
-      return PlatScanResult(candidates: candidates, color: color);
-    } finally {
-      await recognizer.close();
-    }
+    return PlatScanResult(candidates: candidates, color: color);
   }
 }
 
@@ -438,18 +423,43 @@ class PlatColorDetector {
       final bytes = await readBytes();
       buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
       descriptor = await ui.ImageDescriptor.encoded(buffer);
-      codec = await descriptor.instantiateCodec();
+      final origWidth = descriptor.width;
+      final origHeight = descriptor.height;
+      int? targetWidth;
+      int? targetHeight;
+      if (origWidth >= origHeight && origWidth > 800) {
+        targetWidth = 800;
+        targetHeight = (origHeight * 800 / origWidth).round();
+      } else if (origHeight > 800) {
+        targetHeight = 800;
+        targetWidth = (origWidth * 800 / origHeight).round();
+      }
+
+      codec = await descriptor.instantiateCodec(
+        targetWidth: targetWidth,
+        targetHeight: targetHeight,
+      );
       final frame = await codec.getNextFrame();
       frameImage = frame.image;
       final byteData = await frameImage.toByteData(
         format: ui.ImageByteFormat.rawRgba,
       );
       if (byteData == null) return PlatSurfaceColor.unknown;
+
+      final scaleX = frameImage.width / origWidth;
+      final scaleY = frameImage.height / origHeight;
+      final scaledBounds = ui.Rect.fromLTRB(
+        plateBlock.boundingBox.left * scaleX,
+        plateBlock.boundingBox.top * scaleY,
+        plateBlock.boundingBox.right * scaleX,
+        plateBlock.boundingBox.bottom * scaleY,
+      );
+
       return _classify(
         byteData,
         frameImage.width,
         frameImage.height,
-        plateBlock.boundingBox,
+        scaledBounds,
       );
     } catch (_) {
       return PlatSurfaceColor.unknown;

@@ -3,42 +3,24 @@ import 'dart:math' as math;
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../base_ocr_scanner.dart';
+
 /// OCR NIK yang seluruh proses pengenalan dan koreksinya dilakukan lokal.
-class NikScanner {
-  NikScanner({ImagePicker? picker}) : _picker = picker ?? ImagePicker();
+class NikScanner extends BaseOcrScanner<List<String>> {
+  NikScanner({super.picker});
 
-  final ImagePicker _picker;
+  @override
+  int get maxWidth => 2400;
 
-  Future<List<String>?> scan({required ImageSource source}) async {
-    final image = await _picker.pickImage(
-      source: source,
-      imageQuality: 100,
-      maxWidth: 2400,
-      maxHeight: 2400,
-    );
-    if (image == null) return null;
-    return scanImage(image);
-  }
+  @override
+  int get maxHeight => 2400;
 
-  Future<List<String>> scanImage(XFile image) async {
-    final recognizer = TextRecognizer(script: TextRecognitionScript.latin);
-    try {
-      final recognizedText = await recognizer.processImage(
-        InputImage.fromFilePath(image.path),
-      );
-      return NikScanParser.extract(recognizedText.text);
-    } finally {
-      await recognizer.close();
-    }
-  }
-
-  Future<List<String>?> recoverLostScan() async {
-    final response = await _picker.retrieveLostData();
-    if (response.isEmpty) return null;
-    if (response.exception != null) throw response.exception!;
-    final image = response.file;
-    if (image == null) return null;
-    return scanImage(image);
+  @override
+  Future<List<String>> parseRecognizedText(
+    XFile image,
+    RecognizedText recognizedText,
+  ) async {
+    return NikScanParser.extract(recognizedText.text);
   }
 }
 

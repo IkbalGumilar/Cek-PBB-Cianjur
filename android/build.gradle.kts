@@ -19,11 +19,10 @@ subprojects {
     project.evaluationDependsOn(":app")
 }
 
-// media_store_plus 0.1.3 hardcodes compileSdkVersion 33, which is too low for
-// the AndroidX versions Flutter now resolves (they require compileSdk 34+).
-// Force it to match the app's compileSdk instead of patching the pub cache.
+// media_store_plus dan flutter_secure_storage hardcode compileSdk tertentu.
+// Samakan ke compileSdk 36 (Android 16) yang terinstal di SDK lokal.
 subprojects {
-    if (project.name == "media_store_plus") {
+    if (project.name == "media_store_plus" || project.name == "flutter_secure_storage") {
         afterEvaluate {
             extensions.findByType(com.android.build.gradle.LibraryExtension::class.java)?.compileSdk = 36
         }
