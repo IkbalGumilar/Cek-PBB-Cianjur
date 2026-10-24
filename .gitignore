@@ -7,6 +7,12 @@
 .atom/
 Docs/
 tool/
+!tool/
+tool/*
+!tool/dkhp_crypto.py
+!tool/make_dkhp_package.py
+!tool/build_final_dkhp_package.py
+!tool/update_all_stts_2026.py
 .build/
 .buildlog/
 .history

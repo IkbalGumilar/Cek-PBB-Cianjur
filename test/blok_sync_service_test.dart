@@ -135,6 +135,38 @@ void main() {
       final broken = Uint8List.fromList([0x43, 0x50, 0x42, 0x42, ...List.filled(28, 0xFF)]);
       expect(BlokChangeRecord.fromEncryptedBytes(broken), isNull);
     });
+
+    test('toEncryptedBytes dan fromEncryptedBytes mendukung kata sandi kustom dan fallback legacy', () {
+      const record = BlokChangeRecord(
+        id: 'chg_sec',
+        blok: '005',
+        nop: '320520000400500050',
+        tahunBayar: '2026',
+        petugas: 'rina',
+        timestamp: 1770010000,
+        catatan: 'Data sensitif dengan kata sandi petugas',
+      );
+
+      // Enkripsi dengan kata sandi kustom
+      const customPass = 'KunciKustomPetugas123!@#';
+      final encrypted = record.toEncryptedBytes(secret: customPass);
+
+      // Dekripsi dengan kata sandi yang sama
+      final decrypted = BlokChangeRecord.fromEncryptedBytes(encrypted, secret: customPass);
+      expect(decrypted, isNotNull);
+      expect(decrypted!.id, 'chg_sec');
+      expect(decrypted.catatan, 'Data sensitif dengan kata sandi petugas');
+
+      // Dekripsi dengan kata sandi salah harus gagal
+      final failedDecrypted = BlokChangeRecord.fromEncryptedBytes(encrypted, secret: 'KunciSalah');
+      expect(failedDecrypted, isNull);
+
+      // Berkas lama yang dienkripsi dengan default secret tetap bisa dibaca (backward compatibility)
+      final legacyEncrypted = record.toEncryptedBytes(); // default secret
+      final decryptedLegacy = BlokChangeRecord.fromEncryptedBytes(legacyEncrypted, secret: customPass);
+      expect(decryptedLegacy, isNotNull);
+      expect(decryptedLegacy!.id, 'chg_sec');
+    });
   });
 
   group('BlokSyncService - Helper & Sanitasi', () {

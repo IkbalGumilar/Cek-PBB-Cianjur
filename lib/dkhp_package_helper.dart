@@ -1,61 +1,161 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
-import 'package:crypto/crypto.dart';
+import 'package:crypto/crypto.dart' as legacy_crypto;
+import 'package:cryptography/cryptography.dart';
 import 'package:csv/csv.dart';
 import 'package:encrypt/encrypt.dart' as enc;
 
 import 'app_storage.dart';
 import 'backup_crypto.dart';
+import 'backup_password_store.dart';
 import 'blok_data_store.dart';
 import 'blok_record.dart';
 import 'nop_helper.dart';
 
-/// Enkripsi & dekripsi berkas paket `.dkhp` (AES-256-CBC) dengan header khusus "DKHP".
-/// Menjaga kerahasiaan data perpajakan dan foto objek WP saat dibagikan atau disimpan.
+/// Enkripsi paket `.dkhp` menggunakan PBKDF2-HMAC-SHA256 dan AES-256-GCM.
 class DhkpCrypto {
   DhkpCrypto._();
 
-  static const magic = [0x44, 0x4B, 0x48, 0x50]; // "DKHP"
-  static const secret = 'CekPBBCianjur-DKHP-Package-Secret-v1';
+  static const magic = [0x44, 0x4B, 0x48, 0x50]; // Legacy "DKHP"
+  static const _passwordMagic = [0x44, 0x4B, 0x48, 0x32]; // "DKH2"
+  static const _saltLength = 16;
+  static const _nonceLength = 12;
+  static const _tagLength = 16;
+  static const _iterations = 600000;
+  static const _legacySecret = 'CekPBBCianjur-DKHP-Package-Secret-v1';
+  static final _pbkdf2 = Pbkdf2(
+    macAlgorithm: Hmac.sha256(),
+    iterations: _iterations,
+    bits: 256,
+  );
+  static final _aesGcm = AesGcm.with256bits();
 
-  static enc.Key get _key {
-    final digest = sha256.convert(utf8.encode(secret));
-    return enc.Key(Uint8List.fromList(digest.bytes));
-  }
-
-  static Uint8List encryptBytes(Uint8List plainBytes) {
-    final iv = enc.IV.fromSecureRandom(16);
-    final encrypter = enc.Encrypter(enc.AES(_key, mode: enc.AESMode.cbc));
-    final encrypted = encrypter.encryptBytes(plainBytes, iv: iv);
-    return Uint8List.fromList([...magic, ...iv.bytes, ...encrypted.bytes]);
-  }
-
-  static Uint8List? decryptBytes(Uint8List fileBytes) {
-    if (fileBytes.length < magic.length + 16) return null;
-    for (var i = 0; i < magic.length; i++) {
-      if (fileBytes[i] != magic[i]) return null;
+  static Future<Uint8List> encryptBytes(
+    Uint8List plainBytes, {
+    required String password,
+  }) async {
+    if (password.length < 12) {
+      throw const FormatException(
+        'Kata sandi backup harus terdiri dari minimal 12 karakter.',
+      );
     }
+    final salt = Uint8List.fromList(
+      List<int>.generate(_saltLength, (_) => Random.secure().nextInt(256)),
+    );
+    final nonce = _aesGcm.newNonce();
+    final header = Uint8List.fromList([..._passwordMagic, ...salt, ...nonce]);
+    final key = await _pbkdf2.deriveKey(
+      secretKey: SecretKey(utf8.encode(password)),
+      nonce: salt,
+    );
+    final box = await _aesGcm.encrypt(
+      plainBytes,
+      secretKey: key,
+      nonce: nonce,
+      aad: header,
+    );
+    return Uint8List.fromList([...header, ...box.cipherText, ...box.mac.bytes]);
+  }
+
+  static Future<Uint8List?> decryptBytes(
+    Uint8List fileBytes, {
+    String? password,
+  }) async {
+    if (_hasMagic(fileBytes, _passwordMagic)) {
+      final headerLength = _passwordMagic.length + _saltLength + _nonceLength;
+      if (fileBytes.length < headerLength + _tagLength) {
+        throw const FormatException('Berkas backup terenkripsi tidak lengkap.');
+      }
+      if (password == null || password.isEmpty) {
+        throw const DkhpPasswordException(
+          'Kata sandi diperlukan untuk membuka backup ini.',
+        );
+      }
+
+      final salt = fileBytes.sublist(
+        _passwordMagic.length,
+        _passwordMagic.length + _saltLength,
+      );
+      final nonce = fileBytes.sublist(
+        _passwordMagic.length + _saltLength,
+        headerLength,
+      );
+      final header = fileBytes.sublist(0, headerLength);
+      final body = fileBytes.sublist(headerLength);
+      final cipherText = body.sublist(0, body.length - _tagLength);
+      final tag = body.sublist(body.length - _tagLength);
+      final key = await _pbkdf2.deriveKey(
+        secretKey: SecretKey(utf8.encode(password)),
+        nonce: salt,
+      );
+      try {
+        final plainBytes = await _aesGcm.decrypt(
+          SecretBox(cipherText, nonce: nonce, mac: Mac(tag)),
+          secretKey: key,
+          aad: header,
+        );
+        return Uint8List.fromList(plainBytes);
+      } on SecretBoxAuthenticationError {
+        throw const DkhpPasswordException(
+          'Kata sandi salah atau berkas backup telah berubah/rusak.',
+        );
+      }
+    }
+
+    if (!_hasMagic(fileBytes, magic) || fileBytes.length < magic.length + 16) {
+      return null;
+    }
+    return _decryptLegacyCbc(fileBytes);
+  }
+
+  static Uint8List? _decryptLegacyCbc(Uint8List fileBytes) {
+    final digest = legacy_crypto.sha256.convert(utf8.encode(_legacySecret));
+    final key = enc.Key(Uint8List.fromList(digest.bytes));
     final iv = enc.IV(fileBytes.sublist(magic.length, magic.length + 16));
     final encrypted = enc.Encrypted(fileBytes.sublist(magic.length + 16));
     try {
-      final encrypter = enc.Encrypter(enc.AES(_key, mode: enc.AESMode.cbc));
-      final decrypted = encrypter.decryptBytes(encrypted, iv: iv);
-      return Uint8List.fromList(decrypted);
+      final encrypter = enc.Encrypter(enc.AES(key, mode: enc.AESMode.cbc));
+      return Uint8List.fromList(encrypter.decryptBytes(encrypted, iv: iv));
     } catch (_) {
       return null;
     }
   }
 
-  static bool isEncrypted(List<int> bytes) {
-    if (bytes.length < magic.length) return false;
-    for (var i = 0; i < magic.length; i++) {
-      if (bytes[i] != magic[i]) return false;
+  static bool _hasMagic(List<int> bytes, List<int> prefix) {
+    if (bytes.length < prefix.length) return false;
+    for (var i = 0; i < prefix.length; i++) {
+      if (bytes[i] != prefix[i]) return false;
     }
     return true;
   }
+
+  static bool isEncrypted(List<int> bytes) {
+    return _hasMagic(bytes, magic) || _hasMagic(bytes, _passwordMagic);
+  }
+
+  static bool isPasswordProtected(List<int> bytes) =>
+      _hasMagic(bytes, _passwordMagic);
+
+  static Future<bool> isPasswordProtectedFile(String path) async {
+    final handle = await File(path).open();
+    try {
+      return isPasswordProtected(await handle.read(4));
+    } finally {
+      await handle.close();
+    }
+  }
+}
+
+class DkhpPasswordException implements Exception {
+  final String message;
+  const DkhpPasswordException(this.message);
+
+  @override
+  String toString() => message;
 }
 
 /// Pengelola berkas paket `.dkhp` — format arsip terenkripsi khusus aplikasi Cek PBB Cianjur.
@@ -98,7 +198,10 @@ class DhkpPackageHelper {
   }
 
   /// Cari file foto untuk sebuah NOP jika sudah tersimpan lokal.
-  static Future<File?> findPhotoForNop(String nop, {String? customFileName}) async {
+  static Future<File?> findPhotoForNop(
+    String nop, {
+    String? customFileName,
+  }) async {
     final dir = await photosDirectory();
     final cleanNop = nop.replaceAll(RegExp(r'[^0-9]'), '');
     var cached = _cachedPhotoNames;
@@ -160,7 +263,10 @@ class DhkpPackageHelper {
 
   /// Buka dan ekstrak berkas `.dkhp` (terenkripsi maupun tidak) atau `.zip`, lalu simpan datanya ke
   /// [BlokDataStore] dan foto-fotonya ke folder lokal aplikasi.
-  static Future<List<BlokRecord>> unpackDkhp(String filePath) async {
+  static Future<List<BlokRecord>> unpackDkhp(
+    String filePath, {
+    String? password,
+  }) async {
     final file = File(filePath);
     if (!await file.exists()) {
       throw FileSystemException('Berkas .dkhp tidak ditemukan', filePath);
@@ -170,9 +276,14 @@ class DhkpPackageHelper {
     Uint8List zipBytes;
 
     if (DhkpCrypto.isEncrypted(rawBytes)) {
-      final decrypted = DhkpCrypto.decryptBytes(rawBytes);
+      final decrypted = await DhkpCrypto.decryptBytes(
+        rawBytes,
+        password: password,
+      );
       if (decrypted == null) {
-        throw const FormatException('Gagal mendekripsi berkas .dkhp: Kunci atau format enkripsi tidak cocok.');
+        throw const FormatException(
+          'Gagal mendekripsi berkas .dkhp: Kunci atau format enkripsi tidak cocok.',
+        );
       }
       zipBytes = decrypted;
     } else {
@@ -242,8 +353,11 @@ class DhkpPackageHelper {
           final namaFoto = row.length > 6 && row[6].toString().trim().isNotEmpty
               ? row[6].toString().trim()
               : null;
-          final rawTargetPemda = row.length > 7 ? row[7].toString().trim().toLowerCase() : '';
-          final isTargetPemda = rawTargetPemda == '1' ||
+          final rawTargetPemda = row.length > 7
+              ? row[7].toString().trim().toLowerCase()
+              : '';
+          final isTargetPemda =
+              rawTargetPemda == '1' ||
               rawTargetPemda == 'true' ||
               rawTargetPemda == 'ya' ||
               rawTargetPemda == 'yes' ||
@@ -254,10 +368,12 @@ class DhkpPackageHelper {
           final luasBangunan = row.length > 10 ? row[10].toString().trim() : '';
           final njopBumi = row.length > 11 ? row[11].toString().trim() : '';
           final njopBangunan = row.length > 12 ? row[12].toString().trim() : '';
-          final kecamatan = row.length > 13 && row[13].toString().trim().isNotEmpty
+          final kecamatan =
+              row.length > 13 && row[13].toString().trim().isNotEmpty
               ? row[13].toString().trim()
               : 'MANDE';
-          final kelurahan = row.length > 14 && row[14].toString().trim().isNotEmpty
+          final kelurahan =
+              row.length > 14 && row[14].toString().trim().isNotEmpty
               ? row[14].toString().trim()
               : 'BOBOJONG';
           final alamatObjek = row.length > 15 ? row[15].toString().trim() : '';
@@ -266,7 +382,9 @@ class DhkpPackageHelper {
 
           records.add(
             BlokRecord(
-              namaWajibPajak: nama.isEmpty ? 'WP ${nopBlok(nopDigits)}/${nopWilayah(nopDigits)}' : nama,
+              namaWajibPajak: nama.isEmpty
+                  ? 'WP ${nopBlok(nopDigits)}/${nopWilayah(nopDigits)}'
+                  : nama,
               nop: nopDigits,
               tahunBayar: tahun,
               tanggalBayar: tanggal,
@@ -298,7 +416,8 @@ class DhkpPackageHelper {
         if (digits.length == 18) {
           records.add(
             BlokRecord(
-              namaWajibPajak: 'WP Blok ${nopBlok(digits)} No ${nopWilayah(digits)}',
+              namaWajibPajak:
+                  'WP Blok ${nopBlok(digits)} No ${nopWilayah(digits)}',
               nop: digits,
               tahunBayar: currentYear,
               tanggalBayar: '',
@@ -326,6 +445,7 @@ class DhkpPackageHelper {
     Directory? photosDir,
     bool encrypt = true,
     bool includePhotos = true,
+    String? password,
   }) async {
     final archive = Archive();
 
@@ -401,8 +521,18 @@ class DhkpPackageHelper {
       throw Exception('Gagal mengompresi data ke arsip ZIP.');
     }
 
+    final effectivePassword =
+        password ?? await BackupPasswordStore.instance.read();
+    if (encrypt && (effectivePassword == null || effectivePassword.isEmpty)) {
+      throw const DkhpPasswordException(
+        'Atur kata sandi backup sebelum membuat berkas .dkhp terenkripsi.',
+      );
+    }
     final outputBytes = encrypt
-        ? DhkpCrypto.encryptBytes(Uint8List.fromList(zipBytes))
+        ? await DhkpCrypto.encryptBytes(
+            Uint8List.fromList(zipBytes),
+            password: effectivePassword!,
+          )
         : Uint8List.fromList(zipBytes);
 
     final file = File(outputPath);

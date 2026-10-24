@@ -51,8 +51,31 @@ class AppStorage {
 
     Directory dir;
     if (Platform.isAndroid) {
-      final ext = await getExternalStorageDirectory();
-      dir = ext ?? await getApplicationSupportDirectory();
+      dir = await getApplicationSupportDirectory();
+      // Migrasi otomatis dari penyimpanan eksternal lama jika ada
+      try {
+        final ext = await getExternalStorageDirectory();
+        if (ext != null && ext.existsSync()) {
+          final oldDb = File('${ext.path}/blok_data.csv');
+          final newDb = File('${dir.path}/blok_data.csv');
+          if (oldDb.existsSync() && !newDb.existsSync()) {
+            await oldDb.copy(newDb.path);
+          }
+          final oldCookies = Directory('${ext.path}/cookies');
+          final newCookies = Directory('${dir.path}/cookies');
+          if (oldCookies.existsSync() && !newCookies.existsSync()) {
+            await newCookies.create(recursive: true);
+            for (final entity in oldCookies.listSync(recursive: true)) {
+              if (entity is File) {
+                final rel = entity.path.substring(oldCookies.path.length);
+                final dest = File('${newCookies.path}$rel');
+                await dest.parent.create(recursive: true);
+                await entity.copy(dest.path);
+              }
+            }
+          }
+        }
+      } catch (_) {}
     } else if (Platform.isLinux) {
       final home = Platform.environment['HOME'] ?? '';
       dir = Directory('$home/.local/share/$appPackageName');

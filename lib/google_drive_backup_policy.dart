@@ -80,6 +80,40 @@ class GoogleDriveBackupPolicy {
     return null;
   }
 
+  /// Ekstrak ID berkas dari URL Google Drive atau ID berkas mentah.
+  /// Contoh:
+  /// - `https://drive.google.com/file/d/1ABC_123-xyz/view?usp=sharing` -> `1ABC_123-xyz`
+  /// - `https://drive.google.com/uc?export=download&id=1ABC_123-xyz` -> `1ABC_123-xyz`
+  /// - `https://drive.google.com/open?id=1ABC_123-xyz` -> `1ABC_123-xyz`
+  /// - `1ABC_123-xyz` -> `1ABC_123-xyz`
+  static String? extractFileId(String input) {
+    final trimmed = input.trim();
+    if (trimmed.isEmpty) return null;
+
+    final fileMatch = RegExp(r'file/d/([a-zA-Z0-9_-]+)').firstMatch(trimmed);
+    if (fileMatch != null) {
+      return fileMatch.group(1);
+    }
+
+    final idParamMatch =
+        RegExp(r'[?&]id=([a-zA-Z0-9_-]+)').firstMatch(trimmed);
+    if (idParamMatch != null) {
+      return idParamMatch.group(1);
+    }
+
+    final folderMatch =
+        RegExp(r'folders/([a-zA-Z0-9_-]+)').firstMatch(trimmed);
+    if (folderMatch != null) {
+      return folderMatch.group(1);
+    }
+
+    if (RegExp(r'^[a-zA-Z0-9_-]{15,}$').hasMatch(trimmed)) {
+      return trimmed;
+    }
+
+    return null;
+  }
+
   /// Validasi keamanan ketat: melempar [SecurityException] jika ada pelanggaran izin atau akses ke folder lain.
   static void validateAccess({
     required String targetFolder,

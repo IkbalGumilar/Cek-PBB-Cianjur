@@ -408,10 +408,13 @@ class BlokDataStore {
   /// Restore: gabungkan (upsert) isi berkas backup (.dkhp atau arsip tabel) ke data
   /// lokal yang ada sekarang. Mendukung format paket .dkhp modern serta fallback
   /// berkas warisan jika diperlukan.
-  Future<int> importCsv(String path) async {
+  Future<int> importCsv(String path, {String? password}) async {
     final lower = path.toLowerCase();
     if (lower.endsWith('.dkhp') || lower.endsWith('.zip')) {
-      final records = await DhkpPackageHelper.unpackDkhp(path);
+      final records = await DhkpPackageHelper.unpackDkhp(
+        path,
+        password: password,
+      );
       return records.length;
     }
 

@@ -1,248 +1,238 @@
 # Cek PBB Cianjur
 
-Aplikasi untuk membantu staf desa/kelurahan di Kabupaten Cianjur mengecek dan mengurus status PBB (Pajak Bumi dan Bangunan) warga, dengan mengakses langsung portal resmi `cektagihan.cianjurkab.v-tax.id` — tanpa perlu buka situsnya satu per satu lewat browser.
-
-**Tidak tersedia di Play Store / App Store** — didistribusikan manual antar perangkat staf desa (Android lewat sideload APK, Windows/Linux lewat berkas rilis di GitHub).
-
-## Platform yang Didukung
-
-| Platform | Status | Catatan |
-|---|---|---|
-| Android | Didukung penuh | Target utama, semua fitur tersedia |
-| Windows | Didukung | Pembayaran hanya QRIS, lihat [Batasan per Platform](#batasan-per-platform) |
-| Linux | Didukung | Sama seperti Windows |
-| iOS | Tidak didukung | Harus lewat App Store, tidak cocok dengan alur sideload aplikasi ini |
-| macOS | Tidak digarap | Belum jadi target rilis |
-
-## Fitur Utama
-
-- **Cek Tagihan** — cari tagihan PBB per NOP (input manual atau pakai kode pendek Blok + Nomor Wilayah), lihat rincian per tahun pajak (PBB, denda, kurang bayar, status bayar)
-- **Cek Status Bayar** — cek cepat lunas/belum untuk satu NOP dan tahun tertentu
-- **Cetak STTS/SPPT & Bukti Bayar** — unduh/pratinjau bukti bayar dalam bentuk PDF
-- **Pembayaran QRIS** — generate kode QRIS dinamis per NOP + tahun (berlaku 1 jam, sekali pakai), tersedia di semua platform
-- **Pembayaran Virtual Account (VA) Bank BJB** — *khusus Android* — generate nomor VA, salin ke clipboard, dan buka langsung aplikasi m-banking/e-wallet yang terpasang di HP (ikon aplikasi diambil langsung dari sistem, bukan aset yang dibundel)
-- **Scan NOP lewat Kamera/Galeri (OCR)** — *khusus Android* — pindai gambar STTS/SPPT atau dokumen pajak menggunakan OCR (pengenalan teks otomatis di perangkat, tanpa butuh internet) untuk mengisi NOP tanpa perlu mengetik manual. Mendukung deteksi cerdas untuk satu atau banyak NOP sekaligus, tersedia di layar utama (Cek Tagihan / Status Bayar) maupun layar Import.
-- **Cek Massal (Import)** — cek banyak NOP sekaligus dari teks tempel atau berkas (.txt/.csv/.xlsx/.xls), hasil pembayaran otomatis tercatat ke Buku Catatan Blok
-- **Buku Catatan Blok** — rekap pembayaran per blok/wilayah kerja, dengan filter tahun & urutan, cetak ulang bukti bayar, hapus baris yang salah tercatat, total otomatis, dan ekspor ke PDF/Excel/CSV
-- **Backup harian otomatis** — kalau ada data baru, dibackup otomatis setiap hari ke berkas terenkripsi
-- **Monitoring (Portal Staf)** — khusus staf berakun Portal Staf (`cianjurkab.v-tax.id`): login + verifikasi MFA, lihat Monitoring Wilayah (Sudah/Belum Bayar, Realisasi, Piutang, Sudah/Belum Bayar Kolektif, Rangking Realisasi) dan kelola Pembayaran Kolektif (lihat daftar, tambah grup, kelola anggota, hapus grup), dengan hasil yang bisa diunduh/dibagikan/dicetak sebagai PDF/Excel/CSV — lihat [Monitoring (Portal Staf)](#8-monitoring-portal-staf)
-- **Cek Desil & Bansos** — cek data DTSEN Kemensos dengan NIK 16 digit dan captcha, lalu lihat desil serta status Sembako, PKH, PBI-JK, dan KPD. NIK bisa diketik manual atau dipindai dari KTP/KK memakai OCR lokal *khusus Android*; gambar tidak dikirim ke Claude atau layanan OCR cloud.
-- **Cek Kendaraan (Eksperimental)** — cek informasi kendaraan dan rincian PKB/PNBP Jawa Barat dari tab **Cek Kendaraan** di sebelah Monitoring. Form mengikuti format layanan resmi (huruf depan, angka, huruf belakang) dan hasil ditampilkan dalam kartu kendaraan, masa pajak, serta biaya. Plat dapat dipindai dengan OCR lokal di Android/iOS; gambar tidak dikirim ke cloud. Akses data kendaraan masih bergantung pada jaringan yang dapat menjangkau layanan BAPENDA atau relay pengembangan.
-- **Periksa Pembaruan dalam aplikasi** — cek versi terbaru dari rilis GitHub lengkap dengan catatan pembaruannya, lihat [Pembaruan Aplikasi](#pembaruan-aplikasi)
-- Semua dokumen (hasil cek, bukti bayar, laporan, backup) tersimpan di satu folder: `Dokumen/Cek PBB Cianjur` (Android) atau `Downloads/Cek PBB Cianjur` (Windows/Linux)
-
-## Cara Menggunakan
-
-### 1. Cek Tagihan / Cek Status Bayar
-
-Layar utama punya dua mode yang bisa dipilih lewat chip di header: **Cek Tagihan** dan **Cek Status Bayar**.
-
-1. Isi **Blok** dan **Nomor Wilayah** tanpa nol di depan — aplikasi otomatis melengkapinya jadi NOP penuh 18 digit. Contoh: Blok `1`, Nomor Wilayah `1` → otomatis jadi `...0010001...`.
-2. Khusus mode **Cek Status Bayar**, isi juga **Tahun Pajak** yang mau dicek.
-3. Lihat gambar **kode verifikasi (captcha)** yang tampil, lalu ketik ulang di kolom **Kode Verifikasi**. Kalau gambarnya kurang jelas, tekan **Ganti Captcha** untuk minta gambar baru.
-4. Tekan **Cek**.
-5. Kalau blok yang diketik belum pernah dicek sebelumnya di perangkat ini, aplikasi akan tanya sekali apakah blok tersebut termasuk wilayah kerja Anda — jawaban ini menentukan blok apa saja yang muncul di Buku Catatan Blok nanti (bisa diubah kapan saja lewat Pengaturan).
-
-**Hasil Cek Tagihan** ditampilkan sebagai tabel per tahun pajak (PBB, Denda, Kurang Bayar, Status, tombol bayar), plus tombol **Cetak PDF** untuk mengunduh STTS/SPPT dan total kurang bayar di bagian bawah.
-
-**Hasil Cek Status Bayar** ditampilkan sebagai kartu berwarna (hijau = sudah bayar, oranye = belum bayar). Kalau sudah bayar, ada tombol ikon mata untuk melihat/mencetak bukti bayarnya.
-
-### 2. Pembayaran QRIS (semua platform)
-
-Di tabel hasil Cek Tagihan, tekan **Bayar QRIS** pada baris tahun yang mau dibayar. Setelah konfirmasi, aplikasi menampilkan kode QR, jumlah tagihan, ID transaksi, dan batas waktu (berlaku 1 jam, sekali pakai). Pindai kode QR itu pakai aplikasi dompet digital/mobile banking apa pun yang mendukung QRIS.
-
-### 3. Pembayaran Virtual Account (khusus Android)
-
-Kalau baris tahun tersebut punya opsi VA, tombol **Bayar VA** akan muncul di sebelah tombol QRIS (kolom ini tidak muncul di Windows/Linux). Setelah konfirmasi:
-
-1. Nomor Virtual Account Bank BJB ditampilkan — tekan **Salin Kode VA** untuk menyalinnya.
-2. Kalau aplikasi bank Anda tidak punya opsi "Bank BJB" langsung, ada kombinasi **Kode Bank** (910200) + **Kode Bayar** di bawahnya untuk dipakai lewat menu Virtual Account/Multipayment Antar Bank.
-3. Bagian **Buka Aplikasi Bank** menampilkan ikon aplikasi m-banking/e-wallet yang terdeteksi terpasang di HP — sengaja terkunci (abu-abu) sampai Anda menyalin kode VA atau kode bayar dulu, supaya kodenya sudah aman di clipboard sebelum berpindah aplikasi. Setelah disalin, tinggal ketuk ikon aplikasi bank yang mau dipakai, lalu tempel kode VA-nya di sana.
-
-### 4. Cek Massal (Import banyak NOP sekaligus)
-
-Di mode **Cek Status Bayar**, tekan ikon unggah di sebelah kolom Nomor Wilayah untuk membuka layar Import. Ada dua cara mengisi daftar NOP:
-
-- **Tempel teks** — satu NOP per baris, atau dipisah koma. Boleh format lengkap 18 digit atau kode pendek (5-7 digit, sama seperti Blok+Nomor Wilayah).
-- **Pilih Berkas** — unggah `.txt`, `.csv`, atau `.xlsx`/`.xls` berisi daftar NOP.
-
-Teks yang diketik otomatis tersimpan sebagai draft (tidak hilang kalau aplikasi ditutup). Setelah daftar siap, tentukan tahun pajaknya lalu mulai proses cek — captcha akan diminta satu per satu untuk tiap NOP dalam daftar, dan hasil "Sudah Bayar" otomatis tercatat ke Buku Catatan Blok.
-
-### 5. Buku Catatan Blok
-
-Tombol melingkar (FAB) dengan ikon buku di layar utama membuka rekap semua NOP yang statusnya "Sudah Bayar", hasil dari Cek Status Bayar maupun Cek Massal.
-
-- Filter berdasarkan **Blok** (atau "Semua Blok" untuk gabungan semua wilayah kerja Anda) dan **Tahun**, plus pilihan urutan tampilan.
-- Tekan salah satu baris untuk **Cetak Bukti Bayar** ulang — otomatis membuka Cek Status Bayar dengan Blok/Nomor Wilayah/Tahun yang sudah terisi.
-- Setiap baris juga punya ikon **Hapus** untuk mengoreksi catatan yang salah tercatat (mis. salah impor) — akan diminta konfirmasi dulu karena bersifat permanen.
-- **Unduh Laporan** menyimpan rekap ke folder Dokumen dalam format CSV/Excel/PDF pilihan Anda.
-- **Bagikan Laporan** *(khusus Android)* langsung membuka share sheet Android (WhatsApp, email, dll).
-
-### 6. Pengaturan
-
-Ikon roda gigi di header membuka Pengaturan, berisi:
-
-- **Tema** — Ikuti Sistem, Terang, Gelap, atau Hitam AMOLED (hemat baterai di layar OLED).
-- **Data Blok** — ekspor seluruh data blok tersimpan sebagai berkas backup terenkripsi (`.bak`), impor kembali (restore) dari berkas backup — hanya bisa dipulihkan di perangkat dengan wilayah kerja yang sama; backup dari wilayah lain otomatis ditolak — dan atur daftar Blok mana saja yang termasuk wilayah kerja Anda (menentukan apa yang muncul di Buku Catatan Blok).
-- **Bagikan Aplikasi** — di Android, membagikan berkas APK aplikasi ini langsung lewat share sheet; di Windows/Linux, menyalin **link halaman unduhan** (rilis GitHub) ke clipboard supaya penerima mengunduh sendiri versi yang sesuai sistem operasinya.
-- **Tentang Aplikasi** — info aplikasi, versi terpasang, tombol **Periksa Pembaruan**, dan halaman Lisensi Open Source.
-
-### 7. Notifikasi Status Jaringan
-
-Aplikasi memantau koneksi internet dan kesehatan server portal PBB secara berkala. Kalau ada masalah (tidak ada internet, internet lambat, atau server sedang bermasalah), muncul pil peringatan mengambang di bagian atas layar secara otomatis.
-
-### 8. Monitoring (Portal Staf)
-
-Chip **Monitoring** di header membuka portal staf terpisah (`cianjurkab.v-tax.id`) — beda dari Cek Tagihan/Cek Status Bayar yang publik tanpa login, menu ini khusus untuk staf yang punya akun Portal Staf.
-
-**Login & Verifikasi MFA**
-
-1. Login pertama: isi **Username**, **Password**, dan kode **captcha** yang tampil, lalu tekan **Login**.
-2. Kalau kredensial & captcha benar, lanjut ke layar **Verifikasi MFA** — masukkan kode 6 digit dari aplikasi Google Authenticator. Di bawah kolom kode ada tile "Cara Memasukkan Kode Dengan Google Authenticator" yang menampilkan ikon Google Authenticator asli (kalau aplikasinya terpasang di perangkat) dan bisa ditekan untuk langsung membuka aplikasi itu; kalau belum terpasang, tile ini membuka halaman Play Store-nya.
-3. Setelah verifikasi berhasil, sesi login tersimpan di perangkat — buka aplikasi dan tekan Monitoring lagi lain kali tidak perlu login ulang selama sesi di server belum berakhir. Tekan ikon **Keluar** di layar Monitoring untuk logout manual.
-4. Username & password tersimpan otomatis setelah login pertama berhasil (bukan sejak awal) — login kedua dan seterusnya kolom Username/Password sudah terisi sendiri, tinggal isi captcha & kode MFA saja.
-
-**Monitoring Wilayah** — 7 tab meniru modul asli, field per tab dicocokkan langsung dengan nama field aslinya. Wilayah otomatis mengikuti akun staf yang login (tidak perlu pilih kecamatan/kelurahan sendiri):
-
-- **Sudah Bayar** — filter rentang Tanggal Pembayaran (default 30 hari terakhir), Tahun Pajak, Buku, Bank, NOP, Nama WP, Petugas Pembayaran, Kode Bayar Individu/Kolektif, VA, QRIS.
-- **Belum Bayar** — filter Tanggal Cutoff (menghitung semua piutang belum bayar sampai tanggal tersebut — butuh waktu lebih lama dari tab lain karena tidak ada batas tanggal awal), Tahun Pajak, Buku, NOP, Nama WP, Kode Bayar.
-- **Realisasi**, **Piutang**, **Sudah Bayar Kolektif**, **Belum Bayar Kolektif**, **Rangking Realisasi** — field masing-masing tab sama persis dengan modul aslinya.
-
-Hasil tabel setiap tab ditampilkan 10 baris dulu, dengan tombol **Muat 10 Data Lagi** untuk menambah tampilan bertahap (supaya hasil dengan ratusan/ribuan baris tidak langsung dirender semua sekaligus). Di atas tabel ada tiga ikon aksi:
-
-- **Unduh** — simpan hasil ke folder Dokumen dalam format PDF/Excel/CSV pilihan Anda.
-- **Bagikan** *(khusus Android)* — kirim langsung lewat share sheet dalam format yang sama.
-- **Cetak** — buka pratinjau PDF hasilnya, bisa langsung dicetak/dibagikan/diunduh dari layar pratinjau itu.
-
-**Pembayaran Kolektif** — daftar grup pembayaran kolektif: filter Bulan, Status, Tahun, Tanggal Awal/Akhir. Selain melihat daftar, tersedia dua aksi:
-
-Ketuk baris grup untuk membuka aksinya (tabelnya lebar dan harus digeser mendatar, jadi aksi tidak ditaruh di kolom paling kiri yang gampang hilang dari layar):
-
-- **Tambah Group** — buat grup baru (Nama Group, Keterangan, Kolektor, No HP Kolektor, Kecamatan, Kelurahan). Grup baru berstatus **Draft**.
-- **Ubah Group** — ubah nama, keterangan, kolektor, atau no HP. Kecamatan & Kelurahan dikunci saat mengubah, sama seperti di sistem aslinya.
-- **Kelola Anggota** — tambah NOP ke grup (diketik atau diunggah dari berkas) dan keluarkan NOP yang terlanjur masuk. Hanya bisa diubah selama grup berstatus **Draft**; di luar itu daftarnya hanya bisa dilihat.
-- **Cetak Surat Pengantar** — buka dokumen resmi grup langsung dari server (muncul untuk grup yang sudah final atau sudah dibayar).
-- **Hapus Group** — hanya muncul pada grup yang memang masih boleh dihapus (Draft atau Expired). Wajib mengisi **Alasan Penghapusan**.
-
-Semua tombol aksi itu **hanya muncul kalau sistem aslinya juga memunculkannya** untuk grup tersebut — aplikasi membaca tombol apa saja yang dirender server, bukan menyimpulkan sendiri dari statusnya.
-
-Di layar **Kelola Anggota**: NOP boleh ditulis lengkap 18 angka atau disingkat blok+nomor wilayah 5–7 angka (contoh `17154` → blok 017 nomor 0154), dipisah koma kalau lebih dari satu — sebelum terkirim, layar konfirmasi menampilkan NOP lengkap hasil uraiannya untuk dicocokkan. Daftarnya tampil 10 baris dulu dengan tombol **Muat 10 Data Lagi**, atau tombol **Ke Bawah** untuk langsung membuka semuanya dan melompat ke bagian bawah. Di paling bawah ada **Total Keseluruhan** (Pokok, Denda, Total Bayar) yang selalu dihitung dari seluruh anggota, bukan hanya baris yang sedang terlihat. Hasilnya bisa **Unduh / Bagikan / Cetak** sebagai PDF/Excel/CSV, lengkap dengan baris totalnya.
-
-**Unggah Berkas (CSV/Excel)** — daftar NOP juga bisa diambil dari berkas `.csv`, `.xlsx`, `.xls`, atau `.txt` (sistem aslinya hanya menerima CSV). Berkasnya dibaca di aplikasi, bukan dikirim mentah ke server, sehingga sebelum ada yang terkirim Anda lebih dulu melihat:
-
-- kolom mana yang dipakai sebagai NOP (ditebak otomatis, bisa diganti sendiri);
-- daftar **NOP 18 angka** yang benar-benar akan dikirim — termasuk tanda untuk NOP yang berasal dari singkatan, karena awalan wilayahnya dilengkapi dari kelurahan grup;
-- NOP yang dilewati: **sudah jadi anggota**, **ganda di dalam berkas**, atau **tidak terbaca** (baris judul kolom ikut ke sini);
-- peringatan kalau berkas Excel menyimpan NOP sebagai angka — Excel hanya menyimpan 15 angka pertama dengan tepat, jadi digit belakang NOP 18 angka bisa sudah berubah di berkasnya.
-
-NOP dikirim satu per satu dengan indikator kemajuan dan tombol **Hentikan**. Setelah selesai, hasilnya dilaporkan **satu golongan per notifikasi, berurutan** — bukan digabung jadi satu pesan: (1) **Ditambahkan**, (2) **Sudah Bayar — Tidak Dimasukkan**, (3) **Tidak Ditemukan — Tidak Dimasukkan**, masing-masing dengan daftar NOP-nya. Kalau server menjawab hal di luar ketiga golongan itu, muncul notifikasi keempat **Perlu Diperiksa** berisi jawaban server apa adanya — sengaja tidak dipaksa masuk salah satu golongan di atas. Ringkasannya bisa dilihat ulang dan disalin dari kartu hasil.
-
-Tahun pajak dan buku yang dipakai adalah yang tertulis di layar Kelola Anggota, berlaku untuk seluruh isi berkas.
-
-**Tambah Group** dan **Hapus Group** tidak bisa dibatalkan: grup yang dibuat tercatat di server pemerintah, dan penghapusan tercatat permanen di *Log History Penghapusan* lengkap dengan alasan serta nama akun yang menghapus. Karena itu alurnya sengaja dibuat dua langkah — isi form dulu, lalu muncul layar konfirmasi yang menampilkan persis apa yang akan dikirim sebelum ada yang benar-benar terkirim. Menambah/mengeluarkan anggota dan mengubah data grup sebaliknya masih bisa diperbaiki selama grup Draft, jadi cukup satu konfirmasi.
-
-Saat menghapus grup, **Alasan Penghapusan** bisa dipilih dari beberapa alasan siap pakai yang langsung mengisi kolomnya (dan masih bisa disunting) — alasan itu tersimpan permanen di log pemerintah, jadi kalimat yang seragam lebih berguna daripada ketikan seadanya.
-
-**Finalkan** tersedia dari bawah ringkasan Total Bayar pada layar Kelola Anggota. Aksi ini mengunci grup dan menerbitkan kode bayar sungguhan, sehingga selalu meminta konfirmasi. Yang **tidak** tersedia di aplikasi adalah **Generate VA** serta penambahan **massal** — di sistem aslinya, mengosongkan kolom NOP lalu menekan tambah akan memasukkan seluruh NOP yang belum bayar di satu kelurahan sekaligus; aplikasi ini selalu mengirim NOP yang tertulis, termasuk lewat unggah berkas, sehingga jalur itu tertutup.
-
-### 9. Cek Desil & Bansos
-
-Pilih chip **Cek Desil** di header, lalu isi NIK 16 digit dan captcha dari layanan resmi Kemensos.
-
-- Kolom NIK hanya menerima angka dan menampilkan peringatan jika belum tepat 16 digit.
-- Setelah digit ke-16 selesai diketik, fokus berpindah otomatis ke kolom captcha. Menekan Enter pada NIK yang belum lengkap juga menampilkan peringatan yang sama.
-- Tombol **Scan NIK** memakai OCR lokal di perangkat Android. Foto KTP, KK, atau dokumen lain tidak diunggah ke internet.
-- OCR membaca kandidat angka yang mirip, termasuk koreksi karakter seperti `d/b/o/q/s/l` dan angka yang dapat tertukar. Kandidat diberi peringkat berdasarkan konteks tulisan NIK serta struktur tanggal NIK.
-- Jika hasil OCR hanya menghasilkan satu kandidat, NIK langsung diisi. Jika beberapa kandidat masih mungkin, pilih angka yang sesuai pada dialog **Pilih NIK**. NIK hasil OCR diberi peringatan kuning agar dicocokkan lagi dengan dokumen asli.
-- Menekan **Cari Data** menghapus peringatan OCR. Jika captcha salah atau kedaluwarsa, captcha diperbarui dan keyboard dibuka kembali. Jika data tidak ditemukan atau layanan mengalami gangguan, captcha tetap diperbarui tetapi keyboard tidak dipaksa terbuka supaya pesan hasil tetap terlihat.
-- Jika captcha kurang jelas, tekan **Ganti Captcha**. Hasil yang berhasil menampilkan desil, status Sembako, PKH, PBI-JK, dan KPD.
-
-OCR NIK menggunakan Google ML Kit yang tersedia pada Android/iOS. Karena aplikasi ini saat ini merilis Android, Windows, dan Linux, OCR NIK digunakan di Android; pada Windows/Linux NIK tetap dapat dimasukkan secara manual.
-
-### 10. Cek Kendaraan Bermotor (Eksperimental)
-
-Pilih chip **Cek Kendaraan**, isi tiga bagian nomor polisi, pilih warna TNKB, lalu tekan **Lihat Info**. Format yang dikirim ke layanan resmi adalah `F 6456 DFG` untuk input `F / 6456 / DGF`.
-
-Modul ini memakai endpoint PKB yang dipanggil halaman resmi BAPENDA dan menampilkan data kendaraan, masa berlaku pajak/STNK, rincian PKB/PNBP, total, serta keterangan pembayaran. Pesan **Data kendaraan tidak ditemukan**, batas permintaan, dan gangguan jaringan dibedakan agar tindakan pengguna jelas. Jika jaringan perangkat tidak dapat menjangkau endpoint lama, aplikasi menyediakan fallback **WhatsApp Bapenda** dan **Portal Jabar**.
-
-Tombol **Scan Plat (OCR offline)** dapat membaca format kode wilayah, angka, dan huruf belakang dari foto kamera atau galeri. Jika hasil OCR memiliki lebih dari satu kemungkinan, pilih plat yang sesuai pada dialog. OCR juga memperkirakan permukaan TNKB hitam atau putih; keduanya dipetakan ke kategori kendaraan pribadi (`kd_plat=1`) dan hasilnya selalu diberi peringatan untuk diperiksa ulang. Pada Windows/Linux, isi nomor polisi secara manual karena Google ML Kit tidak menyediakan mesin OCR lokal untuk desktop pada modul ini.
-
-Halaman web yang disimpan sebagai HTML adalah snapshot aplikasi React. Snapshot tersebut memuat konfigurasi autentikasi publik di JavaScript dan reCAPTCHA hanya dipakai untuk mengaktifkan tombol web; tokennya tidak dikirim pada request data PKB. Aplikasi tidak menyimpan token captcha atau mengunggahnya lewat Dio.
-
-Untuk menguji perangkat yang tidak dapat menjangkau host API lama, tersedia relay
-lokal khusus pengembangan di `tool/kendaraan_relay.py`. Jalankan relay di komputer,
-lalu hubungkan portnya dengan `adb reverse tcp:8787 tcp:8787` dan build debug dengan
-`--dart-define=KENDARAAN_API_BASE_URL=http://127.0.0.1:8787`. Relay hanya mendengar
-di localhost dan tidak boleh dipasang sebagai layanan publik; build biasa tetap
-menggunakan endpoint resmi.
-
-## Pembaruan Aplikasi
-
-Aplikasi bisa mengecek versi terbaru langsung dari [halaman rilis GitHub repo ini](https://github.com/IkbalGumilar/Cek-PBB-Cianjur/releases/latest) — lewat menu **Pengaturan → Tentang Aplikasi → Periksa Pembaruan**, atau otomatis setiap aplikasi dibuka (maksimal sekali per 24 jam, muncul sebagai banner kecil kalau ada versi baru).
-
-Alurnya **berbeda per platform**:
-
-- **Android** — unduh berkas APK dari rilis GitHub, lalu aplikasi otomatis membuka installer sistem Android untuk konfirmasi pasang (perlu izin "Instal aplikasi tidak dikenal" diaktifkan sekali di Android 8+, aplikasi akan menuntun ke layar izinnya kalau belum aktif).
-- **Windows/Linux** — aplikasi **hanya mengunduh** berkas rilis terbaru ke folder Downloads, **tidak** memasang dirinya sendiri secara otomatis (tidak ada cara aman & generik lintas platform untuk itu tanpa hak admin/root). Setelah unduhan selesai, jalankan/ekstrak berkasnya sendiri untuk memperbarui.
-
-Deteksi versi & catatan pembaruan (log "apa yang ditambahkan/diperbaiki/dihapus") diambil dari deskripsi rilis GitHub apa adanya — jadi setiap merilis versi baru, isi deskripsi rilisnya dengan jelas karena itu yang akan tampil di aplikasi.
-
-**Konvensi penamaan berkas rilis** (supaya terdeteksi otomatis oleh pengecek pembaruan):
-
-| Platform | Asset dicari berdasarkan |
-|---|---|
-| Android | nama berkas berakhiran `.apk` |
-| Windows | nama berkas mengandung kata `windows`, atau berakhiran `.exe`/`.msix` |
-| Linux | nama berkas mengandung kata `linux`, atau berakhiran `.AppImage`/`.tar.gz`/`.deb` |
-
-## Batasan per Platform
-
-- **Pembayaran VA & "Buka Aplikasi Bank"** hanya tersedia di Android — fitur ini bergantung pada kemampuan mendeteksi & membuka aplikasi m-banking/e-wallet lain yang terpasang di HP, sesuatu yang tidak relevan di desktop. Di Windows/Linux, kolom VA tidak ditampilkan sama sekali; pembayaran hanya lewat QRIS.
-- **Pembaruan otomatis (pasang sendiri)** hanya berjalan di Android — lihat [Pembaruan Aplikasi](#pembaruan-aplikasi) di atas.
-- **Bagikan Aplikasi** berbentuk berkas APK di Android, dan link halaman rilis GitHub di Windows/Linux.
-- **macOS** belum digarap sama sekali (folder scaffold `macos/` ada dari `flutter create` tapi belum dikonfigurasi, termasuk entitlement jaringan sandbox-nya) — jangan build/rilis untuk macOS sebelum ini dibenahi.
-
-## Teknologi
-
-- [Flutter](https://flutter.dev/) / Dart — Android, Windows, Linux
-- Kode native Kotlin (`android/app/src/main/kotlin/.../MainActivity.kt`, khusus Android) untuk: penyimpanan berkas ke folder publik, share berkas, deteksi & buka aplikasi bank/e-wallet, ambil ikon aplikasi asli dari sistem, dan buka installer sistem untuk pembaruan
-- Package penting: `dio` + `cookie_jar` (sesi HTTP ke portal resmi, portal staf & pengecekan rilis GitHub — sesi login Portal Staf tersimpan ke berkas supaya bertahan lewat restart aplikasi), `flutter_secure_storage` (kredensial Portal Staf tersimpan aman di perangkat), `html` (parsing respons HTML), `pdf` + `printing`, `excel`, `csv`, `file_picker`, `shared_preferences`, `package_info_plus`, `connectivity_plus`, `url_launcher`
-
-## Build
-
-### Android
-
-```bash
-flutter pub get
-flutter build apk --release --target-platform android-arm64
+[![Flutter](https://img.shields.io/badge/Flutter-3.x-02569B?logo=flutter)](https://flutter.dev)
+[![Dart](https://img.shields.io/badge/Dart-3.x-0175C2?logo=dart)](https://dart.dev)
+[![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20Windows%20%7C%20Linux-green.svg)]()
+[![Security](https://img.shields.io/badge/Security-AES--256--GCM%20%7C%20PBKDF2-red.svg)]()
+[![License](https://img.shields.io/badge/License-Open%20Source-blue.svg)](LICENSE)
+
+Aplikasi manajemen, pengecekan, dan monitoring Pajak Bumi dan Bangunan Perdesaan dan Perkotaan (PBB-P2) yang dirancang khusus untuk memfasilitasi kerja kolektor dan staf desa/kelurahan di Kabupaten Cianjur. Aplikasi ini terhubung langsung secara terenkripsi ke portal resmi BAPENDA Kabupaten Cianjur tanpa memerlukan navigasi manual antarmuka peramban web.
+
+> [!NOTE]
+> **Distribusi Mandiri (Sideload)**  
+> Aplikasi ini tidak didistribusikan melalui Google Play Store atau Apple App Store. Distribusi berkas resmi dilakukan secara internal melalui [GitHub Releases](https://github.com/IkbalGumilar/Cek-PBB-Cianjur/releases/latest) berupa APK untuk Android serta paket biner untuk Windows dan Linux.
+
+---
+
+## Daftar Isi
+- [Fitur Utama](#-fitur-utama)
+- [Arsitektur Keamanan](#-arsitektur-keamanan)
+- [Matriks Dukungan Platform](#-matriks-dukungan-platform)
+- [Panduan Modul Aplikasi](#-panduan-modul-aplikasi)
+  - [1. Pengecekan PBB-P2 & Pembayaran](#1-pengecekan-pbb-p2--pembayaran)
+  - [2. Manajemen Data DHKP & Buku Catatan Blok](#2-manajemen-data-dhkp--buku-catatan-blok)
+  - [3. Kolase Foto SPPT / Objek Pajak](#3-kolase-foto-sppt--objek-pajak)
+  - [4. Sinkronisasi & Integrasi Google Drive](#4-sinkronisasi--integrasi-google-drive)
+  - [5. Monitoring Wilayah & Portal Staf (MFA)](#5-monitoring-wilayah--portal-staf-mfa)
+  - [6. Cek Desil & Bantuan Sosial (Kemensos)](#6-cek-desil--bantuan-sosial-kemensos)
+  - [7. Cek Pajak Kendaraan Bermotor (Jawa Barat)](#7-cek-pajak-kendaraan-bermotor-jawa-barat)
+  - [8. Kustomisasi Tema & Tampilan](#8-kustomisasi-tema--tampilan)
+- [Alur Pembaruan Otomatis](#-alur-pembaruan-otomatis)
+- [Panduan Pengembangan & Kompilasi](#-panduan-pengembangan--kompilasi)
+- [Pernyataan Privasi & Penafian](#-pernyataan-privasi--penafian)
+
+---
+
+## 🌟 Fitur Utama
+
+- **Pengecekan NOP Cepat & Akurat**: Cukup ketik format ringkas Blok dan Nomor Wilayah (misal: Blok `1` Nomor `1`), sistem otomatis memformat menjadi NOP 18 digit resmi BAPENDA (`32.03...`).
+- **Pembayaran Multi-Kanal**:
+  - **QRIS Dinamis**: Kode QR berlaku 1 jam sekali pakai, kompatibel dengan seluruh aplikasi dompet digital & m-banking di Indonesia (semua platform).
+  - **Virtual Account Bank BJB**: Pembuatan nomor VA instan dengan integrasi pembuka aplikasi perbankan lokal yang terpasang di perangkat *(khusus Android)*.
+- **Manajemen DHKP (Daftar Himpunan Ketetapan Pajak)**:
+  - Pelacakan 4 indikator metrik utama: **Sudah Bayar**, **Belum Bayar**, **Target Pemda**, dan **Blacklist (Menunggak ≥ 5 Tahun)**.
+  - Pencatatan riwayat penagihan, status objek pajak, foto lokasi/bukti bayar dengan zoom interaktif, dan penambahan catatan khusus kolektor.
+  - **Ekspor Kolase Foto**: Penggabungan foto objek pajak/SPPT per blok ke dalam dokumen laporan siap cetak atau dibagikan ke instansi pembina.
+- **Sinkronisasi Multi-Petugas & Cloud Backup**:
+  - Terintegrasi langsung dengan Google Drive API untuk mengunduh dan menyinkronkan data antar-kolektor.
+  - Protokol delta sync terenkripsi untuk penggabungan perubahan catatan tanpa menimpa data rekan kerja.
+  - Penjadwalan cadangan harian otomatis berkala (pukul 02:00) dengan kebijakan rotasi retensi 3 berkas terlama.
+- **OCR Offline Lokal (Edge ML)**:
+  - Pemindaian berkas NOP dari gambar fisik STTS/SPPT tanpa memerlukan koneksi internet *(khusus Android)*.
+  - Pemindaian KTP/KK untuk input NIK 16 digit pada modul Bansos.
+  - Pemindaian Plat Nomor Kendaraan (TNKB) dengan deteksi warna permukaan plat.
+- **Portal Monitoring Staf BAPENDA**:
+  - Akses aman berbasis kredensial staf + autentikasi dua faktor (Google Authenticator MFA).
+  - Monitoring piutang, realisasi per wilayah (Kecamatan/Kelurahan), rangking realisasi, dan pencetakan surat pengantar pembayaran kolektif.
+- **Kemanan Sistem Berlapis**:
+  - Proteksi kunci biometrik (sidik jari/wajah), PIN 6-digit terenkripsi, atau kata sandi aplikasi dengan auto-lockout cerdas.
+  - Enkripsi arsip `.dkhp` standar militer (PBKDF2-HMAC-SHA256 600.000 iterasi + AES-256-GCM).
+  - Pengaktifan `FLAG_SECURE` pada Android untuk mencegah perekaman layar dan tangkapan layar tanpa izin.
+
+---
+
+## 🛡️ Arsitektur Keamanan
+
+Aplikasi ini memprioritaskan kerahasiaan dan integritas data wajib pajak melalui implementasi standar kriptografi modern:
+
+```
+[Arsip Paket Data (.dkhp)]
+         │
+         ▼
+[PBKDF2-HMAC-SHA256 (600.000 Iterasi + Salt Kriptografis)]
+         │
+         ▼ (Turunkan Kunci 256-bit)
+[Enkripsi Terotentikasi: AES-256-GCM]
+         │
+         ├── Header AAD (Authenticated Additional Data: Magic Byte, Versi, Metadata)
+         ├── Tag Autentikasi 128-bit (Pencegahan Manipulasi / Integritas Data)
+         └── Data Terkompresi (CSV DHKP, Catatan Kolektor, Delta Sinkronisasi)
 ```
 
-### Windows / Linux
+1. **Enkripsi Kunci & Arsip (`.dkhp`)**:
+   - Seluruh data lokal dan cadangan diekspor menggunakan format kontainer terotentikasi AES-256-GCM.
+   - Kata sandi master diolah menggunakan algoritma derivasi kunci **PBKDF2-HMAC-SHA256** dengan minimal **600.000 iterasi** dan salt acak unik per berkas.
+   - Dilengkapi integritas header terverifikasi (*Authenticated Additional Data* / AAD); perubahan bit sekecil apa pun pada berkas akan ditolak otomatis.
+2. **Penyimpanan Kredensial Aman**:
+   - Kredensial sesi Portal Staf, kata sandi cadangan, dan hash PIN disimpan secara eksklusif di dalam **`FlutterSecureStorage`** (menggunakan Android Keystore System / Windows Credential Manager / Linux Secret Service / Keyring).
+   - Pencegahan serangan brute-force PIN dengan penghitung kegagalan (*failed attempts counter*) persisten yang tidak dapat di-reset dengan menutup paksa aplikasi.
+3. **Perlindungan Tampilan & Obfuscation**:
+   - Mengaktifkan `FLAG_SECURE` pada *window manager* Android untuk menolak tangkapan layar (*screenshot*) dan perekaman layar (*screen recording*) pada area sensitif.
+   - Proses kompilasi rilis memanfaatkan **R8 / ProGuard** (`isMinifyEnabled = true`, `isShrinkResources = true`) untuk mengacak struktur kode (*obfuscation*) dan mereduksi ukuran biner.
 
-```bash
-flutter pub get
-flutter build windows --release   # di mesin Windows
-flutter build linux --release     # di mesin Linux (butuh ninja, cmake, libgtk-3-dev)
-```
+---
 
-> Build Windows harus dijalankan di mesin Windows (atau lewat CI, mis. GitHub Actions runner `windows-latest`) — Flutter tidak mendukung cross-compile ke Windows dari Linux/macOS.
+## 💻 Matriks Dukungan Platform
 
-### Penting: keystore rilis (Android)
+| Fitur / Modul | Android | Windows Desktop | Linux Desktop | Catatan |
+|---|:---:|:---:|:---:|---|
+| **Cek Tagihan & Status Bayar PBB** | ✅ | ✅ | ✅ | Berjalan penuh di semua platform |
+| **Pembayaran QRIS Dinamis** | ✅ | ✅ | ✅ | Berlaku nasional via aplikasi e-wallet/bank apa pun |
+| **Pembayaran Virtual Account (VA)** | ✅ | ❌ | ❌ | Tergantung *intent* pemanggil m-banking lokal di Android |
+| **Manajemen DHKP & Catatan Blok** | ✅ | ✅ | ✅ | Sinkronisasi lokal & ekspor PDF/Excel/CSV |
+| **Google Drive File Picker** | ✅ | ✅ | ✅ | Terintegrasi via Google Drive REST API |
+| **Pencadangan Otomatis (02:00)** | ✅ | ✅ | ✅ | Berjalan di latar belakang dengan rotasi retensi |
+| **Scan OCR (NOP, NIK, Plat Nomor)** | ✅ | ❌ | ❌ | Memanfaatkan engine Google ML Kit di perangkat |
+| **Monitoring Portal Staf & MFA** | ✅ | ✅ | ✅ | Login terenkripsi dengan Google Authenticator |
+| **Cek Desil & Bansos Kemensos** | ✅ | ✅ | ✅ | Input manual (semua OS) / Scan NIK (Android) |
+| **Cek Pajak Kendaraan Jabar** | ✅ | ✅ | ✅ | Input manual (semua OS) / Scan Plat (Android) |
+| **Kunci Biometrik / PIN / Password** | ✅ | ✅ | ✅ | Terintegrasi dengan sistem keamanan perangkat |
+| **Pembaruan Otomatis (In-App Update)** | ✅ | ⚠️ | ⚠️ | Android: Pasang mandiri; Desktop: Unduh biner |
 
-Build release Android **butuh** `android/key.properties` yang menunjuk ke berkas keystore (`.jks`). Berkas ini **sengaja tidak disertakan** di repo (lihat `.gitignore`) karena berisi kredensial penandatanganan aplikasi.
+---
 
-Format `android/key.properties`:
+## 📖 Panduan Modul Aplikasi
 
-```properties
-storePassword=...
-keyPassword=...
-keyAlias=...
-storeFile=nama-file-keystore.jks
-```
+### 1. Pengecekan PBB-P2 & Pembayaran
+1. Pilih tab **Cek Tagihan** atau **Cek Status Bayar** pada bilah menu atas.
+2. Masukkan **Blok** dan **Nomor Wilayah** (tanpa angka nol pembuka). Sistem secara dinamis menghasilkan NOP 18 digit resmi.
+3. Masukkan kode captcha yang tertera pada layar. Tekan tombol **Ganti Captcha** bila gambar tidak jelas.
+4. Tekan **Cek**:
+   - **Mode Cek Tagihan**: Menampilkan rincian tunggakan multi-tahun (Ketetapan Pokok, Denda, Sisa Kurang Bayar) dan opsi cetak STTS/SPPT.
+   - **Mode Cek Status Bayar**: Menampilkan kartu status ringkas (*Lunas* atau *Belum Bayar*). Bila lunas, bukti bayar dapat langsung dicetak atau diunduh sebagai PDF.
+5. **Pembayaran QRIS**: Tekan tombol *Bayar QRIS* pada baris tahun yang diinginkan. Pindai kode QR yang muncul menggunakan dompet digital atau aplikasi perbankan Anda.
+6. **Pembayaran VA (Android)**: Tekan *Bayar VA*, salin nomor Virtual Account Bank BJB, lalu tekan ikon m-banking Anda untuk menyelesaikan transaksi.
 
-**Jangan pernah membuat keystore baru** untuk build berikutnya kalau aplikasi sudah terpasang di HP staf — kunci penandatanganan harus tetap sama selamanya, karena Android menolak update aplikasi kalau tanda tangannya beda (harus uninstall dulu, dan data lokal yang belum dibackup akan hilang). Simpan berkas keystore & password-nya di tempat aman di luar repo.
+### 2. Manajemen Data DHKP & Buku Catatan Blok
+Akses tombol mengambang (FAB) berikon buku di pojok kanan bawah untuk membuka modul DHKP:
+- **Filter 4 Metrik Instan**:
+  - **Semua Data**: Menampilkan keseluruhan basis data DHKP blok wilayah kerja.
+  - **Sudah Bayar**: Objek pajak yang telah terverifikasi lunas di sistem BAPENDA.
+  - **Belum Bayar**: Objek pajak yang masih memiliki kewajiban pembayaran aktif.
+  - **Target Pemda**: Wajib pajak dengan ketetapan prioritas pemantauan pemerintah daerah.
+  - **Blacklist (≥ 5 Tahun)**: Wajib pajak dengan tunggakan kronis lebih dari 5 tahun berturut-turut.
+- **Pembaruan Lapangan**: Kolektor dapat menambahkan foto objek/SPPT, menyematkan catatan penagihan khusus, dan memperbarui status langsung dari lapangan.
+- **Mode Operator**: Dapat diaktifkan melalui menu Lisensi/Pengaturan untuk membuka pengawasan lintas dusun/wilayah tanpa batasan satu blok kerja.
 
-## Catatan
+### 3. Kolase Foto SPPT / Objek Pajak
+Fitur khusus untuk pelaporan dokumentasi fisik penagihan:
+1. Buka menu **Gabungkan Beberapa Gambar** dari layar DHKP.
+2. Pilih cakupan wilayah atau blok kerja tertentu.
+3. Sistem secara otomatis menyusun foto-foto objek pajak dan SPPT yang telah diunggah ke dalam tata letak kisi (*grid photo workstation*) yang rapi dan seragam.
+4. Ekspor hasil kolase menjadi dokumen PDF beresolusi tinggi atau bagikan langsung ke pimpinan via WhatsApp/Email.
 
-- Aplikasi ini mengambil data langsung dari portal resmi pemerintah (bukan API publik yang terdokumentasi), jadi bisa terdampak kalau ada perubahan di sisi vendor/portal.
-- Bukan aplikasi resmi terbitan Bapenda/Pemkab Cianjur — dibangun untuk mempermudah kerja staf desa dalam mengecek PBB warga.
+### 4. Sinkronisasi & Integrasi Google Drive
+Menghubungkan data kerja antar-perangkat petugas secara aman:
+- **Unggah Data Mandiri**: Kolektor dapat mengimpor berkas basis data DHKP baru dari penyimpanan internal atau langsung memilih berkas dari folder Google Drive tanpa bergantung pada pengelola berkas bawaan HP.
+- **Sinkronisasi Delta**: Hanya mengirimkan dan mengunduh perbedaan catatan/status terbaru yang dibuat antar-petugas di lapangan.
+- **Pencadangan Terjadwal**: Sistem secara otomatis mengekspor basis data terenkripsi setiap hari pada pukul 02:00 dini hari dan membatasi penyimpanan lokal maksimal 3 berkas cadangan teranyar.
+
+### 5. Monitoring Wilayah & Portal Staf (MFA)
+Modul administratif resmi bagi staf yang memiliki akun BAPENDA Cianjur:
+- **Autentikasi Dua Langkah**: Dilengkapi verifikasi token berbasis waktu (TOTP) Google Authenticator dengan pintasan pembuka aplikasi otomatis.
+- **7 Tab Rekap Wilayah**:
+  1. *Sudah Bayar* (pencarian rentang tanggal realisasi, NOP, kolektor, atau bank).
+  2. *Belum Bayar* (penghitungan akumulasi piutang hingga tanggal cutoff).
+  3. *Realisasi*, *Piutang*, *Sudah Bayar Kolektif*, *Belum Bayar Kolektif*, dan *Rangking Realisasi Wilayah*.
+- **Manajemen Pembayaran Kolektif**: Pembuatan grup penagihan draft, pengelolaan daftar anggota NOP (mendukung impor massal CSV/Excel dengan validasi pemisahan kolom NOP 18 angka), cetak surat pengantar, dan finalisasi penerbitan kode bayar resmi.
+
+### 6. Cek Desil & Bantuan Sosial (Kemensos)
+Terintegrasi untuk memverifikasi data kelayakan sosial warga:
+- Masukkan 16 digit NIK atau gunakan fitur **Scan NIK (OCR Offline)** melalui kamera/galeri.
+- Masukkan kode verifikasi captcha layanan DTSEN.
+- Menampilkan status desil ekonomi serta kepesertaan bansos aktif: **Sembako / BPNT**, **Program Keluarga Harapan (PKH)**, **PBI-JK (BPJS Kesehatan Gratis)**, dan **KPD**.
+
+### 7. Cek Pajak Kendaraan Bermotor (Jawa Barat)
+Pengecekan kewajiban PKB Jawa Barat secara instan:
+- Masukkan kode nomor polisi (huruf depan, angka, huruf belakang) dan pilih warna plat kendaraan.
+- Mendukung pemindaian plat nomor otomatis via **Scan Plat (OCR Offline)**.
+- Menampilkan rincian Pajak Kendaraan Bermotor (PKB), Bea Balik Nama (BBNKB), SWDKLLJ, PNBP STNK/TNKB, total tagihan, dan tanggal jatuh tempo pajak tahunan/lima tahunan.
+
+### 8. Kustomisasi Tema & Tampilan
+- **Kontras Tinggi Adaptif**: Bilah tab menu navigasi dirancang dengan pil putih bersih di mode terang dan kontainer gelap di mode gelap. Warna teks secara cerdas menyesuaikan tingkat kecerahan latar belakang (*"jika terang jadi gelap, jika kelam jadi terang"*), menjamin keterbacaan tajam dengan rasio kontras melebihi standar WCAG AAA.
+- **Palet Warna Aksen**: Pengaturan warna aksen fleksibel dengan pilihan preset (Hijau PBB, Biru Cianjur, Ungu, Merah Marun, Oranye, Teal, Cokelat Kopi, Slate Gray) atau pengaturan bebas menggunakan pemilih RGB dinamis berbasis interpolasi lerp halus.
+- **Pilihan Mode**: Mendukung mode *Terang*, *Gelap*, *Hitam AMOLED* murni untuk efisiensi daya layar OLED, serta *Material You* (Dynamic Color) pada Android 12+.
+
+---
+
+## 🚀 Alur Pembaruan Otomatis
+
+Aplikasi dilengkapi mekanisme pemantauan rilis berkala yang terhubung ke REST API GitHub:
+1. Pengecekan otomatis berjalan maksimal sekali setiap 24 jam saat aplikasi dibuka, atau dapat dipicu manual melalui **Pengaturan → Tentang Aplikasi → Periksa Pembaruan**.
+2. **Android**: Aplikasi mengunduh berkas `.apk` rilis resmi langsung ke penyimpanan perangkat dan memanggil penginstal sistem Android secara otomatis.
+3. **Windows & Linux**: Aplikasi mengunduh paket biner rilis ke folder `Downloads/Cek PBB Cianjur` dan memberikan instruksi ekstraksi berkas kepada pengguna.
+
+---
+
+## 🛠️ Panduan Pengembangan & Kompilasi
+
+### Prasyarat
+- Flutter SDK versi `>= 3.22.0`
+- Dart SDK versi `>= 3.4.0`
+- Android Studio / Android SDK Platform Tools (API 34)
+- GCC / Clang, CMake, Ninja, dan `libgtk-3-dev` (khusus build desktop Linux)
+- Visual Studio Community dengan C++ Desktop Development (khusus build Windows)
+
+### Langkah Kompilasi
+
+1. **Kloning Repositori**:
+   ```bash
+   git clone https://github.com/IkbalGumilar/Cek-PBB-Cianjur.git
+   cd Cek-PBB-Cianjur
+   ```
+
+2. **Pasang Dependensi**:
+   ```bash
+   flutter pub get
+   ```
+
+3. **Jalankan Pengujian Unit & Widget**:
+   ```bash
+   flutter test -j 1
+   ```
+
+4. **Kompilasi Biner Rilis**:
+   - **Android APK**:
+     ```bash
+     flutter build apk --release --target-platform android-arm64
+     ```
+   - **Linux Desktop**:
+     ```bash
+     flutter build linux --release
+     ```
+   - **Windows Desktop**:
+     ```bash
+     flutter build windows --release
+     ```
+
+> [!IMPORTANT]
+> **Penandatanganan Rilis Android (Keystore)**  
+> Kompilasi rilis Android membutuhkan konfigurasi berkas `android/key.properties` yang merujuk pada berkas keystore penandatanganan (`.jks`). Berkas ini tidak disertakan di dalam repositori demi menjaga integritas dan keamanan aplikasi. Jangan pernah mengganti keystore yang telah dipakai pada perangkat produksi agar pengguna tidak mengalami kegagalan saat memperbarui aplikasi.
+
+---
+
+## ⚖️ Pernyataan Privasi & Penafian
+
+1. **Independensi Pengembang**: Aplikasi ini dikembangkan secara independen oleh pengembang sebagai alat bantu kerja operasional lapangan bagi petugas/kolektor desa di lingkungan Kabupaten Cianjur. Aplikasi ini bukan merupakan aplikasi resmi yang diterbitkan secara kelembagaan oleh Badan Pendapatan Daerah (BAPENDA) Kabupaten Cianjur.
+2. **Kerahasiaan Data**: Seluruh pemrosesan teks, OCR dokumen, dan verifikasi NIK/NOP berlangsung secara luring (*on-device offline processing*) di perangkat masing-masing pengguna. Tidak ada data pribadi warga, dokumen KTP/KK, foto objek pajak, atau kata sandi yang dikirimkan ke peladen pihak ketiga selain transmisi resmi langsung ke portal BAPENDA dan Kemensos.
+3. **Hak Cipta Layanan**: Hak cipta nama, logo daerah, serta infrastruktur portal layanan publik sepenuhnya merupakan milik Pemerintah Kabupaten Cianjur dan kementerian terkait.

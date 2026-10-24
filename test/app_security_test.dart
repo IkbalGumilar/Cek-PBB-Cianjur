@@ -4,6 +4,7 @@ import 'package:cek_pbb_app/app_security_service.dart';
 import 'package:cek_pbb_app/settings_screen.dart';
 import 'package:cek_pbb_app/theme_controller.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:local_auth_platform_interface/local_auth_platform_interface.dart';
@@ -50,11 +51,38 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   late FakeLocalAuthentication fakeAuth;
+  final secureStorageValues = <String, String>{};
 
   setUp(() {
     SharedPreferences.setMockInitialValues({});
+    secureStorageValues.clear();
+    const secureStorageChannel =
+        MethodChannel('plugins.it_nomads.com/flutter_secure_storage');
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(secureStorageChannel, (call) async {
+      final arguments = Map<String, dynamic>.from(call.arguments as Map);
+      switch (call.method) {
+        case 'read':
+          return secureStorageValues[arguments['key']];
+        case 'write':
+          secureStorageValues[arguments['key'] as String] =
+              arguments['value'] as String;
+          return null;
+        case 'delete':
+          secureStorageValues.remove(arguments['key']);
+          return null;
+        case 'containsKey':
+          return secureStorageValues.containsKey(arguments['key']);
+        case 'deleteAll':
+          secureStorageValues.clear();
+          return null;
+      }
+      return null;
+    });
+
     fakeAuth = FakeLocalAuthentication();
     AppSecurityService.instance.resetForTesting();
+    AppSecurityService.setPbkdf2IterationsForTesting(2);
     AppSecurityService.instance.setLocalAuthForTesting(fakeAuth);
   });
 
@@ -131,8 +159,8 @@ void main() {
     });
   });
 
-  group('AppSecurityService - Kustom PIN & Password (SHA-256 + Salt)', () {
-    test('pembuatan dan verifikasi PIN 6 digit kustom', () async {
+  group('AppSecurityService - Kustom PIN & Password (PBKDF2-HMAC-SHA256 & SecureStorage)', () {
+    test('pembuatan dan verifikasi PIN 6 digit kustom menggunakan PBKDF2', () async {
       final service = AppSecurityService.instance;
 
       expect(await service.hasCustomPin(), isFalse);
@@ -140,12 +168,40 @@ void main() {
       await service.setCustomPin('123456');
       expect(await service.hasCustomPin(), isTrue);
 
+      // Verifikasi bahwa hash tersimpan dalam format PBKDF2 di secure storage
+      final storedHash = secureStorageValues['app_security_custom_pin_hash'];
+      expect(storedHash, isNotNull);
+      expect(storedHash!.startsWith(r'$pbkdf2$'), isTrue);
+
       // PIN benar -> true
       expect(await service.verifyCustomPin('123456'), isTrue);
 
       // PIN salah -> false
       expect(await service.verifyCustomPin('654321'), isFalse);
       expect(await service.verifyCustomPin('123457'), isFalse);
+    });
+
+    test('migrasi otomatis PIN legacy SHA-256 ke format PBKDF2 saat berhasil diverifikasi', () async {
+      final service = AppSecurityService.instance;
+
+      // Simulasi data legacy SHA-256 di storage
+      const salt = 'dGVzdHNhbHQxMjM0NTY=';
+      // SHA-256('654321::dGVzdHNhbHQxMjM0NTY=')
+      const legacyHash = '44eac7aaf92a030ad42383c7f73419dc4f352495496b1ac86244992baf339c8d';
+      secureStorageValues['app_security_custom_pin_salt'] = salt;
+      secureStorageValues['app_security_custom_pin_hash'] = legacyHash;
+
+      expect(await service.hasCustomPin(), isTrue);
+      expect(secureStorageValues['app_security_custom_pin_hash']!.startsWith(r'$pbkdf2$'), isFalse);
+
+      // Verifikasi berhasil dengan legacy hash
+      final success = await service.verifyCustomPin('654321');
+      expect(success, isTrue);
+
+      // Hash harus otomatis di-upgrade ke PBKDF2
+      final upgraded = secureStorageValues['app_security_custom_pin_hash'];
+      expect(upgraded, isNotNull);
+      expect(upgraded!.startsWith(r'$pbkdf2$'), isTrue);
     });
 
     test('pembuatan dan verifikasi kata sandi kustom', () async {
@@ -161,6 +217,31 @@ void main() {
 
       // Password salah -> false
       expect(await service.verifyCustomPassword('SalahPassword'), isFalse);
+    });
+
+    test('pencatatan percobaan salah dan status lockout bertahan di secure storage', () async {
+      final service = AppSecurityService.instance;
+
+      expect(await service.getFailedPinAttempts(), 0);
+      expect(await service.getLockoutUntil(), isNull);
+
+      // Catat percobaan salah
+      expect(await service.recordFailedPinAttempt(), 1);
+      expect(await service.recordFailedPinAttempt(), 2);
+      expect(await service.getFailedPinAttempts(), 2);
+
+      // Set lockout 30 detik ke depan
+      final lockoutTime = DateTime.now().add(const Duration(seconds: 30));
+      await service.setLockoutUntil(lockoutTime);
+
+      final storedLockout = await service.getLockoutUntil();
+      expect(storedLockout, isNotNull);
+      expect(storedLockout!.isAfter(DateTime.now()), isTrue);
+
+      // Reset percobaan salah
+      await service.resetFailedPinAttempts();
+      expect(await service.getFailedPinAttempts(), 0);
+      expect(await service.getLockoutUntil(), isNull);
     });
   });
 
@@ -281,12 +362,16 @@ void main() {
       expect(find.text('Hapus'), findsOneWidget);
 
       // Masukkan PIN 123456
-      await tester.tap(find.widgetWithText(OutlinedButton, '1'));
-      await tester.tap(find.widgetWithText(OutlinedButton, '2'));
-      await tester.tap(find.widgetWithText(OutlinedButton, '3'));
-      await tester.tap(find.widgetWithText(OutlinedButton, '4'));
-      await tester.tap(find.widgetWithText(OutlinedButton, '5'));
-      await tester.tap(find.widgetWithText(OutlinedButton, '6'));
+      await tester.runAsync(() async {
+        for (final digit in ['1', '2', '3', '4', '5', '6']) {
+          await tester.tap(find.widgetWithText(OutlinedButton, digit));
+          await tester.pump(const Duration(milliseconds: 50));
+        }
+        for (var i = 0; i < 50; i++) {
+          if (unlockedCalled) break;
+          await Future.delayed(const Duration(milliseconds: 100));
+        }
+      });
       await tester.pumpAndSettle();
 
       expect(unlockedCalled, isTrue);

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import 'app_header.dart';
 import 'monitoring/monitoring_wilayah_screen.dart';
 import 'pembayaran_kolektif_screen.dart';
 import 'settings_screen.dart';
@@ -49,10 +48,14 @@ class _MonitoringHubScreenState extends State<MonitoringHubScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final primaryColor = theme.colorScheme.primary;
+    final onPrimary = theme.colorScheme.onPrimary;
+
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: kHeaderGreen,
-        foregroundColor: Colors.white,
+        backgroundColor: primaryColor,
+        foregroundColor: onPrimary,
         title: const Text('Monitoring'),
         actions: [
           IconButton(
@@ -63,12 +66,12 @@ class _MonitoringHubScreenState extends State<MonitoringHubScreen> {
           IconButton(
             onPressed: _loggingOut ? null : _logout,
             icon: _loggingOut
-                ? const SizedBox(
+                ? SizedBox(
                     height: 18,
                     width: 18,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      color: Colors.white,
+                      color: onPrimary,
                     ),
                   )
                 : const Icon(Icons.logout),

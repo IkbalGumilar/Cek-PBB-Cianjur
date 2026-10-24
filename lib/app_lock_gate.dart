@@ -17,13 +17,23 @@ class AppLockGate extends StatefulWidget {
 
 class _AppLockGateState extends State<AppLockGate> with WidgetsBindingObserver {
   final AppSecurityService _securityService = AppSecurityService.instance;
+  bool _isCheckingInitialLock = true;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    // Cek status kunci saat pembukaan awal aplikasi (cold start)
-    _securityService.onAppResumed();
+    // Cek status kunci saat pembukaan awal aplikasi (cold start) secara aman
+    _checkInitialLock();
+  }
+
+  Future<void> _checkInitialLock() async {
+    await _securityService.onAppResumed();
+    if (mounted) {
+      setState(() {
+        _isCheckingInitialLock = false;
+      });
+    }
   }
 
   @override
@@ -45,6 +55,14 @@ class _AppLockGateState extends State<AppLockGate> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
+    if (_isCheckingInitialLock) {
+      // Tampilkan latar kosong aman selama status kunci async belum selesai dibaca
+      // untuk mencegah layar utama muncul sekilas (frame flashing / UI flicker).
+      return ColoredBox(
+        color: Theme.of(context).scaffoldBackgroundColor,
+      );
+    }
+
     return ValueListenableBuilder<bool>(
       valueListenable: _securityService.isAppLockedNotifier,
       builder: (context, isLocked, child) {

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import 'app_header.dart';
 import 'kolektif_nop_berkas.dart';
 import 'staff_portal_client.dart';
 
@@ -477,10 +476,12 @@ class _KolektifImportScreenState extends State<KolektifImportScreen> {
     final adaSingkatan = _siapKirim.any((b) => b.dariSingkatan);
     final tampil = _siapKirim.take(_tampil).toList();
 
+    final theme = Theme.of(context);
+
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: kHeaderGreen,
-        foregroundColor: Colors.white,
+        backgroundColor: theme.colorScheme.primary,
+        foregroundColor: theme.colorScheme.onPrimary,
         title: const Text('Unggah Berkas NOP'),
       ),
       body: SafeArea(

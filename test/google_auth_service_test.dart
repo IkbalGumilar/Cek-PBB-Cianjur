@@ -1,14 +1,40 @@
 import 'package:cek_pbb_app/blok_backup_scheduler.dart';
 import 'package:cek_pbb_app/google_auth_service.dart';
 import 'package:cek_pbb_app/google_drive_backup_policy.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  final secureStorageValues = <String, String>{};
 
   setUp(() {
     SharedPreferences.setMockInitialValues({});
+    secureStorageValues.clear();
+    const secureStorageChannel =
+        MethodChannel('plugins.it_nomads.com/flutter_secure_storage');
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(secureStorageChannel, (call) async {
+      final arguments = Map<String, dynamic>.from(call.arguments as Map);
+      switch (call.method) {
+        case 'read':
+          return secureStorageValues[arguments['key']];
+        case 'write':
+          secureStorageValues[arguments['key'] as String] =
+              arguments['value'] as String;
+          return null;
+        case 'delete':
+          secureStorageValues.remove(arguments['key']);
+          return null;
+        case 'containsKey':
+          return secureStorageValues.containsKey(arguments['key']);
+        case 'deleteAll':
+          secureStorageValues.clear();
+          return null;
+      }
+      return null;
+    });
     BlokBackupScheduler.instance.resetForTesting();
   });
 

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import 'app_header.dart';
 import 'document_preview_screen.dart';
 import 'kelola_anggota_screen.dart';
 import 'monitoring/monitoring_form_fields.dart';
@@ -585,10 +584,14 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
               'terbaca seperti biasanya. Daftar grup di bawah tetap bisa dilihat.'
         : null;
 
+    final theme = Theme.of(context);
+    final primaryColor = theme.colorScheme.primary;
+    final onPrimary = theme.colorScheme.onPrimary;
+
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: kHeaderGreen,
-        foregroundColor: Colors.white,
+        backgroundColor: primaryColor,
+        foregroundColor: onPrimary,
         title: const Text('Pembayaran Kolektif'),
         actions: [
           IconButton(
@@ -709,12 +712,12 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
               FilledButton(
                 onPressed: sibuk ? null : _muat,
                 child: _loading
-                    ? const SizedBox(
+                    ? SizedBox(
                         height: 20,
                         width: 20,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          color: Colors.white,
+                          color: onPrimary,
                         ),
                       )
                     : const Text('Tampilkan'),

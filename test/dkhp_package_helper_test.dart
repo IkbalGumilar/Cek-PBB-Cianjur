@@ -6,17 +6,46 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:cek_pbb_app/backup_password_store.dart';
 import 'package:cek_pbb_app/blok_data_store.dart';
 import 'package:cek_pbb_app/blok_record.dart';
 import 'package:cek_pbb_app/dkhp_package_helper.dart';
+
+const _backupPassword = 'test-password-for-backups';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   late Directory tempDir;
+  final secureStorageValues = <String, String>{};
 
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
+    secureStorageValues.clear();
+    const secureStorageChannel =
+        MethodChannel('plugins.it_nomads.com/flutter_secure_storage');
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(secureStorageChannel, (call) async {
+      final arguments = Map<String, dynamic>.from(call.arguments as Map);
+      switch (call.method) {
+        case 'read':
+          return secureStorageValues[arguments['key']];
+        case 'write':
+          secureStorageValues[arguments['key'] as String] =
+              arguments['value'] as String;
+          return null;
+        case 'delete':
+          secureStorageValues.remove(arguments['key']);
+          return null;
+        case 'containsKey':
+          return secureStorageValues.containsKey(arguments['key']);
+        case 'deleteAll':
+          secureStorageValues.clear();
+          return null;
+      }
+      return null;
+    });
+    await BackupPasswordStore.instance.save(_backupPassword);
     tempDir = await Directory.systemTemp.createTemp('dkhp_test_');
     BlokDataStore.instance.resetForTesting();
     DhkpPackageHelper.resetForTesting();
@@ -79,6 +108,7 @@ void main() {
       records: recordsToPack,
       photosDir: photosDir,
       encrypt: true,
+      password: _backupPassword,
     );
 
     expect(await packedFile.exists(), isTrue);
@@ -86,7 +116,10 @@ void main() {
     expect(DhkpCrypto.isEncrypted(packedBytes), isTrue);
 
     // 3. Unpack dan verifikasi data
-    final unpackedRecords = await DhkpPackageHelper.unpackDkhp(packagePath);
+    final unpackedRecords = await DhkpPackageHelper.unpackDkhp(
+      packagePath,
+      password: _backupPassword,
+    );
 
     expect(unpackedRecords.length, 2);
 
@@ -135,32 +168,45 @@ AHMAD SUHADA,320520000402600350,2026,2026-03-15,Rp 45.000,Sudah Bayar,3205200004
     expect(records[1].catatan, 'Lunas transfer');
   });
 
-  test('interoperabilitas: paket .dkhp yang dibuat oleh script Python tool/make_dkhp_package.py didekripsi sempurna oleh aplikasi', () async {
-    final csvFile = File('${tempDir.path}/cli_data.csv');
-    await csvFile.writeAsString('''Nama WP,NOP,Tahun Bayar,Tanggal Bayar,Jumlah PBB,Status Bayar,Foto,Target Pemda,Catatan
+  test(
+    'interoperabilitas: paket .dkhp AES-GCM dari Python dapat dibuka aplikasi',
+    () async {
+      final csvFile = File('${tempDir.path}/cli_data.csv');
+      await csvFile.writeAsString(
+        '''Nama WP,NOP,Tahun Bayar,Tanggal Bayar,Jumlah PBB,Status Bayar,Foto,Target Pemda,Catatan
 KUSNADI,320520000402600390,2026,,Rp 210.000,Belum Bayar,,1,Anomali batas tanah
-''');
-    final outDkhp = '${tempDir.path}/from_python.dkhp';
-    final result = await Process.run('python3', [
-      'tool/make_dkhp_package.py',
-      '--data',
-      csvFile.path,
-      '--output',
-      outDkhp,
-    ]);
-    expect(result.exitCode, 0);
+''',
+      );
+      final outDkhp = '${tempDir.path}/from_python.dkhp';
+      final process = await Process.start('python3', [
+        'tool/make_dkhp_package.py',
+        '--data',
+        csvFile.path,
+        '--output',
+        outDkhp,
+        '--password-stdin',
+      ]);
+      process.stdin.writeln(_backupPassword);
+      await process.stdin.close();
+      final stdout = await process.stdout.transform(utf8.decoder).join();
+      final stderr = await process.stderr.transform(utf8.decoder).join();
+      final exitCode = await process.exitCode;
+      expect(exitCode, 0, reason: '$stdout\n$stderr');
 
-    final fileBytes = await File(outDkhp).readAsBytes();
-    expect(DhkpCrypto.isEncrypted(fileBytes), isTrue);
+      final fileBytes = await File(outDkhp).readAsBytes();
+      expect(DhkpCrypto.isEncrypted(fileBytes), isTrue);
 
-    final records = await DhkpPackageHelper.unpackDkhp(outDkhp);
-    expect(records.length, 1);
-    expect(records[0].namaWajibPajak, 'KUSNADI');
-    expect(records[0].nop, '320520000402600390');
-    expect(records[0].isTargetPemda, isTrue);
-    expect(records[0].catatan, 'Anomali batas tanah');
-  });
-
+      final records = await DhkpPackageHelper.unpackDkhp(
+        outDkhp,
+        password: _backupPassword,
+      );
+      expect(records.length, 1);
+      expect(records[0].namaWajibPajak, 'KUSNADI');
+      expect(records[0].nop, '320520000402600390');
+      expect(records[0].isTargetPemda, isTrue);
+      expect(records[0].catatan, 'Anomali batas tanah');
+    },
+  );
   test('BlokDataStore.instance.exportDkhp mengekspor seluruh data ke paket .dkhp dan importCsv berhasil memuatnya kembali', () async {
     final exportPath = await BlokDataStore.instance.exportDkhp(fileName: 'test_export_backup');
     expect(exportPath, endsWith('.dkhp'));
@@ -171,10 +217,42 @@ KUSNADI,320520000402600390,2026,,Rp 210.000,Belum Bayar,,1,Anomali batas tanah
 
     // Reset store dan coba restore/import lewat importCsv
     BlokDataStore.instance.resetForTesting();
-    final count = await BlokDataStore.instance.importCsv(exportPath);
+    final count = await BlokDataStore.instance.importCsv(
+      exportPath,
+      password: _backupPassword,
+    );
     expect(count, greaterThan(0));
 
     final records = await BlokDataStore.instance.loadAll();
     expect(records.length, count);
   });
+
+  test(
+    'enkripsi AES-GCM menolak kata sandi salah dan perubahan data',
+    () async {
+      final encrypted = await DhkpCrypto.encryptBytes(
+        Uint8List.fromList([1, 2, 3, 4]),
+        password: _backupPassword,
+      );
+
+      expect(DhkpCrypto.isPasswordProtected(encrypted), isTrue);
+      expect(
+        await DhkpCrypto.decryptBytes(encrypted, password: _backupPassword),
+        [1, 2, 3, 4],
+      );
+      expect(
+        () => DhkpCrypto.decryptBytes(
+          encrypted,
+          password: 'different-backup-password',
+        ),
+        throwsA(isA<DkhpPasswordException>()),
+      );
+
+      encrypted[encrypted.length - 1] ^= 0x01;
+      expect(
+        () => DhkpCrypto.decryptBytes(encrypted, password: _backupPassword),
+        throwsA(isA<DkhpPasswordException>()),
+      );
+    },
+  );
 }

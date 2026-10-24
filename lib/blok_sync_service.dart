@@ -6,6 +6,7 @@ import 'package:encrypt/encrypt.dart' as enc;
 import 'package:flutter/foundation.dart';
 
 import 'app_storage.dart';
+import 'backup_password_store.dart';
 import 'base_preferences_store.dart';
 import 'blok_backup_scheduler.dart';
 import 'blok_data_store.dart';
@@ -87,30 +88,43 @@ class BlokChangeRecord {
     );
   }
 
-  // --- Enkripsi Rahasia AES-256-CBC untuk File Perubahan (.bin / .dat) ---
+  // --- Enkripsi AES-256-CBC untuk File Perubahan (.bin / .dat) ---
 
   static const List<int> magic = [0x43, 0x50, 0x42, 0x42]; // "CPBB"
-  static const String _secret = 'CekPBBCianjur-PerubahanLog-kunci-v1';
+  static const String _defaultSecret = 'CekPBBCianjur-PerubahanLog-kunci-v1';
+  static String? _configuredSecret;
 
-  static enc.Key get _key {
-    final digest = sha256.convert(utf8.encode(_secret));
+  @visibleForTesting
+  static void setSecretForTesting(String? secret) {
+    _configuredSecret = secret;
+  }
+
+  static enc.Key _deriveKey(String secret) {
+    final digest = sha256.convert(utf8.encode(secret));
     return enc.Key(Uint8List.fromList(digest.bytes));
   }
 
   /// Mengenkripsi payload JSON menjadi berkas biner `.bin` dengan dynamic IV 16-byte acak.
-  Uint8List toEncryptedBytes() {
+  Uint8List toEncryptedBytes({String? secret}) {
     final jsonStr = jsonEncode(toJson());
     final plainBytes = utf8.encode(jsonStr);
 
+    final effectiveSecret = (secret != null && secret.isNotEmpty)
+        ? secret
+        : (_configuredSecret ?? _defaultSecret);
+    final key = _deriveKey(effectiveSecret);
+
     final iv = enc.IV.fromSecureRandom(16);
-    final encrypter = enc.Encrypter(enc.AES(_key, mode: enc.AESMode.cbc));
+    final encrypter = enc.Encrypter(enc.AES(key, mode: enc.AESMode.cbc));
     final encrypted = encrypter.encryptBytes(plainBytes, iv: iv);
 
     return Uint8List.fromList([...magic, ...iv.bytes, ...encrypted.bytes]);
   }
 
   /// Mendekripsi berkas biner `.bin` dan mengembalikannya ke objek [BlokChangeRecord].
-  static BlokChangeRecord? fromEncryptedBytes(Uint8List fileBytes) {
+  /// Mencoba kunci rahasia aktif (atau kata sandi cadangan pengguna), lalu fallback
+  /// ke kunci default agar tetap kompatibel dengan berkas lama.
+  static BlokChangeRecord? fromEncryptedBytes(Uint8List fileBytes, {String? secret}) {
     if (fileBytes.length < magic.length + 16) return null;
     for (var i = 0; i < magic.length; i++) {
       if (fileBytes[i] != magic[i]) return null;
@@ -119,15 +133,25 @@ class BlokChangeRecord {
     final iv = enc.IV(fileBytes.sublist(magic.length, magic.length + 16));
     final encrypted = enc.Encrypted(fileBytes.sublist(magic.length + 16));
 
-    try {
-      final encrypter = enc.Encrypter(enc.AES(_key, mode: enc.AESMode.cbc));
-      final decrypted = encrypter.decryptBytes(encrypted, iv: iv);
-      final jsonStr = utf8.decode(decrypted);
-      final map = jsonDecode(jsonStr) as Map<String, dynamic>;
-      return BlokChangeRecord.fromJson(map);
-    } catch (_) {
-      return null;
+    final candidates = <String>{
+      if (secret != null && secret.isNotEmpty) secret,
+      if (_configuredSecret != null && _configuredSecret!.isNotEmpty) _configuredSecret!,
+      _defaultSecret,
+    };
+
+    for (final cand in candidates) {
+      try {
+        final key = _deriveKey(cand);
+        final encrypter = enc.Encrypter(enc.AES(key, mode: enc.AESMode.cbc));
+        final decrypted = encrypter.decryptBytes(encrypted, iv: iv);
+        final jsonStr = utf8.decode(decrypted);
+        final map = jsonDecode(jsonStr) as Map<String, dynamic>;
+        return BlokChangeRecord.fromJson(map);
+      } catch (_) {
+        // Coba kandidat berikutnya
+      }
     }
+    return null;
   }
 }
 
@@ -250,7 +274,8 @@ class BlokSyncService extends BasePreferencesStore {
       await changesDir.create(recursive: true);
     }
 
-    final encryptedBytes = change.toEncryptedBytes();
+    final backupPassword = await BackupPasswordStore.instance.read();
+    final encryptedBytes = change.toEncryptedBytes(secret: backupPassword);
     final logFile = File('${changesDir.path}/$changeId.bin');
     await logFile.writeAsBytes(encryptedBytes);
 
@@ -298,6 +323,7 @@ class BlokSyncService extends BasePreferencesStore {
     int appliedCount = 0;
 
     final localPhotosDir = await DhkpPackageHelper.photosDirectory();
+    final backupPassword = await BackupPasswordStore.instance.read();
 
     for (final folder in targetFolders) {
       final files = folder.listSync(followLinks: false).whereType<File>();
@@ -306,7 +332,7 @@ class BlokSyncService extends BasePreferencesStore {
         if (!ext.endsWith('.bin') && !ext.endsWith('.dat')) continue;
 
         final bytes = await file.readAsBytes();
-        final change = BlokChangeRecord.fromEncryptedBytes(bytes);
+        final change = BlokChangeRecord.fromEncryptedBytes(bytes, secret: backupPassword);
         if (change == null) continue;
 
         if (processedIds.contains(change.id)) {

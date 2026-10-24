@@ -2,7 +2,6 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import 'app_header.dart';
 import 'currency_format.dart';
 import 'document_preview_screen.dart';
 import 'download_helper.dart';
@@ -594,10 +593,12 @@ class _KelolaAnggotaScreenState extends State<KelolaAnggotaScreen> {
     final tampil = members.take(_tampil).toList();
     final sibuk = _loading || _aksiBerjalan;
 
+    final theme = Theme.of(context);
+
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: kHeaderGreen,
-        foregroundColor: Colors.white,
+        backgroundColor: theme.colorScheme.primary,
+        foregroundColor: theme.colorScheme.onPrimary,
         title: const Text('Kelola Anggota'),
       ),
       floatingActionButton: members.length > _pageSize

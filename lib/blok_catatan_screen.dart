@@ -16,6 +16,7 @@ import 'check_mode.dart';
 import 'dkhp_package_helper.dart';
 import 'document_preview_screen.dart';
 import 'download_helper.dart';
+import 'google_drive_picker_dialog.dart';
 import 'tax_record.dart';
 import 'dusun_data.dart';
 import 'file_importer.dart';
@@ -503,16 +504,16 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
                   // Header
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    color: Theme.of(context).primaryColor,
+                    color: Theme.of(context).colorScheme.primary,
                     child: Row(
                       children: [
-                        const Icon(Icons.receipt_long, color: Colors.white),
+                        Icon(Icons.receipt_long, color: Theme.of(context).colorScheme.onPrimary),
                         const SizedBox(width: 8),
-                        const Expanded(
+                        Expanded(
                           child: Text(
                             'INFORMASI DATA PEMBAYARAN',
                             style: TextStyle(
-                              color: Colors.white,
+                              color: Theme.of(context).colorScheme.onPrimary,
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
                               letterSpacing: 0.5,
@@ -520,7 +521,7 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
                           ),
                         ),
                         IconButton(
-                          icon: const Icon(Icons.close, color: Colors.white),
+                          icon: Icon(Icons.close, color: Theme.of(context).colorScheme.onPrimary),
                           onPressed: () => Navigator.pop(ctx),
                         ),
                       ],
@@ -1018,14 +1019,11 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
 
     if (action == 'google_drive') {
       try {
-        final files = await FilePicker.pickFiles(
-          type: FileType.custom,
-          allowedExtensions: ['dkhp', 'zip', 'csv', 'xlsx', 'xls', 'txt'],
-        );
-        if (files.isEmpty || files.first.path == null) {
+        final filePath = await showGoogleDrivePickerDialog(context);
+        if (filePath == null) {
           return;
         }
-        await _importDkhpFromPath(files.first.path!, sourceLabel: 'Google Drive');
+        await _importDkhpFromPath(filePath, sourceLabel: 'Google Drive');
       } catch (e) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1036,11 +1034,20 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
     }
   }
 
-  Future<void> _importDkhpFromPath(String path, {required String sourceLabel}) async {
+  Future<void> _importDkhpFromPath(
+    String path, {
+    required String sourceLabel,
+  }) async {
     final lower = path.toLowerCase();
 
     if (lower.endsWith('.dkhp') || lower.endsWith('.zip')) {
-      final newRecords = await DhkpPackageHelper.unpackDkhp(path);
+      final passwordProtected = await DhkpCrypto.isPasswordProtectedFile(path);
+      final password = passwordProtected ? await _promptBackupPassword() : null;
+      if (passwordProtected && password == null) return;
+      final newRecords = await DhkpPackageHelper.unpackDkhp(
+        path,
+        password: password,
+      );
       await _load();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1063,24 +1070,56 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
       );
       return;
     }
+
     final nowYear = '${DateTime.now().year}';
-    final newRecords = taxRecords.map((t) => BlokRecord(
-      nop: t.nop,
-      namaWajibPajak:
-          t.namaWajibPajak ?? 'WP ${nopBlok(t.nop)}/${nopWilayah(t.nop)}',
-      tahunBayar: nowYear,
-      tanggalBayar: t.isPaid ? 'Sudah Bayar' : '',
-      jumlahPbb: '',
-      statusBayar: t.isPaid ? 'Sudah Bayar' : 'Belum Bayar',
-    ));
+    final newRecords = taxRecords.map(
+      (t) => BlokRecord(
+        nop: t.nop,
+        namaWajibPajak:
+            t.namaWajibPajak ?? 'WP ${nopBlok(t.nop)}/${nopWilayah(t.nop)}',
+        tahunBayar: nowYear,
+        tanggalBayar: t.isPaid ? 'Sudah Bayar' : '',
+        jumlahPbb: '',
+        statusBayar: t.isPaid ? 'Sudah Bayar' : 'Belum Bayar',
+      ),
+    );
     await BlokDataStore.instance.upsertAll(newRecords);
     await _load();
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('${newRecords.length} data DHKP berhasil diunggah ($sourceLabel).'),
+        content: Text(
+          '${newRecords.length} data DHKP berhasil diunggah ($sourceLabel).',
+        ),
       ),
     );
+  }
+
+  Future<String?> _promptBackupPassword() {
+    final controller = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Kata sandi backup'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          obscureText: true,
+          decoration: const InputDecoration(labelText: 'Masukkan kata sandi'),
+          onSubmitted: (value) => Navigator.of(ctx).pop(value),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(controller.text),
+            child: const Text('Buka backup'),
+          ),
+        ],
+      ),
+    ).whenComplete(controller.dispose);
   }
 
   /// Pop-up preview foto ala profil WhatsApp (bisa di-zoom/pan, ganti/upload foto baru, atau hapus)

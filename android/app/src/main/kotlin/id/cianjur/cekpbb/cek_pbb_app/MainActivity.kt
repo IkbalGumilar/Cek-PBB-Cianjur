@@ -10,9 +10,11 @@ import android.graphics.drawable.Drawable
 import android.media.MediaScannerConnection
 import android.net.Uri
 import android.os.Build
+import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
 import android.provider.Settings
+import android.view.WindowManager
 import androidx.core.content.FileProvider
 import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -29,6 +31,16 @@ class MainActivity : FlutterFragmentActivity() {
     // Nama folder publik tempat semua dokumen aplikasi ini disimpan:
     // Dokumen/Cek PBB Cianjur (hasil cek, bukti bayar, laporan blok, backup).
     private val documentsFolderName = "Cek PBB Cianjur"
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        // Mencegah tangkapan layar (screenshot), perekaman layar (screen record),
+        // dan pratinjau snapshot di recent apps / task switcher (anti shoulder-surfing & data leak).
+        window.setFlags(
+            WindowManager.LayoutParams.FLAG_SECURE,
+            WindowManager.LayoutParams.FLAG_SECURE
+        )
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)

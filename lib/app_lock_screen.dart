@@ -43,21 +43,34 @@ class _AppLockScreenState extends State<AppLockScreen> {
 
   Future<void> _initLockState() async {
     final type = await _service.getLockType();
+    final attempts = await _service.getFailedPinAttempts();
+    final lockoutUntil = await _service.getLockoutUntil();
+
     if (!mounted) return;
     setState(() {
       _lockType = type;
+      _failedAttempts = attempts;
       _isLoading = false;
     });
 
-    if (type == AppLockType.device) {
+    if (lockoutUntil != null && DateTime.now().isBefore(lockoutUntil)) {
+      final remaining = lockoutUntil.difference(DateTime.now()).inSeconds;
+      if (remaining > 0) {
+        _startLockoutTimer(remaining, persist: false);
+      }
+    } else if (type == AppLockType.device) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _triggerDeviceAuth();
       });
     }
   }
 
-  void _startLockoutTimer(int seconds) {
-    _lockoutUntil = DateTime.now().add(Duration(seconds: seconds));
+  void _startLockoutTimer(int seconds, {bool persist = true}) {
+    final until = DateTime.now().add(Duration(seconds: seconds));
+    _lockoutUntil = until;
+    if (persist) {
+      _service.setLockoutUntil(until);
+    }
     _countdownTimer?.cancel();
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!mounted) {
@@ -67,8 +80,10 @@ class _AppLockScreenState extends State<AppLockScreen> {
       final remaining = _lockoutUntil?.difference(DateTime.now()).inSeconds ?? 0;
       if (remaining <= 0) {
         timer.cancel();
+        _service.resetFailedPinAttempts();
         setState(() {
           _lockoutUntil = null;
+          _failedAttempts = 0;
           _errorMessage = null;
         });
       } else {
@@ -92,6 +107,7 @@ class _AppLockScreenState extends State<AppLockScreen> {
 
     if (success) {
       _failedAttempts = 0;
+      await _service.resetFailedPinAttempts();
       widget.onUnlocked?.call();
     } else {
       setState(() {
@@ -114,10 +130,13 @@ class _AppLockScreenState extends State<AppLockScreen> {
 
       if (success) {
         _failedAttempts = 0;
+        await _service.resetFailedPinAttempts();
         widget.onUnlocked?.call();
       } else {
-        _failedAttempts++;
+        final newAttempts = await _service.recordFailedPinAttempt();
+        if (!mounted) return;
         setState(() {
+          _failedAttempts = newAttempts;
           _enteredPin = '';
           if (_failedAttempts >= 5) {
             _startLockoutTimer(30);
@@ -151,10 +170,13 @@ class _AppLockScreenState extends State<AppLockScreen> {
 
     if (success) {
       _failedAttempts = 0;
+      await _service.resetFailedPinAttempts();
       widget.onUnlocked?.call();
     } else {
-      _failedAttempts++;
+      final newAttempts = await _service.recordFailedPinAttempt();
+      if (!mounted) return;
       setState(() {
+        _failedAttempts = newAttempts;
         _passwordController.clear();
         if (_failedAttempts >= 5) {
           _startLockoutTimer(30);

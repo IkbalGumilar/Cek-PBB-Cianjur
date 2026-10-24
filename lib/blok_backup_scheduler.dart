@@ -1,10 +1,12 @@
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import 'app_storage.dart';
 import 'base_preferences_store.dart';
 import 'blok_data_store.dart';
+import 'backup_password_store.dart';
 import 'google_drive_backup_policy.dart';
 
 /// Pengelola & penjadwal cadangan data DHKP ala WhatsApp.
@@ -22,6 +24,40 @@ class BlokBackupScheduler extends BasePreferencesStore {
   static final instance = BlokBackupScheduler._();
 
   static const int maxRetainedBackups = 3;
+
+  FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
+
+  @visibleForTesting
+  void setSecureStorageForTesting(FlutterSecureStorage storage) {
+    _secureStorage = storage;
+  }
+
+  Future<String?> _readSecureToken(String key) async {
+    try {
+      final val = await _secureStorage.read(key: key);
+      if (val != null) {
+        await remove(key);
+        return val;
+      }
+    } catch (_) {}
+    return getString(key);
+  }
+
+  Future<void> _writeSecureToken(String key, String value) async {
+    try {
+      await _secureStorage.write(key: key, value: value);
+      await remove(key);
+      return;
+    } catch (_) {}
+    await setString(key, value);
+  }
+
+  Future<void> _deleteSecureToken(String key) async {
+    try {
+      await _secureStorage.delete(key: key);
+    } catch (_) {}
+    await remove(key);
+  }
 
   /// Folder khusus terisolasi di Google Drive (aplikasi dilarang mengakses folder lain).
   String get googleDriveDedicatedFolder =>
@@ -88,8 +124,8 @@ class BlokBackupScheduler extends BasePreferencesStore {
       await remove(_googlePhotoUrlKey);
       await remove(_googleDriveFolderLinkKey);
       await remove(_googleDriveFolderIdKey);
-      await remove(_googleDesktopAccessTokenKey);
-      await remove(_googleDesktopRefreshTokenKey);
+      await _deleteSecureToken(_googleDesktopAccessTokenKey);
+      await _deleteSecureToken(_googleDesktopRefreshTokenKey);
     }
   }
 
@@ -102,16 +138,20 @@ class BlokBackupScheduler extends BasePreferencesStore {
   }
 
   Future<String> getGoogleDesktopAccessToken() async {
-    return (await getString(_googleDesktopAccessTokenKey)) ?? '';
+    return (await _readSecureToken(_googleDesktopAccessTokenKey)) ?? '';
+  }
+
+  Future<String> getGoogleDesktopRefreshToken() async {
+    return (await _readSecureToken(_googleDesktopRefreshTokenKey)) ?? '';
   }
 
   Future<void> setGoogleDesktopTokens({
     required String accessToken,
     String? refreshToken,
   }) async {
-    await setString(_googleDesktopAccessTokenKey, accessToken);
+    await _writeSecureToken(_googleDesktopAccessTokenKey, accessToken);
     if (refreshToken != null && refreshToken.isNotEmpty) {
-      await setString(_googleDesktopRefreshTokenKey, refreshToken);
+      await _writeSecureToken(_googleDesktopRefreshTokenKey, refreshToken);
     }
   }
 
@@ -378,6 +418,8 @@ class BlokBackupScheduler extends BasePreferencesStore {
     DateTime? now,
     Future<String> Function(String fileName)? exportCsv,
   }) async {
+    if (!(await BackupPasswordStore.instance.hasPassword())) return false;
+
     final current = now ?? DateTime.now();
     final frequency = await getFrequencyDays();
     if (frequency <= 0) return false;

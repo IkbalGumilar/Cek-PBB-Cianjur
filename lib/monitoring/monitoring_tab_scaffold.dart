@@ -63,12 +63,12 @@ class _MonitoringTabScaffoldState extends State<MonitoringTabScaffold> {
           FilledButton(
             onPressed: _loading ? null : _submit,
             child: _loading
-                ? const SizedBox(
+                ? SizedBox(
                     height: 20,
                     width: 20,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      color: Colors.white,
+                      color: Theme.of(context).colorScheme.onPrimary,
                     ),
                   )
                 : const Text('Tampilkan'),

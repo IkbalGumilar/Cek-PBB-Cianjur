@@ -183,6 +183,57 @@ class _ModeMenu extends StatelessWidget {
     required this.kendaraanSelected,
   });
 
+  Widget _buildHeaderChip({
+    required BuildContext context,
+    required String label,
+    required bool selected,
+    required VoidCallback onSelected,
+    required Color primaryColor,
+    required Color onPrimary,
+  }) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    // Latar belakang pil: putih bersih di mode terang (tidak abu-abu),
+    // atau permukaan kontainer gelap di mode gelap.
+    final chipBgColor = isDark ? const Color(0xFF2C2C2C) : Colors.white;
+    final isBgBright = chipBgColor.computeLuminance() > 0.5;
+
+    // Warna teks adaptif sesuai preferensi:
+    // "jika terang jadi gelap, jika kelam jadi terang"
+    const darkTextColor = Color(0xFF1F1F1F);
+    const lightTextColor = Colors.white;
+
+    // Teks chip terpilih: memakai primaryColor bila kontrasnya mencukupi,
+    // atau warna gelap/terang kontras tinggi bila warna aksen terlalu pucat.
+    final selectedTextColor = isBgBright
+        ? (primaryColor.computeLuminance() > 0.4 ? darkTextColor : primaryColor)
+        : (primaryColor.computeLuminance() < 0.2 ? lightTextColor : primaryColor);
+
+    // Teks chip belum terpilih: adaptif terhadap terang/kelamnya latar belakang
+    final unselectedTextColor = isBgBright ? darkTextColor : lightTextColor;
+
+    return ChoiceChip(
+      label: Text(label),
+      selected: selected,
+      onSelected: (_) => onSelected(),
+      showCheckmark: selected,
+      checkmarkColor: selectedTextColor,
+      color: WidgetStateProperty.all<Color>(chipBgColor),
+      selectedColor: chipBgColor,
+      backgroundColor: chipBgColor,
+      labelStyle: TextStyle(
+        color: selected ? selectedTextColor : unselectedTextColor,
+        fontWeight: FontWeight.bold,
+      ),
+      side: BorderSide(
+        color: isDark
+            ? Colors.white.withValues(alpha: 0.15)
+            : Colors.black.withValues(alpha: 0.08),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final primaryColor = Theme.of(context).colorScheme.primary;
@@ -191,56 +242,41 @@ class _ModeMenu extends StatelessWidget {
       ...CheckMode.values.map((mode) {
         final selected =
             !desilSelected && !kendaraanSelected && mode == activeMode;
-        return ChoiceChip(
-          label: Text(mode.label),
+        return _buildHeaderChip(
+          context: context,
+          label: mode.label,
           selected: selected,
-          onSelected: (_) => onModeChanged(mode),
-          selectedColor: onPrimary,
-          labelStyle: TextStyle(
-            color: selected ? primaryColor : onPrimary,
-            fontWeight: FontWeight.bold,
-          ),
-          backgroundColor: onPrimary.withValues(alpha: 0.15),
-          side: BorderSide(color: onPrimary.withValues(alpha: 0.5)),
+          onSelected: () => onModeChanged(mode),
+          primaryColor: primaryColor,
+          onPrimary: onPrimary,
         );
       }),
       // Bukan mode tampilan seperti chip lain — ini navigasi ke alur
       // login + MFA Portal Staf (lihat MainShell._openMonitoring), jadi
       // sengaja tidak pernah "selected".
-      ChoiceChip(
-        label: const Text('Monitoring'),
+      _buildHeaderChip(
+        context: context,
+        label: 'Monitoring',
         selected: false,
-        onSelected: (_) => onMonitoringPressed(),
-        labelStyle: TextStyle(
-          color: onPrimary,
-          fontWeight: FontWeight.bold,
-        ),
-        backgroundColor: onPrimary.withValues(alpha: 0.15),
-        side: BorderSide(color: onPrimary.withValues(alpha: 0.5)),
+        onSelected: onMonitoringPressed,
+        primaryColor: primaryColor,
+        onPrimary: onPrimary,
       ),
-      ChoiceChip(
-        label: const Text('Cek Kendaraan'),
+      _buildHeaderChip(
+        context: context,
+        label: 'Cek Kendaraan',
         selected: kendaraanSelected,
-        onSelected: (_) => onKendaraanPressed(),
-        selectedColor: onPrimary,
-        labelStyle: TextStyle(
-          color: kendaraanSelected ? primaryColor : onPrimary,
-          fontWeight: FontWeight.bold,
-        ),
-        backgroundColor: onPrimary.withValues(alpha: 0.15),
-        side: BorderSide(color: onPrimary.withValues(alpha: 0.5)),
+        onSelected: onKendaraanPressed,
+        primaryColor: primaryColor,
+        onPrimary: onPrimary,
       ),
-      ChoiceChip(
-        label: const Text('Cek Desil'),
+      _buildHeaderChip(
+        context: context,
+        label: 'Cek Desil',
         selected: desilSelected,
-        onSelected: (_) => onDesilPressed(),
-        selectedColor: onPrimary,
-        labelStyle: TextStyle(
-          color: desilSelected ? primaryColor : onPrimary,
-          fontWeight: FontWeight.bold,
-        ),
-        backgroundColor: onPrimary.withValues(alpha: 0.15),
-        side: BorderSide(color: onPrimary.withValues(alpha: 0.5)),
+        onSelected: onDesilPressed,
+        primaryColor: primaryColor,
+        onPrimary: onPrimary,
       ),
     ];
 

@@ -464,12 +464,12 @@ class DesilViewState extends State<DesilView> {
           FilledButton.icon(
             onPressed: _submitting || _loadingCaptcha ? null : _submit,
             icon: _submitting
-                ? const SizedBox(
+                ? SizedBox(
                     height: 18,
                     width: 18,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      color: Colors.white,
+                      color: Theme.of(context).colorScheme.onPrimary,
                     ),
                   )
                 : const Icon(Icons.search),

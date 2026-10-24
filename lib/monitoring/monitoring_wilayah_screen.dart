@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../app_header.dart';
 import '../settings_screen.dart';
 import '../staff_portal_client.dart';
 import '../theme_controller.dart';
@@ -40,12 +39,16 @@ class MonitoringWilayahScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final primaryColor = theme.colorScheme.primary;
+    final onPrimary = theme.colorScheme.onPrimary;
+
     return DefaultTabController(
       length: _tabs.length,
       child: Scaffold(
         appBar: AppBar(
-          backgroundColor: kHeaderGreen,
-          foregroundColor: Colors.white,
+          backgroundColor: primaryColor,
+          foregroundColor: onPrimary,
           title: const Text('Monitoring Wilayah'),
           actions: [
             IconButton(
@@ -62,9 +65,9 @@ class MonitoringWilayahScreen extends StatelessWidget {
           ],
           bottom: TabBar(
             isScrollable: true,
-            labelColor: Colors.white,
-            unselectedLabelColor: Colors.white70,
-            indicatorColor: Colors.white,
+            labelColor: onPrimary,
+            unselectedLabelColor: onPrimary.withValues(alpha: 0.7),
+            indicatorColor: onPrimary,
             tabs: [for (final t in _tabs) Tab(text: t)],
           ),
         ),

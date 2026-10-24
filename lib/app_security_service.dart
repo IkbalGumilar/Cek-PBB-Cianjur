@@ -1,9 +1,11 @@
 import 'dart:convert';
 import 'dart:math';
 
-import 'package:crypto/crypto.dart';
+import 'package:crypto/crypto.dart' hide Hmac;
+import 'package:cryptography/cryptography.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:local_auth/local_auth.dart';
 
 import 'base_preferences_store.dart';
@@ -27,7 +29,8 @@ enum AppLockType {
 /// 1. Opsional (default nonaktif), dapat diaktifkan/dinonaktifkan di Pengaturan.
 /// 2. Terintegrasi dengan biometrik HP (Fingerprint & Face Unlock) serta fallback
 ///    ke PIN/pola layar kunci perangkat.
-/// 3. Opsi PIN kustom 6 digit atau Password kustom dengan hash SHA-256 + garam acak (salt).
+/// 3. Opsi PIN kustom 6 digit atau Password kustom dengan hash PBKDF2-HMAC-SHA256
+///    (100.000 iterasi) + salt acak tersimpan di FlutterSecureStorage.
 /// 4. Opsi waktu kunci otomatis: Segera (0 detik), 30 detik, 1 menit (60 detik), 5 menit (300 detik).
 /// 5. Pengelolaan status aktif/terkunci secara reaktif via [isAppLockedNotifier].
 class AppSecurityService extends BasePreferencesStore {
@@ -41,6 +44,59 @@ class AppSecurityService extends BasePreferencesStore {
   static const String _keyPinSalt = 'app_security_custom_pin_salt';
   static const String _keyPasswordHash = 'app_security_custom_password_hash';
   static const String _keyPasswordSalt = 'app_security_custom_password_salt';
+  static const String _keyFailedAttempts = 'app_security_failed_pin_attempts';
+  static const String _keyLockoutUntilMillis = 'app_security_lockout_until_millis';
+
+  FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
+
+  @visibleForTesting
+  void setSecureStorageForTesting(FlutterSecureStorage storage) {
+    _secureStorage = storage;
+  }
+
+  static int pbkdf2Iterations = 100000;
+
+  @visibleForTesting
+  static void setPbkdf2IterationsForTesting(int iterations) {
+    pbkdf2Iterations = iterations;
+  }
+
+  Future<String?> _readSecure(String key) async {
+    try {
+      final val = await _secureStorage.read(key: key);
+      if (val != null) return val;
+    } catch (_) {}
+    return getString(key);
+  }
+
+  Future<void> _writeSecure(String key, String value) async {
+    try {
+      await _secureStorage.write(key: key, value: value);
+    } catch (_) {}
+    await setString(key, value);
+  }
+
+  Future<void> _deleteSecure(String key) async {
+    try {
+      await _secureStorage.delete(key: key);
+    } catch (_) {}
+    await remove(key);
+  }
+
+  Future<String> _hashSecretPbkdf2(String secret, String salt) async {
+    final saltBytes = utf8.encode(salt);
+    final pbkdf2 = Pbkdf2(
+      macAlgorithm: Hmac.sha256(),
+      iterations: pbkdf2Iterations,
+      bits: 256,
+    );
+    final key = await pbkdf2.deriveKey(
+      secretKey: SecretKey(utf8.encode(secret)),
+      nonce: saltBytes,
+    );
+    final keyBytes = await key.extractBytes();
+    return '\$pbkdf2\$${base64Encode(keyBytes)}';
+  }
 
   LocalAuthentication _localAuth = LocalAuthentication();
 
@@ -183,26 +239,39 @@ class AppSecurityService extends BasePreferencesStore {
 
   /// Memeriksa apakah PIN kustom sudah pernah dibuat.
   Future<bool> hasCustomPin() async {
-    final hash = await getString(_keyPinHash);
+    final hash = await _readSecure(_keyPinHash);
     return hash != null && hash.isNotEmpty;
   }
 
-  /// Mengatur PIN 6 digit baru dengan hash SHA-256 + salt acak.
+  /// Mengatur PIN 6 digit baru dengan hash PBKDF2-HMAC-SHA256 (100.000 iterasi) + salt acak.
   Future<void> setCustomPin(String pin) async {
     final salt = _generateSalt();
-    final hash = _hashSecret(pin, salt);
-    await setString(_keyPinSalt, salt);
-    await setString(_keyPinHash, hash);
+    final hash = await _hashSecretPbkdf2(pin, salt);
+    await _writeSecure(_keyPinSalt, salt);
+    await _writeSecure(_keyPinHash, hash);
   }
 
   /// Memverifikasi PIN kustom yang dimasukkan pengguna.
+  /// Mendukung verifikasi hash PBKDF2 maupun migrasi otomatis dari hash legacy SHA-256.
   Future<bool> verifyCustomPin(String pin) async {
-    final salt = await getString(_keyPinSalt);
-    final storedHash = await getString(_keyPinHash);
+    final salt = await _readSecure(_keyPinSalt);
+    final storedHash = await _readSecure(_keyPinHash);
     if (salt == null || storedHash == null) return false;
 
-    final inputHash = _hashSecret(pin, salt);
-    final matches = inputHash == storedHash;
+    bool matches = false;
+    if (storedHash.startsWith(r'$pbkdf2$')) {
+      final inputHash = await _hashSecretPbkdf2(pin, salt);
+      matches = inputHash == storedHash;
+    } else {
+      final inputHash = _hashSecret(pin, salt);
+      matches = inputHash == storedHash;
+      if (matches) {
+        // Upgrade otomatis ke PBKDF2
+        final upgraded = await _hashSecretPbkdf2(pin, salt);
+        await _writeSecure(_keyPinHash, upgraded);
+      }
+    }
+
     if (matches) {
       unlock();
     }
@@ -213,30 +282,88 @@ class AppSecurityService extends BasePreferencesStore {
 
   /// Memeriksa apakah password kustom sudah pernah dibuat.
   Future<bool> hasCustomPassword() async {
-    final hash = await getString(_keyPasswordHash);
+    final hash = await _readSecure(_keyPasswordHash);
     return hash != null && hash.isNotEmpty;
   }
 
-  /// Mengatur password kustom baru dengan hash SHA-256 + salt acak.
+  /// Mengatur password kustom baru dengan hash PBKDF2-HMAC-SHA256 (100.000 iterasi) + salt acak.
   Future<void> setCustomPassword(String password) async {
     final salt = _generateSalt();
-    final hash = _hashSecret(password, salt);
-    await setString(_keyPasswordSalt, salt);
-    await setString(_keyPasswordHash, hash);
+    final hash = await _hashSecretPbkdf2(password, salt);
+    await _writeSecure(_keyPasswordSalt, salt);
+    await _writeSecure(_keyPasswordHash, hash);
   }
 
   /// Memverifikasi password kustom yang dimasukkan pengguna.
+  /// Mendukung verifikasi hash PBKDF2 maupun migrasi otomatis dari hash legacy SHA-256.
   Future<bool> verifyCustomPassword(String password) async {
-    final salt = await getString(_keyPasswordSalt);
-    final storedHash = await getString(_keyPasswordHash);
+    final salt = await _readSecure(_keyPasswordSalt);
+    final storedHash = await _readSecure(_keyPasswordHash);
     if (salt == null || storedHash == null) return false;
 
-    final inputHash = _hashSecret(password, salt);
-    final matches = inputHash == storedHash;
+    bool matches = false;
+    if (storedHash.startsWith(r'$pbkdf2$')) {
+      final inputHash = await _hashSecretPbkdf2(password, salt);
+      matches = inputHash == storedHash;
+    } else {
+      final inputHash = _hashSecret(password, salt);
+      matches = inputHash == storedHash;
+      if (matches) {
+        // Upgrade otomatis ke PBKDF2
+        final upgraded = await _hashSecretPbkdf2(password, salt);
+        await _writeSecure(_keyPasswordHash, upgraded);
+      }
+    }
+
     if (matches) {
       unlock();
     }
     return matches;
+  }
+
+  // --- Persistent Lockout & Percobaan Salah PIN/Password ---
+
+  /// Mendapatkan jumlah percobaan salah yang tersimpan di penyimpanan aman.
+  Future<int> getFailedPinAttempts() async {
+    final raw = await _readSecure(_keyFailedAttempts);
+    if (raw == null) return 0;
+    return int.tryParse(raw) ?? 0;
+  }
+
+  /// Menambah 1 catatan percobaan salah dan mengembalikan hitungan terbaru.
+  Future<int> recordFailedPinAttempt() async {
+    final current = await getFailedPinAttempts();
+    final updated = current + 1;
+    await _writeSecure(_keyFailedAttempts, updated.toString());
+    return updated;
+  }
+
+  /// Me-reset hitungan percobaan salah dan status lockout setelah berhasil buka kunci.
+  Future<void> resetFailedPinAttempts() async {
+    await _deleteSecure(_keyFailedAttempts);
+    await _deleteSecure(_keyLockoutUntilMillis);
+  }
+
+  /// Mendapatkan batas waktu penguncian sementara jika ada dan belum kedaluwarsa.
+  Future<DateTime?> getLockoutUntil() async {
+    final raw = await _readSecure(_keyLockoutUntilMillis);
+    if (raw == null) return null;
+    final millis = int.tryParse(raw);
+    if (millis == null) return null;
+    final until = DateTime.fromMillisecondsSinceEpoch(millis);
+    if (DateTime.now().isBefore(until)) {
+      return until;
+    }
+    await _deleteSecure(_keyLockoutUntilMillis);
+    return null;
+  }
+
+  /// Mengatur batas waktu penguncian sementara (lockout) secara persisten.
+  Future<void> setLockoutUntil(DateTime until) async {
+    await _writeSecure(
+      _keyLockoutUntilMillis,
+      until.millisecondsSinceEpoch.toString(),
+    );
   }
 
   // --- Lifecycle & Lock State ---
@@ -285,6 +412,7 @@ class AppSecurityService extends BasePreferencesStore {
   @visibleForTesting
   void resetForTesting() {
     resetPrefsForTesting();
+    pbkdf2Iterations = 100000;
     isAppLockedNotifier.value = false;
     _lastPausedTime = null;
   }

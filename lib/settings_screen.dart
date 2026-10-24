@@ -10,6 +10,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'apk_share_helper.dart';
 import 'app_security_service.dart';
+import 'backup_password_store.dart';
 import 'blok_backup_scheduler.dart';
 import 'desktop_accent_color_helper.dart';
 import 'google_auth_service.dart';
@@ -1255,6 +1256,7 @@ class _BackupSectionState extends State<_BackupSection> {
   String _googlePhotoUrl = '';
   String _googleFolderLink = '';
   bool _overCellular = false;
+  bool _hasBackupPassword = false;
   List<File> _localBackups = [];
 
   @override
@@ -1275,6 +1277,7 @@ class _BackupSectionState extends State<_BackupSection> {
     final folderLink = await scheduler.getGoogleDriveFolderLink();
     final cellular = await scheduler.getOverCellular();
     final files = await scheduler.getLocalBackups();
+    final hasBackupPassword = await BackupPasswordStore.instance.hasPassword();
 
     if (mounted) {
       setState(() {
@@ -1287,6 +1290,7 @@ class _BackupSectionState extends State<_BackupSection> {
         _googlePhotoUrl = googlePhoto;
         _googleFolderLink = folderLink;
         _overCellular = cellular;
+        _hasBackupPassword = hasBackupPassword;
         _localBackups = files;
       });
     }
@@ -1354,6 +1358,12 @@ class _BackupSectionState extends State<_BackupSection> {
   }
 
   Future<void> _performBackup() async {
+    final hasBackupPassword =
+        await BackupPasswordStore.instance.hasPassword();
+    if (!hasBackupPassword && !(await _setupBackupPassword())) {
+      return;
+    }
+    if (!_hasBackupPassword) setState(() => _hasBackupPassword = true);
     setState(() => _isBackingUp = true);
     try {
       final file = await BlokBackupScheduler.instance.performBackup(
@@ -1393,6 +1403,95 @@ class _BackupSectionState extends State<_BackupSection> {
     } finally {
       if (mounted) setState(() => _isBackingUp = false);
     }
+  }
+
+  Future<bool> _setupBackupPassword() async {
+    final passwordController = TextEditingController();
+    final confirmController = TextEditingController();
+    var errorText = '';
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('Atur kata sandi backup'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Kata sandi ini melindungi backup dan diperlukan untuk '
+                'memulihkannya di perangkat lain. Simpan dengan aman; '
+                'kata sandi yang hilang tidak dapat dipulihkan. Backup lama '
+                'tetap memerlukan kata sandi lamanya.',
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: passwordController,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: 'Kata sandi (minimal 12 karakter)',
+                ),
+              ),
+              TextField(
+                controller: confirmController,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: 'Ulangi kata sandi',
+                ),
+              ),
+              if (errorText.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  errorText,
+                  style: TextStyle(color: Theme.of(ctx).colorScheme.error),
+                ),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Batal'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                final password = passwordController.text;
+                if (password.length < 12) {
+                  setDialogState(
+                    () => errorText = 'Kata sandi harus minimal 12 karakter.',
+                  );
+                  return;
+                }
+                if (password != confirmController.text) {
+                  setDialogState(() => errorText = 'Kata sandi tidak cocok.');
+                  return;
+                }
+                try {
+                  await BackupPasswordStore.instance.save(password);
+                  if (ctx.mounted) Navigator.of(ctx).pop(true);
+                } catch (e) {
+                  setDialogState(
+                    () => errorText = 'Gagal menyimpan kata sandi: $e',
+                  );
+                }
+              },
+              child: const Text('Simpan'),
+            ),
+          ],
+        ),
+      ),
+    );
+    passwordController.dispose();
+    confirmController.dispose();
+    if (saved == true && mounted) {
+      setState(() => _hasBackupPassword = true);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Kata sandi tersimpan di secure storage perangkat.'),
+        ),
+      );
+      return true;
+    }
+    return false;
   }
 
   Future<void> _showFrequencyDialog() async {
@@ -1657,10 +1756,27 @@ class _BackupSectionState extends State<_BackupSection> {
           const SizedBox(height: 6),
           Text(
             'Cadangkan data DHKP ke penyimpanan perangkat atau akun Google. '
-            'Pencadangan otomatis berjalan tiap pk 02:00 pagi.',
+            'Pencadangan otomatis berjalan tiap pk 02:00 pagi. Backup baru '
+            'dilindungi kata sandi yang hanya tersimpan di secure storage.',
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: 16),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.password_outlined),
+            title: Text(
+              _hasBackupPassword
+                  ? 'Kata sandi backup tersimpan'
+                  : 'Atur kata sandi backup',
+            ),
+            subtitle: Text(
+              _hasBackupPassword
+                  ? 'Diperlukan untuk membuka backup di perangkat lain.'
+                  : 'Wajib untuk membuat backup terenkripsi.',
+            ),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: _setupBackupPassword,
+          ),
           Card(
             elevation: 0,
             color: Theme.of(context)

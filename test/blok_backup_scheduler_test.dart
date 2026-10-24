@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:cek_pbb_app/app_storage.dart';
+import 'package:cek_pbb_app/backup_password_store.dart';
 import 'package:cek_pbb_app/blok_backup_scheduler.dart';
 import 'package:cek_pbb_app/blok_data_store.dart';
 import 'package:cek_pbb_app/blok_record.dart';
@@ -10,16 +11,45 @@ import 'package:cek_pbb_app/google_drive_backup_policy.dart';
 import 'package:cek_pbb_app/settings_screen.dart';
 import 'package:cek_pbb_app/theme_controller.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+const _backupPassword = 'test-password-for-backups';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   late Directory tempDir;
+  final secureStorageValues = <String, String>{};
 
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
+    secureStorageValues.clear();
+    const secureStorageChannel =
+        MethodChannel('plugins.it_nomads.com/flutter_secure_storage');
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(secureStorageChannel, (call) async {
+      final arguments = Map<String, dynamic>.from(call.arguments as Map);
+      switch (call.method) {
+        case 'read':
+          return secureStorageValues[arguments['key']];
+        case 'write':
+          secureStorageValues[arguments['key'] as String] =
+              arguments['value'] as String;
+          return null;
+        case 'delete':
+          secureStorageValues.remove(arguments['key']);
+          return null;
+        case 'containsKey':
+          return secureStorageValues.containsKey(arguments['key']);
+        case 'deleteAll':
+          secureStorageValues.clear();
+          return null;
+      }
+      return null;
+    });
+    await BackupPasswordStore.instance.save(_backupPassword);
     tempDir = await Directory.systemTemp.createTemp('backup_scheduler_test_');
     AppStorage.setMockDirectories(dataDir: tempDir, mediaDir: tempDir);
     BlokDataStore.instance.resetForTesting();
@@ -231,6 +261,16 @@ void main() {
   });
 
   group('BlokBackupScheduler - Eksekusi Cadangan performBackup & runIfNeeded', () {
+    test('runIfNeeded melewati backup sampai kata sandi ditetapkan', () async {
+      final scheduler = BlokBackupScheduler.instance;
+      await BackupPasswordStore.instance.clear();
+      await scheduler.setFrequencyDays(1);
+      await scheduler.markDirty();
+
+      expect(await scheduler.runIfNeeded(), isFalse);
+      expect(await scheduler.isDirty(), isTrue);
+    });
+
     test('performBackup dengan onlyDkhpData true mengekspor paket dkhp dan merotasi retensi', () async {
       final scheduler = BlokBackupScheduler.instance;
 
@@ -262,7 +302,10 @@ void main() {
       expect(await scheduler.getLastBackupPath(), file.path);
 
       // Cek isi berkas .dkhp dengan unpack
-      final records = await DhkpPackageHelper.unpackDkhp(file.path);
+      final records = await DhkpPackageHelper.unpackDkhp(
+        file.path,
+        password: _backupPassword,
+      );
       expect(records.any((r) => r.namaWajibPajak == 'Haji Sulaiman'), isTrue);
     });
 
@@ -686,4 +729,3 @@ void main() {
     });
   });
 }
-

@@ -8,14 +8,8 @@ import 'dusun_data.dart';
 import 'operator_mode_store.dart';
 import 'wilayah_kerja_store.dart';
 
-/// Backup/restore Buku Catatan Blok dienkripsi (AES-256-CBC) dengan kunci
-/// yang diturunkan otomatis per identitas (Dusun 1-5, Operator, atau belum
-/// pilih wilayah) — tidak ada password yang diketik manual, semuanya
-/// dihitung dari identitas perangkat saat ekspor/impor terjadi. Efeknya:
-/// berkas backup satu wilayah tidak bisa dibuka perangkat wilayah lain
-/// (kuncinya beda), dan hanya perangkat Mode Operator yang bisa membuka
-/// laporan dari semua dusun (operator mencoba semua kunci dusun + kuncinya
-/// sendiri saat restore, lihat [allowedRestoreIdentities]).
+/// Pembaca kompatibilitas untuk backup CSV legacy AES-CBC. Jangan gunakan
+/// untuk membuat backup baru; paket baru menggunakan kata sandi dan AES-GCM.
 class BackupCrypto {
   BackupCrypto._();
 
@@ -50,22 +44,9 @@ class BackupCrypto {
     return [dusun == null ? _unassignedIdentity : dusunIdentity(dusun)];
   }
 
-  static enc.Key _keyFor(String identity) {
+  static enc.Key _legacyKeyFor(String identity) {
     final digest = sha256.convert(utf8.encode('$_appSecret::$identity'));
     return enc.Key(Uint8List.fromList(digest.bytes));
-  }
-
-  static Uint8List encryptForIdentity(String identity, Uint8List plainBytes) {
-    final iv = enc.IV.fromSecureRandom(16);
-    final encrypter = enc.Encrypter(
-      enc.AES(_keyFor(identity), mode: enc.AESMode.cbc),
-    );
-    final marked = Uint8List.fromList([
-      ...utf8.encode(_plaintextMarker),
-      ...plainBytes,
-    ]);
-    final encrypted = encrypter.encryptBytes(marked, iv: iv);
-    return Uint8List.fromList([..._magic, ...iv.bytes, ...encrypted.bytes]);
   }
 
   /// Coba dekripsi [fileBytes] dengan tiap identitas di [identities] secara
@@ -86,7 +67,7 @@ class BackupCrypto {
     for (final identity in identities) {
       try {
         final encrypter = enc.Encrypter(
-          enc.AES(_keyFor(identity), mode: enc.AESMode.cbc),
+          enc.AES(_legacyKeyFor(identity), mode: enc.AESMode.cbc),
         );
         final decrypted = Uint8List.fromList(
           encrypter.decryptBytes(encrypted, iv: iv),
