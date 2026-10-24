@@ -212,10 +212,23 @@ class AppSecurityService extends BasePreferencesStore {
     }
   }
 
+  bool _isAuthenticating = false;
+  bool get isAuthenticating => _isAuthenticating;
+
+  bool _temporaryLockBypass = false;
+  bool get temporaryLockBypass => _temporaryLockBypass;
+
+  /// Mengatur bypass penguncian sementara saat membuka dialog pihak ketiga (misal: Google Sign In).
+  void setTemporaryLockBypass(bool value) {
+    _temporaryLockBypass = value;
+  }
+
   /// Meminta autentikasi menggunakan Kunci Perangkat (Sidik Jari / Wajah / Kunci Layar HP).
   Future<bool> authenticateWithDevice({
     String reason = 'Konfirmasi keamanan untuk membuka Cek PBB Cianjur',
   }) async {
+    if (_isAuthenticating) return false;
+    _isAuthenticating = true;
     try {
       final authenticated = await _localAuth.authenticate(
         localizedReason: reason,
@@ -232,6 +245,8 @@ class AppSecurityService extends BasePreferencesStore {
     } catch (e) {
       debugPrint('AppSecurityService: Gagal autentikasi biometrik: $e');
       return false;
+    } finally {
+      _isAuthenticating = false;
     }
   }
 
@@ -379,8 +394,22 @@ class AppSecurityService extends BasePreferencesStore {
     _lastPausedTime = null;
   }
 
+  /// Dipanggil saat inisialisasi awal membuka aplikasi (cold start).
+  Future<void> onColdStart() async {
+    final enabled = await isLockEnabled();
+    if (enabled) {
+      lock();
+    } else {
+      unlock();
+    }
+    _lastPausedTime = null;
+  }
+
   /// Dipanggil saat aplikasi beralih ke latar belakang (background / paused).
   void onAppPaused() {
+    // Jangan catat jika aplikasi sudah terkunci, sedang dalam proses autentikasi,
+    // atau sedang dalam dialog pihak ketiga (bypass sementara).
+    if (isAppLocked || _isAuthenticating || _temporaryLockBypass) return;
     _lastPausedTime = DateTime.now();
   }
 
@@ -393,11 +422,14 @@ class AppSecurityService extends BasePreferencesStore {
       return;
     }
 
-    if (_lastPausedTime == null) {
-      // Pembukaan awal aplikasi (cold start) -> langsung kunci
-      lock();
-      return;
-    }
+    // Jika saat ini aplikasi sudah terkunci, biarkan tetap terkunci
+    if (isAppLocked) return;
+
+    // Jika sedang dalam proses autentikasi (misal prompt biometrik) atau bypass dialog eksternal
+    if (_isAuthenticating || _temporaryLockBypass) return;
+
+    // Jika belum pernah di-pause (misal hanya transisi lokal), jangan kunci
+    if (_lastPausedTime == null) return;
 
     final timeout = await getTimeoutSeconds();
     final elapsedSeconds =
@@ -406,6 +438,7 @@ class AppSecurityService extends BasePreferencesStore {
     if (elapsedSeconds >= timeout) {
       lock();
     }
+    _lastPausedTime = null;
   }
 
   /// Reset preferensi untuk keperluan pengujian.
@@ -415,6 +448,8 @@ class AppSecurityService extends BasePreferencesStore {
     pbkdf2Iterations = 100000;
     isAppLockedNotifier.value = false;
     _lastPausedTime = null;
+    _isAuthenticating = false;
+    _temporaryLockBypass = false;
   }
 
   // --- Internal Crypto Helper ---

@@ -297,6 +297,32 @@ void main() {
       service.unlock();
       expect(service.isAppLocked, isFalse);
     });
+
+    test('tidak mengunci ulang saat onAppResumed jika _lastPausedTime null atau baru saja dibuka', () async {
+      final service = AppSecurityService.instance;
+      await service.setLockEnabled(true);
+      service.unlock();
+      expect(service.isAppLocked, isFalse);
+
+      // Resume terpanggil tanpa ada onAppPaused
+      await service.onAppResumed();
+      expect(service.isAppLocked, isFalse);
+    });
+
+    test('tidak mengunci saat temporaryLockBypass sedang aktif (alur Google Sign In)', () async {
+      final service = AppSecurityService.instance;
+      await service.setLockEnabled(true);
+      await service.setTimeoutSeconds(0);
+      service.unlock();
+
+      service.setTemporaryLockBypass(true);
+      service.onAppPaused();
+      await service.onAppResumed();
+
+      expect(service.isAppLocked, isFalse);
+
+      service.setTemporaryLockBypass(false);
+    });
   });
 
   group('AppLockGate & AppLockScreen - Tampilan & Interaksi UI', () {

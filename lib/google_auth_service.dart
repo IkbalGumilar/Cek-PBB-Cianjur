@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'app_security_service.dart';
 import 'blok_backup_scheduler.dart';
 import 'google_drive_backup_policy.dart';
 
@@ -97,11 +98,14 @@ class GoogleAuthService {
       final token = await BlokBackupScheduler.instance.getGoogleDesktopAccessToken();
       return token.isNotEmpty;
     }
-    try {
-      return await _googleSignIn.canAccessScopes(_scopes);
-    } catch (_) {
-      return false;
+    if (kIsWeb) {
+      try {
+        return await _googleSignIn.canAccessScopes(_scopes);
+      } catch (_) {
+        return false;
+      }
     }
+    return _googleSignIn.currentUser != null;
   }
 
   /// Membuka popup / dialog sistem Google Account Chooser di perangkat Android/iOS,
@@ -128,6 +132,8 @@ class GoogleAuthService {
       return await _signInDesktop();
     }
 
+    // Abaikan penguncian aplikasi sementara saat popup Google Sign In sistem sedang aktif
+    AppSecurityService.instance.setTemporaryLockBypass(true);
     try {
       final account = await _googleSignIn.signIn();
       if (account == null) {
@@ -135,15 +141,18 @@ class GoogleAuthService {
         return null;
       }
 
-      // Verifikasi & minta izin akses Google Drive jika belum disetujui
-      final hasDrive = await _googleSignIn.canAccessScopes(_scopes);
-      if (!hasDrive) {
-        final granted = await _googleSignIn.requestScopes(_scopes);
-        if (!granted) {
-          throw Exception(
-            'Izin akses Google Drive ditolak. Cadangan data DHKP '
-            'membutuhkan izin akses folder Google Drive agar dapat disinkronkan.',
-          );
+      // canAccessScopes & requestScopes hanya didukung pada platform Web.
+      // Pada Android & iOS, seluruh scope di _scopes sudah diotorisasi langsung di dalam panggilan signIn().
+      if (kIsWeb) {
+        final hasDrive = await _googleSignIn.canAccessScopes(_scopes);
+        if (!hasDrive) {
+          final granted = await _googleSignIn.requestScopes(_scopes);
+          if (!granted) {
+            throw Exception(
+              'Izin akses Google Drive ditolak. Cadangan data DHKP '
+              'membutuhkan izin akses folder Google Drive agar dapat disinkronkan.',
+            );
+          }
         }
       }
 
@@ -164,10 +173,16 @@ class GoogleAuthService {
       return user;
     } on PlatformException catch (e) {
       debugPrint('Google Sign-In PlatformException: ${e.code} - ${e.message}');
+      // Kode pembatalan oleh pengguna (12501 atau sign_in_canceled)
+      if (e.code == 'sign_in_canceled' || e.message?.contains('12501') == true) {
+        return null;
+      }
       rethrow;
     } catch (e) {
       debugPrint('Google Sign-In Error: $e');
       rethrow;
+    } finally {
+      AppSecurityService.instance.setTemporaryLockBypass(false);
     }
   }
 

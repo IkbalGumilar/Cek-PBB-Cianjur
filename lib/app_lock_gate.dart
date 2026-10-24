@@ -28,7 +28,7 @@ class _AppLockGateState extends State<AppLockGate> with WidgetsBindingObserver {
   }
 
   Future<void> _checkInitialLock() async {
-    await _securityService.onAppResumed();
+    await _securityService.onColdStart();
     if (mounted) {
       setState(() {
         _isCheckingInitialLock = false;
@@ -44,9 +44,10 @@ class _AppLockGateState extends State<AppLockGate> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused ||
-        state == AppLifecycleState.inactive ||
-        state == AppLifecycleState.hidden) {
+    // PENTING: Hanya tanggapi 'paused' (saat aplikasi benar-benar ke background).
+    // Abaikan 'inactive' karena event ini muncul saat prompt biometrik sistem,
+    // Google Sign-In, atau notifikasi sistem sedang tampil di atas aplikasi.
+    if (state == AppLifecycleState.paused) {
       _securityService.onAppPaused();
     } else if (state == AppLifecycleState.resumed) {
       _securityService.onAppResumed();
@@ -63,16 +64,20 @@ class _AppLockGateState extends State<AppLockGate> with WidgetsBindingObserver {
       );
     }
 
-    return ValueListenableBuilder<bool>(
-      valueListenable: _securityService.isAppLockedNotifier,
-      builder: (context, isLocked, child) {
-        if (isLocked) {
-          return AppLockScreen(
-            onUnlocked: () => _securityService.unlock(),
-          );
-        }
-        return widget.child;
-      },
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        widget.child,
+        ValueListenableBuilder<bool>(
+          valueListenable: _securityService.isAppLockedNotifier,
+          builder: (context, isLocked, child) {
+            if (!isLocked) return const SizedBox.shrink();
+            return AppLockScreen(
+              onUnlocked: () => _securityService.unlock(),
+            );
+          },
+        ),
+      ],
     );
   }
 }
