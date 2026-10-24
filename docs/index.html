@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cek PBB Cianjur - Aplikasi Manajemen & Pengecekan PBB-P2</title>
+  <meta name="description" content="Aplikasi Cek PBB Cianjur untuk pengecekan tagihan, manajemen data DHKP kolektor desa, rekap pembayaran, dan pencadangan terenkripsi.">
+  <style>
+    :root {
+      --primary: #0f766e;
+      --primary-dark: #115e59;
+      --primary-light: #ccfbf1;
+      --accent: #2563eb;
+      --text-main: #1f2937;
+      --text-muted: #6b7280;
+      --bg: #f8fafc;
+      --card-bg: #ffffff;
+      --border: #e2e8f0;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      color: var(--text-main);
+      background-color: var(--bg);
+      line-height: 1.6;
+    }
+    header {
+      background: #ffffff;
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+    .nav-container {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 1rem 1.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-weight: 700;
+      font-size: 1.25rem;
+      color: var(--primary);
+      text-decoration: none;
+    }
+    .brand svg {
+      width: 32px;
+      height: 32px;
+      fill: var(--primary);
+    }
+    .nav-links {
+      display: flex;
+      gap: 1.5rem;
+    }
+    .nav-links a {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 0.95rem;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+    .nav-links a:hover {
+      color: var(--primary);
+    }
+    .hero {
+      background: linear-gradient(135deg, #0f766e 0%, #1e3a8a 100%);
+      color: #ffffff;
+      padding: 5rem 1.5rem;
+      text-align: center;
+    }
+    .hero-container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    .badge {
+      display: inline-block;
+      background: rgba(255, 255, 255, 0.15);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      padding: 0.35rem 0.9rem;
+      border-radius: 9999px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      margin-bottom: 1.25rem;
+      letter-spacing: 0.5px;
+    }
+    .hero h1 {
+      font-size: 2.75rem;
+      font-weight: 800;
+      line-height: 1.2;
+      margin-bottom: 1.25rem;
+    }
+    .hero p {
+      font-size: 1.15rem;
+      opacity: 0.9;
+      margin-bottom: 2rem;
+      line-height: 1.7;
+    }
+    .hero-buttons {
+      display: flex;
+      justify-content: center;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.85rem 1.75rem;
+      border-radius: 8px;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 0.2s ease;
+      font-size: 1rem;
+    }
+    .btn-white {
+      background: #ffffff;
+      color: var(--primary);
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+    .btn-white:hover {
+      background: #f1f5f9;
+      transform: translateY(-1px);
+    }
+    .btn-outline {
+      border: 1.5px solid rgba(255, 255, 255, 0.6);
+      color: #ffffff;
+    }
+    .btn-outline:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: #ffffff;
+    }
+    .section {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 4.5rem 1.5rem;
+    }
+    .section-title {
+      text-align: center;
+      margin-bottom: 3rem;
+    }
+    .section-title h2 {
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--text-main);
+      margin-bottom: 0.5rem;
+    }
+    .section-title p {
+      color: var(--text-muted);
+      font-size: 1.05rem;
+    }
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 2rem;
+    }
+    .feature-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 2rem;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .feature-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08);
+    }
+    .feature-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 10px;
+      background: var(--primary-light);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 1.25rem;
+      color: var(--primary);
+    }
+    .feature-card h3 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin-bottom: 0.75rem;
+    }
+    .feature-card p {
+      color: var(--text-muted);
+      font-size: 0.95rem;
+      line-height: 1.6;
+    }
+    .security-banner {
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 3rem 2rem;
+      margin: 2rem auto;
+      max-width: 1100px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2.5rem;
+      align-items: center;
+    }
+    @media (max-width: 768px) {
+      .security-banner {
+        grid-template-columns: 1fr;
+      }
+      .hero h1 {
+        font-size: 2rem;
+      }
+    }
+    .security-banner h3 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      margin-bottom: 1rem;
+      color: var(--primary);
+    }
+    .security-banner ul {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      margin-top: 1rem;
+    }
+    .security-banner li {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      color: var(--text-main);
+      font-size: 0.95rem;
+    }
+    .security-banner li::before {
+      content: "✓";
+      color: var(--primary);
+      font-weight: bold;
+    }
+    footer {
+      background: #ffffff;
+      border-top: 1px solid var(--border);
+      padding: 3rem 1.5rem;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+    .footer-container {
+      max-width: 1100px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1.5rem;
+    }
+    .footer-links {
+      display: flex;
+      gap: 1.5rem;
+    }
+    .footer-links a {
+      color: var(--text-muted);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+    .footer-links a:hover {
+      color: var(--primary);
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="nav-container">
+      <a href="index.html" class="brand">
+        <svg viewBox="0 0 24 24">
+          <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/>
+        </svg>
+        Cek PBB Cianjur
+      </a>
+      <nav class="nav-links">
+        <a href="#fitur">Fitur</a>
+        <a href="#keamanan">Keamanan</a>
+        <a href="privacy.html">Kebijakan Privasi</a>
+        <a href="terms.html">Ketentuan</a>
+      </nav>
+    </div>
+  </header>
+
+  <section class="hero">
+    <div class="hero-container">
+      <div class="badge">Aplikasi Resmi Kolektor & Wajib Pajak</div>
+      <h1>Manajemen & Cek Tagihan PBB-P2 Kabupaten Cianjur</h1>
+      <p>
+        Solusi cerdas bagi kolektor desa dan masyarakat untuk pengecekan tagihan NOP,
+        pencatatan blok DHKP secara offline, rekap penagihan cepat, dan pencadangan data otomatis.
+      </p>
+      <div class="hero-buttons">
+        <a href="https://github.com/IkbalGumilar/Cek-PBB-Cianjur/releases" class="btn btn-white">
+          Unduh Aplikasi
+        </a>
+        <a href="privacy.html" class="btn btn-outline">
+          Baca Kebijakan Privasi
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <main class="section" id="fitur">
+    <div class="section-title">
+      <h2>Fitur Unggulan</h2>
+      <p>Didesain untuk kecepatan kerja di lapangan, baik saat ada sinyal maupun di pelosok offline.</p>
+    </div>
+
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon">🔍</div>
+        <h3>Cek NOP Real-Time & Cepat</h3>
+        <p>Integrasi langsung dengan basis data PBB Kabupaten Cianjur. Dilengkapi pemindai kamera (OCR) dan riwayat pencarian cepat.</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">📁</div>
+        <h3>Manajemen DHKP & Blok Desa</h3>
+        <p>Impor basis data DHKP desa, kelola blok penagihan per kolektor, dan tandai status lunas atau titip bayar secara offline.</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">☁️</div>
+        <h3>Pencadangan Google Drive</h3>
+        <p>Cadangkan data DHKP secara berkala ke folder Google Drive pribadi pengguna untuk menjamin data tidak hilang saat ganti perangkat.</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">🖨️</div>
+        <h3>Cetak Struk Bluetooth & PDF</h3>
+        <p>Cetak bukti tanda terima sementara (STTS) langsung ke printer thermal Bluetooth kolektor atau simpan sebagai dokumen PDF.</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">🔒</div>
+        <h3>Kunci Aplikasi Biometrik</h3>
+        <p>Lindungi kerahasiaan data wajib pajak dengan proteksi Sidik Jari, Face Unlock, atau PIN kunci layar perangkat.</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">🛡️</div>
+        <h3>Enkripsi AES-256 Kuat</h3>
+        <p>Paket berkas <code>.dkhp</code> dilindungi algoritma enkripsi AES-256-CBC/GCM dengan PBKDF2 600.000 iterasi.</p>
+      </div>
+    </div>
+
+    <div class="security-banner" id="keamanan" style="margin-top: 4rem;">
+      <div>
+        <h3>Komitmen Keamanan & Privasi Data</h3>
+        <p>
+          Cek PBB Cianjur menghormati privasi penuh pengguna dan wajib pajak. Kami menerapkan prinsip <strong>Least Privilege</strong> dalam integrasi Google Drive.
+        </p>
+        <ul>
+          <li>Aplikasi hanya mengakses berkas miliknya sendiri di folder <code>Cek PBB Cianjur</code></li>
+          <li>Aplikasi tidak pernah membaca atau mengintip berkas pribadi pengguna di Google Drive</li>
+          <li>Data disimpan secara lokal di perangkat tanpa perantara server komersial pihak ketiga</li>
+          <li>Patuh terhadap Kebijakan Data Pengguna Layanan API Google</li>
+        </ul>
+      </div>
+      <div>
+        <div style="background: var(--bg); padding: 1.5rem; border-radius: 12px; border: 1px solid var(--border);">
+          <h4 style="margin-bottom: 0.5rem; color: var(--primary);">Integrasi Terpercaya</h4>
+          <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 1rem;">
+            Fitur sinkronisasi cloud dirancang transparan dengan izin terbatas (<code>drive.file</code>) agar pengguna memiliki kendali penuh atas datanya.
+          </p>
+          <a href="privacy.html" style="color: var(--primary); font-weight: 600; text-decoration: none; font-size: 0.95rem;">
+            Pelajari Kebijakan Privasi Lengkap &rarr;
+          </a>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <div class="footer-container">
+      <div>
+        <p>&copy; 2026 Cek PBB Cianjur. Pengembang: Ikbal Gumilar.</p>
+      </div>
+      <div class="footer-links">
+        <a href="index.html">Beranda</a>
+        <a href="privacy.html">Kebijakan Privasi</a>
+        <a href="terms.html">Syarat & Ketentuan</a>
+        <a href="https://github.com/IkbalGumilar/Cek-PBB-Cianjur" target="_blank" rel="noopener">GitHub</a>
+      </div>
+    </div>
+  </footer>
+
+</body>
+</html>
