@@ -2,9 +2,10 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:dio/dio.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -50,17 +51,12 @@ class GoogleDriveItem {
   }
 }
 
-/// Service komunikasi langsung ke Google Drive API v3 dan downloader berkas.
+/// Service komunikasi langsung ke Google Drive API v3 (REST API resmi) dan downloader berkas.
 class GoogleDriveService {
   GoogleDriveService._();
   static final instance = GoogleDriveService._();
 
-  final Dio _dio = Dio(
-    BaseOptions(
-      connectTimeout: const Duration(seconds: 15),
-      receiveTimeout: const Duration(seconds: 45),
-    ),
-  );
+  final http.Client _httpClient = http.Client();
 
   @visibleForTesting
   static List<GoogleDriveItem>? mockItems;
@@ -74,7 +70,7 @@ class GoogleDriveService {
     mockDownloader = null;
   }
 
-  /// Mengambil daftar berkas DHKP dan data tabel dari Google Drive pengguna.
+  /// Mengambil daftar berkas DHKP dan data tabel dari Google Drive pengguna via REST API v3.
   Future<List<GoogleDriveItem>> listDkhpFiles({String? folderId}) async {
     if (mockItems != null) return mockItems!;
 
@@ -99,53 +95,75 @@ class GoogleDriveService {
     );
 
     try {
-      final response = await _dio.getUri<Map<String, dynamic>>(
-        uri,
-        options: Options(headers: authHeaders),
-      );
-      final data = response.data;
-      if (data != null && data['files'] is List) {
-        final list = data['files'] as List;
-        final items = <GoogleDriveItem>[];
-        for (final item in list) {
-          if (item is Map) {
-            final name = item['name'] as String? ?? '';
-            final mime = item['mimeType'] as String? ?? '';
-            final isFolder = mime == 'application/vnd.google-apps.folder';
-            final lower = name.toLowerCase();
-            final isRelevant = isFolder ||
-                lower.endsWith('.dkhp') ||
-                lower.endsWith('.zip') ||
-                lower.endsWith('.csv') ||
-                lower.endsWith('.xlsx') ||
-                lower.endsWith('.xls') ||
-                lower.endsWith('.txt');
-            if (isRelevant) {
-              items.add(
-                GoogleDriveItem(
-                  id: item['id'] as String? ?? '',
-                  name: name,
-                  size: int.tryParse(item['size']?.toString() ?? '') ?? 0,
-                  modifiedTime: DateTime.tryParse(
-                    item['modifiedTime']?.toString() ?? '',
+      final response = await _httpClient
+          .get(uri, headers: authHeaders)
+          .timeout(const Duration(seconds: 20));
+
+      if (response.statusCode == 200) {
+        final data =
+            json.decode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        if (data['files'] is List) {
+          final list = data['files'] as List;
+          final items = <GoogleDriveItem>[];
+          for (final item in list) {
+            if (item is Map) {
+              final name = item['name'] as String? ?? '';
+              final mime = item['mimeType'] as String? ?? '';
+              final isFolder = mime == 'application/vnd.google-apps.folder';
+              final lower = name.toLowerCase();
+              final isRelevant = isFolder ||
+                  lower.endsWith('.dkhp') ||
+                  lower.endsWith('.zip') ||
+                  lower.endsWith('.csv') ||
+                  lower.endsWith('.xlsx') ||
+                  lower.endsWith('.xls') ||
+                  lower.endsWith('.txt');
+              if (isRelevant) {
+                items.add(
+                  GoogleDriveItem(
+                    id: item['id'] as String? ?? '',
+                    name: name,
+                    size: int.tryParse(item['size']?.toString() ?? '') ?? 0,
+                    modifiedTime: DateTime.tryParse(
+                      item['modifiedTime']?.toString() ?? '',
+                    ),
+                    mimeType: mime,
+                    isFolder: isFolder,
                   ),
-                  mimeType: mime,
-                  isFolder: isFolder,
-                ),
-              );
+                );
+              }
             }
           }
+          return items;
         }
-        return items;
+        return [];
+      } else {
+        String errorMsg =
+            'Google Drive REST API merespons status ${response.statusCode}';
+        try {
+          final errJson = json.decode(response.body);
+          if (errJson is Map && errJson['error'] is Map) {
+            final m = errJson['error']['message'] as String?;
+            if (m != null && m.isNotEmpty) {
+              errorMsg = m;
+            }
+          }
+        } catch (_) {}
+        if (response.statusCode == 403) {
+          throw Exception(
+            'Google Drive API (403): $errorMsg\n\n'
+            'Solusi: Aktifkan "Google Drive API" di Google Cloud Console (Library), atau gunakan tombol File Manager HP.',
+          );
+        }
+        throw Exception(errorMsg);
       }
-      return [];
     } catch (e) {
       debugPrint('Gagal mengambil daftar berkas Google Drive: $e');
       rethrow;
     }
   }
 
-  /// Mengunduh berkas Google Drive ke direktori sementara lokal.
+  /// Mengunduh berkas Google Drive ke direktori sementara lokal via REST API v3.
   Future<File> downloadFile({
     required String fileId,
     required String fileName,
@@ -161,13 +179,30 @@ class GoogleDriveService {
 
     final authHeaders = await GoogleAuthService.instance.getAuthHeaders();
     if (authHeaders != null) {
-      final url = 'https://www.googleapis.com/drive/v3/files/$fileId?alt=media';
-      await _dio.download(
-        url,
-        targetFile.path,
-        options: Options(headers: authHeaders),
-        onReceiveProgress: onProgress,
-      );
+      final url = Uri.parse(
+          'https://www.googleapis.com/drive/v3/files/$fileId?alt=media');
+      final request = http.Request('GET', url);
+      request.headers.addAll(authHeaders);
+
+      final streamedResponse = await _httpClient.send(request);
+      if (streamedResponse.statusCode != 200) {
+        throw Exception(
+            'Gagal mengunduh berkas Drive (Status ${streamedResponse.statusCode}).');
+      }
+
+      final contentLength = streamedResponse.contentLength ?? 0;
+      int receivedBytes = 0;
+      final sink = targetFile.openWrite();
+
+      await for (final chunk in streamedResponse.stream) {
+        sink.add(chunk);
+        receivedBytes += chunk.length;
+        if (onProgress != null && contentLength > 0) {
+          onProgress(receivedBytes, contentLength);
+        }
+      }
+      await sink.flush();
+      await sink.close();
       return targetFile;
     }
 
@@ -194,19 +229,26 @@ class GoogleDriveService {
         : 'dkhp_drive_$fileId.dkhp';
     final targetFile = File('${tempDir.path}/$actualName');
 
-    final url =
-        'https://drive.google.com/uc?export=download&id=$fileId&confirm=t';
-    await _dio.download(
-      url,
-      targetFile.path,
-      options: Options(
-        followRedirects: true,
-        maxRedirects: 5,
-      ),
-      onReceiveProgress: onProgress,
-    );
+    final url = Uri.parse(
+        'https://drive.google.com/uc?export=download&id=$fileId&confirm=t');
+    final request = http.Request('GET', url);
+    final streamedResponse = await _httpClient.send(request);
 
-    // Periksa jika respons merupakan halaman HTML peringatan Google
+    final contentLength = streamedResponse.contentLength ?? 0;
+    int receivedBytes = 0;
+    final sink = targetFile.openWrite();
+
+    await for (final chunk in streamedResponse.stream) {
+      sink.add(chunk);
+      receivedBytes += chunk.length;
+      if (onProgress != null && contentLength > 0) {
+        onProgress(receivedBytes, contentLength);
+      }
+    }
+    await sink.flush();
+    await sink.close();
+
+    // Periksa jika respons merupakan halaman HTML peringatan scan virus Google
     if (await targetFile.exists() && await targetFile.length() < 50000) {
       final bytes = await targetFile.readAsBytes();
       final content = utf8.decode(bytes, allowMalformed: true);
@@ -217,13 +259,22 @@ class GoogleDriveService {
             RegExp(r'confirm=([0-9a-zA-Z_-]+)').firstMatch(content);
         if (confirmMatch != null) {
           final confirmCode = confirmMatch.group(1);
-          final confirmUrl =
-              'https://drive.google.com/uc?export=download&confirm=$confirmCode&id=$fileId';
-          await _dio.download(
-            confirmUrl,
-            targetFile.path,
-            onReceiveProgress: onProgress,
-          );
+          final confirmUrl = Uri.parse(
+              'https://drive.google.com/uc?export=download&confirm=$confirmCode&id=$fileId');
+          final retryRequest = http.Request('GET', confirmUrl);
+          final retryStream = await _httpClient.send(retryRequest);
+          final retryLength = retryStream.contentLength ?? 0;
+          int retryReceived = 0;
+          final retrySink = targetFile.openWrite();
+          await for (final chunk in retryStream.stream) {
+            retrySink.add(chunk);
+            retryReceived += chunk.length;
+            if (onProgress != null && retryLength > 0) {
+              onProgress(retryReceived, retryLength);
+            }
+          }
+          await retrySink.flush();
+          await retrySink.close();
         }
       }
     }
@@ -308,10 +359,43 @@ class _GoogleDrivePickerDialogState extends State<GoogleDrivePickerDialog>
       }
     } catch (e) {
       if (mounted) {
+        final errStr = e.toString();
+        String friendlyError;
+        if (errStr.contains('403')) {
+          friendlyError =
+              'Akses Google Drive API ditolak (403). Pastikan "Google Drive API" sudah diaktifkan di Google Cloud Console, atau pilih berkas langsung melalui File Manager HP di bawah.';
+        } else if (errStr.contains('SocketException') ||
+            errStr.contains('Failed host lookup') ||
+            errStr.contains('ClientException')) {
+          friendlyError =
+              'Gagal terhubung ke Google Drive (Koneksi jaringan bermasalah). Silakan periksa koneksi atau gunakan File Manager HP.';
+        } else {
+          friendlyError =
+              'Gagal memuat berkas Google Drive: ${errStr.replaceFirst('Exception: ', '')}';
+        }
         setState(() {
-          _error = 'Gagal memuat berkas Google Drive: $e';
+          _error = friendlyError;
           _loading = false;
         });
+      }
+    }
+  }
+
+  Future<void> _pickViaSystemFileManager() async {
+    try {
+      final files = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['dkhp', 'zip', 'csv', 'xlsx', 'xls', 'txt'],
+      );
+      if (!mounted) return;
+      if (files.isNotEmpty && files.first.path != null) {
+        Navigator.of(context).pop(files.first.path);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal membuka berkas: $e')),
+        );
       }
     }
   }
@@ -551,30 +635,46 @@ class _GoogleDrivePickerDialogState extends State<GoogleDrivePickerDialog>
             if (_error != null)
               Container(
                 margin: const EdgeInsets.all(12),
-                padding: const EdgeInsets.all(10),
+                padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: theme.colorScheme.error.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
+                  color: theme.colorScheme.error.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(10),
                   border: Border.all(
                     color: theme.colorScheme.error.withValues(alpha: 0.3),
                   ),
                 ),
-                child: Row(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Icon(
-                      Icons.error_outline,
-                      size: 18,
-                      color: theme.colorScheme.error,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        _error!,
-                        style: TextStyle(
-                          fontSize: 12,
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          Icons.info_outline,
+                          size: 20,
                           color: theme.colorScheme.error,
                         ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _error!,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: theme.colorScheme.error,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    FilledButton.icon(
+                      onPressed: _pickViaSystemFileManager,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: Colors.blue.shade700,
+                        foregroundColor: Colors.white,
                       ),
+                      icon: const FaIcon(FontAwesomeIcons.googleDrive, size: 16),
+                      label: const Text('Buka Google Drive (File Manager HP)'),
                     ),
                   ],
                 ),
@@ -669,7 +769,7 @@ class _GoogleDrivePickerDialogState extends State<GoogleDrivePickerDialog>
 
     if (_items.isEmpty) {
       return Center(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -678,16 +778,26 @@ class _GoogleDrivePickerDialogState extends State<GoogleDrivePickerDialog>
                   size: 48, color: Colors.grey),
               const SizedBox(height: 12),
               const Text(
-                'Belum Ada Berkas DHKP di Drive',
+                'Belum Ada Berkas DHKP Terdeteksi',
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
               ),
               const SizedBox(height: 6),
               const Text(
-                'Tidak ditemukan berkas berekstensi .dkhp, .zip, atau .csv pada akun Google Drive Anda.',
+                'Jika berkas Anda berada di folder lain atau akses REST API terhalang izin server, Anda dapat langsung memilih berkas dari Google Drive menggunakan File Manager HP.',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 12),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 16),
+              FilledButton.icon(
+                onPressed: _pickViaSystemFileManager,
+                style: FilledButton.styleFrom(
+                  backgroundColor: Colors.blue.shade700,
+                  foregroundColor: Colors.white,
+                ),
+                icon: const FaIcon(FontAwesomeIcons.googleDrive, size: 16),
+                label: const Text('Buka Drive via File Manager HP'),
+              ),
+              const SizedBox(height: 10),
               OutlinedButton.icon(
                 onPressed: _loadAccountAndFiles,
                 icon: const Icon(Icons.refresh, size: 16),
@@ -703,10 +813,57 @@ class _GoogleDrivePickerDialogState extends State<GoogleDrivePickerDialog>
       onRefresh: _loadAccountAndFiles,
       child: ListView.separated(
         padding: const EdgeInsets.symmetric(vertical: 8),
-        itemCount: _items.length,
+        itemCount: _items.length + 1,
         separatorBuilder: (_, _) => const Divider(height: 1),
         itemBuilder: (ctx, idx) {
-          final item = _items[idx];
+          if (idx == 0) {
+            return Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+              child: Material(
+                color: Colors.blue.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(10),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(10),
+                  onTap: _pickViaSystemFileManager,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 10),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(10),
+                      border:
+                          Border.all(color: Colors.blue.withValues(alpha: 0.3)),
+                    ),
+                    child: const Row(
+                      children: [
+                        FaIcon(FontAwesomeIcons.googleDrive,
+                            color: Colors.blue, size: 22),
+                        SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Buka via File Manager HP',
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold, fontSize: 13),
+                              ),
+                              Text(
+                                'Pilih Google Drive di menu samping HP tanpa hambatan API',
+                                style: TextStyle(fontSize: 11),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Icon(Icons.arrow_forward_ios,
+                            size: 13, color: Colors.blue),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }
+          final item = _items[idx - 1];
           return ListTile(
             leading: _buildFileIcon(item),
             title: Text(

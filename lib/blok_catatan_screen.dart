@@ -981,16 +981,18 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
             onPressed: () => Navigator.pop(ctx, 'file'),
             child: const ListTile(
               leading: Icon(Icons.folder_open_outlined, color: Colors.teal),
-              title: Text('Pilih Berkas'),
-              subtitle: Text('Buka paket .dkhp atau berkas tabel dari penyimpanan perangkat'),
+              title: Text('Pilih Berkas (File Manager HP)'),
+              subtitle: Text(
+                  'Buka File Manager HP (bisa pilih Google Drive di menu samping atau memori internal)'),
             ),
           ),
           SimpleDialogOption(
             onPressed: () => Navigator.pop(ctx, 'google_drive'),
             child: const ListTile(
               leading: FaIcon(FontAwesomeIcons.googleDrive, color: Colors.blue),
-              title: Text('Google Drive'),
-              subtitle: Text('Pilih dan buka berkas langsung dari Google Drive'),
+              title: Text('Jelajah Cloud & Tautan Drive'),
+              subtitle: Text(
+                  'Jelajahi berkas akun Drive atau unduh via tautan link'),
             ),
           ),
         ],

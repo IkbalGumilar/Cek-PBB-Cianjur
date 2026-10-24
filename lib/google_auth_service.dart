@@ -47,7 +47,6 @@ class GoogleAuthService {
     'email',
     'profile',
     GoogleDriveBackupPolicy.allowedScopeDriveFile,
-    GoogleDriveBackupPolicy.allowedScopeAppData,
   ];
 
   GoogleSignIn _googleSignIn = GoogleSignIn(

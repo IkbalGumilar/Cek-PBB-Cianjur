@@ -61,6 +61,7 @@ dependencies:
   dynamic_color: ^1.7.0
   local_auth: ^3.0.2
   google_sign_in: ^6.3.0
+  http: ^1.6.0
 
 dev_dependencies:
   flutter_test:
