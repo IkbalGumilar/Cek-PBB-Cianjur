@@ -2,17 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'blok_data_store.dart';
-import 'blok_record.dart';
 import 'captcha_ocr_helper.dart';
 import 'check_mode.dart';
 import 'download_helper.dart';
 import 'nop_helper.dart';
-import 'operator_mode_store.dart';
 import 'pbb_client.dart';
 import 'result_screen.dart';
 import 'tax_record.dart';
 import 'unity_lerp_widgets.dart';
-import 'wilayah_kerja_store.dart';
 
 class BatchCheckScreen extends StatefulWidget {
   final List<TaxRecord> records;
@@ -67,23 +64,7 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
   /// wilayah tidak dicatat ke Buku Catatan Blok, lihat [_submit]). Tidak
   /// relevan sama sekali di Mode Operator — semua blok otomatis dicatat.
   Future<void> _warnIfOutsideWilayah() async {
-    if (await OperatorModeStore.instance.isEnabled()) return;
-    final dusun = await WilayahKerjaStore.instance.selectedDusun();
-    if (dusun == null || !mounted) return;
-    final wilayahBloks = await WilayahKerjaStore.instance.whitelistedBloks();
-    final hasOutside = widget.records.any(
-      (r) => !wilayahBloks.contains(nopBlok(r.nop)),
-    );
-    if (!hasOutside || !mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Terdapat blok yang bukan wilayah kerja Anda di daftar ini — tetap bisa dicek, '
-          'tapi hasilnya tidak akan dicatat ke Buku Catatan Blok.',
-        ),
-        duration: Duration(seconds: 6),
-      ),
-    );
+    // Tidak perlu peringatan wilayah manual karena data DHKP sudah mencakup wilayah kerja
   }
 
   @override
@@ -199,22 +180,11 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
       _current.namaWajibPajak = result.namaWajibPajak;
 
       if (_current.isPaid) {
-        final isOperator = await OperatorModeStore.instance.isEnabled();
-        if (!mounted) return;
-        final wilayahBloks = await WilayahKerjaStore.instance
-            .whitelistedBloks();
-        if (!mounted) return;
-        if (isOperator || wilayahBloks.contains(nopBlok(_current.nop))) {
-          await BlokDataStore.instance.upsert(
-            BlokRecord(
-              nop: _current.nop,
-              namaWajibPajak: result.namaWajibPajak ?? '',
-              tahunBayar: widget.tahun,
-              tanggalBayar: result.tanggalBayar ?? '',
-              jumlahPbb: result.jumlahPbb ?? '',
-            ),
-          );
-        }
+        await BlokDataStore.instance.updateStatusBayarFromCheck(
+          nop: _current.nop,
+          tahun: widget.tahun,
+          result: result,
+        );
       }
 
       if (widget.downloadBuktiBayar && _current.isPaid) {

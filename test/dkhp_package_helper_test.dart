@@ -160,4 +160,21 @@ KUSNADI,320520000402600390,2026,,Rp 210.000,Belum Bayar,,1,Anomali batas tanah
     expect(records[0].isTargetPemda, isTrue);
     expect(records[0].catatan, 'Anomali batas tanah');
   });
+
+  test('BlokDataStore.instance.exportDkhp mengekspor seluruh data ke paket .dkhp dan importCsv berhasil memuatnya kembali', () async {
+    final exportPath = await BlokDataStore.instance.exportDkhp(fileName: 'test_export_backup');
+    expect(exportPath, endsWith('.dkhp'));
+    expect(File(exportPath).existsSync(), isTrue);
+
+    final rawBytes = await File(exportPath).readAsBytes();
+    expect(DhkpCrypto.isEncrypted(rawBytes), isTrue);
+
+    // Reset store dan coba restore/import lewat importCsv
+    BlokDataStore.instance.resetForTesting();
+    final count = await BlokDataStore.instance.importCsv(exportPath);
+    expect(count, greaterThan(0));
+
+    final records = await BlokDataStore.instance.loadAll();
+    expect(records.length, count);
+  });
 }

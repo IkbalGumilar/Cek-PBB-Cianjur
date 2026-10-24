@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/material.dart';
 
+import 'app_lock_gate.dart';
 import 'blok_backup_scheduler.dart';
 import 'blok_data_store.dart';
 import 'connectivity_monitor.dart';
@@ -66,7 +67,7 @@ class _CekPbbAppState extends State<CekPbbApp> with WidgetsBindingObserver {
     unawaited(
       BlokBackupScheduler.instance.runIfNeeded(
         exportCsv: (fileName) =>
-            BlokDataStore.instance.exportCsv(fileName: fileName),
+            BlokDataStore.instance.exportDkhp(fileName: fileName),
       ),
     );
     _detectDesktopAccent();
@@ -234,7 +235,9 @@ class _CekPbbAppState extends State<CekPbbApp> with WidgetsBindingObserver {
               themeMode: _flutterThemeMode(themeState.mode),
               home: MainShell(themeController: _themeController),
               builder: (context, child) {
-                return Stack(children: [?child, const NetworkStatusOverlay()]);
+                return AppLockGate(
+                  child: Stack(children: [?child, const NetworkStatusOverlay()]),
+                );
               },
             );
           },

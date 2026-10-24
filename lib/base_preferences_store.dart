@@ -62,4 +62,10 @@ abstract class BasePreferencesStore {
     final prefs = await getPrefs();
     await prefs.remove(key);
   }
+
+  @protected
+  @visibleForTesting
+  void resetPrefsForTesting() {
+    _prefs = null;
+  }
 }

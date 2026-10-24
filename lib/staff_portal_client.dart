@@ -5,8 +5,8 @@ import 'package:cookie_jar/cookie_jar.dart';
 import 'package:dio/dio.dart';
 import 'package:dio_cookie_manager/dio_cookie_manager.dart';
 import 'package:html/parser.dart' as html_parser;
-import 'package:path_provider/path_provider.dart';
 
+import 'app_storage.dart';
 import 'kolektif_nop_berkas.dart';
 import 'staff_portal_token_extractor.dart';
 
@@ -326,10 +326,10 @@ class StaffPortalClient {
   /// tidak perlu ubah cara pemanggilannya di layar-layar yang sudah ada.
   Future<void> _ensureCookieManager() async {
     if (_cookieManagerAttached) return;
-    final dir = await getApplicationSupportDirectory();
+    final dir = await AppStorage.getCookiesDirectory();
     final jar = PersistCookieJar(
       ignoreExpires: true,
-      storage: FileStorage('${dir.path}/staff_portal_cookies'),
+      storage: FileStorage(dir.path),
     );
     _dio.interceptors.add(CookieManager(jar));
     _cookieManagerAttached = true;

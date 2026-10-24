@@ -14,7 +14,7 @@ endif()
 set(BINARY_NAME "cek_pbb_app")
 # The unique GTK application identifier for this application. See:
 # https://wiki.gnome.org/HowDoI/ChooseApplicationID
-set(APPLICATION_ID "id.cianjur.cekpbb.cek_pbb_app")
+set(APPLICATION_ID "id.cianjur.pbb")
 
 # Explicitly opt in to modern CMake behaviors to avoid warnings with recent
 # versions of CMake.

@@ -3,14 +3,14 @@ import 'dart:io';
 
 import 'package:csv/csv.dart';
 import 'package:flutter/foundation.dart';
-import 'package:path_provider/path_provider.dart';
-
+import 'app_storage.dart';
 import 'backup_crypto.dart';
 import 'blok_backup_scheduler.dart';
 import 'blok_record.dart';
+import 'dkhp_package_helper.dart';
 import 'download_helper.dart';
+import 'pbb_client.dart';
 
-const _dataFileName = 'blok_data.csv';
 const _csvHeader = [
   'Nama WP',
   'NOP',
@@ -18,7 +18,7 @@ const _csvHeader = [
   'Tanggal Bayar',
   'Jumlah PBB',
 ];
-const _backupExtension = '.bak';
+const _backupExtension = '.dkhp';
 
 /// Penyimpanan lokal "Buku Catatan Blok" — daftar NOP yang sudah terkonfirmasi
 /// "Sudah Bayar", dikelompokkan per blok. Data disimpan sebagai CSV di
@@ -34,115 +34,8 @@ class BlokDataStore {
   /// dapat merespons secara reaktif tanpa perlu I/O disk ulang.
   final countNotifier = ValueNotifier<int>(0);
 
-  static const initialDhkpRecords = [
-    BlokRecord(
-      namaWajibPajak: 'SUGENG RAHARJO',
-      nop: '320520000402600340',
-      tahunBayar: '2026',
-      tanggalBayar: '',
-      jumlahPbb: 'Rp 102.378',
-      statusBayar: 'Belum Bayar',
-      namaFoto: '320520000402600340.jpg',
-      isTargetPemda: false,
-      catatan: '',
-      luasBumi: '450 m2',
-      luasBangunan: '120 m2',
-      njopBumi: '82.000,00/m2',
-      njopBangunan: '350.000,00/m2',
-      kecamatan: 'MANDE',
-      kelurahan: 'BOBOJONG',
-      alamatObjek: 'JL PASIR PARAHU',
-      alamatWp: 'KP PASIR PARAHU RT 02/05',
-      rtObjek: '002',
-    ),
-    BlokRecord(
-      namaWajibPajak: 'AHMAD SUHADA',
-      nop: '320520000402600350',
-      tahunBayar: '2026',
-      tanggalBayar: '2026-03-15',
-      jumlahPbb: 'Rp 45.000',
-      statusBayar: 'Sudah Bayar',
-      namaFoto: '320520000402600350.jpg',
-      isTargetPemda: false,
-      catatan: 'Lunas via Bank BJB',
-      luasBumi: '210 m2',
-      luasBangunan: '54 m2',
-      njopBumi: '82.000,00/m2',
-      njopBangunan: '250.000,00/m2',
-      kecamatan: 'MANDE',
-      kelurahan: 'BOBOJONG',
-      alamatObjek: 'JL CIKANGKUNG',
-      alamatWp: 'KP CIKANGKUNG',
-      rtObjek: '018',
-    ),
-    BlokRecord(
-      namaWajibPajak: 'SITI ROHMAH',
-      nop: '320520000402600360',
-      tahunBayar: '2026',
-      tanggalBayar: '',
-      jumlahPbb: 'Rp 85.500',
-      statusBayar: 'Blacklist',
-      namaFoto: '320520000402600360.jpg',
-      isTargetPemda: false,
-      catatan: 'Nunggak 6 tahun sejak 2020. Pemilik tidak di lokasi.',
-      luasBumi: '380 m2',
-      luasBangunan: '0 m2',
-      njopBumi: '82.000,00/m2',
-      njopBangunan: '0,00/m2',
-      kecamatan: 'MANDE',
-      kelurahan: 'BOBOJONG',
-      alamatObjek: 'BLOK PASIR',
-      alamatWp: 'KP PASIR PARAHU',
-      rtObjek: '015',
-    ),
-    BlokRecord(
-      namaWajibPajak: 'DUDI KURNIAWAN',
-      nop: '320520000402600370',
-      tahunBayar: '2026',
-      tanggalBayar: '2026-02-20',
-      jumlahPbb: 'Rp 150.000',
-      statusBayar: 'Sudah Bayar',
-      namaFoto: null,
-      isTargetPemda: false,
-      catatan: '',
-      luasBumi: '600 m2',
-      luasBangunan: '150 m2',
-      njopBumi: '82.000,00/m2',
-      njopBangunan: '400.000,00/m2',
-      kecamatan: 'MANDE',
-      kelurahan: 'BOBOJONG',
-      alamatObjek: 'JL UTAMA BOBOJONG',
-      alamatWp: 'KP BOBOJONG TENGAH',
-      rtObjek: '005',
-    ),
-    BlokRecord(
-      namaWajibPajak: 'H ACEP',
-      nop: '320520000402600380',
-      tahunBayar: '2026',
-      tanggalBayar: '',
-      jumlahPbb: 'Rp 320.000',
-      statusBayar: 'Belum Bayar',
-      namaFoto: '320520000402600380.jpg',
-      isTargetPemda: true,
-      catatan: 'Prioritas Penagihan Target Pemda 2026.',
-      luasBumi: '1438 m2',
-      luasBangunan: '0 m2',
-      njopBumi: '82.000,00/m2',
-      njopBangunan: '0,00/m2',
-      kecamatan: 'MANDE',
-      kelurahan: 'BOBOJONG',
-      alamatObjek: 'JL CIKANGKUNG',
-      alamatWp: 'PASIR PARAHU',
-      rtObjek: '019',
-    ),
-  ];
-
   Future<File> _dataFile() async {
-    final dir = await getApplicationDocumentsDirectory();
-    if (!await dir.exists()) {
-      await dir.create(recursive: true);
-    }
-    return File('${dir.path}/$_dataFileName');
+    return AppStorage.getDatabaseFile();
   }
 
   void invalidateCache() {
@@ -159,19 +52,14 @@ class BlokDataStore {
     if (_cache != null) return _cache!;
 
     final file = await _dataFile();
-    if (!await file.exists()) {
-      _cache = List<BlokRecord>.from(initialDhkpRecords);
-      countNotifier.value = _cache!.length;
-      await _persist(_cache!);
+    if (!file.existsSync()) {
+      _cache = [];
+      countNotifier.value = 0;
       return _cache!;
     }
 
-    final content = await file.readAsString();
+    final content = file.readAsStringSync();
     _cache = _parseCsv(content);
-    if (_cache!.isEmpty) {
-      _cache = List<BlokRecord>.from(initialDhkpRecords);
-      await _persist(_cache!);
-    }
     countNotifier.value = _cache!.length;
     return _cache!;
   }
@@ -282,7 +170,7 @@ class BlokDataStore {
         ],
     ];
     final file = await _dataFile();
-    await file.writeAsString(Csv().encode(rows));
+    file.writeAsStringSync(Csv().encode(rows));
     _cache = records;
     countNotifier.value = records.length;
   }
@@ -312,6 +200,85 @@ class BlokDataStore {
 
   /// Simpan/perbarui satu catatan (upsert berdasar NOP+tahun).
   Future<void> upsert(BlokRecord record) => upsertAll([record]);
+
+  /// Memperbarui data DHKP berdasarkan hasil Cek Status Bayar.
+  /// Jika data NOP+tahun sudah ada (mis. awalnya "Belum Bayar"), statusnya akan
+  /// diupdate ke "Sudah Bayar" dan tanggal bayar diisi, tanpa menghapus
+  /// rincian objek pajak (luas tanah/bangunan, NJOP, alamat, RT, target pemda, catatan, foto).
+  /// Jika belum ada dan hasilnya lunas, record baru akan ditambahkan.
+  Future<DhkpCheckUpdateOutcome?> updateStatusBayarFromCheck({
+    required String nop,
+    required String tahun,
+    required PbbResult result,
+  }) async {
+    final records = List<BlokRecord>.from(await loadAll());
+    final key = '$nop|$tahun';
+    final index = records.indexWhere((r) => r.uniqueKey == key);
+
+    final isPaid = result.isPaid;
+
+    if (index != -1) {
+      final existing = records[index];
+      final wasUnpaid = !existing.isPaid;
+
+      // Jika di server belum bayar dan di lokal juga belum, atau tidak ada perubahan
+      if (!isPaid && !wasUnpaid) {
+        return null;
+      }
+
+      final updatedStatus = isPaid ? 'Sudah Bayar' : existing.statusBayar;
+      final updatedTanggal = (result.tanggalBayar != null && result.tanggalBayar!.trim().isNotEmpty)
+          ? result.tanggalBayar!.trim()
+          : (isPaid && existing.tanggalBayar.isEmpty
+              ? DateTime.now().toIso8601String().substring(0, 10)
+              : existing.tanggalBayar);
+      final updatedJumlah = (result.jumlahPbb != null && result.jumlahPbb!.trim().isNotEmpty)
+          ? result.jumlahPbb!.trim()
+          : existing.jumlahPbb;
+      final updatedNama = (result.namaWajibPajak != null && result.namaWajibPajak!.trim().isNotEmpty)
+          ? result.namaWajibPajak!.trim()
+          : existing.namaWajibPajak;
+
+      final updatedRecord = existing.copyWith(
+        statusBayar: updatedStatus,
+        tanggalBayar: updatedTanggal,
+        jumlahPbb: updatedJumlah,
+        namaWajibPajak: updatedNama,
+      );
+
+      records[index] = updatedRecord;
+      await _persist(records);
+      await BlokBackupScheduler.instance.markDirty();
+
+      return DhkpCheckUpdateOutcome(
+        wasExisting: true,
+        changedFromUnpaid: wasUnpaid && isPaid,
+        record: updatedRecord,
+      );
+    } else if (isPaid) {
+      // Record belum ada di database, buat baru
+      final newRecord = BlokRecord(
+        nop: nop,
+        namaWajibPajak: result.namaWajibPajak ?? '',
+        tahunBayar: tahun,
+        tanggalBayar: (result.tanggalBayar != null && result.tanggalBayar!.trim().isNotEmpty)
+            ? result.tanggalBayar!.trim()
+            : DateTime.now().toIso8601String().substring(0, 10),
+        jumlahPbb: result.jumlahPbb ?? '',
+        statusBayar: 'Sudah Bayar',
+      );
+      records.add(newRecord);
+      await _persist(records);
+      await BlokBackupScheduler.instance.markDirty();
+
+      return DhkpCheckUpdateOutcome(
+        wasExisting: false,
+        changedFromUnpaid: true,
+        record: newRecord,
+      );
+    }
+    return null;
+  }
 
   /// Hapus satu catatan berdasar [BlokRecord.uniqueKey] (NOP+tahun) — dipakai
   /// untuk mengoreksi baris yang salah tercatat (mis. salah impor), beda dari
@@ -383,31 +350,35 @@ class BlokDataStore {
     return sortBlokRecords(records, BlokSortBy.blokWilayah);
   }
 
-  /// Backup: tulis seluruh data ke berkas terenkripsi (.bak) yang bisa
-  /// disimpan/dibagikan — dikunci otomatis dengan kunci wilayah kerja/Mode
-  /// Operator perangkat ini saat ekspor (lihat backup_crypto.dart), supaya
-  /// tidak bisa dibuka wilayah lain atau dibaca sebagai teks biasa.
-  /// [fileName] (tanpa ekstensi) tetap dipakai backup harian otomatis
-  /// (ditimpa tiap kali dipanggil di hari yang sama) kalau diisi; default
-  /// nama unik per waktu ekspor (dipakai tombol "Ekspor Data" manual di
-  /// Setelan).
-  Future<String> exportCsv({String? fileName}) async {
-    final records = await forReport();
-    final rows = <List<String>>[
-      _csvHeader,
-      for (final r in records)
-        [r.namaWajibPajak, r.nop, r.tahunBayar, r.tanggalBayar, r.jumlahPbb],
-    ];
-    final csvBytes = Uint8List.fromList(utf8.encode(Csv().encode(rows)));
-    final identity = await BackupCrypto.currentIdentity();
-    final encrypted = BackupCrypto.encryptForIdentity(identity, csvBytes);
+  /// Backup: tulis seluruh data dan foto ke berkas paket terenkripsi (.dkhp).
+  /// Format .bak lama telah dipensiunkan penuh dan digantikan oleh paket .dkhp.
+  /// Bila [includePhotos] bernilai false, hanya data DHKP yang dipaketkan (hemat memori).
+  Future<String> exportDkhp({
+    String? fileName,
+    bool includePhotos = true,
+  }) async {
+    final records = await loadAll();
     final base =
-        fileName ?? 'backup_data_blok_${DateTime.now().millisecondsSinceEpoch}';
-    return DownloadHelper.saveBytes(encrypted, '$base$_backupExtension');
+        fileName ?? 'backup_dkhp_${DateTime.now().millisecondsSinceEpoch}';
+    final backupsDir = await AppStorage.getBackupsDirectory();
+    final outputPath = '${backupsDir.path}/$base$_backupExtension';
+    final file = await DhkpPackageHelper.packDkhp(
+      outputPath: outputPath,
+      records: records,
+      includePhotos: includePhotos,
+    );
+    return file.path;
   }
 
+  /// Alias kompatibilitas mundur untuk [exportDkhp].
+  Future<String> exportCsv({
+    String? fileName,
+    bool includePhotos = true,
+  }) =>
+      exportDkhp(fileName: fileName, includePhotos: includePhotos);
+
   /// Laporan data blok (opsional per tahun) untuk diunduh sebagai CSV —
-  /// berbeda dari [exportCsv] (backup teknis lengkap): laporan ini menyertakan
+  /// berbeda dari [exportDkhp] (backup teknis lengkap): laporan ini menyertakan
   /// kolom Blok & Nomor Wilayah terpisah supaya langsung terbaca saat dibuka.
   Future<String> exportReportCsv({String? tahun}) async {
     final records = await forReport(tahun: tahun);
@@ -434,14 +405,16 @@ class BlokDataStore {
     );
   }
 
-  /// Restore: gabungkan (upsert) isi berkas backup terenkripsi (.bak) ke data
-  /// lokal yang ada sekarang. Berkas hanya bisa dibuka kalau dienkripsi oleh
-  /// identitas yang cocok dengan perangkat ini sekarang (wilayah kerja yang
-  /// sama, atau Mode Operator yang bisa membuka laporan semua dusun) — kalau
-  /// tidak cocok, [BackupAccessDeniedException] dilempar dan tidak ada data
-  /// yang berubah. Tidak menghapus data lokal yang tidak ada di berkas —
-  /// hanya menambah/menimpa baris yang NOP+tahun-nya sama.
+  /// Restore: gabungkan (upsert) isi berkas backup (.dkhp atau arsip tabel) ke data
+  /// lokal yang ada sekarang. Mendukung format paket .dkhp modern serta fallback
+  /// berkas warisan jika diperlukan.
   Future<int> importCsv(String path) async {
+    final lower = path.toLowerCase();
+    if (lower.endsWith('.dkhp') || lower.endsWith('.zip')) {
+      final records = await DhkpPackageHelper.unpackDkhp(path);
+      return records.length;
+    }
+
     final fileBytes = await File(path).readAsBytes();
     final identities = await BackupCrypto.allowedRestoreIdentities();
     final decrypted = BackupCrypto.tryDecrypt(fileBytes, identities);
@@ -476,3 +449,17 @@ class BlokDataStore {
     }
   }
 }
+
+/// Hasil dari operasi pembaruan status bayar DHKP berdasarkan Cek Status Bayar.
+class DhkpCheckUpdateOutcome {
+  final bool wasExisting;
+  final bool changedFromUnpaid;
+  final BlokRecord record;
+
+  const DhkpCheckUpdateOutcome({
+    required this.wasExisting,
+    required this.changedFromUnpaid,
+    required this.record,
+  });
+}
+

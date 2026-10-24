@@ -7,6 +7,8 @@
          Periksa Pembaruan) — tanpa ini Android 8+ menolak Intent instal APK
          yang dipicu oleh aplikasi lain (bukan Play Store/toko aplikasi). -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- Izin untuk fitur Kunci Aplikasi berbasis Biometrik (Sidik Jari / Wajah) -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
     <application
         android:label="Cek PBB Cianjur"
         android:name="${applicationName}"

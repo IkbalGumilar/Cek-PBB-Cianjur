@@ -18,8 +18,6 @@ import 'staff_portal_client.dart';
 import 'theme_controller.dart';
 import 'update_checker.dart';
 import 'update_screen.dart';
-import 'wilayah_kerja_picker.dart';
-import 'wilayah_kerja_store.dart';
 
 enum _ActiveView { check, import, desil, kendaraan }
 
@@ -65,8 +63,6 @@ class _MainShellState extends State<MainShell> {
 
     if (isOperator) {
       await _maybeShowOperatorWelcome();
-    } else {
-      await _ensureWilayahKerjaChosen();
     }
     await _checkForUpdateSilently();
   }
@@ -95,19 +91,6 @@ class _MainShellState extends State<MainShell> {
         ],
       ),
     );
-  }
-
-  // Tanya sekali di aplikasi pertama kali dijalankan (lihat
-  // WilayahKerjaStore.hasBeenAsked) — melewati dialog ini sepenuhnya boleh,
-  // cuma berarti tidak ada riwayat "Sudah Bayar" yang dicatat ke Buku
-  // Catatan Blok; cek & bayar tetap jalan normal. Tidak dipanggil sama
-  // sekali di Mode Operator — operator tidak terikat satu wilayah.
-  Future<void> _ensureWilayahKerjaChosen() async {
-    final alreadyAsked = await WilayahKerjaStore.instance.hasBeenAsked();
-    if (alreadyAsked || !mounted) return;
-    final chosen = await pickDusunDialog(context, allowSkip: true);
-    await WilayahKerjaStore.instance.setSelectedDusun(chosen);
-    await WilayahKerjaStore.instance.markAsked();
   }
 
   // Cek pembaruan otomatis saat aplikasi dibuka (dibatasi sekali per 24 jam

@@ -3,22 +3,19 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:path_provider/path_provider.dart';
 
+import 'app_storage.dart';
 import 'blok_data_store.dart';
-import 'blok_record.dart';
 import 'check_mode.dart';
 import 'document_preview_screen.dart';
 import 'nop_helper.dart';
 import 'nop_scanner.dart';
-import 'operator_mode_store.dart';
 import 'pbb_client.dart';
 import 'qris_result.dart';
 import 'qris_view_screen.dart';
 import 'tagihan_result.dart';
 import 'va_result.dart';
 import 'va_view_screen.dart';
-import 'wilayah_kerja_store.dart';
 
 class CheckFormView extends StatefulWidget {
   final CheckMode mode;
@@ -265,7 +262,7 @@ class _CheckFormViewState extends State<CheckFormView> {
 
           if (checkMassal == true) {
             // Tambahkan ke file draft NOP untuk ImportView
-            final dir = await getApplicationDocumentsDirectory();
+            final dir = await AppStorage.getDataDirectory();
             final file = File('${dir.path}/draft_nop.txt');
             final existing = await file.exists() ? await file.readAsString() : '';
             final existingSet = existing
@@ -383,9 +380,29 @@ class _CheckFormViewState extends State<CheckFormView> {
         );
         if (!mounted) return;
         setState(() => _statusBayarResult = result);
-        if (result.status.startsWith('Sudah Bayar')) {
-          await _recordIfInWilayah(nop: nop, tahun: tahun, result: result);
+        if (result.isPaid) {
+          final outcome = await _recordIfInWilayah(nop: nop, tahun: tahun, result: result);
           if (!mounted) return;
+          if (outcome != null) {
+            final msg = outcome.changedFromUnpaid
+                ? 'Data DHKP berhasil di-update: Status berubah dari Belum Bayar menjadi Sudah Bayar!'
+                : (outcome.wasExisting
+                    ? 'Data DHKP sudah berstatus Sudah Bayar.'
+                    : 'Data baru berhasil dicatat ke Data DHKP (Sudah Bayar).');
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Row(
+                  children: [
+                    const Icon(Icons.check_circle, color: Colors.white, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text(msg)),
+                  ],
+                ),
+                backgroundColor: Colors.green.shade700,
+                duration: const Duration(seconds: 4),
+              ),
+            );
+          }
         }
       } else {
         final result = await _client.checkTagihan(
@@ -423,49 +440,18 @@ class _CheckFormViewState extends State<CheckFormView> {
   /// dicatat — pengecekan & pembayaran sendiri tidak terpengaruh sama sekali.
   ///
   /// Mode Operator melewati semua pengecekan wilayah ini — operator menerima
-  /// laporan dari semua dusun, jadi semua blok otomatis dicatat.
-  Future<void> _recordIfInWilayah({
+  /// Catat / perbarui hasil "Sudah Bayar" ke Buku Catatan Data DHKP.
+  /// Karena paket DHKP sudah mencakup wilayah kerja perangkat ini,
+  /// data langsung disinkronkan tanpa perlu memilih dusun atau role secara manual.
+  Future<DhkpCheckUpdateOutcome?> _recordIfInWilayah({
     required String nop,
     required String tahun,
     required PbbResult result,
   }) async {
-    final isOperator = await OperatorModeStore.instance.isEnabled();
-    if (!isOperator) {
-      final dusun = await WilayahKerjaStore.instance.selectedDusun();
-      if (dusun == null) return;
-
-      final blok = nopBlok(nop);
-      final wilayahBloks = await WilayahKerjaStore.instance.whitelistedBloks();
-      if (!wilayahBloks.contains(blok)) {
-        if (!mounted) return;
-        await showDialog<void>(
-          context: context,
-          builder: (ctx) => AlertDialog(
-            title: const Text('Blok Bukan Wilayah Anda'),
-            content: const Text(
-              'Blok ini tidak termasuk wilayah kerja Anda, jadi hasil cek ini tidak akan dicatat '
-              'ke Buku Catatan Blok. Pengecekan & pembayaran tetap bisa dilanjutkan seperti biasa.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('Mengerti'),
-              ),
-            ],
-          ),
-        );
-        return;
-      }
-    }
-
-    await BlokDataStore.instance.upsert(
-      BlokRecord(
-        nop: nop,
-        namaWajibPajak: result.namaWajibPajak ?? '',
-        tahunBayar: tahun,
-        tanggalBayar: result.tanggalBayar ?? '',
-        jumlahPbb: result.jumlahPbb ?? '',
-      ),
+    return await BlokDataStore.instance.updateStatusBayarFromCheck(
+      nop: nop,
+      tahun: tahun,
+      result: result,
     );
   }
 

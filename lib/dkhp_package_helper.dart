@@ -6,8 +6,8 @@ import 'package:archive/archive.dart';
 import 'package:crypto/crypto.dart';
 import 'package:csv/csv.dart';
 import 'package:encrypt/encrypt.dart' as enc;
-import 'package:path_provider/path_provider.dart';
 
+import 'app_storage.dart';
 import 'backup_crypto.dart';
 import 'blok_data_store.dart';
 import 'blok_record.dart';
@@ -66,11 +66,9 @@ class DhkpCrypto {
 class DhkpPackageHelper {
   static const extensionName = 'dkhp';
 
-  static Directory? _cachedPhotosDir;
   static Set<String>? _cachedPhotoNames;
 
   static void resetForTesting() {
-    _cachedPhotosDir = null;
     _cachedPhotoNames = null;
   }
 
@@ -94,16 +92,9 @@ class DhkpPackageHelper {
     _cachedPhotoNames = null;
   }
 
-  /// Folder lokal aplikasi untuk menyimpan foto-foto dokumen DHKP.
+  /// Folder lokal aplikasi untuk menyimpan foto-foto dokumen DHKP (publik media).
   static Future<Directory> photosDirectory() async {
-    if (_cachedPhotosDir != null) return _cachedPhotosDir!;
-    final baseDir = await getApplicationDocumentsDirectory();
-    final dir = Directory('${baseDir.path}/dhkp_photos');
-    if (!await dir.exists()) {
-      await dir.create(recursive: true);
-    }
-    _cachedPhotosDir = dir;
-    return dir;
+    return AppStorage.getPhotosDirectory();
   }
 
   /// Cari file foto untuk sebuah NOP jika sudah tersimpan lokal.
@@ -328,11 +319,13 @@ class DhkpPackageHelper {
   }
 
   /// Membungkus daftar record dan file foto menjadi paket terenkripsi `.dkhp`.
+  /// Bila [includePhotos] bernilai false, hanya tabel data yang dipaketkan (hemat memori).
   static Future<File> packDkhp({
     required String outputPath,
     required List<BlokRecord> records,
     Directory? photosDir,
     bool encrypt = true,
+    bool includePhotos = true,
   }) async {
     final archive = Archive();
 
@@ -384,18 +377,20 @@ class DhkpPackageHelper {
     final csvBytes = utf8.encode(csvString);
     archive.addFile(ArchiveFile('data.csv', csvBytes.length, csvBytes));
 
-    // 2. Tambahkan foto jika ada
-    final sourcePhotosDir = photosDir ?? await photosDirectory();
-    if (await sourcePhotosDir.exists()) {
-      for (final r in records) {
-        final photoName = r.namaFoto;
-        if (photoName != null && photoName.isNotEmpty) {
-          final photoFile = File('${sourcePhotosDir.path}/$photoName');
-          if (await photoFile.exists()) {
-            final photoBytes = await photoFile.readAsBytes();
-            archive.addFile(
-              ArchiveFile('foto/$photoName', photoBytes.length, photoBytes),
-            );
+    // 2. Tambahkan foto jika diminta dan ada
+    if (includePhotos) {
+      final sourcePhotosDir = photosDir ?? await photosDirectory();
+      if (await sourcePhotosDir.exists()) {
+        for (final r in records) {
+          final photoName = r.namaFoto;
+          if (photoName != null && photoName.isNotEmpty) {
+            final photoFile = File('${sourcePhotosDir.path}/$photoName');
+            if (await photoFile.exists()) {
+              final photoBytes = await photoFile.readAsBytes();
+              archive.addFile(
+                ArchiveFile('foto/$photoName', photoBytes.length, photoBytes),
+              );
+            }
           }
         }
       }
@@ -411,7 +406,7 @@ class DhkpPackageHelper {
         : Uint8List.fromList(zipBytes);
 
     final file = File(outputPath);
-    await file.writeAsBytes(outputBytes);
+    file.writeAsBytesSync(outputBytes);
     return file;
   }
 }

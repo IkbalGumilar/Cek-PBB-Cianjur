@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 
+import 'app_storage.dart';
 import 'batch_check_screen.dart';
 import 'check_mode.dart';
 import 'file_importer.dart';
@@ -58,8 +59,18 @@ class _ImportViewState extends State<ImportView> {
   }
 
   Future<File> _draftFile() async {
-    final dir = await getApplicationDocumentsDirectory();
-    return File('${dir.path}/$_draftFileName');
+    final dir = await AppStorage.getDataDirectory();
+    final target = File('${dir.path}/$_draftFileName');
+    if (!await target.exists()) {
+      try {
+        final oldDir = await getApplicationDocumentsDirectory();
+        final oldFile = File('${oldDir.path}/$_draftFileName');
+        if (await oldFile.exists()) {
+          await oldFile.copy(target.path);
+        }
+      } catch (_) {}
+    }
+    return target;
   }
 
   Future<void> _loadDraft() async {

@@ -28,6 +28,11 @@ class PbbResult {
     this.tanggalBayar,
     this.jumlahPbb,
   });
+
+  bool get isPaid =>
+      status.toLowerCase().contains('sudah') ||
+      status.toLowerCase().contains('lunas') ||
+      (tanggalBayar != null && tanggalBayar!.trim().isNotEmpty);
 }
 
 class CaptchaError implements Exception {

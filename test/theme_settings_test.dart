@@ -87,8 +87,10 @@ void main() {
         expect(find.text('Ikuti Sistem'), findsOneWidget);
 
         // Cek switch Material You tampil
-        expect(find.text('Warna Dinamis (Material You)'), findsOneWidget);
-        expect(find.byType(Switch), findsOneWidget);
+        expect(
+          find.widgetWithText(SwitchListTile, 'Warna Dinamis (Material You)'),
+          findsOneWidget,
+        );
 
         // Cek bagian Aksen Warna & RGB tampil
         expect(find.text('Aksen Warna (RGB)'), findsOneWidget);
@@ -115,8 +117,10 @@ void main() {
         await tester.pumpAndSettle();
 
         // Switch Material You tidak boleh muncul
-        expect(find.text('Warna Dinamis (Material You)'), findsNothing);
-        expect(find.byType(Switch), findsNothing);
+        expect(
+          find.widgetWithText(SwitchListTile, 'Warna Dinamis (Material You)'),
+          findsNothing,
+        );
 
         // Bagian Aksen Warna & RGB tetap langsung tampil
         expect(find.text('Aksen Warna (RGB)'), findsOneWidget);
@@ -143,15 +147,18 @@ void main() {
         await tester.pumpAndSettle();
 
         // Switch Material You tampil
-        expect(find.text('Warna Dinamis (Material You)'), findsOneWidget);
-        expect(find.byType(Switch), findsOneWidget);
+        final materialYouTile = find.widgetWithText(
+          SwitchListTile,
+          'Warna Dinamis (Material You)',
+        );
+        expect(materialYouTile, findsOneWidget);
 
         // Bagian Aksen Warna & slider tersembunyi
         expect(find.text('Aksen Warna (RGB)'), findsNothing);
         expect(find.byType(Slider), findsNothing);
 
         // Saat switch dimatikan, opsi aksen warna muncul
-        await tester.tap(find.byType(Switch));
+        await tester.tap(materialYouTile);
         await tester.pumpAndSettle();
 
         expect(find.text('Aksen Warna (RGB)'), findsOneWidget);

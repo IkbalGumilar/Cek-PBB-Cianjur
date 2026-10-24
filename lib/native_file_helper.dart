@@ -10,6 +10,45 @@ import 'package:flutter/services.dart';
 class NativeFileHelper {
   static const _channel = MethodChannel('id.cianjur.cekpbb.cek_pbb_app/files');
 
+  /// Dapatkan path absolut folder media publik Android (`/storage/emulated/0/Android/media/id.cianjur.pbb`).
+  static Future<String> getMediaDirectoryPath() async {
+    if (!Platform.isAndroid) {
+      throw UnsupportedError('Media directory path hanya tersedia di Android.');
+    }
+    try {
+      final path = await _channel.invokeMethod<String>('getMediaDirectoryPath');
+      return path ?? '/storage/emulated/0/Android/media/id.cianjur.pbb';
+    } catch (_) {
+      return '/storage/emulated/0/Android/media/id.cianjur.pbb';
+    }
+  }
+
+  /// Simpan [bytes] ke folder publik Android/media/id.cianjur.pbb/[subfolder]/ (Android).
+  static Future<String> saveToMedia({
+    required Uint8List bytes,
+    required String fileName,
+    String subfolder = 'documents',
+    required String mimeType,
+  }) async {
+    if (!Platform.isAndroid) {
+      throw UnsupportedError('Penyimpanan ke Media hanya didukung di Android saat ini.');
+    }
+    try {
+      final location = await _channel.invokeMethod<String>('saveToMedia', {
+        'fileName': fileName,
+        'subfolder': subfolder,
+        'bytes': bytes,
+        'mimeType': mimeType,
+      });
+      if (location == null || location.isEmpty) {
+        throw Exception('Gagal menyimpan berkas ke folder media.');
+      }
+      return location;
+    } on PlatformException catch (e) {
+      throw Exception('Gagal menyimpan berkas ke media: ${e.message ?? e.code}');
+    }
+  }
+
   /// Simpan [bytes] ke folder publik Dokumen/Cek PBB Cianjur (Android) atau
   /// Documents/Cek PBB Cianjur (desktop). Return lokasi untuk ditampilkan ke
   /// user. File dengan nama sama akan ditimpa (dipakai untuk backup harian).

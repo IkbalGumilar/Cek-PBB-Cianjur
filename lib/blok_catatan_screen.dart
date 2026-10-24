@@ -1,25 +1,31 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 
+import 'batch_check_screen.dart';
 import 'blok_data_store.dart';
 import 'blok_record.dart';
 import 'blok_report_exporter.dart';
+import 'blok_sync_service.dart';
 import 'check_mode.dart';
 import 'dkhp_package_helper.dart';
 import 'document_preview_screen.dart';
 import 'download_helper.dart';
+import 'tax_record.dart';
 import 'dusun_data.dart';
 import 'file_importer.dart';
+import 'image_crop_helper.dart';
+import 'kolase_foto_screen.dart';
 import 'native_file_helper.dart';
 import 'nop_helper.dart';
 import 'operator_mode_store.dart';
 import 'tagihan_result.dart' show formatRupiah;
 import 'unity_lerp_widgets.dart';
-import 'wilayah_kerja_store.dart';
 
 /// Dikembalikan lewat Navigator.pop saat user menekan "Rincian Tagihan" (mode tagihan)
 /// atau "Cetak Bukti Bayar" (mode status bayar) — dipakai MainShell untuk membuka form
@@ -136,14 +142,12 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
       _selectedBlok = _semuaBlokValue;
       _selectedTahun = '${DateTime.now().year}';
     } else {
-      final whitelist = await WilayahKerjaStore.instance.whitelistedBloks();
-      // Hanya tampilkan blok yang termasuk wilayah kerja user perangkat ini —
-      // jika belum dipilih atau kosong, tampilkan semua blok agar data DHKP tetap bisa diakses.
-      final bloks = allBloks.where(whitelist.contains).toList();
+      // Role / wilayah kerja manual sudah tidak berlaku.
+      // Paket .dkhp yang diimpor sudah mencakup wilayah kerja petugas secara otomatis.
       _isOperator = false;
       _allBloks = allBloks;
-      _bloks = bloks.isNotEmpty ? bloks : allBloks;
-      _whitelist = whitelist.isNotEmpty ? whitelist : allBloks.toSet();
+      _bloks = allBloks;
+      _whitelist = allBloks.toSet();
       _selectedBlok = _semuaBlokValue;
       _selectedTahun = '${DateTime.now().year}';
     }
@@ -157,6 +161,42 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
     setState(() {
       _loading = false;
     });
+
+    // Sinkronisasi otomatis saat membuka DHKP
+    unawaited(_triggerAutoSync(silent: true));
+  }
+
+  Future<void> _triggerAutoSync({bool silent = false}) async {
+    try {
+      final newChanges = await BlokSyncService.instance.syncCurrentScope(
+        blok: _selectedBlok,
+      );
+      if (newChanges > 0) {
+        await _loadRecords();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                '$newChanges perubahan data baru & foto berhasil disinkronkan.',
+              ),
+              backgroundColor: Colors.teal[800],
+            ),
+          );
+        }
+      } else if (!silent && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Semua data perubahan DHKP sudah sinkron dengan Drive.'),
+          ),
+        );
+      }
+    } catch (e) {
+      if (!silent && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal sinkronisasi data: $e')),
+        );
+      }
+    }
   }
 
   /// Khusus Mode Operator — pilih dusun mana yang mau dilihat, lalu daftar
@@ -429,6 +469,12 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
         catatan: controller.text.trim(),
       );
       await BlokDataStore.instance.upsert(newRecord);
+      unawaited(
+        BlokSyncService.instance.recordChange(
+          record: newRecord,
+          catatan: controller.text.trim(),
+        ),
+      );
       await _loadRecords();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -646,6 +692,17 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
+                        if (!record.isPaid) ...[
+                          OutlinedButton.icon(
+                            icon: const Icon(Icons.fact_check_outlined, size: 16, color: Colors.teal),
+                            label: const Text('Cek Status Bayar'),
+                            onPressed: () {
+                              Navigator.pop(ctx);
+                              _bukaStatusBayar(record);
+                            },
+                          ),
+                          const SizedBox(width: 8),
+                        ],
                         OutlinedButton.icon(
                           icon: const Icon(Icons.search, size: 16),
                           label: const Text('Cek Tagihan'),
@@ -794,6 +851,11 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
         alamatWp: alamatWpController.text.trim(),
       );
       await BlokDataStore.instance.upsert(updatedRecord);
+      unawaited(
+        BlokSyncService.instance.recordChange(
+          record: updatedRecord,
+        ),
+      );
       await _loadRecords();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -826,6 +888,88 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
     );
   }
 
+  void _bukaStatusBayar(BlokRecord record) {
+    Navigator.pop(
+      context,
+      BlokNavigationRequest(
+        blok: record.blok,
+        wilayah: record.wilayah,
+        tahun: record.tahunBayar,
+        targetMode: CheckMode.statusBayar,
+      ),
+    );
+  }
+
+  Future<void> _cekStatusBayarMassal() async {
+    final unpaidRecords = _records.where((r) => !r.isPaid).toList();
+
+    if (unpaidRecords.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Semua data pada filter saat ini sudah berstatus Sudah Bayar.'),
+          backgroundColor: Colors.green,
+        ),
+      );
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.fact_check_outlined, color: Colors.teal),
+            SizedBox(width: 8),
+            Text('Update DHKP via Cek Status'),
+          ],
+        ),
+        content: Text(
+          'Ditemukan ${unpaidRecords.length} data dengan status "Belum Bayar" pada filter saat ini.\n\n'
+          'Pengecekan massal akan memeriksa status pembayaran NOP tersebut ke server Bapenda. '
+          'Jika statusnya di server sudah Lunas, data DHKP akan otomatis diperbarui menjadi "Sudah Bayar".\n\n'
+          'Lanjutkan pengecekan?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal'),
+          ),
+          FilledButton.icon(
+            icon: const Icon(Icons.play_arrow),
+            label: Text('Mulai Cek (${unpaidRecords.length} NOP)'),
+            onPressed: () => Navigator.pop(ctx, true),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    final taxRecords = unpaidRecords.map((r) => TaxRecord(nop: r.nop)).toList();
+    final tahun = _selectedTahun ?? (unpaidRecords.first.tahunBayar.isNotEmpty ? unpaidRecords.first.tahunBayar : '2026');
+
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => BatchCheckScreen(
+          records: taxRecords,
+          tahun: tahun,
+          downloadBuktiBayar: false,
+        ),
+      ),
+    );
+
+    if (!mounted) return;
+    await _loadRecords();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Pengecekan massal selesai. Data DHKP telah diperbarui.'),
+        backgroundColor: Colors.teal,
+      ),
+    );
+  }
+
   Future<void> _uploadDataDialog() async {
     final action = await showDialog<String>(
       context: context,
@@ -835,33 +979,23 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
           SimpleDialogOption(
             onPressed: () => Navigator.pop(ctx, 'file'),
             child: const ListTile(
-              leading: Icon(Icons.enhanced_encryption_outlined, color: Colors.teal),
-              title: Text('Pilih Berkas (.dkhp / CSV / Excel / TXT)'),
-              subtitle: Text('Buka paket .dkhp terenkripsi (rahasia) atau berkas tabel'),
+              leading: Icon(Icons.folder_open_outlined, color: Colors.teal),
+              title: Text('Pilih Berkas'),
+              subtitle: Text('Buka paket .dkhp atau berkas tabel dari penyimpanan perangkat'),
             ),
           ),
           SimpleDialogOption(
-            onPressed: () => Navigator.pop(ctx, 'sample'),
+            onPressed: () => Navigator.pop(ctx, 'google_drive'),
             child: const ListTile(
-              leading: Icon(Icons.dataset_outlined, color: Colors.blue),
-              title: Text('Muat 5 Data Contoh DHKP'),
-              subtitle: Text('Contoh lengkap: Target Pemda, Blacklist, Catatan & Foto'),
+              leading: FaIcon(FontAwesomeIcons.googleDrive, color: Colors.blue),
+              title: Text('Google Drive'),
+              subtitle: Text('Pilih dan buka berkas langsung dari Google Drive'),
             ),
           ),
         ],
       ),
     );
     if (action == null || !mounted) return;
-
-    if (action == 'sample') {
-      await BlokDataStore.instance.upsertAll(BlokDataStore.initialDhkpRecords);
-      await _load();
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('5 data contoh DHKP berhasil dimuat.')),
-      );
-      return;
-    }
 
     if (action == 'file') {
       try {
@@ -872,58 +1006,81 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
         if (files.isEmpty || files.first.path == null) {
           return;
         }
-        final path = files.first.path!;
-        final lower = path.toLowerCase();
-
-        if (lower.endsWith('.dkhp') || lower.endsWith('.zip')) {
-          final newRecords = await DhkpPackageHelper.unpackDkhp(path);
-          await _load();
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Paket .dkhp berhasil diimpor: ${newRecords.length} data & foto berhasil dimuat.',
-              ),
-            ),
-          );
-          return;
-        }
-
-        final taxRecords = await FileImporter.importFrom(path);
-        if (taxRecords.isEmpty) {
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Tidak ditemukan NOP yang valid di file ini.'),
-            ),
-          );
-          return;
-        }
-        final nowYear = '${DateTime.now().year}';
-        final newRecords = taxRecords.map((t) => BlokRecord(
-          nop: t.nop,
-          namaWajibPajak:
-              t.namaWajibPajak ?? 'WP ${nopBlok(t.nop)}/${nopWilayah(t.nop)}',
-          tahunBayar: nowYear,
-          tanggalBayar: t.isPaid ? 'Sudah Bayar' : '',
-          jumlahPbb: '',
-          statusBayar: t.isPaid ? 'Sudah Bayar' : 'Belum Bayar',
-        ));
-        await BlokDataStore.instance.upsertAll(newRecords);
-        await _load();
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('${newRecords.length} data DHKP berhasil diunggah.'),
-          ),
-        );
+        await _importDkhpFromPath(files.first.path!, sourceLabel: 'berkas lokal');
       } catch (e) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal membaca file: $e')),
+          SnackBar(content: Text('Gagal membaca berkas: $e')),
         );
       }
+      return;
     }
+
+    if (action == 'google_drive') {
+      try {
+        final files = await FilePicker.pickFiles(
+          type: FileType.custom,
+          allowedExtensions: ['dkhp', 'zip', 'csv', 'xlsx', 'xls', 'txt'],
+        );
+        if (files.isEmpty || files.first.path == null) {
+          return;
+        }
+        await _importDkhpFromPath(files.first.path!, sourceLabel: 'Google Drive');
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal membaca berkas Google Drive: $e')),
+        );
+      }
+      return;
+    }
+  }
+
+  Future<void> _importDkhpFromPath(String path, {required String sourceLabel}) async {
+    final lower = path.toLowerCase();
+
+    if (lower.endsWith('.dkhp') || lower.endsWith('.zip')) {
+      final newRecords = await DhkpPackageHelper.unpackDkhp(path);
+      await _load();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Paket .dkhp berhasil diimpor ($sourceLabel): ${newRecords.length} data & foto berhasil dimuat.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    final taxRecords = await FileImporter.importFrom(path);
+    if (taxRecords.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Tidak ditemukan NOP yang valid di file ini.'),
+        ),
+      );
+      return;
+    }
+    final nowYear = '${DateTime.now().year}';
+    final newRecords = taxRecords.map((t) => BlokRecord(
+      nop: t.nop,
+      namaWajibPajak:
+          t.namaWajibPajak ?? 'WP ${nopBlok(t.nop)}/${nopWilayah(t.nop)}',
+      tahunBayar: nowYear,
+      tanggalBayar: t.isPaid ? 'Sudah Bayar' : '',
+      jumlahPbb: '',
+      statusBayar: t.isPaid ? 'Sudah Bayar' : 'Belum Bayar',
+    ));
+    await BlokDataStore.instance.upsertAll(newRecords);
+    await _load();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('${newRecords.length} data DHKP berhasil diunggah ($sourceLabel).'),
+      ),
+    );
   }
 
   /// Pop-up preview foto ala profil WhatsApp (bisa di-zoom/pan, ganti/upload foto baru, atau hapus)
@@ -1158,7 +1315,6 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
     if (method == null) return null;
 
     Uint8List? imageBytes;
-    String extension = 'jpg';
 
     try {
       if (method == 'camera' || method == 'gallery') {
@@ -1173,17 +1329,12 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
           );
           if (picked != null) {
             imageBytes = await picked.readAsBytes();
-            final ext = picked.name.split('.').last.toLowerCase();
-            if (ext.isNotEmpty) extension = ext;
           }
         } catch (_) {
           final res = await FilePicker.pickFiles(type: FileType.image);
           if (res.isNotEmpty && res.first.path != null) {
             final f = File(res.first.path!);
             imageBytes = await f.readAsBytes();
-            final name = res.first.name;
-            final ext = name.contains('.') ? name.split('.').last.toLowerCase() : 'jpg';
-            extension = ext;
           }
         }
       } else if (method == 'file') {
@@ -1191,9 +1342,6 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
         if (res.isNotEmpty && res.first.path != null) {
           final f = File(res.first.path!);
           imageBytes = await f.readAsBytes();
-          final name = res.first.name;
-          final ext = name.contains('.') ? name.split('.').last.toLowerCase() : 'jpg';
-          extension = ext;
         }
       }
     } catch (e) {
@@ -1207,14 +1355,24 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
 
     if (imageBytes == null) return null;
 
+    // Potong otomatis dimensi gambar menjadi rasio 1:1 (persegi) agar rapi
+    final squareBytes = ImageCropHelper.cropToSquare(imageBytes);
+
     final photosDir = await DhkpPackageHelper.photosDirectory();
     final cleanNop = record.nop.replaceAll(RegExp(r'[^0-9]'), '');
-    final fileName = '$cleanNop.$extension';
+    final fileName = '$cleanNop.jpg';
     final targetFile = File('${photosDir.path}/$fileName');
-    await targetFile.writeAsBytes(imageBytes);
+    await targetFile.writeAsBytes(squareBytes);
 
     final updatedRecord = record.copyWith(namaFoto: fileName);
     await BlokDataStore.instance.upsert(updatedRecord);
+    unawaited(
+      BlokSyncService.instance.recordChange(
+        record: updatedRecord,
+        namaFoto: fileName,
+        sourcePhotoFile: targetFile,
+      ),
+    );
     await _loadRecords();
 
     if (mounted) {
@@ -1237,6 +1395,12 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
     }
     final updated = record.copyWith(namaFoto: '');
     await BlokDataStore.instance.upsert(updated);
+    unawaited(
+      BlokSyncService.instance.recordChange(
+        record: updated,
+        namaFoto: '',
+      ),
+    );
     await _loadRecords();
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1400,6 +1564,18 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
     }
   }
 
+  void _bukaKolaseFoto() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => KolaseFotoScreen(
+          initialBlok: _selectedBlok,
+          bloks: _bloks,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -1411,7 +1587,22 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
             icon: const Icon(Icons.upload_file),
             tooltip: 'Upload Data DHKP',
           ),
+          IconButton(
+            onPressed: _busy ? null : () => _triggerAutoSync(silent: false),
+            icon: const Icon(Icons.sync_rounded),
+            tooltip: 'Sinkronkan Perubahan (Drive Bersama)',
+          ),
           if (_bloks.isNotEmpty) ...[
+            IconButton(
+              onPressed: _busy ? null : _bukaKolaseFoto,
+              icon: const Icon(Icons.auto_awesome_mosaic_outlined),
+              tooltip: 'Kolase Foto Dokumentasi SPPT',
+            ),
+            IconButton(
+              onPressed: _busy ? null : _cekStatusBayarMassal,
+              icon: const Icon(Icons.fact_check_outlined),
+              tooltip: 'Cek Status Bayar Massal (Update Belum Bayar)',
+            ),
             IconButton(
               onPressed: _busy ? null : _unduhLaporan,
               icon: const Icon(Icons.download_outlined),
@@ -1437,14 +1628,14 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
           switchOutCurve: Curves.easeInCubic,
           child: _loading
               ? const _BlokCatatanLoadingView(key: ValueKey('loading-view'))
-              : (!_isOperator && _bloks.isEmpty)
+              : (_allBloks.isEmpty || (!_isOperator && _bloks.isEmpty))
                   ? const Center(
                       key: ValueKey('empty-view'),
                       child: Padding(
                         padding: EdgeInsets.all(24),
                         child: Text(
                           'Belum ada data DHKP. Tekan tombol Upload Data di kanan atas '
-                          'untuk mengunggah berkas atau memuat contoh data.',
+                          'untuk mengunggah berkas.',
                           textAlign: TextAlign.center,
                         ),
                       ),
@@ -1837,6 +2028,15 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
                                                                     color: Colors.green,
                                                                   ),
                                                                   tooltip: 'Cetak Bukti Bayar',
+                                                                )
+                                                              else
+                                                                IconButton(
+                                                                  onPressed: () => _bukaStatusBayar(r),
+                                                                  icon: const Icon(
+                                                                    Icons.fact_check_outlined,
+                                                                    color: Colors.teal,
+                                                                  ),
+                                                                  tooltip: 'Cek Status Bayar (Update jika Lunas)',
                                                                 ),
                                                               IconButton(
                                                                 onPressed: () => _hapusBaris(r),

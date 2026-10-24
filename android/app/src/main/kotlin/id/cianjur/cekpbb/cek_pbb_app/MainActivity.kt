@@ -7,20 +7,21 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
+import android.media.MediaScannerConnection
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import android.provider.Settings
 import androidx.core.content.FileProvider
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import java.io.ByteArrayOutputStream
 import java.io.File
 
-class MainActivity : FlutterActivity() {
+class MainActivity : FlutterFragmentActivity() {
     private val apkChannelName = "id.cianjur.cekpbb.cek_pbb_app/apk"
     private val filesChannelName = "id.cianjur.cekpbb.cek_pbb_app/files"
     private val bankChannelName = "id.cianjur.cekpbb.cek_pbb_app/bank"
@@ -42,6 +43,15 @@ class MainActivity : FlutterActivity() {
         }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, filesChannelName).setMethodCallHandler { call, result ->
             when (call.method) {
+                "getMediaDirectoryPath" -> {
+                    try {
+                        val dir = getMediaDirectory()
+                        result.success(dir.absolutePath)
+                    } catch (e: Exception) {
+                        result.error("MEDIA_DIR_FAILED", e.message, null)
+                    }
+                }
+                "saveToMedia" -> saveToMedia(call, result)
                 "saveToDocuments" -> saveToDocuments(call, result)
                 "shareBytes" -> shareBytes(call, result)
                 else -> result.notImplemented()
@@ -224,6 +234,48 @@ class MainActivity : FlutterActivity() {
             }
         }
         return null
+    }
+
+    // Akses direktori publik Android/media/<packageName> seperti WhatsApp
+    private fun getMediaDirectory(subfolder: String? = null): File {
+        val externalDirs = externalMediaDirs
+        val base = externalDirs.firstOrNull { it != null }
+            ?: File(Environment.getExternalStorageDirectory(), "Android/media/$packageName")
+        val dir = if (subfolder.isNullOrEmpty()) base else File(base, subfolder)
+        if (!dir.exists()) {
+            dir.mkdirs()
+        }
+        return dir
+    }
+
+    // Simpan berkas langsung ke Android/media/<packageName>/[subfolder]
+    // dan daftarkan ke MediaScanner agar langsung terdeteksi oleh Galeri/File Manager
+    private fun saveToMedia(call: MethodCall, result: MethodChannel.Result) {
+        try {
+            val fileName = call.argument<String>("fileName")!!
+            val subfolder = call.argument<String>("subfolder") ?: "documents"
+            val bytes = call.argument<ByteArray>("bytes")!!
+            val mimeType = call.argument<String>("mimeType")
+
+            val dir = getMediaDirectory(subfolder)
+            val file = File(dir, fileName)
+            file.writeBytes(bytes)
+
+            try {
+                MediaScannerConnection.scanFile(
+                    applicationContext,
+                    arrayOf(file.absolutePath),
+                    if (mimeType != null) arrayOf(mimeType) else null,
+                    null
+                )
+            } catch (_: Exception) {
+                // Non-fatal if media scanner fails
+            }
+
+            result.success("Android/media/$packageName/$subfolder/$fileName")
+        } catch (e: Exception) {
+            result.error("SAVE_MEDIA_FAILED", e.message, null)
+        }
     }
 
     // Simpan bytes ke folder publik Dokumen/Cek PBB Cianjur. Tidak lewat
