@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'package:path/path.dart' as p;
+
 import 'package:cek_pbb_app/app_storage.dart';
 import 'package:cek_pbb_app/backup_password_store.dart';
 import 'package:cek_pbb_app/blok_backup_scheduler.dart';
@@ -209,19 +211,19 @@ void main() {
       final backupsDir = await AppStorage.getBackupsDirectory();
 
       // Buat 4 berkas dummy cadangan dengan timestamp berbeda
-      final file1 = File('${backupsDir.path}/cadangan_1.dkhp');
+      final file1 = File(p.join(backupsDir.path, 'cadangan_1.dkhp'));
       await file1.writeAsString('backup-1');
       await file1.setLastModified(DateTime(2026, 10, 20, 2, 0));
 
-      final file2 = File('${backupsDir.path}/cadangan_2.dkhp');
+      final file2 = File(p.join(backupsDir.path, 'cadangan_2.dkhp'));
       await file2.writeAsString('backup-2');
       await file2.setLastModified(DateTime(2026, 10, 21, 2, 0));
 
-      final file3 = File('${backupsDir.path}/cadangan_3.dkhp');
+      final file3 = File(p.join(backupsDir.path, 'cadangan_3.dkhp'));
       await file3.writeAsString('backup-3');
       await file3.setLastModified(DateTime(2026, 10, 22, 2, 0));
 
-      final file4 = File('${backupsDir.path}/cadangan_4.dkhp');
+      final file4 = File(p.join(backupsDir.path, 'cadangan_4.dkhp'));
       await file4.writeAsString('backup-4');
       await file4.setLastModified(DateTime(2026, 10, 23, 2, 0));
 
@@ -240,7 +242,7 @@ void main() {
       expect(file4.existsSync(), isTrue);
 
       // Tambahkan file ke-5
-      final file5 = File('${backupsDir.path}/cadangan_5.dkhp');
+      final file5 = File(p.join(backupsDir.path, 'cadangan_5.dkhp'));
       await file5.writeAsString('backup-5');
       await file5.setLastModified(DateTime(2026, 10, 24, 2, 0));
 
@@ -255,8 +257,8 @@ void main() {
       final finalFiles = await scheduler.getLocalBackups();
       expect(finalFiles.length, 3);
       // Urutan getLocalBackups: terbaru ke terlama
-      expect(finalFiles.first.path, file5.path);
-      expect(finalFiles.last.path, file3.path);
+      expect(p.basename(finalFiles.first.path), p.basename(file5.path));
+      expect(p.basename(finalFiles.last.path), p.basename(file3.path));
     });
   });
 

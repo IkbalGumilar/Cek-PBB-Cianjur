@@ -30,6 +30,9 @@ jobs:
       - name: Get Dependencies
         run: flutter pub get
 
+      - name: Install Python Cryptography for Interop Test
+        run: pip install cryptography
+
       - name: Run Tests
         run: flutter test -j 1
 
