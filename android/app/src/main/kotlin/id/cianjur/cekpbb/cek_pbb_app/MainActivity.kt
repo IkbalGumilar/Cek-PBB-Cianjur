@@ -27,6 +27,10 @@ class MainActivity : FlutterFragmentActivity() {
     private val apkChannelName = "id.cianjur.cekpbb.cek_pbb_app/apk"
     private val filesChannelName = "id.cianjur.cekpbb.cek_pbb_app/files"
     private val bankChannelName = "id.cianjur.cekpbb.cek_pbb_app/bank"
+    private val deepLinkChannelName = "id.cianjur.cekpbb.cek_pbb_app/deeplink"
+
+    private var initialDeepLink: String? = null
+    private var deepLinkChannel: MethodChannel? = null
 
     // Nama folder publik tempat semua dokumen aplikasi ini disimpan:
     // Dokumen/Cek PBB Cianjur (hasil cek, bukti bayar, laporan blok, backup).
@@ -34,12 +38,28 @@ class MainActivity : FlutterFragmentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        handleDeepLink(intent)
         // Mencegah tangkapan layar (screenshot), perekaman layar (screen record),
         // dan pratinjau snapshot di recent apps / task switcher (anti shoulder-surfing & data leak).
         window.setFlags(
             WindowManager.LayoutParams.FLAG_SECURE,
             WindowManager.LayoutParams.FLAG_SECURE
         )
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleDeepLink(intent)
+    }
+
+    private fun handleDeepLink(intent: Intent?) {
+        val data: Uri? = intent?.data
+        if (data != null) {
+            val link = data.toString()
+            initialDeepLink = link
+            deepLinkChannel?.invokeMethod("onDeepLink", link)
+        }
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -66,6 +86,7 @@ class MainActivity : FlutterFragmentActivity() {
                 "saveToMedia" -> saveToMedia(call, result)
                 "saveToDocuments" -> saveToDocuments(call, result)
                 "shareBytes" -> shareBytes(call, result)
+                "shareText" -> shareText(call, result)
                 else -> result.notImplemented()
             }
         }
@@ -75,6 +96,18 @@ class MainActivity : FlutterFragmentActivity() {
                 "launchApp" -> launchApp(call, result)
                 "getAppIcon" -> getAppIcon(call, result)
                 else -> result.notImplemented()
+            }
+        }
+        deepLinkChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, deepLinkChannelName).apply {
+            setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "getInitialLink" -> {
+                        val link = initialDeepLink
+                        initialDeepLink = null
+                        result.success(link)
+                    }
+                    else -> result.notImplemented()
+                }
             }
         }
     }
@@ -350,6 +383,26 @@ class MainActivity : FlutterFragmentActivity() {
             result.success(null)
         } catch (e: Exception) {
             result.error("SHARE_FAILED", e.message, null)
+        }
+    }
+
+    // Bagikan teks (misalnya tautan penyimpanan bersama) langsung lewat share sheet Android.
+    private fun shareText(call: MethodCall, result: MethodChannel.Result) {
+        try {
+            val text = call.argument<String>("text")!!
+            val title = call.argument<String>("title") ?: "Bagikan Tautan"
+            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_TEXT, text)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            val chooser = Intent.createChooser(shareIntent, title).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            startActivity(chooser)
+            result.success(null)
+        } catch (e: Exception) {
+            result.error("SHARE_TEXT_FAILED", e.message, null)
         }
     }
 }

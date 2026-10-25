@@ -6,7 +6,6 @@ import 'package:encrypt/encrypt.dart' as enc;
 import 'package:flutter/foundation.dart';
 
 import 'app_storage.dart';
-import 'backup_password_store.dart';
 import 'base_preferences_store.dart';
 import 'blok_backup_scheduler.dart';
 import 'blok_data_store.dart';
@@ -32,6 +31,7 @@ class BlokChangeRecord {
   final String? namaWajibPajak;
   final String? alamatObjek;
   final String? alamatWp;
+  final String? dhkpFingerprint;
 
   const BlokChangeRecord({
     required this.id,
@@ -48,6 +48,7 @@ class BlokChangeRecord {
     this.namaWajibPajak,
     this.alamatObjek,
     this.alamatWp,
+    this.dhkpFingerprint,
   });
 
   Map<String, dynamic> toJson() {
@@ -66,6 +67,8 @@ class BlokChangeRecord {
       if (namaWajibPajak != null) 'namaWajibPajak': namaWajibPajak,
       if (alamatObjek != null) 'alamatObjek': alamatObjek,
       if (alamatWp != null) 'alamatWp': alamatWp,
+      if (dhkpFingerprint != null && dhkpFingerprint!.isNotEmpty)
+        'dhkpFingerprint': dhkpFingerprint,
     };
   }
 
@@ -85,6 +88,7 @@ class BlokChangeRecord {
       namaWajibPajak: json['namaWajibPajak'] as String?,
       alamatObjek: json['alamatObjek'] as String?,
       alamatWp: json['alamatWp'] as String?,
+      dhkpFingerprint: json['dhkpFingerprint'] as String?,
     );
   }
 
@@ -238,6 +242,11 @@ class BlokSyncService extends BasePreferencesStore {
     final cleanNop = record.nop.replaceAll(RegExp(r'[^0-9]'), '');
     final changeId = 'change_${now.millisecondsSinceEpoch}_${cleanNop}_$petugas';
 
+    final allRecords = await BlokDataStore.instance.loadAll();
+    final dhkpFingerprint = DhkpPackageHelper.computeDhkpFingerprint(
+      allRecords.isEmpty ? [record] : allRecords,
+    );
+
     final change = BlokChangeRecord(
       id: changeId,
       blok: record.blok,
@@ -253,6 +262,7 @@ class BlokSyncService extends BasePreferencesStore {
       namaWajibPajak: record.namaWajibPajak,
       alamatObjek: record.alamatObjek,
       alamatWp: record.alamatWp,
+      dhkpFingerprint: dhkpFingerprint,
     );
 
     final syncRoot = await getSyncRootDirectory();
@@ -274,8 +284,7 @@ class BlokSyncService extends BasePreferencesStore {
       await changesDir.create(recursive: true);
     }
 
-    final backupPassword = await BackupPasswordStore.instance.read();
-    final encryptedBytes = change.toEncryptedBytes(secret: backupPassword);
+    final encryptedBytes = change.toEncryptedBytes();
     final logFile = File('${changesDir.path}/$changeId.bin');
     await logFile.writeAsBytes(encryptedBytes);
 
@@ -323,7 +332,6 @@ class BlokSyncService extends BasePreferencesStore {
     int appliedCount = 0;
 
     final localPhotosDir = await DhkpPackageHelper.photosDirectory();
-    final backupPassword = await BackupPasswordStore.instance.read();
 
     for (final folder in targetFolders) {
       final files = folder.listSync(followLinks: false).whereType<File>();
@@ -332,7 +340,7 @@ class BlokSyncService extends BasePreferencesStore {
         if (!ext.endsWith('.bin') && !ext.endsWith('.dat')) continue;
 
         final bytes = await file.readAsBytes();
-        final change = BlokChangeRecord.fromEncryptedBytes(bytes, secret: backupPassword);
+        final change = BlokChangeRecord.fromEncryptedBytes(bytes);
         if (change == null) continue;
 
         if (processedIds.contains(change.id)) {
@@ -349,6 +357,18 @@ class BlokSyncService extends BasePreferencesStore {
           if (cleanR == cleanChangeNop) {
             targetRecord = r;
             break;
+          }
+        }
+
+        // Validasi sidik jari berkas DHKP:
+        // Jika berkas DHKP lokal sudah dimuat tetapi memiliki sidik jari berbeda
+        // dan NOP perubahan tidak ada di berkas DHKP lokal, tolak perubahan tersebut.
+        if (existingRecords.isNotEmpty &&
+            change.dhkpFingerprint != null &&
+            change.dhkpFingerprint!.isNotEmpty) {
+          final localFp = DhkpPackageHelper.computeDhkpFingerprint(existingRecords);
+          if (localFp != change.dhkpFingerprint && targetRecord == null) {
+            continue;
           }
         }
 

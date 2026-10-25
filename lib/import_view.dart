@@ -13,6 +13,7 @@ import 'file_importer.dart';
 import 'nop_helper.dart';
 import 'nop_scanner.dart';
 import 'tax_record.dart';
+import 'unity_lerp_widgets.dart';
 
 const _draftFileName = 'draft_nop.txt';
 
@@ -39,6 +40,7 @@ class _ImportViewState extends State<ImportView> {
   String? _fileName;
   List<TaxRecord> _records = [];
   bool _loading = false;
+  String _loadingMessage = 'Memuat berkas...';
   String? _errorText;
   String? _savedNotice;
 
@@ -143,6 +145,7 @@ class _ImportViewState extends State<ImportView> {
 
     setState(() {
       _loading = true;
+      _loadingMessage = 'Memindai NOP dari dokumen gambar...';
       _errorText = null;
       _savedNotice = null;
     });
@@ -247,6 +250,7 @@ class _ImportViewState extends State<ImportView> {
       _errorText = null;
       _savedNotice = null;
       _loading = true;
+      _loadingMessage = 'Membaca & mengekstrak daftar NOP dari berkas...';
     });
     try {
       final files = await FilePicker.pickFiles(
@@ -375,126 +379,176 @@ class _ImportViewState extends State<ImportView> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            'Format yang didukung: .txt (dipisah koma/baris baru), .csv, .xlsx',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Tiap NOP bisa ditulis lengkap (18 digit) atau singkat 5-7 digit terakhir '
-            '(blok+nomor wilayah). Contoh: ${nopShortcutExamples.map((e) => '${e.$1} -> ${e.$2}').join(', ')}',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-          const SizedBox(height: 16),
-          OutlinedButton.icon(
-            onPressed: _loading ? null : _pickFile,
-            icon: const Icon(Icons.folder_open),
-            label: Text(_fileName ?? 'Pilih File'),
-          ),
-          if (_loading)
-            const Padding(
-              padding: EdgeInsets.only(top: 16),
-              child: Center(child: CircularProgressIndicator()),
-            ),
-          if (_records.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Text(
-              '${_records.length} NOP dari file',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 8),
-            Container(
-              constraints: const BoxConstraints(maxHeight: 160),
-              decoration: BoxDecoration(
-                border: Border.all(color: Theme.of(context).dividerColor),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: ListView.builder(
-                shrinkWrap: true,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
-                ),
-                itemCount: _records.length,
-                itemBuilder: (context, index) => Text(
-                  _records[index].nop,
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 760),
+          child: Card(
+            elevation: 0,
+            color: scheme.surfaceContainerLow,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: BorderSide(
+                color: scheme.outlineVariant.withValues(alpha: 0.5),
               ),
             ),
-          ],
-          const SizedBox(height: 20),
-          const Divider(),
-          const SizedBox(height: 8),
-          Text(
-            'Atau ketik langsung di sini',
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _textController,
-            maxLines: 8,
-            decoration: const InputDecoration(
-              border: OutlineInputBorder(),
-              alignLabelWithHint: true,
-              hintText: _placeholderExample,
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'Cek Banyak NOP Sekaligus',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Pilih berkas daftar NOP (.xlsx, .csv, .txt) atau ketik langsung di bawah.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                  ),
+                  const SizedBox(height: 14),
+                  OutlinedButton.icon(
+                    onPressed: _loading ? null : _pickFile,
+                    icon: const Icon(Icons.folder_open),
+                    label: Text(_fileName ?? 'Pilih File'),
+                  ),
+                  SmoothActivityBanner(
+                    isActive: _loading,
+                    message: _loadingMessage,
+                    icon: Icons.file_open_outlined,
+                    margin: const EdgeInsets.only(top: 12),
+                  ),
+                  if (_records.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      '${_records.length} NOP dari file',
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      constraints: const BoxConstraints(maxHeight: 150),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: scheme.outlineVariant),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        itemCount: _records.length,
+                        itemBuilder: (context, index) => Text(
+                          _records[index].nop,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 18),
+                  const Divider(),
+                  const SizedBox(height: 10),
+                  Text(
+                    'Atau ketik langsung di sini',
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Tulis 18 angka NOP lengkap atau singkat (blok + nomor wilayah). Contoh: ${nopShortcutExamples.map((e) => '${e.$1} -> ${e.$2}').join(', ')}',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: _textController,
+                    maxLines: 7,
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      alignLabelWithHint: true,
+                      hintText: _placeholderExample,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      OutlinedButton.icon(
+                        onPressed: _saveDraft,
+                        icon: const Icon(Icons.save_outlined),
+                        label: const Text('Simpan'),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: _loading ? null : _scanDocument,
+                        icon: const Icon(Icons.document_scanner_outlined),
+                        label: const Text('Scan'),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: _clearNotes,
+                        icon: const Icon(Icons.delete_outline),
+                        label: const Text('Hapus Semua'),
+                      ),
+                      if (_savedNotice != null)
+                        Text(
+                          _savedNotice!,
+                          style: const TextStyle(
+                            color: Colors.green,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+                  if (widget.mode == CheckMode.statusBayar) ...[
+                    TextField(
+                      controller: _tahunController,
+                      decoration: const InputDecoration(
+                        labelText: 'Tahun Pajak (dipakai untuk semua NOP)',
+                        border: OutlineInputBorder(),
+                      ),
+                      keyboardType: TextInputType.number,
+                    ),
+                    const SizedBox(height: 14),
+                  ],
+                  if (_errorText != null) ...[
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      margin: const EdgeInsets.only(bottom: 12),
+                      decoration: BoxDecoration(
+                        color: scheme.errorContainer,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        _errorText!,
+                        style: TextStyle(color: scheme.onErrorContainer),
+                      ),
+                    ),
+                  ],
+                  FilledButton.icon(
+                    onPressed: _startBatch,
+                    icon: const Icon(Icons.play_arrow_outlined),
+                    label: const Text('Mulai Cek'),
+                    style: FilledButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-          const SizedBox(height: 8),
-          Wrap(
-            crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              OutlinedButton.icon(
-                onPressed: _saveDraft,
-                icon: const Icon(Icons.save_outlined),
-                label: const Text('Simpan'),
-              ),
-              OutlinedButton.icon(
-                onPressed: _loading ? null : _scanDocument,
-                icon: const Icon(Icons.document_scanner_outlined),
-                label: const Text('Scan'),
-              ),
-              OutlinedButton.icon(
-                onPressed: _clearNotes,
-                icon: const Icon(Icons.delete_outline),
-                label: const Text('Hapus Semua'),
-              ),
-              if (_savedNotice != null)
-                Text(
-                  _savedNotice!,
-                  style: const TextStyle(color: Colors.green),
-                ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          if (widget.mode == CheckMode.statusBayar) ...[
-            TextField(
-              controller: _tahunController,
-              decoration: const InputDecoration(
-                labelText: 'Tahun Pajak (dipakai untuk semua NOP)',
-                border: OutlineInputBorder(),
-              ),
-              keyboardType: TextInputType.number,
-            ),
-            const SizedBox(height: 12),
-          ],
-          if (_errorText != null)
-            Text(_errorText!, style: const TextStyle(color: Colors.red)),
-          FilledButton(
-            onPressed: _startBatch,
-            child: const Padding(
-              padding: EdgeInsets.symmetric(vertical: 12),
-              child: Text('Mulai Cek'),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }

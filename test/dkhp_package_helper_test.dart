@@ -207,24 +207,129 @@ KUSNADI,320520000402600390,2026,,Rp 210.000,Belum Bayar,,1,Anomali batas tanah
       expect(records[0].catatan, 'Anomali batas tanah');
     },
   );
-  test('BlokDataStore.instance.exportDkhp mengekspor seluruh data ke paket .dkhp dan importCsv berhasil memuatnya kembali', () async {
+  test('BlokDataStore.instance.exportDkhp mengekspor data perubahan ke paket .dkhp dan importCsv memvalidasi sidik jari DHKP dasar', () async {
+    await BlokDataStore.instance.clearAll();
+    await BlokDataStore.instance.upsertAll(const [
+      BlokRecord(
+        namaWajibPajak: 'WAJIB PAJAK 1 (BELUM DIUBAH)',
+        nop: '320520000402600010',
+        tahunBayar: '2026',
+        tanggalBayar: '',
+        jumlahPbb: 'Rp 50.000',
+        statusBayar: 'Belum Bayar',
+      ),
+      BlokRecord(
+        namaWajibPajak: 'WAJIB PAJAK 2 (SUDAH DIUBAH)',
+        nop: '320520000402600020',
+        tahunBayar: '2026',
+        tanggalBayar: '2026-08-17',
+        jumlahPbb: 'Rp 75.000',
+        statusBayar: 'Sudah Bayar',
+        catatan: 'Lunas kolektif RT 02',
+      ),
+    ]);
+
     final exportPath = await BlokDataStore.instance.exportDkhp(fileName: 'test_export_backup');
     expect(exportPath, endsWith('.dkhp'));
     expect(File(exportPath).existsSync(), isTrue);
 
     final rawBytes = await File(exportPath).readAsBytes();
     expect(DhkpCrypto.isEncrypted(rawBytes), isTrue);
+    expect(DhkpCrypto.isPasswordProtected(rawBytes), isFalse);
 
-    // Reset store dan coba restore/import lewat importCsv
-    BlokDataStore.instance.resetForTesting();
+    // Periksa manifest di dalam berkas cadangan: hanya menyimpan 1 perubahan dari 2 NOP dasar
+    final manifest = await DhkpPackageHelper.readBackupManifest(exportPath);
+    expect(manifest, isNotNull);
+    expect(manifest!['isDeltaOnly'], isTrue);
+    expect(manifest['baseTotalNop'], 2);
+    expect(manifest['changedCount'], 1);
+    final changes = manifest['changes'] as List<dynamic>;
+    expect(changes.length, 1);
+    final firstChange = changes.first as Map<String, dynamic>;
+    expect(firstChange['blok'], '026');
+    expect(firstChange['nomor'], '0002');
+    expect(firstChange.containsKey('nop'), isFalse);
+
+    // Simulasi ganti HP dengan berkas DHKP dasar yang sama (belum ada perubahan di HP baru)
+    await BlokDataStore.instance.clearAll();
+    await BlokDataStore.instance.upsertAll(const [
+      BlokRecord(
+        namaWajibPajak: 'WAJIB PAJAK 1 (BELUM DIUBAH)',
+        nop: '320520000402600010',
+        tahunBayar: '2026',
+        tanggalBayar: '',
+        jumlahPbb: 'Rp 50.000',
+        statusBayar: 'Belum Bayar',
+      ),
+      BlokRecord(
+        namaWajibPajak: 'WAJIB PAJAK 2 (AWAL)',
+        nop: '320520000402600020',
+        tahunBayar: '2026',
+        tanggalBayar: '',
+        jumlahPbb: 'Rp 75.000',
+        statusBayar: 'Belum Bayar',
+      ),
+    ]);
+
     final count = await BlokDataStore.instance.importCsv(
       exportPath,
-      password: _backupPassword,
+      requireBaseDhkp: true,
     );
-    expect(count, greaterThan(0));
+    expect(count, 1);
 
     final records = await BlokDataStore.instance.loadAll();
-    expect(records.length, count);
+    expect(records.length, 2);
+    final updatedWp2 = records.firstWhere((r) => r.nop == '320520000402600020');
+    expect(updatedWp2.statusBayar, 'Sudah Bayar');
+    expect(updatedWp2.catatan, 'Lunas kolektif RT 02');
+  });
+
+  test('unpackDkhp menolak pemulihan jika berkas DHKP dasar belum dimuat atau berasal dari desa/berkas DHKP yang berbeda', () async {
+    await BlokDataStore.instance.clearAll();
+    await BlokDataStore.instance.upsertAll(const [
+      BlokRecord(
+        namaWajibPajak: 'WP DUSUN 4 A',
+        nop: '320520000402600110',
+        tahunBayar: '2026',
+        tanggalBayar: '2026-04-01',
+        jumlahPbb: 'Rp 100.000',
+        statusBayar: 'Sudah Bayar',
+        catatan: 'Bukti lunas',
+      ),
+      BlokRecord(
+        namaWajibPajak: 'WP DUSUN 4 B',
+        nop: '320520000402600120',
+        tahunBayar: '2026',
+        tanggalBayar: '',
+        jumlahPbb: 'Rp 80.000',
+        statusBayar: 'Belum Bayar',
+      ),
+    ]);
+
+    final backupPath = await BlokDataStore.instance.exportDkhp(fileName: 'delta_dusun4');
+
+    // 1. Jika belum ada berkas DHKP sama sekali -> ditolak
+    await BlokDataStore.instance.clearAll();
+    expect(
+      () => BlokDataStore.instance.importCsv(backupPath, requireBaseDhkp: true),
+      throwsA(isA<DhkpBackupValidationException>()),
+    );
+
+    // 2. Jika berkas DHKP yang dimuat berbeda (sidik jari NOP tidak cocok) -> ditolak
+    await BlokDataStore.instance.upsertAll(const [
+      BlokRecord(
+        namaWajibPajak: 'WP DESA LAIN',
+        nop: '320520000900100010',
+        tahunBayar: '2026',
+        tanggalBayar: '',
+        jumlahPbb: 'Rp 120.000',
+        statusBayar: 'Belum Bayar',
+      ),
+    ]);
+    expect(
+      () => BlokDataStore.instance.importCsv(backupPath, requireBaseDhkp: true),
+      throwsA(isA<DhkpBackupValidationException>()),
+    );
   });
 
   test(

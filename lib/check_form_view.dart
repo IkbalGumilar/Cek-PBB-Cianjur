@@ -303,10 +303,10 @@ class _CheckFormViewState extends State<CheckFormView> {
     }
   }
 
-  Future<void> _loadCaptcha() async {
+  Future<void> _loadCaptcha({bool clearError = true}) async {
     setState(() {
       _loadingCaptcha = true;
-      _errorText = null;
+      if (clearError) _errorText = null;
     });
     try {
       final bytes = await _client.fetchCaptchaImage(widget.mode);
@@ -351,7 +351,7 @@ class _CheckFormViewState extends State<CheckFormView> {
         (widget.mode == CheckMode.statusBayar && tahun.isEmpty) ||
         manualCaptcha.isEmpty) {
       setState(
-        () => _errorText = 'Lengkapi dulu semua field yang wajib diisi.',
+        () => _errorText = 'Lengkapi dulu semua kolom yang wajib diisi.',
       );
       return;
     }
@@ -381,19 +381,24 @@ class _CheckFormViewState extends State<CheckFormView> {
         if (!mounted) return;
         setState(() => _statusBayarResult = result);
         if (result.isPaid) {
-          final outcome = await _recordIfInWilayah(nop: nop, tahun: tahun, result: result);
+          final outcome =
+              await _recordIfInWilayah(nop: nop, tahun: tahun, result: result);
           if (!mounted) return;
           if (outcome != null) {
             final msg = outcome.changedFromUnpaid
-                ? 'Data DHKP berhasil di-update: Status berubah dari Belum Bayar menjadi Sudah Bayar!'
+                ? 'Data DHKP diperbarui: Status menjadi Sudah Bayar!'
                 : (outcome.wasExisting
-                    ? 'Data DHKP sudah berstatus Sudah Bayar.'
-                    : 'Data baru berhasil dicatat ke Data DHKP (Sudah Bayar).');
+                    ? 'Data DHKP sudah tercatat Sudah Bayar.'
+                    : 'Data baru berhasil dicatat ke DHKP (Sudah Bayar).');
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Row(
                   children: [
-                    const Icon(Icons.check_circle, color: Colors.white, size: 20),
+                    const Icon(
+                      Icons.check_circle,
+                      color: Colors.white,
+                      size: 20,
+                    ),
                     const SizedBox(width: 8),
                     Expanded(child: Text(msg)),
                   ],
@@ -422,7 +427,7 @@ class _CheckFormViewState extends State<CheckFormView> {
       _captchaController.clear();
       await Future<void>.delayed(const Duration(seconds: 1));
       if (!mounted) return;
-      await _loadCaptcha();
+      await _loadCaptcha(clearError: false);
       if (mounted) _captchaFocusNode.requestFocus();
     } catch (e) {
       if (!mounted) return;
@@ -432,17 +437,7 @@ class _CheckFormViewState extends State<CheckFormView> {
     }
   }
 
-  /// Catat hasil "Sudah Bayar" ke Buku Catatan Blok kalau blok-nya termasuk
-  /// wilayah kerja yang sedang dipilih (lihat WilayahKerjaStore). Kalau belum
-  /// ada wilayah kerja dipilih sama sekali, diam-diam tidak dicatat (memang
-  /// pilihan user untuk tidak menyimpan riwayat). Kalau sudah ada wilayah
-  /// kerja tapi blok ini di luar itu, beri tahu lewat dialog lalu tetap tidak
-  /// dicatat — pengecekan & pembayaran sendiri tidak terpengaruh sama sekali.
-  ///
-  /// Mode Operator melewati semua pengecekan wilayah ini — operator menerima
   /// Catat / perbarui hasil "Sudah Bayar" ke Buku Catatan Data DHKP.
-  /// Karena paket DHKP sudah mencakup wilayah kerja perangkat ini,
-  /// data langsung disinkronkan tanpa perlu memilih dusun atau role secara manual.
   Future<DhkpCheckUpdateOutcome?> _recordIfInWilayah({
     required String nop,
     required String tahun,
@@ -474,162 +469,299 @@ class _CheckFormViewState extends State<CheckFormView> {
     }
 
     final isTagihan = widget.mode == CheckMode.tagihan;
+    final scheme = Theme.of(context).colorScheme;
 
     return SingleChildScrollView(
       controller: _scrollController,
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 88),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 760),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Expanded(
-                child: TextField(
-                  controller: _blokController,
-                  decoration: const InputDecoration(
-                    labelText: 'Blok',
-                    border: OutlineInputBorder(),
-                    counterText: '',
+              Card(
+                elevation: 0,
+                color: scheme.surfaceContainerLow,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  side: BorderSide(
+                    color: scheme.outlineVariant.withValues(alpha: 0.5),
                   ),
-                  keyboardType: TextInputType.number,
-                  maxLength: 3,
                 ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: TextField(
-                  controller: _wilayahController,
-                  decoration: const InputDecoration(
-                    labelText: 'Nomor Wilayah',
-                    border: OutlineInputBorder(),
-                    counterText: '',
-                  ),
-                  keyboardType: TextInputType.number,
-                  maxLength: 4,
-                ),
-              ),
-              const SizedBox(width: 8),
-              // Tombol scan OCR — tersedia di semua mode
-              _scanningOcr
-                  ? const Padding(
-                      padding: EdgeInsets.all(12),
-                      child: SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: scheme.primaryContainer,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Icon(
+                              isTagihan
+                                  ? Icons.receipt_long_outlined
+                                  : Icons.verified_outlined,
+                              color: scheme.onPrimaryContainer,
+                              size: 22,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  isTagihan
+                                      ? 'Cek Tagihan PBB'
+                                      : 'Cek Status Bayar PBB',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .titleMedium
+                                      ?.copyWith(
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  isTagihan
+                                      ? 'Lihat rincian tunggakan dan bayar lewat QRIS atau VA'
+                                      : 'Periksa bukti lunas pembayaran PBB per tahun',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodySmall
+                                      ?.copyWith(
+                                        color: scheme.onSurfaceVariant,
+                                      ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
-                    )
-                  : IconButton.filledTonal(
-                      onPressed: _scanAndFill,
-                      icon: const Icon(Icons.document_scanner_outlined),
-                      tooltip: 'Scan NOP dari dokumen',
-                    ),
-              if (!isTagihan) ...[
-                const SizedBox(width: 8),
-                IconButton.filledTonal(
-                  onPressed: widget.onImportPressed,
-                  icon: const Icon(Icons.upload_file),
-                  tooltip: 'Import File (cek banyak NOP)',
+                      const SizedBox(height: 18),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _blokController,
+                              decoration: const InputDecoration(
+                                labelText: 'Blok',
+                                hintText: 'Contoh: 17',
+                                border: OutlineInputBorder(),
+                                counterText: '',
+                              ),
+                              keyboardType: TextInputType.number,
+                              maxLength: 3,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: TextField(
+                              controller: _wilayahController,
+                              decoration: const InputDecoration(
+                                labelText: 'Nomor Wilayah',
+                                hintText: 'Contoh: 154',
+                                border: OutlineInputBorder(),
+                                counterText: '',
+                              ),
+                              keyboardType: TextInputType.number,
+                              maxLength: 4,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          _scanningOcr
+                              ? const Padding(
+                                  padding: EdgeInsets.all(12),
+                                  child: SizedBox(
+                                    width: 24,
+                                    height: 24,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  ),
+                                )
+                              : IconButton.filledTonal(
+                                  onPressed: _scanAndFill,
+                                  icon: const Icon(
+                                    Icons.document_scanner_outlined,
+                                  ),
+                                  tooltip: 'Scan NOP dari dokumen',
+                                ),
+                          if (!isTagihan) ...[
+                            const SizedBox(width: 8),
+                            IconButton.filledTonal(
+                              onPressed: widget.onImportPressed,
+                              icon: const Icon(Icons.upload_file),
+                              tooltip: 'Import File (cek banyak NOP)',
+                            ),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Cukup isi angka tanpa nol di depan (contoh: Blok 1, Nomor 1).',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: scheme.onSurfaceVariant,
+                            ),
+                      ),
+                      if (widget.mode == CheckMode.statusBayar) ...[
+                        const SizedBox(height: 14),
+                        TextField(
+                          controller: _tahunController,
+                          decoration: const InputDecoration(
+                            labelText: 'Tahun Pajak',
+                            border: OutlineInputBorder(),
+                          ),
+                          keyboardType: TextInputType.number,
+                        ),
+                      ],
+                      const SizedBox(height: 18),
+                      Center(
+                        child: _loadingCaptcha
+                            ? const Padding(
+                                padding: EdgeInsets.all(24),
+                                child: CircularProgressIndicator(),
+                              )
+                            : _captchaBytes != null
+                                ? Container(
+                                    decoration: BoxDecoration(
+                                      border: Border.all(
+                                        color: scheme.outlineVariant,
+                                      ),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    clipBehavior: Clip.antiAlias,
+                                    child: Image.memory(
+                                      _captchaBytes!,
+                                      height: 84,
+                                    ),
+                                  )
+                                : const Text('Captcha belum dimuat'),
+                      ),
+                      const SizedBox(height: 6),
+                      Center(
+                        child: TextButton.icon(
+                          onPressed: _loadingCaptcha || _submitting
+                              ? null
+                              : () => _loadCaptcha(),
+                          icon: const Icon(Icons.refresh, size: 18),
+                          label: const Text('Ganti Captcha'),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      ValueListenableBuilder<TextEditingValue>(
+                        valueListenable: _captchaController,
+                        builder: (context, value, _) {
+                          return TextField(
+                            controller: _captchaController,
+                            focusNode: _captchaFocusNode,
+                            textInputAction: TextInputAction.go,
+                            textCapitalization: TextCapitalization.none,
+                            autocorrect: false,
+                            enableSuggestions: false,
+                            decoration: InputDecoration(
+                              labelText: 'Kode Verifikasi',
+                              hintText: 'Ketik huruf pada gambar di atas',
+                              border: const OutlineInputBorder(),
+                              suffixIcon: value.text.isNotEmpty
+                                  ? IconButton(
+                                      icon: const Icon(Icons.clear, size: 20),
+                                      tooltip: 'Hapus teks',
+                                      onPressed: () {
+                                        _captchaController.clear();
+                                        _captchaFocusNode.requestFocus();
+                                      },
+                                    )
+                                  : null,
+                            ),
+                            onSubmitted: (_) => _submitting ? null : _submit(),
+                          );
+                        },
+                      ),
+                      if (_errorText != null) ...[
+                        const SizedBox(height: 14),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: scheme.errorContainer,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.error_outline,
+                                size: 18,
+                                color: scheme.onErrorContainer,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  _errorText!,
+                                  style: TextStyle(
+                                    color: scheme.onErrorContainer,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 18),
+                      FilledButton.icon(
+                        onPressed: _submitting ? null : _submit,
+                        icon: _submitting
+                            ? SizedBox(
+                                height: 18,
+                                width: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: scheme.onPrimary,
+                                ),
+                              )
+                            : const Icon(Icons.search),
+                        label: const Text('Cek'),
+                        style: FilledButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              if (_statusBayarResult != null) ...[
+                const SizedBox(height: 16),
+                _StatusBayarResultCard(
+                  result: _statusBayarResult!,
+                  nop: buildNop(
+                    blok: _blokController.text,
+                    wilayah: _wilayahController.text,
+                  ),
+                  tahun: _tahunController.text.trim(),
+                  client: _client,
+                ),
+              ],
+              if (_tagihanResult != null) ...[
+                const SizedBox(height: 16),
+                _TagihanResultCard(
+                  result: _tagihanResult!,
+                  nop: buildNop(
+                    blok: _blokController.text,
+                    wilayah: _wilayahController.text,
+                  ),
+                  client: _client,
+                  onOpenStatusBayar: widget.onOpenStatusBayar,
                 ),
               ],
             ],
           ),
-          const SizedBox(height: 4),
-          Text(
-            'Isi blok & nomor wilayah saja, tanpa nol di depan. '
-            'Contoh: Blok 1, Nomor 1 -> otomatis jadi 001 dan 0001.',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-          if (widget.mode == CheckMode.statusBayar) ...[
-            const SizedBox(height: 12),
-            TextField(
-              controller: _tahunController,
-              decoration: const InputDecoration(
-                labelText: 'Tahun Pajak',
-                border: OutlineInputBorder(),
-              ),
-              keyboardType: TextInputType.number,
-            ),
-          ],
-          const SizedBox(height: 16),
-          Center(
-            child: _loadingCaptcha
-                ? const Padding(
-                    padding: EdgeInsets.all(24),
-                    child: CircularProgressIndicator(),
-                  )
-                : _captchaBytes != null
-                ? Container(
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.grey),
-                    ),
-                    child: Image.memory(_captchaBytes!, height: 84),
-                  )
-                : const Text('Captcha belum dimuat'),
-          ),
-          const SizedBox(height: 6),
-          Center(
-            child: TextButton.icon(
-              onPressed: _loadingCaptcha || _submitting ? null : _loadCaptcha,
-              icon: const Icon(Icons.refresh, size: 18),
-              label: const Text('Ganti Captcha'),
-            ),
-          ),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _captchaController,
-            focusNode: _captchaFocusNode,
-            textInputAction: TextInputAction.go,
-            textCapitalization: TextCapitalization.none,
-            autocorrect: false,
-            enableSuggestions: false,
-            decoration: const InputDecoration(
-              labelText: 'Kode Verifikasi',
-              hintText: '5-6 huruf captcha',
-              helperText: 'Ketik manual kode verifikasi pada gambar di atas',
-              border: OutlineInputBorder(),
-            ),
-            onSubmitted: (_) => _submitting ? null : _submit(),
-          ),
-          const SizedBox(height: 16),
-          FilledButton(
-            onPressed: _submitting ? null : _submit,
-            child: _submitting
-                ? SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Theme.of(context).colorScheme.onPrimary,
-                    ),
-                  )
-                : const Text('Cek'),
-          ),
-          const SizedBox(height: 16),
-          if (_errorText != null)
-            Text(_errorText!, style: const TextStyle(color: Colors.red)),
-          if (_statusBayarResult != null)
-            _StatusBayarResultCard(
-              result: _statusBayarResult!,
-              nop: buildNop(
-                blok: _blokController.text,
-                wilayah: _wilayahController.text,
-              ),
-              tahun: _tahunController.text.trim(),
-              client: _client,
-            ),
-          if (_tagihanResult != null)
-            _TagihanResultCard(
-              result: _tagihanResult!,
-              nop: buildNop(
-                blok: _blokController.text,
-                wilayah: _wilayahController.text,
-              ),
-              client: _client,
-              onOpenStatusBayar: widget.onOpenStatusBayar,
-            ),
-        ],
+        ),
       ),
     );
   }

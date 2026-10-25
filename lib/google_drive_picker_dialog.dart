@@ -12,6 +12,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'blok_backup_scheduler.dart';
 import 'google_auth_service.dart';
 import 'google_drive_backup_policy.dart';
+import 'unity_lerp_widgets.dart';
 
 /// Representasi item berkas atau folder di Google Drive.
 class GoogleDriveItem {
@@ -65,23 +66,305 @@ class GoogleDriveService {
   static Future<File> Function(String fileId, String fileName)? mockDownloader;
 
   @visibleForTesting
+  static Future<String?> Function(String folderName, {String? parentFolderId})?
+      mockFolderFinder;
+
+  @visibleForTesting
+  static Future<String?> Function(String folderName, {String? parentFolderId})?
+      mockFolderCreator;
+
+  @visibleForTesting
+  static Future<String?> Function({
+    required File file,
+    String? folderId,
+    String? customFileName,
+    String mimeType,
+  })? mockUploader;
+
+  @visibleForTesting
   static void resetForTesting() {
     mockItems = null;
     mockDownloader = null;
+    mockFolderFinder = null;
+    mockFolderCreator = null;
+    mockUploader = null;
   }
 
-  /// Mengambil daftar berkas DHKP dan data tabel dari Google Drive pengguna via REST API v3.
+  /// Mencari folder di Google Drive berdasarkan nama.
+  Future<String?> findFolder(String folderName, {String? parentFolderId}) async {
+    if (mockFolderFinder != null) {
+      return await mockFolderFinder!(folderName, parentFolderId: parentFolderId);
+    }
+
+    final authHeaders = await GoogleAuthService.instance.getAuthHeaders();
+    if (authHeaders == null) return null;
+
+    final queries = <String>[
+      "mimeType = 'application/vnd.google-apps.folder'",
+      "name = '$folderName'",
+      "trashed = false",
+    ];
+    if (parentFolderId != null && parentFolderId.isNotEmpty) {
+      queries.add("'$parentFolderId' in parents");
+    }
+
+    final uri = Uri.parse('https://www.googleapis.com/drive/v3/files').replace(
+      queryParameters: {
+        'q': queries.join(' and '),
+        'fields': 'files(id, name)',
+        'pageSize': '1',
+      },
+    );
+
+    try {
+      final res = await _httpClient
+          .get(uri, headers: authHeaders)
+          .timeout(const Duration(seconds: 15));
+      if (res.statusCode == 200) {
+        final data =
+            json.decode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+        final files = data['files'] as List?;
+        if (files != null && files.isNotEmpty) {
+          final first = files.first;
+          if (first is Map && first['id'] is String) {
+            return first['id'] as String;
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('findFolder error: $e');
+    }
+    return null;
+  }
+
+  /// Membuat folder baru di Google Drive pengguna.
+  Future<String?> createFolder(String folderName,
+      {String? parentFolderId}) async {
+    if (mockFolderCreator != null) {
+      return await mockFolderCreator!(folderName,
+          parentFolderId: parentFolderId);
+    }
+
+    final authHeaders = await GoogleAuthService.instance.getAuthHeaders();
+    if (authHeaders == null) return null;
+
+    final uri = Uri.parse('https://www.googleapis.com/drive/v3/files');
+    final bodyMap = <String, dynamic>{
+      'name': folderName,
+      'mimeType': 'application/vnd.google-apps.folder',
+    };
+    if (parentFolderId != null && parentFolderId.isNotEmpty) {
+      bodyMap['parents'] = [parentFolderId];
+    }
+
+    final headers = {
+      ...authHeaders,
+      'Content-Type': 'application/json; charset=UTF-8',
+    };
+
+    try {
+      final res = await _httpClient
+          .post(
+            uri,
+            headers: headers,
+            body: json.encode(bodyMap),
+          )
+          .timeout(const Duration(seconds: 15));
+
+      if (res.statusCode == 200 || res.statusCode == 201) {
+        final data =
+            json.decode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+        return data['id'] as String?;
+      } else {
+        debugPrint('createFolder failed (${res.statusCode}): ${res.body}');
+      }
+    } catch (e) {
+      debugPrint('createFolder error: $e');
+    }
+    return null;
+  }
+
+  /// Memastikan folder khusus "Cek PBB Cianjur" ada di Google Drive pengguna.
+  /// Jika belum ada, otomatis membuat folder baru.
+  /// Mengembalikan ID folder Google Drive yang valid, atau null jika gagal.
+  Future<String?> ensureDedicatedFolder({
+    String folderName = GoogleDriveBackupPolicy.dedicatedFolderName,
+  }) async {
+    try {
+      final existingId = await findFolder(folderName);
+      if (existingId != null && existingId.isNotEmpty) {
+        await BlokBackupScheduler.instance.setGoogleDriveFolderId(existingId);
+        return existingId;
+      }
+
+      final newId = await createFolder(folderName);
+      if (newId != null && newId.isNotEmpty) {
+        await BlokBackupScheduler.instance.setGoogleDriveFolderId(newId);
+        return newId;
+      }
+    } catch (e) {
+      debugPrint('ensureDedicatedFolder error: $e');
+    }
+    return null;
+  }
+
+  /// Mengunggah berkas ke Google Drive (ke dalam folder khusus atau folder bersama).
+  /// Otomatis memastikan folder target ada (membuat jika belum ada).
+  Future<String?> uploadFile({
+    required File file,
+    String? folderId,
+    String? customFileName,
+    String mimeType = 'application/octet-stream',
+  }) async {
+    if (mockUploader != null) {
+      return await mockUploader!(
+        file: file,
+        folderId: folderId,
+        customFileName: customFileName,
+        mimeType: mimeType,
+      );
+    }
+
+    final authHeaders = await GoogleAuthService.instance.getAuthHeaders(
+      interactiveIfNeeded: true,
+    );
+    if (authHeaders == null) {
+      throw Exception('Akun Google belum terhubung atau token kadaluarsa.');
+    }
+
+    String? targetFolderId = folderId;
+    if (targetFolderId == null || targetFolderId.isEmpty) {
+      targetFolderId = await ensureDedicatedFolder();
+    }
+
+    final fileName = customFileName ?? file.uri.pathSegments.last;
+    final metadata = <String, dynamic>{
+      'name': fileName,
+    };
+    if (targetFolderId != null && targetFolderId.isNotEmpty) {
+      metadata['parents'] = [targetFolderId];
+    }
+
+    final boundary =
+        '----BoundaryUpload${DateTime.now().millisecondsSinceEpoch}';
+    final metadataJson = json.encode(metadata);
+
+    final fileBytes = await file.readAsBytes();
+
+    final headerBytes = utf8.encode(
+      '--$boundary\r\n'
+      'Content-Type: application/json; charset=UTF-8\r\n\r\n'
+      '$metadataJson\r\n'
+      '--$boundary\r\n'
+      'Content-Type: $mimeType\r\n\r\n',
+    );
+    final footerBytes = utf8.encode('\r\n--$boundary--\r\n');
+
+    final fullBody = <int>[
+      ...headerBytes,
+      ...fileBytes,
+      ...footerBytes,
+    ];
+
+    final uri = Uri.parse(
+      'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,size',
+    );
+
+    final req = http.Request('POST', uri);
+    req.headers.addAll(authHeaders);
+    req.headers['Content-Type'] = 'multipart/related; boundary=$boundary';
+    req.headers['Content-Length'] = fullBody.length.toString();
+    req.bodyBytes = fullBody;
+
+    final streamedRes =
+        await _httpClient.send(req).timeout(const Duration(seconds: 45));
+    final res = await http.Response.fromStream(streamedRes);
+
+    if (res.statusCode == 200 || res.statusCode == 201) {
+      final resData =
+          json.decode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+      return resData['id'] as String?;
+    } else {
+      String errorMsg = 'Google Drive upload error ${res.statusCode}';
+      try {
+        final errJson = json.decode(res.body);
+        if (errJson is Map && errJson['error'] is Map) {
+          final m = errJson['error']['message'] as String?;
+          if (m != null && m.isNotEmpty) {
+            errorMsg = m;
+          }
+        }
+      } catch (_) {}
+      throw Exception(errorMsg);
+    }
+  }
+
+  static bool isSupportedDkhpFileName(String name, {bool isFolder = false}) {
+    if (isFolder) return true;
+    final lower = name.trim().toLowerCase();
+    return lower.endsWith('.dkhp') ||
+        lower.endsWith('.dhkp') ||
+        lower.endsWith('.zip') ||
+        lower.endsWith('.csv') ||
+        lower.endsWith('.xlsx') ||
+        lower.endsWith('.xls') ||
+        lower.endsWith('.txt');
+  }
+
+  List<GoogleDriveItem> _parseDriveItems(Map<String, dynamic> data) {
+    final items = <GoogleDriveItem>[];
+    if (data['files'] is List) {
+      final list = data['files'] as List;
+      for (final item in list) {
+        if (item is Map) {
+          final name = item['name'] as String? ?? '';
+          final mime = item['mimeType'] as String? ?? '';
+          final isFolder = mime == 'application/vnd.google-apps.folder';
+          if (isSupportedDkhpFileName(name, isFolder: isFolder)) {
+            items.add(
+              GoogleDriveItem(
+                id: item['id'] as String? ?? '',
+                name: name,
+                size: int.tryParse(item['size']?.toString() ?? '') ?? 0,
+                modifiedTime: DateTime.tryParse(
+                  item['modifiedTime']?.toString() ?? '',
+                ),
+                mimeType: mime,
+                isFolder: isFolder,
+              ),
+            );
+          }
+        }
+      }
+    }
+    return items;
+  }
+
+  /// Mengambil daftar berkas DHKP (.dhkp / .dkhp) dan data tabel dari Google Drive pengguna via REST API v3.
   Future<List<GoogleDriveItem>> listDkhpFiles({String? folderId}) async {
     if (mockItems != null) return mockItems!;
 
-    final authHeaders = await GoogleAuthService.instance.getAuthHeaders();
+    final authHeaders = await GoogleAuthService.instance.getAuthHeaders(
+      interactiveIfNeeded: true,
+    );
     if (authHeaders == null) {
       return [];
     }
 
+    String? targetFolderId = folderId;
+    if (targetFolderId == null || targetFolderId.isEmpty) {
+      final sharedLink =
+          await BlokBackupScheduler.instance.getGoogleDriveFolderLink();
+      targetFolderId = GoogleDriveBackupPolicy.extractFolderId(sharedLink);
+      if (targetFolderId == null || targetFolderId.isEmpty) {
+        // Cek apakah folder "Cek PBB Cianjur" ada, jika tidak ada maka buat folder baru
+        targetFolderId = await ensureDedicatedFolder();
+      }
+    }
+
     final queries = <String>['trashed = false'];
-    if (folderId != null && folderId.isNotEmpty) {
-      queries.add("'$folderId' in parents");
+    if (targetFolderId != null && targetFolderId.isNotEmpty) {
+      queries.add("'$targetFolderId' in parents");
     }
 
     final q = queries.join(' and ');
@@ -102,41 +385,45 @@ class GoogleDriveService {
       if (response.statusCode == 200) {
         final data =
             json.decode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
-        if (data['files'] is List) {
-          final list = data['files'] as List;
-          final items = <GoogleDriveItem>[];
-          for (final item in list) {
-            if (item is Map) {
-              final name = item['name'] as String? ?? '';
-              final mime = item['mimeType'] as String? ?? '';
-              final isFolder = mime == 'application/vnd.google-apps.folder';
-              final lower = name.toLowerCase();
-              final isRelevant = isFolder ||
-                  lower.endsWith('.dkhp') ||
-                  lower.endsWith('.zip') ||
-                  lower.endsWith('.csv') ||
-                  lower.endsWith('.xlsx') ||
-                  lower.endsWith('.xls') ||
-                  lower.endsWith('.txt');
-              if (isRelevant) {
-                items.add(
-                  GoogleDriveItem(
-                    id: item['id'] as String? ?? '',
-                    name: name,
-                    size: int.tryParse(item['size']?.toString() ?? '') ?? 0,
-                    modifiedTime: DateTime.tryParse(
-                      item['modifiedTime']?.toString() ?? '',
-                    ),
-                    mimeType: mime,
-                    isFolder: isFolder,
-                  ),
-                );
+        final itemsById = <String, GoogleDriveItem>{};
+        for (final item in _parseDriveItems(data)) {
+          if (item.id.isNotEmpty) {
+            itemsById[item.id] = item;
+          }
+        }
+
+        // Jika berada di level utama (folderId == null), cari juga berkas .dhkp / .dkhp
+        // yang mungkin ditaruh pengguna di luar folder ID baru (misal di folder "Cek PBB Cianjur"
+        // lain atau di root Drive) agar selalu terdeteksi.
+        if (folderId == null || folderId.isEmpty) {
+          try {
+            final fallbackUri =
+                Uri.parse('https://www.googleapis.com/drive/v3/files').replace(
+              queryParameters: {
+                'q':
+                    "trashed = false and mimeType != 'application/vnd.google-apps.folder' and (name contains '.dhkp' or name contains '.dkhp' or name contains 'dhkp' or name contains 'dkhp')",
+                'pageSize': '50',
+                'fields': 'files(id, name, mimeType, size, modifiedTime)',
+                'orderBy': 'modifiedTime desc',
+              },
+            );
+            final fallbackRes = await _httpClient
+                .get(fallbackUri, headers: authHeaders)
+                .timeout(const Duration(seconds: 12));
+            if (fallbackRes.statusCode == 200) {
+              final fallbackData = json.decode(
+                utf8.decode(fallbackRes.bodyBytes),
+              ) as Map<String, dynamic>;
+              for (final item in _parseDriveItems(fallbackData)) {
+                if (item.id.isNotEmpty) {
+                  itemsById.putIfAbsent(item.id, () => item);
+                }
               }
             }
-          }
-          return items;
+          } catch (_) {}
         }
-        return [];
+
+        return itemsById.values.toList();
       } else {
         String errorMsg =
             'Google Drive REST API merespons status ${response.statusCode}';
@@ -177,7 +464,9 @@ class GoogleDriveService {
     final safeName = fileName.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
     final targetFile = File('${tempDir.path}/gdrive_$safeName');
 
-    final authHeaders = await GoogleAuthService.instance.getAuthHeaders();
+    final authHeaders = await GoogleAuthService.instance.getAuthHeaders(
+      interactiveIfNeeded: true,
+    );
     if (authHeaders != null) {
       final url = Uri.parse(
           'https://www.googleapis.com/drive/v3/files/$fileId?alt=media');
@@ -307,6 +596,7 @@ class _GoogleDrivePickerDialogState extends State<GoogleDrivePickerDialog>
 
   bool _loading = false;
   bool _downloading = false;
+  bool _uploading = false;
   double? _downloadProgress;
   String? _downloadFileName;
   String? _error;
@@ -327,7 +617,7 @@ class _GoogleDrivePickerDialogState extends State<GoogleDrivePickerDialog>
     super.dispose();
   }
 
-  Future<void> _loadAccountAndFiles() async {
+  Future<void> _loadAccountAndFiles({String? customFolderId}) async {
     setState(() {
       _loading = true;
       _error = null;
@@ -341,7 +631,8 @@ class _GoogleDrivePickerDialogState extends State<GoogleDrivePickerDialog>
       if (_currentAccount.isNotEmpty || GoogleDriveService.mockItems != null) {
         final folderLink =
             await BlokBackupScheduler.instance.getGoogleDriveFolderLink();
-        final folderId = GoogleDriveBackupPolicy.extractFolderId(folderLink);
+        final folderId = customFolderId ??
+            GoogleDriveBackupPolicy.extractFolderId(folderLink);
         final files =
             await GoogleDriveService.instance.listDkhpFiles(folderId: folderId);
         if (mounted) {
@@ -384,12 +675,22 @@ class _GoogleDrivePickerDialogState extends State<GoogleDrivePickerDialog>
   Future<void> _pickViaSystemFileManager() async {
     try {
       final files = await FilePicker.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['dkhp', 'zip', 'csv', 'xlsx', 'xls', 'txt'],
+        type: FileType.any,
       );
       if (!mounted) return;
       if (files.isNotEmpty && files.first.path != null) {
-        Navigator.of(context).pop(files.first.path);
+        final path = files.first.path!;
+        if (!GoogleDriveService.isSupportedDkhpFileName(files.first.name)) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Format berkas tidak didukung. Pilih berkas .dhkp, .dkhp, .zip, .csv, .xlsx, .xls, atau .txt.',
+              ),
+            ),
+          );
+          return;
+        }
+        Navigator.of(context).pop(path);
       }
     } catch (e) {
       if (mounted) {
@@ -410,6 +711,8 @@ class _GoogleDrivePickerDialogState extends State<GoogleDrivePickerDialog>
       if (!mounted) return;
       if (user != null) {
         _currentAccount = user.email;
+        // Otomatis pastikan folder khusus "Cek PBB Cianjur" ada di Google Drive
+        unawaited(GoogleDriveService.instance.ensureDedicatedFolder());
         await _loadAccountAndFiles();
       } else {
         setState(() => _loading = false);
@@ -423,7 +726,61 @@ class _GoogleDrivePickerDialogState extends State<GoogleDrivePickerDialog>
     }
   }
 
+  Future<void> _uploadLocalFileToDrive() async {
+    try {
+      final picked = await FilePicker.pickFiles(
+        type: FileType.any,
+      );
+      if (picked.isEmpty || picked.first.path == null) return;
+
+      final file = File(picked.first.path!);
+      final fileName = picked.first.name;
+      if (!GoogleDriveService.isSupportedDkhpFileName(fileName)) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Format berkas tidak didukung. Pilih berkas .dhkp, .dkhp, .zip, .csv, .xlsx, .xls, atau .txt.',
+            ),
+          ),
+        );
+        return;
+      }
+
+      setState(() {
+        _uploading = true;
+        _error = null;
+      });
+
+      await GoogleDriveService.instance.uploadFile(
+        file: file,
+        customFileName: fileName,
+      );
+
+      if (!mounted) return;
+      setState(() => _uploading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Berkas "$fileName" berhasil diunggah ke Google Drive.'),
+          backgroundColor: Colors.green[800],
+        ),
+      );
+      await _loadAccountAndFiles();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _uploading = false;
+        _error = 'Gagal mengunggah berkas: $e';
+      });
+    }
+  }
+
   Future<void> _downloadAndSelect(GoogleDriveItem item) async {
+    if (item.isFolder) {
+      await _loadAccountAndFiles(customFolderId: item.id);
+      return;
+    }
+
     setState(() {
       _downloading = true;
       _downloadFileName = item.name;
@@ -514,7 +871,7 @@ class _GoogleDrivePickerDialogState extends State<GoogleDrivePickerDialog>
       return const Icon(Icons.folder, color: Colors.amber, size: 28);
     }
     final lower = item.name.toLowerCase();
-    if (lower.endsWith('.dkhp')) {
+    if (lower.endsWith('.dkhp') || lower.endsWith('.dhkp')) {
       return const Icon(Icons.inventory_2, color: Colors.teal, size: 28);
     }
     if (lower.endsWith('.zip')) {
@@ -571,9 +928,17 @@ class _GoogleDrivePickerDialogState extends State<GoogleDrivePickerDialog>
                       ],
                     ),
                   ),
+                  if (_currentAccount.isNotEmpty)
+                    IconButton(
+                      icon: const Icon(Icons.upload_file_outlined),
+                      tooltip: 'Unggah Berkas ke Google Drive',
+                      onPressed: (_downloading || _uploading)
+                          ? null
+                          : _uploadLocalFileToDrive,
+                    ),
                   IconButton(
                     icon: const Icon(Icons.close),
-                    onPressed: _downloading
+                    onPressed: _downloading || _uploading
                         ? null
                         : () => Navigator.of(context).pop(),
                   ),
@@ -593,45 +958,22 @@ class _GoogleDrivePickerDialogState extends State<GoogleDrivePickerDialog>
                 ),
               ],
             ),
-            if (_downloading) ...[
-              Container(
-                color: theme.colorScheme.primary.withValues(alpha: 0.08),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.downloading,
-                          size: 16,
-                          color: theme.colorScheme.primary,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'Mengunduh "${_downloadFileName ?? 'berkas'}"...',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        if (_downloadProgress != null)
-                          Text(
-                            '${(_downloadProgress! * 100).toInt()}%',
-                            style: const TextStyle(fontSize: 12),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    LinearProgressIndicator(value: _downloadProgress),
-                  ],
-                ),
-              ),
-            ],
+            SmoothActivityBanner(
+              isActive: _uploading,
+              message: 'Mengunggah berkas ke Google Drive...',
+              icon: Icons.cloud_upload_outlined,
+              margin: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+            ),
+            SmoothActivityBanner(
+              isActive: _downloading,
+              message: 'Mengunduh "${_downloadFileName ?? 'berkas'}"...',
+              subtitle: _downloadProgress != null
+                  ? '${(_downloadProgress! * 100).toInt()}% selesai'
+                  : 'Menyiapkan unduhan dari Google Drive...',
+              icon: Icons.downloading_rounded,
+              progress: _downloadProgress,
+              margin: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+            ),
             if (_error != null)
               Container(
                 margin: const EdgeInsets.all(12),
@@ -720,15 +1062,11 @@ class _GoogleDrivePickerDialogState extends State<GoogleDrivePickerDialog>
 
   Widget _buildDriveFilesTab() {
     if (_loading) {
-      return const Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 12),
-            Text('Menghubungkan ke Google Drive...'),
-          ],
-        ),
+      return const SmoothLoadingCard(
+        icon: Icons.cloud_sync_outlined,
+        title: 'Menghubungkan ke Google Drive...',
+        subtitle: 'Memuat daftar berkas DHKP & cadangan dari folder cloud Anda...',
+        badgeText: 'Memuat daftar berkas Drive',
       );
     }
 
@@ -788,6 +1126,16 @@ class _GoogleDrivePickerDialogState extends State<GoogleDrivePickerDialog>
                 style: TextStyle(fontSize: 12),
               ),
               const SizedBox(height: 16),
+              FilledButton.icon(
+                onPressed: _uploadLocalFileToDrive,
+                style: FilledButton.styleFrom(
+                  backgroundColor: Colors.teal.shade700,
+                  foregroundColor: Colors.white,
+                ),
+                icon: const Icon(Icons.upload_file, size: 16),
+                label: const Text('Unggah Berkas ke Folder Ini'),
+              ),
+              const SizedBox(height: 10),
               FilledButton.icon(
                 onPressed: _pickViaSystemFileManager,
                 style: FilledButton.styleFrom(

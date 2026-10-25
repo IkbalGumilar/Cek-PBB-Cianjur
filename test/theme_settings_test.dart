@@ -63,9 +63,9 @@ void main() {
     });
   });
 
-  group('SettingsScreen Theme Section UI', () {
+  group('SettingsScreen & ThemeSettingsScreen UI', () {
     testWidgets(
-      'menampilkan dropdown tema, switch Material You, dan slider RGB saat Material You didukung dan nonaktif',
+      'SettingsScreen membuka menu Tema & Tampilan terpisah dengan dropdown tema, switch wallpaper, dan slider warna',
       (tester) async {
         final controller = ThemeController();
 
@@ -79,36 +79,43 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        // Cek judul tema & tampilan
+        // Cek kartu menu di SettingsScreen
         expect(find.text('Tema & Tampilan'), findsOneWidget);
+        expect(find.text('Keamanan Aplikasi'), findsOneWidget);
+        expect(find.text('Pencadangan Data'), findsOneWidget);
+        expect(find.text('Tentang & Bagikan Aplikasi'), findsOneWidget);
+
+        // Buka menu Tema & Tampilan
+        await tester.tap(find.text('Tema & Tampilan'));
+        await tester.pumpAndSettle();
 
         // Cek dropdown mode tema
         expect(find.text('Mode Tema'), findsOneWidget);
         expect(find.text('Ikuti Sistem'), findsOneWidget);
 
-        // Cek switch Material You tampil
+        // Cek switch Ikuti Warna Wallpaper tampil
         expect(
-          find.widgetWithText(SwitchListTile, 'Warna Dinamis (Material You)'),
+          find.widgetWithText(SwitchListTile, 'Ikuti Warna Wallpaper'),
           findsOneWidget,
         );
 
-        // Cek bagian Aksen Warna & RGB tampil
-        expect(find.text('Aksen Warna (RGB)'), findsOneWidget);
+        // Cek bagian Warna Aplikasi & slider tampil
+        expect(find.text('Warna Aplikasi'), findsOneWidget);
         expect(find.text('#2E7D32'), findsOneWidget);
-        expect(find.byType(Slider), findsNWidgets(3)); // R, G, B slider
+        expect(find.byType(Slider), findsNWidgets(3));
 
         controller.dispose();
       },
     );
 
     testWidgets(
-      'menyembunyikan opsi Material You saat perangkat/Android tidak mendukung',
+      'menyembunyikan opsi Ikuti Warna Wallpaper saat perangkat tidak mendukung',
       (tester) async {
         final controller = ThemeController();
 
         await tester.pumpWidget(
           MaterialApp(
-            home: SettingsScreen(
+            home: ThemeSettingsScreen(
               themeController: controller,
               isMaterialYouSupported: false,
             ),
@@ -116,14 +123,12 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        // Switch Material You tidak boleh muncul
         expect(
-          find.widgetWithText(SwitchListTile, 'Warna Dinamis (Material You)'),
+          find.widgetWithText(SwitchListTile, 'Ikuti Warna Wallpaper'),
           findsNothing,
         );
 
-        // Bagian Aksen Warna & RGB tetap langsung tampil
-        expect(find.text('Aksen Warna (RGB)'), findsOneWidget);
+        expect(find.text('Warna Aplikasi'), findsOneWidget);
         expect(find.byType(Slider), findsNWidgets(3));
 
         controller.dispose();
@@ -131,14 +136,14 @@ void main() {
     );
 
     testWidgets(
-      'menyembunyikan slider RGB saat Material You didukung dan diaktifkan',
+      'menyembunyikan slider warna saat Ikuti Warna Wallpaper diaktifkan',
       (tester) async {
         final controller = ThemeController();
         await controller.setUseMaterialYou(true);
 
         await tester.pumpWidget(
           MaterialApp(
-            home: SettingsScreen(
+            home: ThemeSettingsScreen(
               themeController: controller,
               isMaterialYouSupported: true,
             ),
@@ -146,22 +151,21 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        // Switch Material You tampil
-        final materialYouTile = find.widgetWithText(
+        final wallpaperTile = find.widgetWithText(
           SwitchListTile,
-          'Warna Dinamis (Material You)',
+          'Ikuti Warna Wallpaper',
         );
-        expect(materialYouTile, findsOneWidget);
+        expect(wallpaperTile, findsOneWidget);
 
-        // Bagian Aksen Warna & slider tersembunyi
-        expect(find.text('Aksen Warna (RGB)'), findsNothing);
+        // Slider dan pilihan warna sendiri tersembunyi
+        expect(find.text('Atur Warna Sendiri'), findsNothing);
         expect(find.byType(Slider), findsNothing);
 
-        // Saat switch dimatikan, opsi aksen warna muncul
-        await tester.tap(materialYouTile);
+        // Saat switch dimatikan, opsi warna muncul
+        await tester.tap(wallpaperTile);
         await tester.pumpAndSettle();
 
-        expect(find.text('Aksen Warna (RGB)'), findsOneWidget);
+        expect(find.text('Atur Warna Sendiri'), findsOneWidget);
         expect(find.byType(Slider), findsNWidgets(3));
 
         controller.dispose();
@@ -169,15 +173,14 @@ void main() {
     );
 
     testWidgets(
-      'animasi Lerp (Linear Interpolation) ala Unity mentransisikan nilai slider dengan halus saat memilih preset',
+      'animasi Lerp mentransisikan nilai slider dengan halus saat memilih preset',
       (tester) async {
         final controller = ThemeController();
-        // Awal: Hijau PBB #2E7D32 -> R: 46, G: 125, B: 50
         await controller.setAccentColor(const Color(0xFF2E7D32));
 
         await tester.pumpWidget(
           MaterialApp(
-            home: SettingsScreen(
+            home: ThemeSettingsScreen(
               themeController: controller,
               isMaterialYouSupported: true,
             ),
@@ -185,7 +188,6 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        // Target: Biru Cianjur 0xFF1565C0 -> R: 21, G: 101, B: 192 (Preset index 1)
         final bluePresetFinder = find.byWidgetPredicate(
           (w) =>
               w is Container &&
@@ -194,20 +196,16 @@ void main() {
         );
         expect(bluePresetFinder, findsOneWidget);
 
-        // Tap preset biru
         await tester.tap(bluePresetFinder);
-        await tester.pump(); // dispatch tap event
-        await tester.pump(const Duration(milliseconds: 190)); // Maju 190ms (setengah durasi animasi 380ms)
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 190));
 
-        // Nilai R harus sedang bertransisi antara 46 dan 21
         final rSlider = tester.widget<Slider>(find.byType(Slider).first);
         expect(rSlider.value, lessThan(46));
         expect(rSlider.value, greaterThan(21));
 
-        // Tunggu animasi lerp selesai
         await tester.pumpAndSettle();
 
-        // Cek nilai akhir sudah mencapai target Biru Cianjur
         expect(controller.accentColor, const Color(0xFF1565C0));
         final finalRSlider = tester.widget<Slider>(find.byType(Slider).first);
         expect(finalRSlider.value.round(), 21);

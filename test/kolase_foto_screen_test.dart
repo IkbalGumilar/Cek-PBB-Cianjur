@@ -113,7 +113,7 @@ void main() {
       await tester.pump();
 
       expect(find.textContaining('Belum ada foto dokumentasi di Blok 001'), findsOneWidget);
-      expect(find.textContaining('Kolase hanya memuat foto dokumentasi resmi'), findsOneWidget);
+      expect(find.textContaining('Kolase memuat gambar dokumentasi petugas'), findsOneWidget);
       expect(find.text('Muat Ulang Foto'), findsOneWidget);
     });
 

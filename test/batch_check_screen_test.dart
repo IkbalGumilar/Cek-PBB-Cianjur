@@ -1,7 +1,6 @@
 import 'dart:typed_data';
 
 import 'package:cek_pbb_app/batch_check_screen.dart';
-import 'package:cek_pbb_app/captcha_ocr_helper.dart';
 import 'package:cek_pbb_app/check_mode.dart';
 import 'package:cek_pbb_app/pbb_client.dart';
 import 'package:cek_pbb_app/tax_record.dart';
@@ -51,13 +50,7 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
-  tearDown(() {
-    CaptchaOcrHelper.ocrRunnerForTesting = null;
-  });
-
-  testWidgets('menampilkan NOP, tahun, counter live, checkbox eksperimental, dan pre-fill OCR captcha otomatis', (tester) async {
-    CaptchaOcrHelper.ocrRunnerForTesting = (bytes) async => 'misled';
-
+  testWidgets('menampilkan NOP, tahun, counter live, dan input kode verifikasi manual tanpa fitur auto-complete', (tester) async {
     final records = [
       TaxRecord(nop: '320520000401701540'),
       TaxRecord(nop: '320520000401701550'),
@@ -75,7 +68,6 @@ void main() {
       ),
     );
 
-    // Tunggu fetch captcha & ocr selesai
     await tester.pumpAndSettle();
 
     // Verifikasi judul dan NOP
@@ -89,88 +81,16 @@ void main() {
     expect(find.text('Belum: 0'), findsOneWidget);
     expect(find.text('Sisa: 2'), findsOneWidget);
 
-    // Verifikasi checkbox auto-complete eksperimental
-    expect(find.text('Auto-complete CAPTCHA'), findsOneWidget);
-    expect(find.text('Eksperimental'), findsOneWidget);
-    final checkbox = tester.widget<Checkbox>(find.byType(Checkbox));
-    expect(checkbox.value, isTrue);
-
-    // Verifikasi badge OCR tebakan muncul dan TextField terisi otomatis
-    expect(find.text('Tebakan OCR: "misled"'), findsOneWidget);
-    final textField = tester.widget<TextField>(find.byType(TextField));
-    expect(textField.controller?.text, 'misled');
-
-    // Verifikasi seluruh teks terseleksi agar mudah diganti jika keliru
-    expect(textField.controller?.selection.baseOffset, 0);
-    expect(textField.controller?.selection.extentOffset, 6);
-  });
-
-  testWidgets('uncheck checkbox mematikan OCR dan menghapus tebakan eksperimental', (tester) async {
-    CaptchaOcrHelper.ocrRunnerForTesting = (bytes) async => 'misled';
-
-    final records = [
-      TaxRecord(nop: '320520000401701540'),
-    ];
-
-    await tester.pumpWidget(
-      MaterialApp(
-        home: BatchCheckScreen(
-          records: records,
-          tahun: '2024',
-          client: FakePbbClient(),
-        ),
-      ),
-    );
-
-    await tester.pumpAndSettle();
-
-    expect(find.text('Tebakan OCR: "misled"'), findsOneWidget);
-
-    // Uncheck checkbox
-    await tester.tap(find.text('Auto-complete CAPTCHA'));
-    await tester.pumpAndSettle();
-
-    final checkbox = tester.widget<Checkbox>(find.byType(Checkbox));
-    expect(checkbox.value, isFalse);
-    expect(find.text('Tebakan OCR: "misled"'), findsNothing);
-  });
-
-  testWidgets('initialAutoOcr false tidak menjalankan OCR sama sekali', (tester) async {
-    bool ocrCalled = false;
-    CaptchaOcrHelper.ocrRunnerForTesting = (bytes) async {
-      ocrCalled = true;
-      return 'misled';
-    };
-
-    final records = [
-      TaxRecord(nop: '320520000401701540'),
-    ];
-
-    await tester.pumpWidget(
-      MaterialApp(
-        home: BatchCheckScreen(
-          records: records,
-          tahun: '2024',
-          client: FakePbbClient(),
-          initialAutoOcr: false,
-        ),
-      ),
-    );
-
-    await tester.pumpAndSettle();
-
-    final checkbox = tester.widget<Checkbox>(find.byType(Checkbox));
-    expect(checkbox.value, isFalse);
-    expect(ocrCalled, isFalse);
-    expect(find.text('Tebakan OCR: "misled"'), findsNothing);
+    // Pastikan opsi auto-complete sudah dihapus
+    expect(find.text('Auto-complete CAPTCHA'), findsNothing);
+    expect(find.text('Eksperimental'), findsNothing);
+    expect(find.byType(Checkbox), findsNothing);
 
     final textField = tester.widget<TextField>(find.byType(TextField));
     expect(textField.controller?.text, isEmpty);
   });
 
   testWidgets('tombol clear icon menghapus teks captcha dan memfokuskan kembali', (tester) async {
-    CaptchaOcrHelper.ocrRunnerForTesting = (bytes) async => 'misled';
-
     final records = [
       TaxRecord(nop: '320520000401701540'),
     ];
@@ -185,6 +105,9 @@ void main() {
       ),
     );
 
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField), 'abcde');
     await tester.pumpAndSettle();
 
     expect(find.byTooltip('Hapus teks'), findsOneWidget);
@@ -198,8 +121,6 @@ void main() {
   });
 
   testWidgets('cek & lanjut memperbarui status, counter, dan berpindah ke NOP berikutnya', (tester) async {
-    CaptchaOcrHelper.ocrRunnerForTesting = (bytes) async => 'pugged';
-
     final records = [
       TaxRecord(nop: '320520000401701540'),
       TaxRecord(nop: '320520000401701550'),
@@ -223,7 +144,9 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    // Tekan Cek & Lanjut
+    // Ketik captcha manual lalu tekan Cek & Lanjut
+    await tester.enterText(find.byType(TextField), 'pugged');
+    await tester.pump();
     await tester.tap(find.text('Cek & Lanjut'));
     await tester.pumpAndSettle();
 
@@ -239,8 +162,6 @@ void main() {
   });
 
   testWidgets('tombol Lewati menandai status record dan memperbarui counter Lewat', (tester) async {
-    CaptchaOcrHelper.ocrRunnerForTesting = (bytes) async => 'duping';
-
     final records = [
       TaxRecord(nop: '320520000401701540'),
       TaxRecord(nop: '320520000401701550'),
@@ -258,15 +179,15 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    // Tap Lewati
+    // Tekan Lewati pada NOP pertama
     await tester.tap(find.text('Lewati'));
     await tester.pumpAndSettle();
 
-    // Harus sudah berpindah ke NOP kedua
+    // Berpindah ke NOP kedua
     expect(find.text('Cek Status Bayar (2/2)'), findsOneWidget);
     expect(records[0].status, 'Dilewati');
 
-    // Badge Lewat harus muncul
+    // Badge Lewat muncul
     expect(find.text('Lewat: 1'), findsOneWidget);
     expect(find.text('Sisa: 1'), findsOneWidget);
   });

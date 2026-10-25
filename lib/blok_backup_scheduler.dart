@@ -6,7 +6,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'app_storage.dart';
 import 'base_preferences_store.dart';
 import 'blok_data_store.dart';
-import 'backup_password_store.dart';
+import 'dkhp_package_helper.dart';
 import 'google_drive_backup_policy.dart';
 
 /// Pengelola & penjadwal cadangan data DHKP ala WhatsApp.
@@ -218,6 +218,21 @@ class BlokBackupScheduler extends BasePreferencesStore {
     return false;
   }
 
+  /// Mendapatkan ID folder Google Drive yang tersimpan (baik folder bersama maupun folder khusus).
+  Future<String?> getGoogleDriveFolderId() async {
+    return getString(_googleDriveFolderIdKey);
+  }
+
+  /// Menyimpan ID folder Google Drive (folder khusus atau folder bersama).
+  Future<void> setGoogleDriveFolderId(String folderId) async {
+    final trimmed = folderId.trim();
+    if (trimmed.isEmpty) {
+      await remove(_googleDriveFolderIdKey);
+    } else {
+      await setString(_googleDriveFolderIdKey, trimmed);
+    }
+  }
+
   /// Izinkan pencadangan melalui data seluler atau hanya Wi-Fi. Default: false (Wi-Fi saja).
   Future<bool> getOverCellular() async {
     return getBool(_overCellularKey, defaultValue: false);
@@ -296,7 +311,9 @@ class BlokBackupScheduler extends BasePreferencesStore {
     for (final entity in dir.listSync(followLinks: false)) {
       if (entity is File) {
         final lower = entity.path.toLowerCase();
-        if (lower.endsWith('.dkhp') || lower.endsWith('.bak')) {
+        if (lower.endsWith('.dkhp') ||
+            lower.endsWith('.dhkp') ||
+            lower.endsWith('.bak')) {
           list.add(entity);
         }
       }
@@ -331,7 +348,9 @@ class BlokBackupScheduler extends BasePreferencesStore {
     for (final entity in dir.listSync(followLinks: false)) {
       if (entity is File) {
         final lower = entity.path.toLowerCase();
-        if (lower.endsWith('.dkhp') || lower.endsWith('.bak')) {
+        if (lower.endsWith('.dkhp') ||
+            lower.endsWith('.dhkp') ||
+            lower.endsWith('.bak')) {
           files.add(entity);
         }
       }
@@ -368,13 +387,14 @@ class BlokBackupScheduler extends BasePreferencesStore {
     return files;
   }
 
-  /// Eksekusi pembuatan cadangan (baik manual maupun otomatis).
-  /// Menyimpan file .dkhp baru, mencatat metadata, merotasi maksimal 3 file,
-  /// dan mereset dirty status.
+  /// Eksekusi pembuatan cadangan perubahan (baik manual maupun otomatis).
+  /// Menyimpan file .dkhp baru yang memuat sidik jari berkas DHKP dasar (`dhkpFingerprint`)
+  /// beserta data perubahan & gambar dokumentasi, merotasi maksimal 3 file, dan mereset dirty status.
   Future<File?> performBackup({
     bool? onlyDkhpData,
     String? customPrefix,
     Future<String> Function(String fileName)? customExporter,
+    bool enforcePreviousDhkpMatch = false,
   }) async {
     final onlyData = onlyDkhpData ?? await getOnlyDkhpData();
     final now = DateTime.now();
@@ -389,9 +409,38 @@ class BlokBackupScheduler extends BasePreferencesStore {
     if (customExporter != null) {
       filePath = await customExporter(fileName);
     } else {
+      final currentRecords = await BlokDataStore.instance.loadAll();
+      if (currentRecords.isEmpty) {
+        throw const DhkpBackupValidationException(
+          'Tidak dapat membuat cadangan: Belum ada berkas DHKP yang dimuat di aplikasi.',
+        );
+      }
+
+      if (enforcePreviousDhkpMatch) {
+        final existingBackups = await getLocalBackups();
+        if (existingBackups.isNotEmpty) {
+          final prevManifest = await DhkpPackageHelper.readBackupManifest(
+            existingBackups.first.path,
+          );
+          final prevFp =
+              (prevManifest?['dhkpFingerprint'] as String?)?.trim() ?? '';
+          final currentFp = DhkpPackageHelper.computeDhkpFingerprint(
+            currentRecords,
+          );
+          if (prevFp.isNotEmpty &&
+              currentFp.isNotEmpty &&
+              prevFp != currentFp) {
+            throw const DhkpBackupValidationException(
+              'Tidak dapat membuat cadangan: Berkas DHKP saat ini berbeda dengan berkas DHKP pada cadangan sebelumnya.',
+            );
+          }
+        }
+      }
+
       filePath = await BlokDataStore.instance.exportDkhp(
         fileName: fileName,
         includePhotos: !onlyData,
+        deltaOnly: true,
       );
     }
 
@@ -413,13 +462,11 @@ class BlokBackupScheduler extends BasePreferencesStore {
 
   /// Pengecekan startup aplikasi: dijalankan otomatis saat aplikasi dibuka.
   /// Hanya melakukan ekspor jika jadwal terpenuhi dan ada perubahan data
-  /// (atau belum ada cadangan).
+  /// (atau belum ada cadangan) tanpa memerlukan kata sandi manual.
   Future<bool> runIfNeeded({
     DateTime? now,
     Future<String> Function(String fileName)? exportCsv,
   }) async {
-    if (!(await BackupPasswordStore.instance.hasPassword())) return false;
-
     final current = now ?? DateTime.now();
     final frequency = await getFrequencyDays();
     if (frequency <= 0) return false;

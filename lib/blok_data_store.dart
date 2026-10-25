@@ -350,12 +350,12 @@ class BlokDataStore {
     return sortBlokRecords(records, BlokSortBy.blokWilayah);
   }
 
-  /// Backup: tulis seluruh data dan foto ke berkas paket terenkripsi (.dkhp).
-  /// Format .bak lama telah dipensiunkan penuh dan digantikan oleh paket .dkhp.
-  /// Bila [includePhotos] bernilai false, hanya data DHKP yang dipaketkan (hemat memori).
+  /// Backup: tulis data perubahan dan gambar dokumentasi ke berkas paket terenkripsi (.dkhp)
+  /// beserta sidik jari berkas DHKP dasar (`dhkpFingerprint`).
   Future<String> exportDkhp({
     String? fileName,
     bool includePhotos = true,
+    bool deltaOnly = true,
   }) async {
     final records = await loadAll();
     final base =
@@ -365,7 +365,9 @@ class BlokDataStore {
     final file = await DhkpPackageHelper.packDkhp(
       outputPath: outputPath,
       records: records,
+      baseRecords: records,
       includePhotos: includePhotos,
+      deltaOnly: deltaOnly,
     );
     return file.path;
   }
@@ -408,12 +410,16 @@ class BlokDataStore {
   /// Restore: gabungkan (upsert) isi berkas backup (.dkhp atau arsip tabel) ke data
   /// lokal yang ada sekarang. Mendukung format paket .dkhp modern serta fallback
   /// berkas warisan jika diperlukan.
-  Future<int> importCsv(String path, {String? password}) async {
-    final lower = path.toLowerCase();
-    if (lower.endsWith('.dkhp') || lower.endsWith('.zip')) {
+  Future<int> importCsv(
+    String path, {
+    String? password,
+    bool requireBaseDhkp = false,
+  }) async {
+    if (DhkpPackageHelper.isDkhpArchivePath(path)) {
       final records = await DhkpPackageHelper.unpackDkhp(
         path,
         password: password,
+        requireBaseDhkp: requireBaseDhkp,
       );
       return records.length;
     }

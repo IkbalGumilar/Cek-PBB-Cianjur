@@ -283,3 +283,300 @@ class _LerpPressableState extends State<LerpPressable>
     );
   }
 }
+
+/// Banner indikator aktivitas (memuat data, menyimpan perubahan, mengekspor, sinkronisasi)
+/// dengan transisi masuk/keluar yang mulus (`AnimatedSize` + `AnimatedSwitcher`).
+class SmoothActivityBanner extends StatelessWidget {
+  final bool isActive;
+  final String message;
+  final String? subtitle;
+  final IconData icon;
+  final double? progress;
+  final Color? accentColor;
+  final EdgeInsetsGeometry margin;
+
+  const SmoothActivityBanner({
+    super.key,
+    required this.isActive,
+    required this.message,
+    this.subtitle,
+    this.icon = Icons.sync_rounded,
+    this.progress,
+    this.accentColor,
+    this.margin = const EdgeInsets.only(bottom: 10),
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final color = accentColor ?? scheme.primary;
+
+    return AnimatedSize(
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeOutCubic,
+      alignment: Alignment.topCenter,
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 240),
+        switchInCurve: Curves.easeOutCubic,
+        switchOutCurve: Curves.easeInCubic,
+        transitionBuilder: (child, animation) {
+          final offsetAnimation = Tween<Offset>(
+            begin: const Offset(0, -0.08),
+            end: Offset.zero,
+          ).animate(animation);
+          return FadeTransition(
+            opacity: animation,
+            child: SlideTransition(
+              position: offsetAnimation,
+              child: child,
+            ),
+          );
+        },
+        child: !isActive
+            ? const SizedBox.shrink(key: ValueKey('inactive-banner'))
+            : Container(
+                key: ValueKey('active-banner-$message'),
+                margin: margin,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: color.withValues(alpha: 0.3),
+                  ),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 10,
+                      ),
+                      child: Row(
+                        children: [
+                          Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              SizedBox(
+                                width: 26,
+                                height: 26,
+                                child: CircularProgressIndicator(
+                                  value: progress,
+                                  strokeWidth: 2.4,
+                                  color: color,
+                                  backgroundColor:
+                                      color.withValues(alpha: 0.18),
+                                ),
+                              ),
+                              Icon(icon, size: 13, color: color),
+                            ],
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  message,
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: scheme.onSurface,
+                                  ),
+                                ),
+                                if (subtitle != null &&
+                                    subtitle!.isNotEmpty) ...[
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    subtitle!,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: scheme.onSurfaceVariant,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                          if (progress != null)
+                            Padding(
+                              padding: const EdgeInsets.only(left: 8),
+                              child: Text(
+                                '${(progress!.clamp(0.0, 1.0) * 100).round()}%',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: color,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    LinearProgressIndicator(
+                      value: progress,
+                      minHeight: 3,
+                      color: color,
+                      backgroundColor: color.withValues(alpha: 0.12),
+                    ),
+                  ],
+                ),
+              ),
+      ),
+    );
+  }
+}
+
+/// Kartu pemuatan data penuh dengan transisi masuk yang halus (scale + fade).
+class SmoothLoadingCard extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final String badgeText;
+  final IconData icon;
+  final Color? accentColor;
+  final bool isDarkCanvas;
+
+  const SmoothLoadingCard({
+    super.key,
+    required this.title,
+    required this.subtitle,
+    this.badgeText = 'Memproses data...',
+    this.icon = Icons.sync_rounded,
+    this.accentColor,
+    this.isDarkCanvas = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final primary = accentColor ?? (isDarkCanvas ? Colors.tealAccent : colorScheme.primary);
+
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(begin: 0.94, end: 1.0),
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOutCubic,
+      builder: (context, scale, child) {
+        final opacity = ((scale - 0.94) / 0.06).clamp(0.0, 1.0);
+        return Opacity(
+          opacity: opacity,
+          child: Transform.scale(
+            scale: scale,
+            child: child,
+          ),
+        );
+      },
+      child: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 420),
+            child: Card(
+              elevation: 2,
+              color: isDarkCanvas ? const Color(0xFF282828) : null,
+              margin: EdgeInsets.zero,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: BorderSide(
+                  color: isDarkCanvas
+                      ? Colors.white12
+                      : colorScheme.outlineVariant.withValues(alpha: 0.5),
+                ),
+              ),
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        SizedBox(
+                          width: 68,
+                          height: 68,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 3.5,
+                            valueColor: AlwaysStoppedAnimation<Color>(primary),
+                            backgroundColor: primary.withValues(alpha: 0.15),
+                          ),
+                        ),
+                        Icon(
+                          icon,
+                          size: 30,
+                          color: primary,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 18),
+                    Text(
+                      title,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: isDarkCanvas ? Colors.white : null,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      subtitle,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: isDarkCanvas
+                            ? Colors.white70
+                            : (theme.textTheme.bodySmall?.color ??
+                                Colors.grey[600]),
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 14),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: primary.withValues(alpha: 0.14),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SizedBox(
+                            width: 12,
+                            height: 12,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: primary,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Flexible(
+                            child: Text(
+                              badgeText,
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: isDarkCanvas
+                                    ? Colors.white
+                                    : colorScheme.onSurface,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+

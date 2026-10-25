@@ -96,4 +96,23 @@ class NativeFileHelper {
       throw Exception('Gagal membagikan berkas: ${e.message ?? e.code}');
     }
   }
+
+  /// Bagikan [text] langsung lewat share sheet Android, atau salin ke Clipboard di Desktop.
+  static Future<void> shareText({
+    required String text,
+    String title = 'Bagikan Tautan',
+  }) async {
+    if (!Platform.isAndroid) {
+      await Clipboard.setData(ClipboardData(text: text));
+      return;
+    }
+    try {
+      await _channel.invokeMethod<void>('shareText', {
+        'text': text,
+        'title': title,
+      });
+    } on PlatformException catch (_) {
+      await Clipboard.setData(ClipboardData(text: text));
+    }
+  }
 }

@@ -22,16 +22,18 @@ class GoogleDriveBackupPolicy {
       'https://www.googleapis.com/auth/drive.appdata';
   static const String allowedScopeDriveFile =
       'https://www.googleapis.com/auth/drive.file';
+  static const String allowedScopeDriveReadonly =
+      'https://www.googleapis.com/auth/drive.readonly';
 
   static const List<String> allowedScopes = [
     allowedScopeAppData,
     allowedScopeDriveFile,
+    allowedScopeDriveReadonly,
   ];
 
-  /// Scope terlarang yang dilarang digunakan karena memberikan akses ke seluruh Google Drive pengguna.
+  /// Scope terlarang yang dilarang digunakan karena memberikan akses tulis penuh ke seluruh Google Drive pengguna.
   static const List<String> forbiddenScopes = [
     'https://www.googleapis.com/auth/drive',
-    'https://www.googleapis.com/auth/drive.readonly',
     'https://www.googleapis.com/auth/drive.metadata',
     'https://www.googleapis.com/auth/drive.metadata.readonly',
   ];
@@ -141,15 +143,14 @@ class GoogleDriveBackupPolicy {
   static const String privacyNoticeTitle = 'Keamanan & Privasi Terjamin';
 
   static const String privacyNoticeBody =
-      'Aplikasi hanya akan membuat dan mengakses folder khusus '
-      '("$dedicatedFolderName" atau folder AppData terisolasi). '
-      'Aplikasi dibatasi secara sistem dan dilarang mengakses dokumen, foto, '
-      'atau folder pribadi lainnya di Google Drive Anda.';
+      'Aplikasi hanya menggunakan folder khusus "$dedicatedFolderName" '
+      'untuk menyimpan cadangan. Dokumen dan foto pribadi Anda di Google Drive '
+      'tetap aman dan tidak bisa dibuka oleh aplikasi.';
 
   /// Pemberitahuan syarat izin Editor pada folder bersama.
   static const String editorRequirementNotice =
-      'Akun Google yang terhubung wajib memiliki hak akses Editor '
-      'di folder bersama ini agar aplikasi dapat membuat dan memperbarui berkas cadangan.';
+      'Pastikan akun Google Anda sudah diberi izin Edit pada folder bersama '
+      'ini agar cadangan bisa disimpan.';
 }
 
 /// Pengecualian keamanan saat terjadi pelanggaran izin atau akses folder.

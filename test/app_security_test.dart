@@ -403,7 +403,7 @@ void main() {
       expect(unlockedCalled, isTrue);
     });
 
-    testWidgets('SettingsScreen menampilkan section Keamanan Aplikasi dan komponen pengaturannya', (tester) async {
+    testWidgets('SettingsScreen menampilkan menu Keamanan Aplikasi dan membuka halaman pengaturannya', (tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -421,10 +421,13 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // Section Keamanan Aplikasi tampil
+      // Menu Keamanan Aplikasi tampil di SettingsScreen lalu diketuk
       final securityTile = find.text('Keamanan Aplikasi');
       await tester.ensureVisible(securityTile);
       expect(securityTile, findsOneWidget);
+      await tester.tap(securityTile);
+      await tester.pumpAndSettle();
+
       expect(find.text('Kunci Aplikasi (App Lock)'), findsOneWidget);
       expect(find.textContaining('Nonaktif • Aplikasi dapat langsung dibuka'), findsOneWidget);
 

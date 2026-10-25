@@ -31,4 +31,39 @@ void main() {
       isTrue,
     );
   });
+
+  test('isStableRelease hanya menerima rilis resmi dan menolak pre-release maupun draft', () {
+    expect(
+      UpdateChecker.isStableRelease({
+        'tag_name': 'v1.0.0',
+        'draft': false,
+        'prerelease': false,
+      }),
+      isTrue,
+    );
+    expect(
+      UpdateChecker.isStableRelease({
+        'tag_name': 'v0.1.0-alpha.8',
+        'draft': false,
+        'prerelease': true,
+      }),
+      isFalse,
+    );
+    expect(
+      UpdateChecker.isStableRelease({
+        'tag_name': 'v0.1.0-beta.1',
+        'draft': false,
+        'prerelease': false,
+      }),
+      isFalse,
+    );
+    expect(
+      UpdateChecker.isStableRelease({
+        'tag_name': 'v1.0.0',
+        'draft': true,
+        'prerelease': false,
+      }),
+      isFalse,
+    );
+  });
 }

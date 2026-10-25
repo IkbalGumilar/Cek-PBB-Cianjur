@@ -118,7 +118,7 @@ class _KendaraanViewState extends State<KendaraanView> {
     if (!Platform.isAndroid && !Platform.isIOS) {
       setState(
         () => _errorText =
-            'OCR plat offline tersedia di Android/iOS. Pada Windows/Linux, masukkan plat secara manual.',
+            'Scan foto plat tersedia di HP. Pada komputer, ketik nomor plat secara manual.',
       );
       return;
     }
@@ -176,13 +176,13 @@ class _KendaraanViewState extends State<KendaraanView> {
         // berwarna hitam maupun putih tetap masuk kategori ini.
         _color = '1';
         _plateOcrWarning =
-            'Hasil OCR: ${selected.formatted}. ${scan.colorMessage} Periksa kembali dengan foto sebelum menekan Lihat Info.';
+            'Plat terbaca: ${selected.formatted}. ${scan.colorMessage} Periksa kembali sebelum menekan Lihat Info.';
       });
     } catch (_) {
       if (mounted) {
         setState(
           () => _errorText =
-              'OCR offline tidak dapat memproses foto ini. Coba foto plat lebih dekat dan terang.',
+              'Gagal membaca foto plat. Coba foto plat lebih dekat dan terang.',
         );
       }
     } finally {
@@ -306,7 +306,7 @@ class _KendaraanViewState extends State<KendaraanView> {
                   label: Text(
                     _scanningPlate
                         ? 'Membaca plat...'
-                        : 'Scan Plat (OCR offline)',
+                        : 'Foto / Scan Plat Nomor',
                   ),
                 ),
               ),
@@ -337,7 +337,7 @@ class _KendaraanViewState extends State<KendaraanView> {
               ],
               const SizedBox(height: 16),
               Text(
-                'Pilih Warna TNKB',
+                'Pilih Warna Plat Nomor',
                 style: Theme.of(
                   context,
                 ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
@@ -441,12 +441,8 @@ class _PlateForm extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final inputStyle = Theme.of(context).textTheme.headlineSmall?.copyWith(
-      fontWeight: FontWeight.bold,
-      letterSpacing: 2,
-    );
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
       decoration: BoxDecoration(
         color: Colors.black,
         borderRadius: BorderRadius.circular(12),
@@ -454,10 +450,8 @@ class _PlateForm extends StatelessWidget {
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          // Three plate blocks still fit on a normal phone width; stack them
-          // only on very narrow desktop windows where each block would become
-          // unreadably small.
-          final compact = constraints.maxWidth < 300;
+          final fontSize = (constraints.maxWidth / 12.5).clamp(18.0, 28.0);
+          final letterSpacing = constraints.maxWidth < 320 ? 1.0 : 2.0;
           final fields = [
             _plateField(
               controller: frontController,
@@ -465,6 +459,8 @@ class _PlateForm extends StatelessWidget {
               nextFocus: numberFocus,
               hint: 'XX',
               maxLength: 2,
+              fontSize: fontSize,
+              letterSpacing: letterSpacing,
               keyboard: TextInputType.text,
               inputFormatters: [
                 FilteringTextInputFormatter.allow(RegExp('[A-Za-z]')),
@@ -478,6 +474,8 @@ class _PlateForm extends StatelessWidget {
               nextFocus: backFocus,
               hint: 'XXXX',
               maxLength: 4,
+              fontSize: fontSize,
+              letterSpacing: letterSpacing,
               keyboard: TextInputType.number,
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
               onChanged: onChanged,
@@ -488,6 +486,8 @@ class _PlateForm extends StatelessWidget {
               nextFocus: null,
               hint: 'XXX',
               maxLength: 3,
+              fontSize: fontSize,
+              letterSpacing: letterSpacing,
               keyboard: TextInputType.text,
               inputFormatters: [
                 FilteringTextInputFormatter.allow(RegExp('[A-Za-z]')),
@@ -496,24 +496,21 @@ class _PlateForm extends StatelessWidget {
               onChanged: onChanged,
             ),
           ];
-          return compact
-              ? Column(children: [for (final field in fields) field])
-              : Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    for (var i = 0; i < fields.length; i++) ...[
-                      if (i > 0)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 4),
-                          child: Text(
-                            ' ',
-                            style: inputStyle?.copyWith(color: Colors.white),
-                          ),
-                        ),
-                      Expanded(flex: [2, 4, 3][i], child: fields[i]),
-                    ],
-                  ],
-                );
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              for (var i = 0; i < fields.length; i++) ...[
+                if (i > 0)
+                  Container(
+                    width: 1,
+                    height: 28,
+                    margin: const EdgeInsets.symmetric(horizontal: 4),
+                    color: Colors.white24,
+                  ),
+                Expanded(flex: const [3, 5, 4][i], child: fields[i]),
+              ],
+            ],
+          );
         },
       ),
     );
@@ -525,10 +522,18 @@ class _PlateForm extends StatelessWidget {
     required FocusNode? nextFocus,
     required String hint,
     required int maxLength,
+    required double fontSize,
+    required double letterSpacing,
     required TextInputType keyboard,
     required List<TextInputFormatter> inputFormatters,
     VoidCallback? onChanged,
   }) {
+    final textStyle = TextStyle(
+      color: Colors.white,
+      fontSize: fontSize,
+      fontWeight: FontWeight.bold,
+      letterSpacing: letterSpacing,
+    );
     return TextField(
       controller: controller,
       focusNode: focusNode,
@@ -547,15 +552,12 @@ class _PlateForm extends StatelessWidget {
       inputFormatters: inputFormatters,
       onChanged: (_) => onChanged?.call(),
       textAlign: TextAlign.center,
-      style: const TextStyle(
-        color: Colors.white,
-        fontSize: 30,
-        fontWeight: FontWeight.bold,
-        letterSpacing: 2,
-      ),
+      style: textStyle,
       decoration: InputDecoration(
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 2, vertical: 8),
         hintText: hint,
-        hintStyle: const TextStyle(color: Colors.white54),
+        hintStyle: textStyle.copyWith(color: Colors.white54),
         counterText: '',
         border: InputBorder.none,
         filled: true,

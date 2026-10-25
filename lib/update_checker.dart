@@ -75,7 +75,7 @@ class UpdateChecker {
 
     final releases = (response.data ?? const [])
         .whereType<Map<String, dynamic>>()
-        .where((release) => release['draft'] != true)
+        .where(isStableRelease)
         .toList();
     if (releases.isEmpty) return null;
 
@@ -90,8 +90,7 @@ class UpdateChecker {
       }
     }
 
-    final tagName = data['tag_name'] as String? ?? '';
-    final latestVersion = tagName.replaceFirst(RegExp(r'^v'), '');
+    final latestVersion = _versionFromTag(data['tag_name']) ?? '';
     if (latestVersion.isEmpty ||
         !isNewerVersion(latestVersion, currentVersion)) {
       return null;
@@ -162,12 +161,18 @@ class UpdateChecker {
     return null;
   }
 
+  /// Memastikan rilis bukan draft dan bukan pre-release (alpha/beta/rc).
+  static bool isStableRelease(Map<String, dynamic> release) {
+    if (release['draft'] == true || release['prerelease'] == true) {
+      return false;
+    }
+    return _versionFromTag(release['tag_name']) != null;
+  }
+
   static String? _versionFromTag(Object? tag) {
     if (tag is! String) return null;
-    final version = tag.replaceFirst(RegExp(r'^v'), '');
-    return RegExp(r'^\d+\.\d+\.\d+(?:-(?:alpha|beta)(?:\.?\d+)?)?$').hasMatch(version)
-        ? version
-        : null;
+    final version = tag.trim().replaceFirst(RegExp(r'^v'), '');
+    return RegExp(r'^\d+\.\d+\.\d+$').hasMatch(version) ? version : null;
   }
 
   static bool isNewerVersion(String latest, String current) {

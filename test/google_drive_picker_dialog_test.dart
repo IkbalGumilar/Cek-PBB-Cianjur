@@ -168,6 +168,68 @@ void main() {
         await tempFile.delete();
       }
     });
+
+    test('ensureDedicatedFolder menemukan folder yang sudah ada dan menyimpan ID', () async {
+      GoogleDriveService.mockFolderFinder = (folderName, {parentFolderId}) async {
+        if (folderName == GoogleDriveBackupPolicy.dedicatedFolderName) {
+          return 'folder_existing_id';
+        }
+        return null;
+      };
+
+      final folderId = await GoogleDriveService.instance.ensureDedicatedFolder();
+      expect(folderId, 'folder_existing_id');
+      expect(await BlokBackupScheduler.instance.getGoogleDriveFolderId(), 'folder_existing_id');
+    });
+
+    test('ensureDedicatedFolder membuat folder baru jika folder belum ada', () async {
+      GoogleDriveService.mockFolderFinder = (folderName, {parentFolderId}) async {
+        return null; // Folder tidak ditemukan
+      };
+      GoogleDriveService.mockFolderCreator = (folderName, {parentFolderId}) async {
+        if (folderName == GoogleDriveBackupPolicy.dedicatedFolderName) {
+          return 'folder_new_created_id';
+        }
+        return null;
+      };
+
+      final folderId = await GoogleDriveService.instance.ensureDedicatedFolder();
+      expect(folderId, 'folder_new_created_id');
+      expect(await BlokBackupScheduler.instance.getGoogleDriveFolderId(), 'folder_new_created_id');
+    });
+
+    test('uploadFile menggunakan mockUploader dan parameter yang sesuai', () async {
+      final tempFile = File('${Directory.systemTemp.path}/test_upload.dkhp');
+      await tempFile.writeAsString('dkhp data');
+
+      String? uploadedFolderId;
+      String? uploadedFileName;
+
+      GoogleDriveService.mockUploader = ({
+        required file,
+        folderId,
+        customFileName,
+        mimeType = 'application/octet-stream',
+      }) async {
+        uploadedFolderId = folderId;
+        uploadedFileName = customFileName;
+        return 'uploaded_file_id_123';
+      };
+
+      final resId = await GoogleDriveService.instance.uploadFile(
+        file: tempFile,
+        folderId: 'custom_folder_xyz',
+        customFileName: 'cadangan_2026.dkhp',
+      );
+
+      expect(resId, 'uploaded_file_id_123');
+      expect(uploadedFolderId, 'custom_folder_xyz');
+      expect(uploadedFileName, 'cadangan_2026.dkhp');
+
+      if (await tempFile.exists()) {
+        await tempFile.delete();
+      }
+    });
   });
 
   group('GoogleDrivePickerDialog Widget Tests', () {

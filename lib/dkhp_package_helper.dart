@@ -38,9 +38,9 @@ class DhkpCrypto {
     Uint8List plainBytes, {
     required String password,
   }) async {
-    if (password.length < 12) {
+    if (password.length < 8) {
       throw const FormatException(
-        'Kata sandi backup harus terdiri dari minimal 12 karakter.',
+        'Kata sandi backup harus terdiri dari minimal 8 karakter.',
       );
     }
     final salt = Uint8List.fromList(
@@ -59,6 +59,19 @@ class DhkpCrypto {
       aad: header,
     );
     return Uint8List.fromList([...header, ...box.cipherText, ...box.mac.bytes]);
+  }
+
+  /// Enkripsi bawaan AES-256-CBC (`DKHP`) saat pengguna belum mengatur kata sandi kustom.
+  static Uint8List encryptLegacyBytes(Uint8List plainBytes) {
+    final digest = legacy_crypto.sha256.convert(utf8.encode(_legacySecret));
+    final key = enc.Key(Uint8List.fromList(digest.bytes));
+    final ivBytes = Uint8List.fromList(
+      List<int>.generate(16, (_) => Random.secure().nextInt(256)),
+    );
+    final iv = enc.IV(ivBytes);
+    final encrypter = enc.Encrypter(enc.AES(key, mode: enc.AESMode.cbc));
+    final encrypted = encrypter.encryptBytes(plainBytes, iv: iv);
+    return Uint8List.fromList([...magic, ...ivBytes, ...encrypted.bytes]);
   }
 
   static Future<Uint8List?> decryptBytes(
@@ -158,13 +171,95 @@ class DkhpPasswordException implements Exception {
   String toString() => message;
 }
 
-/// Pengelola berkas paket `.dkhp` — format arsip terenkripsi khusus aplikasi Cek PBB Cianjur.
+/// Dilempar ketika berkas cadangan perubahan tidak cocok dengan sidik jari DHKP dasar
+/// atau ketika berkas DHKP dasar belum dimuat di aplikasi.
+class DhkpBackupValidationException extends FormatException {
+  const DhkpBackupValidationException(super.message);
+}
+
+/// Pengelola berkas paket `.dkhp` / `.dhkp` — format arsip terenkripsi khusus aplikasi Cek PBB Cianjur.
 ///
-/// Paket `.dkhp` berisi:
-/// 1. `data.csv`: tabel data NOP, Nama WP, Status Bayar, Target Pemda, Catatan Petugas, dsb.
-/// 2. Folder `foto/`: foto lembaran SPPT / DHKP per NOP (misal `320520000402600340.jpg`).
+/// Paket cadangan `.dkhp` / `.dhkp` berisi:
+/// 1. `manifest.json`: sidik jari (SHA-256) dari berkas DHKP dasar (`dhkpFingerprint`) serta daftar perubahan blok & nomor NOP.
+/// 2. `data.csv`: baris data NOP yang mengalami perubahan (status bayar, catatan petugas, gambar dokumentasi).
+/// 3. Folder `foto/`: gambar dokumentasi petugas per NOP (misal `320520000402600340.jpg`).
 class DhkpPackageHelper {
   static const extensionName = 'dkhp';
+  static const altExtensionName = 'dhkp';
+
+  /// Memeriksa apakah nama/path berkas merupakan paket DHKP (`.dkhp`, `.dhkp`, atau `.zip`).
+  static bool isDkhpArchivePath(String path) {
+    final lower = path.trim().toLowerCase();
+    return lower.endsWith('.dkhp') ||
+        lower.endsWith('.dhkp') ||
+        lower.endsWith('.zip');
+  }
+
+  /// Menghitung sidik jari (SHA-256 fingerprint) langsung dari daftar NOP di dalam berkas DHKP.
+  /// Murni dihitung dari isi berkas DHKP (bukan ID perangkat/HP), sehingga tetap cocok 100%
+  /// saat berpindah HP selama berkas DHKP dasarnya sama, dan otomatis menolak jika berkas DHKP berbeda.
+  static String computeDhkpFingerprint(Iterable<BlokRecord> records) {
+    final sortedNops = records
+        .map((r) => r.nop.replaceAll(RegExp(r'[^0-9]'), ''))
+        .where((n) => n.length == 18)
+        .toSet()
+        .toList()
+      ..sort();
+    if (sortedNops.isEmpty) return '';
+    return legacy_crypto.sha256
+        .convert(utf8.encode(sortedNops.join('\n')))
+        .toString();
+  }
+
+  /// Memeriksa apakah satu baris DHKP memiliki perubahan dari petugas
+  /// (status bayar lunas, tanggal bayar, catatan, gambar dokumentasi, target pemda, atau blacklist).
+  static bool isChangedRecord(BlokRecord r) {
+    return r.isPaid ||
+        r.catatan.trim().isNotEmpty ||
+        r.hasPhoto ||
+        r.isTargetPemda ||
+        r.isBlacklist;
+  }
+
+  /// Mengambil daftar baris DHKP yang mengalami perubahan saja.
+  static List<BlokRecord> extractChangedRecords(Iterable<BlokRecord> records) {
+    return records.where(isChangedRecord).toList();
+  }
+
+  /// Membaca metadata `manifest.json` dari berkas `.dkhp` (termasuk `dhkpFingerprint`) jika ada.
+  static Future<Map<String, dynamic>?> readBackupManifest(
+    String filePath, {
+    String? password,
+  }) async {
+    final file = File(filePath);
+    if (!await file.exists()) return null;
+    try {
+      final rawBytes = await file.readAsBytes();
+      Uint8List zipBytes;
+      if (DhkpCrypto.isEncrypted(rawBytes)) {
+        final effectivePass =
+            password ?? await BackupPasswordStore.instance.read();
+        final decrypted = await DhkpCrypto.decryptBytes(
+          rawBytes,
+          password: effectivePass,
+        );
+        if (decrypted == null) return null;
+        zipBytes = decrypted;
+      } else {
+        zipBytes = rawBytes;
+      }
+      final archive = ZipDecoder().decodeBytes(zipBytes);
+      for (final entry in archive.files) {
+        if (!entry.isFile) continue;
+        if (entry.name.toLowerCase().endsWith('manifest.json')) {
+          final text = utf8.decode(entry.content as List<int>);
+          final decoded = jsonDecode(text);
+          if (decoded is Map<String, dynamic>) return decoded;
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
 
   static Set<String>? _cachedPhotoNames;
 
@@ -263,9 +358,14 @@ class DhkpPackageHelper {
 
   /// Buka dan ekstrak berkas `.dkhp` (terenkripsi maupun tidak) atau `.zip`, lalu simpan datanya ke
   /// [BlokDataStore] dan foto-fotonya ke folder lokal aplikasi.
+  ///
+  /// Bila berkas merupakan cadangan perubahan (`manifest.json` dengan `isDeltaOnly == true` atau
+  /// [requireBaseDhkp] bernilai `true`), aplikasi memvalidasi bahwa sidik jari DHKP (`dhkpFingerprint`)
+  /// cocok dengan data DHKP yang sudah ada di aplikasi.
   static Future<List<BlokRecord>> unpackDkhp(
     String filePath, {
     String? password,
+    bool requireBaseDhkp = false,
   }) async {
     final file = File(filePath);
     if (!await file.exists()) {
@@ -276,9 +376,11 @@ class DhkpPackageHelper {
     Uint8List zipBytes;
 
     if (DhkpCrypto.isEncrypted(rawBytes)) {
+      final effectivePassword =
+          password ?? await BackupPasswordStore.instance.read();
       final decrypted = await DhkpCrypto.decryptBytes(
         rawBytes,
-        password: password,
+        password: effectivePassword,
       );
       if (decrypted == null) {
         throw const FormatException(
@@ -305,13 +407,16 @@ class DhkpPackageHelper {
     final archive = ZipDecoder().decodeBytes(zipBytes);
     final photosDir = await photosDirectory();
 
+    ArchiveFile? manifestFile;
     ArchiveFile? dataFile;
     final photoFiles = <ArchiveFile>[];
 
     for (final entry in archive.files) {
       if (!entry.isFile) continue;
       final nameLower = entry.name.toLowerCase();
-      if (nameLower.endsWith('.csv') || nameLower.endsWith('.json')) {
+      if (nameLower.endsWith('manifest.json')) {
+        manifestFile = entry;
+      } else if (nameLower.endsWith('.csv') || nameLower.endsWith('.json')) {
         dataFile = entry;
       } else if (nameLower.endsWith('.jpg') ||
           nameLower.endsWith('.jpeg') ||
@@ -321,11 +426,15 @@ class DhkpPackageHelper {
       }
     }
 
-    // Ekstrak semua foto ke folder lokal
-    for (final p in photoFiles) {
-      final baseName = p.name.split('/').last;
-      final targetFile = File('${photosDir.path}/$baseName');
-      await targetFile.writeAsBytes(p.content as List<int>);
+    Map<String, dynamic>? manifest;
+    if (manifestFile != null) {
+      try {
+        final manifestContent = utf8.decode(manifestFile.content as List<int>);
+        final decoded = jsonDecode(manifestContent);
+        if (decoded is Map<String, dynamic>) {
+          manifest = decoded;
+        }
+      } catch (_) {}
     }
 
     final records = <BlokRecord>[];
@@ -408,6 +517,126 @@ class DhkpPackageHelper {
       }
     }
 
+    // Validasi kecocokan berkas DHKP dasar sebelum mengekstrak foto & menerapkan perubahan
+    final existingRecords = await BlokDataStore.instance.loadAll();
+    final isDeltaArchive =
+        manifest != null && (manifest['isDeltaOnly'] == true);
+
+    if (requireBaseDhkp || isDeltaArchive) {
+      if (requireBaseDhkp && existingRecords.isEmpty) {
+        throw const DhkpBackupValidationException(
+          'Berkas DHKP dasar belum dimuat. Muat berkas DHKP terlebih dahulu sebelum menggunakan berkas cadangan perubahan.',
+        );
+      }
+
+      if (existingRecords.isNotEmpty && manifest != null) {
+        final backupFingerprint =
+            (manifest['dhkpFingerprint'] as String?)?.trim() ?? '';
+        final localFingerprint = computeDhkpFingerprint(existingRecords);
+        if (backupFingerprint.isNotEmpty &&
+            localFingerprint.isNotEmpty &&
+            localFingerprint != backupFingerprint) {
+          throw const DhkpBackupValidationException(
+            'Berkas cadangan ditolak: Data perubahan ini berasal dari berkas DHKP yang berbeda dengan data DHKP di aplikasi.',
+          );
+        }
+      }
+    }
+
+    final existingByNop = <String, BlokRecord>{
+      for (final r in existingRecords)
+        r.nop.replaceAll(RegExp(r'[^0-9]'), ''): r,
+    };
+    final existingByBlokNomor = <String, BlokRecord>{
+      for (final r in existingRecords)
+        '${r.blok.replaceAll(RegExp(r'[^0-9]'), '').padLeft(3, '0')}_${r.wilayah.replaceAll(RegExp(r'[^0-9]'), '').padLeft(4, '0')}':
+            r,
+    };
+
+    // Kalau di dalam arsip tidak ada data.csv tapi ada manifest changes (hanya blok & nomor)
+    if (records.isEmpty && manifest != null && manifest['changes'] is List) {
+      final changesList = manifest['changes'] as List;
+      for (final item in changesList) {
+        if (item is! Map) continue;
+        final rawBlok = (item['blok'] ?? '')
+            .toString()
+            .trim()
+            .replaceAll(RegExp(r'[^0-9]'), '');
+        final rawNomor = (item['nomor'] ?? '')
+            .toString()
+            .trim()
+            .replaceAll(RegExp(r'[^0-9]'), '');
+        final rawNop = (item['nop'] ?? '')
+            .toString()
+            .trim()
+            .replaceAll(RegExp(r'[^0-9]'), '');
+
+        BlokRecord? baseRecord;
+        if (rawBlok.isNotEmpty && rawNomor.isNotEmpty) {
+          final key = '${rawBlok.padLeft(3, '0')}_${rawNomor.padLeft(4, '0')}';
+          baseRecord = existingByBlokNomor[key];
+        }
+        if (baseRecord == null && rawNop.length == 18) {
+          baseRecord = existingByNop[rawNop];
+        }
+
+        if (baseRecord != null) {
+          records.add(
+            baseRecord.copyWith(
+              tahunBayar: (item['tahunBayar'] ?? baseRecord.tahunBayar)
+                  .toString(),
+              tanggalBayar: (item['tanggalBayar'] ?? baseRecord.tanggalBayar)
+                  .toString(),
+              statusBayar: (item['statusBayar'] ?? baseRecord.statusBayar)
+                  .toString(),
+              namaFoto: item['namaFoto']?.toString() ?? baseRecord.namaFoto,
+              isTargetPemda: item['isTargetPemda'] is bool
+                  ? item['isTargetPemda'] as bool
+                  : baseRecord.isTargetPemda,
+              catatan: (item['catatan'] ?? baseRecord.catatan).toString(),
+            ),
+          );
+          continue;
+        }
+
+        // Fallback apabila berkas DHKP dasar memiliki prefix desa atau kompatibilitas mundur
+        String resolvedNop = rawNop;
+        if (resolvedNop.length != 18 &&
+            rawBlok.isNotEmpty &&
+            rawNomor.isNotEmpty &&
+            existingRecords.isNotEmpty) {
+          final sampleNop = existingRecords.first.nop.replaceAll(
+            RegExp(r'[^0-9]'),
+            '',
+          );
+          if (sampleNop.length == 18) {
+            final prefix = sampleNop.substring(0, 10);
+            final suffix = sampleNop.substring(17);
+            resolvedNop =
+                '$prefix${rawBlok.padLeft(3, '0')}${rawNomor.padLeft(4, '0')}$suffix';
+          }
+        }
+        if (resolvedNop.length != 18) continue;
+
+        records.add(
+          BlokRecord(
+            namaWajibPajak:
+                (item['namaWajibPajak'] ??
+                        'WP ${nopBlok(resolvedNop)}/${nopWilayah(resolvedNop)}')
+                    .toString(),
+            nop: resolvedNop,
+            tahunBayar: (item['tahunBayar'] ?? currentYear).toString(),
+            tanggalBayar: (item['tanggalBayar'] ?? '').toString(),
+            jumlahPbb: (item['jumlahPbb'] ?? '').toString(),
+            statusBayar: (item['statusBayar'] ?? 'Belum Bayar').toString(),
+            namaFoto: item['namaFoto']?.toString(),
+            isTargetPemda: item['isTargetPemda'] == true,
+            catatan: (item['catatan'] ?? '').toString(),
+          ),
+        );
+      }
+    }
+
     // Kalau di dalam arsip tidak ada data.csv tapi ada kumpulan foto dengan nama NOP
     if (records.isEmpty && photoFiles.isNotEmpty) {
       for (final p in photoFiles) {
@@ -430,78 +659,151 @@ class DhkpPackageHelper {
       }
     }
 
-    if (records.isNotEmpty) {
-      await BlokDataStore.instance.upsertAll(records);
+    // Ekstrak semua foto dokumentasi ke folder lokal setelah validasi lulus
+    for (final p in photoFiles) {
+      final baseName = p.name.split('/').last;
+      final targetFile = File('${photosDir.path}/$baseName');
+      await targetFile.writeAsBytes(p.content as List<int>);
+    }
+    invalidatePhotoCache();
+
+    // Gabungkan data perubahan ke data DHKP dasar bila data dasar sudah ada
+    final mergedRecords = <BlokRecord>[];
+    for (final r in records) {
+      final cleanNop = r.nop.replaceAll(RegExp(r'[^0-9]'), '');
+      final base = existingByNop[cleanNop];
+      if (base != null && isDeltaArchive) {
+        mergedRecords.add(
+          base.copyWith(
+            statusBayar: r.statusBayar,
+            tanggalBayar: r.tanggalBayar,
+            catatan: r.catatan,
+            namaFoto: r.namaFoto ?? base.namaFoto,
+            isTargetPemda: r.isTargetPemda,
+          ),
+        );
+      } else {
+        mergedRecords.add(r);
+      }
     }
 
-    return records;
+    if (mergedRecords.isNotEmpty) {
+      await BlokDataStore.instance.upsertAll(mergedRecords);
+    }
+
+    return mergedRecords;
   }
 
-  /// Membungkus daftar record dan file foto menjadi paket terenkripsi `.dkhp`.
-  /// Bila [includePhotos] bernilai false, hanya tabel data yang dipaketkan (hemat memori).
+  /// Membungkus data perubahan DHKP dan gambar dokumentasi menjadi paket terenkripsi `.dkhp`.
+  ///
+  /// Secara bawaan menggunakan enkripsi sederhana otomatis (`DhkpCrypto.encryptLegacyBytes`)
+  /// tanpa memerlukan kata sandi manual, serta menyematkan sidik jari berkas DHKP dasar
+  /// (`dhkpFingerprint`) di dalam `manifest.json`.
   static Future<File> packDkhp({
     required String outputPath,
     required List<BlokRecord> records,
+    List<BlokRecord>? baseRecords,
     Directory? photosDir,
     bool encrypt = true,
     bool includePhotos = true,
+    bool deltaOnly = false,
     String? password,
   }) async {
     final archive = Archive();
+    final effectiveBase = baseRecords ?? records;
+    final dhkpFingerprint = computeDhkpFingerprint(effectiveBase);
+    final changedList = extractChangedRecords(records);
+    final targetRecords = (deltaOnly && changedList.isNotEmpty)
+        ? changedList
+        : records;
 
-    // 1. Buat data.csv
-    final csvRows = <List<String>>[
-      [
-        'Nama WP',
-        'NOP',
-        'Tahun Bayar',
-        'Tanggal Bayar',
-        'Jumlah PBB',
-        'Status Bayar',
-        'Foto',
-        'Target Pemda',
-        'Catatan',
-        'Luas Bumi',
-        'Luas Bangunan',
-        'NJOP Bumi',
-        'NJOP Bangunan',
-        'Kecamatan',
-        'Kelurahan',
-        'Alamat Objek',
-        'Alamat WP',
-        'RT Objek',
-      ],
-      for (final r in records)
-        [
-          r.namaWajibPajak,
-          r.nop,
-          r.tahunBayar,
-          r.tanggalBayar,
-          r.jumlahPbb,
-          r.statusBayar,
-          r.namaFoto ?? '',
-          r.isTargetPemda ? '1' : '0',
-          r.catatan,
-          r.luasBumi,
-          r.luasBangunan,
-          r.njopBumi,
-          r.njopBangunan,
-          r.kecamatan,
-          r.kelurahan,
-          r.alamatObjek,
-          r.alamatWp,
-          r.rtObjek,
+    // 1. Buat manifest.json dengan sidik jari berkas DHKP dasar dan daftar perubahan (Hanya Blok & Nomor, tanpa NOP 18 digit)
+    if (effectiveBase.isNotEmpty) {
+      final manifestMap = <String, dynamic>{
+        'format': 'dhkp_delta_v1',
+        'isDeltaOnly': deltaOnly,
+        'dhkpFingerprint': dhkpFingerprint,
+        'baseTotalNop': effectiveBase.length,
+        'changedCount': changedList.length,
+        'timestamp': DateTime.now().millisecondsSinceEpoch,
+        'changes': [
+          for (final r in targetRecords)
+            {
+              'blok': r.blok,
+              'nomor': r.wilayah,
+              'tahunBayar': r.tahunBayar,
+              'statusBayar': r.statusBayar,
+              'tanggalBayar': r.tanggalBayar,
+              'catatan': r.catatan,
+              if (r.namaFoto != null && r.namaFoto!.isNotEmpty)
+                'namaFoto': r.namaFoto,
+              'isTargetPemda': r.isTargetPemda,
+            },
         ],
-    ];
-    final csvString = Csv().encode(csvRows);
-    final csvBytes = utf8.encode(csvString);
-    archive.addFile(ArchiveFile('data.csv', csvBytes.length, csvBytes));
+      };
+      final manifestBytes = utf8.encode(jsonEncode(manifestMap));
+      archive.addFile(
+        ArchiveFile('manifest.json', manifestBytes.length, manifestBytes),
+      );
+    }
 
-    // 2. Tambahkan foto jika diminta dan ada
+    // 2. Buat data.csv HANYA jika bukan deltaOnly (paket DHKP utuh).
+    // Saat deltaOnly == true, berkas cadangan tidak menyimpan Nama WP, Alamat, Luas, NJOP, atau Pokok PBB
+    // sama sekali untuk mencegah kebocoran data pribadi jika berkas cadangan bocor.
+    if (!deltaOnly) {
+      final csvRows = <List<String>>[
+        [
+          'Nama WP',
+          'NOP',
+          'Tahun Bayar',
+          'Tanggal Bayar',
+          'Jumlah PBB',
+          'Status Bayar',
+          'Foto',
+          'Target Pemda',
+          'Catatan',
+          'Luas Bumi',
+          'Luas Bangunan',
+          'NJOP Bumi',
+          'NJOP Bangunan',
+          'Kecamatan',
+          'Kelurahan',
+          'Alamat Objek',
+          'Alamat WP',
+          'RT Objek',
+        ],
+        for (final r in targetRecords)
+          [
+            r.namaWajibPajak,
+            r.nop,
+            r.tahunBayar,
+            r.tanggalBayar,
+            r.jumlahPbb,
+            r.statusBayar,
+            r.namaFoto ?? '',
+            r.isTargetPemda ? '1' : '0',
+            r.catatan,
+            r.luasBumi,
+            r.luasBangunan,
+            r.njopBumi,
+            r.njopBangunan,
+            r.kecamatan,
+            r.kelurahan,
+            r.alamatObjek,
+            r.alamatWp,
+            r.rtObjek,
+          ],
+      ];
+      final csvString = Csv().encode(csvRows);
+      final csvBytes = utf8.encode(csvString);
+      archive.addFile(ArchiveFile('data.csv', csvBytes.length, csvBytes));
+    }
+
+    // 3. Tambahkan gambar dokumentasi jika diminta dan ada
     if (includePhotos) {
       final sourcePhotosDir = photosDir ?? await photosDirectory();
       if (await sourcePhotosDir.exists()) {
-        for (final r in records) {
+        for (final r in targetRecords) {
           final photoName = r.namaFoto;
           if (photoName != null && photoName.isNotEmpty) {
             final photoFile = File('${sourcePhotosDir.path}/$photoName');
@@ -521,19 +823,20 @@ class DhkpPackageHelper {
       throw Exception('Gagal mengompresi data ke arsip ZIP.');
     }
 
-    final effectivePassword =
-        password ?? await BackupPasswordStore.instance.read();
-    if (encrypt && (effectivePassword == null || effectivePassword.isEmpty)) {
-      throw const DkhpPasswordException(
-        'Atur kata sandi backup sebelum membuat berkas .dkhp terenkripsi.',
+    final explicitPassword = password?.trim();
+    final Uint8List outputBytes;
+    if (!encrypt) {
+      outputBytes = Uint8List.fromList(zipBytes);
+    } else if (explicitPassword != null && explicitPassword.length >= 8) {
+      outputBytes = await DhkpCrypto.encryptBytes(
+        Uint8List.fromList(zipBytes),
+        password: explicitPassword,
+      );
+    } else {
+      outputBytes = DhkpCrypto.encryptLegacyBytes(
+        Uint8List.fromList(zipBytes),
       );
     }
-    final outputBytes = encrypt
-        ? await DhkpCrypto.encryptBytes(
-            Uint8List.fromList(zipBytes),
-            password: effectivePassword!,
-          )
-        : Uint8List.fromList(zipBytes);
 
     final file = File(outputPath);
     file.writeAsBytesSync(outputBytes);

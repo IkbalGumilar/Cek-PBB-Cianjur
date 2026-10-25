@@ -209,7 +209,7 @@ class DesilViewState extends State<DesilView> {
       if (mounted) {
         setState(
           () => _errorText =
-              'OCR offline tidak dapat memproses gambar ini. Coba foto lebih dekat dan terang.',
+              'Gagal membaca gambar. Coba foto KTP atau KK lebih dekat dan terang.',
         );
       }
     } finally {
@@ -376,7 +376,7 @@ class DesilViewState extends State<DesilView> {
                   : IconButton.filledTonal(
                       onPressed: _scanAndFillNik,
                       icon: const Icon(Icons.document_scanner_outlined),
-                      tooltip: 'Scan NIK dari KTP atau KK (offline)',
+                      tooltip: 'Scan NIK dari KTP atau KK',
                     ),
             ],
           ),
@@ -397,7 +397,7 @@ class DesilViewState extends State<DesilView> {
                     SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'NIK diperoleh dari OCR. Periksa kembali setiap angka dengan KTP atau KK sebelum mencari data.',
+                        'NIK terisi dari foto dokumen. Pastikan angkanya sudah sesuai dengan KTP atau KK.',
                         style: TextStyle(color: Color(0xFF5F4800)),
                       ),
                     ),

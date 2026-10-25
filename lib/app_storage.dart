@@ -128,6 +128,7 @@ class AppStorage {
         dir = await getDataDirectory();
       }
     }
+    _ensurePrivacyMarkers(dir);
     _cachedMediaDir = dir;
     return dir;
   }
@@ -175,8 +176,8 @@ class AppStorage {
   static Future<Directory> getPhotosDirectory() async {
     final mediaDir = await getMediaDirectory();
     final photosDir = Directory('${mediaDir.path}/photos');
-    if (!await photosDir.exists()) {
-      await photosDir.create(recursive: true);
+    if (!photosDir.existsSync()) {
+      photosDir.createSync(recursive: true);
     }
 
     // Migrasi foto-foto dari folder lama jika ada (hanya di lingkungan produksi)
@@ -184,33 +185,34 @@ class AppStorage {
       try {
         final oldDirs = <Directory>[];
         final oldDocsDir = await getApplicationDocumentsDirectory();
-      oldDirs.add(Directory('${oldDocsDir.path}/dhkp_photos'));
+        oldDirs.add(Directory('${oldDocsDir.path}/dhkp_photos'));
 
-      if (Platform.isLinux) {
-        final home = Platform.environment['HOME'] ?? '';
-        oldDirs.add(Directory('$home/.local/share/pbb.cianjur/photos'));
-      } else if (Platform.isWindows) {
-        final localAppData = Platform.environment['LOCALAPPDATA'] ?? '';
-        oldDirs.add(Directory('$localAppData\\pbb.cianjur\\photos'));
-      } else if (Platform.isAndroid) {
-        oldDirs.add(Directory('/storage/emulated/0/Android/media/pbb.cianjur/photos'));
-      }
+        if (Platform.isLinux) {
+          final home = Platform.environment['HOME'] ?? '';
+          oldDirs.add(Directory('$home/.local/share/pbb.cianjur/photos'));
+        } else if (Platform.isWindows) {
+          final localAppData = Platform.environment['LOCALAPPDATA'] ?? '';
+          oldDirs.add(Directory('$localAppData\\pbb.cianjur\\photos'));
+        } else if (Platform.isAndroid) {
+          oldDirs.add(Directory('/storage/emulated/0/Android/media/pbb.cianjur/photos'));
+        }
 
-      for (final oldPhotosDir in oldDirs) {
-        if (await oldPhotosDir.exists()) {
-          final oldFiles = oldPhotosDir.listSync().whereType<File>();
-          for (final file in oldFiles) {
-            final fileName = file.uri.pathSegments.last;
-            final newFile = File('${photosDir.path}/$fileName');
-            if (!await newFile.exists()) {
-              await file.copy(newFile.path);
+        for (final oldPhotosDir in oldDirs) {
+          if (await oldPhotosDir.exists()) {
+            final oldFiles = oldPhotosDir.listSync().whereType<File>();
+            for (final file in oldFiles) {
+              final fileName = file.uri.pathSegments.last;
+              final newFile = File('${photosDir.path}/$fileName');
+              if (!await newFile.exists()) {
+                await file.copy(newFile.path);
+              }
             }
           }
         }
-      }
-    } catch (_) {}
-  }
+      } catch (_) {}
+    }
 
+    _ensurePrivacyMarkers(photosDir);
     return photosDir;
   }
 
@@ -218,9 +220,10 @@ class AppStorage {
   static Future<Directory> getDocumentsDirectory() async {
     final mediaDir = await getMediaDirectory();
     final docDir = Directory('${mediaDir.path}/documents');
-    if (!await docDir.exists()) {
-      await docDir.create(recursive: true);
+    if (!docDir.existsSync()) {
+      docDir.createSync(recursive: true);
     }
+    _ensurePrivacyMarkers(docDir);
     return docDir;
   }
 
@@ -228,9 +231,10 @@ class AppStorage {
   static Future<Directory> getBackupsDirectory() async {
     final mediaDir = await getMediaDirectory();
     final backupDir = Directory('${mediaDir.path}/backups');
-    if (!await backupDir.exists()) {
-      await backupDir.create(recursive: true);
+    if (!backupDir.existsSync()) {
+      backupDir.createSync(recursive: true);
     }
+    _ensurePrivacyMarkers(backupDir);
     return backupDir;
   }
 
@@ -238,9 +242,27 @@ class AppStorage {
   static Future<Directory> getCookiesDirectory() async {
     final dataDir = await getDataDirectory();
     final cookiesDir = Directory('${dataDir.path}/cookies');
-    if (!await cookiesDir.exists()) {
-      await cookiesDir.create(recursive: true);
+    if (!cookiesDir.existsSync()) {
+      cookiesDir.createSync(recursive: true);
     }
     return cookiesDir;
+  }
+
+  /// Memastikan berkas proteksi `.nomedia` dan `.nosearch` ada di direktori tersebut.
+  /// Mencegah foto/dokumen muncul di Galeri HP, Google Photos, atau indeks pencarian global Android.
+  static void _ensurePrivacyMarkers(Directory dir) {
+    try {
+      if (!dir.existsSync()) {
+        dir.createSync(recursive: true);
+      }
+      final noMedia = File('${dir.path}/.nomedia');
+      if (!noMedia.existsSync()) {
+        noMedia.createSync();
+      }
+      final noSearch = File('${dir.path}/.nosearch');
+      if (!noSearch.existsSync()) {
+        noSearch.createSync();
+      }
+    } catch (_) {}
   }
 }

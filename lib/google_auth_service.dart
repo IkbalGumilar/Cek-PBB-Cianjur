@@ -47,6 +47,7 @@ class GoogleAuthService {
     'email',
     'profile',
     GoogleDriveBackupPolicy.allowedScopeDriveFile,
+    GoogleDriveBackupPolicy.allowedScopeDriveReadonly,
   ];
 
   GoogleSignIn _googleSignIn = GoogleSignIn(
@@ -425,14 +426,56 @@ class GoogleAuthService {
   }
 
   /// Mendapatkan HTTP headers otentikasi (Bearer token) untuk sinkronisasi Google Drive.
-  Future<Map<String, String>?> getAuthHeaders() async {
+  Future<Map<String, String>?> getAuthHeaders({
+    bool interactiveIfNeeded = false,
+  }) async {
     if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
-      final token = await BlokBackupScheduler.instance.getGoogleDesktopAccessToken();
+      final token =
+          await BlokBackupScheduler.instance.getGoogleDesktopAccessToken();
       if (token.isEmpty) return null;
       return {'Authorization': 'Bearer $token'};
     }
-    final account = _googleSignIn.currentUser ?? await _googleSignIn.signInSilently();
+    var account =
+        _googleSignIn.currentUser ?? await _googleSignIn.signInSilently();
+    if (account == null) {
+      // Fallback ke sesi dengan scope drive.file jika pengguna sebelumnya login sebelum scope drive.readonly ditambahkan
+      try {
+        final fallbackSignIn = GoogleSignIn(
+          scopes: const [
+            'email',
+            'profile',
+            GoogleDriveBackupPolicy.allowedScopeDriveFile,
+          ],
+        );
+        account = await fallbackSignIn.signInSilently();
+      } catch (_) {}
+    }
+    if (account == null && interactiveIfNeeded) {
+      final savedEmail = await BlokBackupScheduler.instance.getGoogleAccount();
+      if (savedEmail.isNotEmpty) {
+        AppSecurityService.instance.setTemporaryLockBypass(true);
+        try {
+          account = await _googleSignIn.signIn();
+        } catch (_) {
+        } finally {
+          AppSecurityService.instance.setTemporaryLockBypass(false);
+        }
+      }
+    }
     if (account == null) return null;
-    return account.authHeaders;
+    if (interactiveIfNeeded && !kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
+      AppSecurityService.instance.setTemporaryLockBypass(true);
+      try {
+        await _googleSignIn.requestScopes(_scopes);
+        final refreshed = _googleSignIn.currentUser;
+        if (refreshed != null) {
+          account = refreshed;
+        }
+      } catch (_) {
+      } finally {
+        AppSecurityService.instance.setTemporaryLockBypass(false);
+      }
+    }
+    return account?.authHeaders;
   }
 }

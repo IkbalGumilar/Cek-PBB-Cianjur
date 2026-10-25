@@ -13,6 +13,7 @@ import 'import_view.dart';
 import 'kendaraan/kendaraan_view.dart';
 import 'monitoring_hub_screen.dart';
 import 'operator_mode_store.dart';
+import 'shared_storage_link_service.dart';
 import 'staff_login_screen.dart';
 import 'staff_portal_client.dart';
 import 'theme_controller.dart';
@@ -65,6 +66,9 @@ class _MainShellState extends State<MainShell> {
       await _maybeShowOperatorWelcome();
     }
     await _checkForUpdateSilently();
+    if (mounted) {
+      unawaited(SharedStorageLinkService.instance.init(context));
+    }
   }
 
   // Muncul sekali, tepat setelah Mode Operator baru diaktifkan lewat 2

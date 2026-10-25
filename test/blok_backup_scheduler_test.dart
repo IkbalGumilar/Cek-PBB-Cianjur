@@ -261,7 +261,7 @@ void main() {
   });
 
   group('BlokBackupScheduler - Eksekusi Cadangan performBackup & runIfNeeded', () {
-    test('runIfNeeded melewati backup sampai kata sandi ditetapkan', () async {
+    test('runIfNeeded melewati backup jika belum ada data DHKP yang dimuat', () async {
       final scheduler = BlokBackupScheduler.instance;
       await BackupPasswordStore.instance.clear();
       await scheduler.setFrequencyDays(1);
@@ -271,8 +271,9 @@ void main() {
       expect(await scheduler.isDirty(), isTrue);
     });
 
-    test('performBackup dengan onlyDkhpData true mengekspor paket dkhp dan merotasi retensi', () async {
+    test('performBackup dengan onlyDkhpData true mengekspor paket perubahan dkhp tanpa kata sandi manual dan merotasi retensi', () async {
       final scheduler = BlokBackupScheduler.instance;
+      await BackupPasswordStore.instance.clear();
 
       // Isi BlokDataStore dengan dummy record
       await BlokDataStore.instance.upsert(
@@ -301,16 +302,30 @@ void main() {
       expect(await scheduler.getLastBackupSize(), greaterThan(0));
       expect(await scheduler.getLastBackupPath(), file.path);
 
-      // Cek isi berkas .dkhp dengan unpack
+      // Cek isi berkas .dkhp dengan unpack (tanpa kata sandi manual)
       final records = await DhkpPackageHelper.unpackDkhp(
         file.path,
-        password: _backupPassword,
+        requireBaseDhkp: true,
       );
       expect(records.any((r) => r.namaWajibPajak == 'Haji Sulaiman'), isTrue);
     });
 
-    test('runIfNeeded menghormati jadwal dan status dirty', () async {
+    test('runIfNeeded menghormati jadwal dan status dirty tanpa memerlukan kata sandi manual', () async {
       final scheduler = BlokBackupScheduler.instance;
+      await BackupPasswordStore.instance.clear();
+
+      // Pastikan ada berkas DHKP dasar yang dimuat
+      await BlokDataStore.instance.upsert(
+        const BlokRecord(
+          namaWajibPajak: 'Asep Sunandar',
+          nop: '320520000402600150',
+          tahunBayar: '2026',
+          tanggalBayar: '2026-06-01',
+          jumlahPbb: '95000',
+          statusBayar: 'Sudah Bayar',
+          catatan: 'Lunas',
+        ),
+      );
 
       // Frekuensi 0 -> tidak jalan
       await scheduler.setFrequencyDays(0);
@@ -320,7 +335,7 @@ void main() {
       await scheduler.setFrequencyDays(1);
       await scheduler.markDirty();
 
-      // Belum pernah backup sama sekali dan dirty -> jalan
+      // Belum pernah backup sama sekali dan dirty -> jalan otomatis tanpa password
       final ran = await scheduler.runIfNeeded();
       expect(ran, isTrue);
 
@@ -330,7 +345,7 @@ void main() {
     });
   });
 
-  group('SettingsScreen - _BackupSection UI & Interaksi', () {
+  group('SettingsScreen & BackupSettingsScreen - UI & Interaksi', () {
     testWidgets('menampilkan bagian cadangan data DHKP dan komponen pengaturannya', (tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
@@ -347,6 +362,10 @@ void main() {
           ),
         ),
       );
+      await tester.pumpAndSettle();
+
+      // Buka menu Pencadangan Data
+      await tester.tap(find.text('Pencadangan Data'));
       await tester.pumpAndSettle();
 
       // Verifikasi judul dan deskripsi cadangan
@@ -367,8 +386,6 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
-      final controller = ThemeController();
-
       // Tambahkan data dummy
       await BlokDataStore.instance.upsert(
         BlokRecord(
@@ -382,11 +399,8 @@ void main() {
       );
 
       await tester.pumpWidget(
-        MaterialApp(
-          home: SettingsScreen(
-            themeController: controller,
-            isMaterialYouSupported: false,
-          ),
+        const MaterialApp(
+          home: BackupSettingsScreen(),
         ),
       );
       await tester.pumpAndSettle();
@@ -408,8 +422,6 @@ void main() {
       expect(find.text('Berkas Cadangan'), findsOneWidget);
       expect(find.textContaining('Cadangan data DHKP berhasil disimpan'), findsOneWidget);
       expect(find.textContaining('cadangan_dkhp_data_'), findsOneWidget);
-
-      controller.dispose();
     });
 
     testWidgets('dialog frekuensi otomatis dapat mengubah frekuensi cadangan', (tester) async {
@@ -418,14 +430,9 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
-      final controller = ThemeController();
-
       await tester.pumpWidget(
-        MaterialApp(
-          home: SettingsScreen(
-            themeController: controller,
-            isMaterialYouSupported: false,
-          ),
+        const MaterialApp(
+          home: BackupSettingsScreen(),
         ),
       );
       await tester.pumpAndSettle();
@@ -448,13 +455,11 @@ void main() {
       // Nilai tersimpan di scheduler
       expect(await BlokBackupScheduler.instance.getFrequencyDays(), 7);
       expect(find.text('Mingguan (setiap 7 hari)'), findsOneWidget);
-
-      controller.dispose();
     });
   });
 
   group('GoogleDriveBackupPolicy - Kebijakan Keamanan & Pembatasan Folder Khusus', () {
-    test('hanya scope terbatas (drive.appdata dan drive.file) yang diizinkan', () {
+    test('hanya scope terbatas (drive.appdata, drive.file, drive.readonly) yang diizinkan dan scope penuh dilarang', () {
       expect(
         GoogleDriveBackupPolicy.isScopeAllowed(GoogleDriveBackupPolicy.allowedScopeAppData),
         isTrue,
@@ -463,14 +468,14 @@ void main() {
         GoogleDriveBackupPolicy.isScopeAllowed(GoogleDriveBackupPolicy.allowedScopeDriveFile),
         isTrue,
       );
+      expect(
+        GoogleDriveBackupPolicy.isScopeAllowed(GoogleDriveBackupPolicy.allowedScopeDriveReadonly),
+        isTrue,
+      );
 
-      // Scope luas dilarang keras demi privasi pengguna
+      // Scope penuh baca-tulis seluruh Drive dilarang keras demi privasi pengguna
       expect(
         GoogleDriveBackupPolicy.isScopeAllowed('https://www.googleapis.com/auth/drive'),
-        isFalse,
-      );
-      expect(
-        GoogleDriveBackupPolicy.isScopeAllowed('https://www.googleapis.com/auth/drive.readonly'),
         isFalse,
       );
     });
@@ -568,14 +573,9 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
-      final controller = ThemeController();
-
       await tester.pumpWidget(
-        MaterialApp(
-          home: SettingsScreen(
-            themeController: controller,
-            isMaterialYouSupported: false,
-          ),
+        const MaterialApp(
+          home: BackupSettingsScreen(),
         ),
       );
       await tester.pumpAndSettle();
@@ -613,8 +613,6 @@ void main() {
       expect(await BlokBackupScheduler.instance.getGoogleDisplayName(), 'Petugas PBB');
       expect(find.textContaining('petugas@gmail.com'), findsWidgets);
       expect(find.textContaining('Folder: Cek PBB Cianjur'), findsOneWidget);
-
-      controller.dispose();
     });
 
     test('syarat link folder bersama: harus terhubung akun Google terlebih dahulu', () async {
@@ -661,14 +659,9 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
-      final controller = ThemeController();
-
       await tester.pumpWidget(
-        MaterialApp(
-          home: SettingsScreen(
-            themeController: controller,
-            isMaterialYouSupported: false,
-          ),
+        const MaterialApp(
+          home: BackupSettingsScreen(),
         ),
       );
       await tester.pumpAndSettle();
@@ -724,8 +717,6 @@ void main() {
         '1ABC_shared_folder_9999',
       );
       expect(find.textContaining('1ABC_shared_folder_9999'), findsWidgets);
-
-      controller.dispose();
     });
   });
 }

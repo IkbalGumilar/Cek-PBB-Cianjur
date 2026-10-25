@@ -77,6 +77,8 @@ class BlokCatatanScreen extends StatefulWidget {
 class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
   bool _loading = true;
   bool _busy = false;
+  String _busyMessage = 'Memuat data DHKP...';
+  IconData _busyIcon = Icons.sync_rounded;
   bool _isOperator = false;
   List<String> _allBloks = [];
   List<String> _bloks = [];
@@ -168,6 +170,13 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
   }
 
   Future<void> _triggerAutoSync({bool silent = false}) async {
+    if (!silent && mounted) {
+      setState(() {
+        _busy = true;
+        _busyMessage = 'Menyinkronkan perubahan data DHKP...';
+        _busyIcon = Icons.cloud_sync_outlined;
+      });
+    }
     try {
       final newChanges = await BlokSyncService.instance.syncCurrentScope(
         blok: _selectedBlok,
@@ -178,7 +187,7 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
-                '$newChanges perubahan data baru & foto berhasil disinkronkan.',
+                '$newChanges perubahan data baru & gambar dokumentasi berhasil disinkronkan.',
               ),
               backgroundColor: Colors.teal[800],
             ),
@@ -197,6 +206,10 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
           SnackBar(content: Text('Gagal sinkronisasi data: $e')),
         );
       }
+    } finally {
+      if (!silent && mounted) {
+        setState(() => _busy = false);
+      }
     }
   }
 
@@ -211,15 +224,27 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
       _bloks = _allBloks.where(whitelist.contains).toList();
       _selectedBlok = _semuaBlokValue;
     });
-    _loadRecords(setBusy: true);
+    _loadRecords(
+      setBusy: true,
+      busyMessage: 'Memuat data wilayah Dusun $wilayah...',
+      busyIcon: Icons.map_outlined,
+    );
   }
 
-  Future<void> _loadRecords({bool setBusy = false}) async {
+  Future<void> _loadRecords({
+    bool setBusy = false,
+    String? busyMessage,
+    IconData? busyIcon,
+  }) async {
     final blok = _selectedBlok;
     if (blok == null) return;
 
     if (setBusy && mounted) {
-      setState(() => _busy = true);
+      setState(() {
+        _busy = true;
+        _busyMessage = busyMessage ?? 'Memuat data catatan blok...';
+        _busyIcon = busyIcon ?? Icons.sync_rounded;
+      });
     }
 
     // Cache direktori & nama file foto di memori agar sel tabel tidak melakukan I/O disk
@@ -354,7 +379,13 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
       _selectedBlok = blok;
       _currentPage = 0;
     });
-    _loadRecords(setBusy: true);
+    _loadRecords(
+      setBusy: true,
+      busyMessage: blok == _semuaBlokValue
+          ? 'Memuat data semua blok...'
+          : 'Memuat data Blok ${int.tryParse(blok) ?? blok}...',
+      busyIcon: Icons.grid_view_rounded,
+    );
   }
 
   void _pilihTahun(String? tahun) {
@@ -362,7 +393,13 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
       _selectedTahun = tahun;
       _currentPage = 0;
     });
-    _loadRecords(setBusy: true);
+    _loadRecords(
+      setBusy: true,
+      busyMessage: tahun == null
+          ? 'Memuat data semua tahun pajak...'
+          : 'Memuat data tahun pajak $tahun...',
+      busyIcon: Icons.calendar_month_outlined,
+    );
   }
 
   void _pilihKategori(DhkpKategoriFilter? kategori) {
@@ -371,7 +408,11 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
       _kategoriFilter = kategori;
       _currentPage = 0;
     });
-    _loadRecords(setBusy: true);
+    _loadRecords(
+      setBusy: true,
+      busyMessage: 'Menyaring kategori: ${kategori.label}...',
+      busyIcon: Icons.filter_alt_outlined,
+    );
   }
 
   void _pilihSort(BlokSortBy? sortBy) {
@@ -380,7 +421,11 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
       _sortBy = sortBy;
       _currentPage = 0;
     });
-    _loadRecords(setBusy: true);
+    _loadRecords(
+      setBusy: true,
+      busyMessage: 'Mengurutkan data: ${sortBy.label}...',
+      busyIcon: Icons.sort_rounded,
+    );
   }
 
   /// Hapus satu baris — mis. untuk mengoreksi baris yang salah tercatat
@@ -408,6 +453,13 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
     );
     if (confirmed != true) return;
 
+    if (mounted) {
+      setState(() {
+        _busy = true;
+        _busyMessage = 'Menghapus baris data DHKP...';
+        _busyIcon = Icons.delete_sweep_outlined;
+      });
+    }
     await BlokDataStore.instance.deleteByKey(record.uniqueKey);
     await _loadRecords();
   }
@@ -466,6 +518,13 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
     );
 
     if (updated == true) {
+      if (mounted) {
+        setState(() {
+          _busy = true;
+          _busyMessage = 'Menyimpan catatan petugas...';
+          _busyIcon = Icons.save_outlined;
+        });
+      }
       final newRecord = record.copyWith(
         catatan: controller.text.trim(),
       );
@@ -496,7 +555,7 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             clipBehavior: Clip.antiAlias,
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 550, maxHeight: 680),
+              constraints: const BoxConstraints(maxWidth: 580, maxHeight: 680),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -690,10 +749,13 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
                   // Actions
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
+                    child: Wrap(
+                      alignment: WrapAlignment.end,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 8,
+                      runSpacing: 8,
                       children: [
-                        if (!record.isPaid) ...[
+                        if (!record.isPaid)
                           OutlinedButton.icon(
                             icon: const Icon(Icons.fact_check_outlined, size: 16, color: Colors.teal),
                             label: const Text('Cek Status Bayar'),
@@ -702,8 +764,6 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
                               _bukaStatusBayar(record);
                             },
                           ),
-                          const SizedBox(width: 8),
-                        ],
                         OutlinedButton.icon(
                           icon: const Icon(Icons.search, size: 16),
                           label: const Text('Cek Tagihan'),
@@ -712,7 +772,6 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
                             _bukaTagihan(record);
                           },
                         ),
-                        const SizedBox(width: 8),
                         FilledButton.icon(
                           icon: const Icon(Icons.edit, size: 16),
                           label: const Text('Edit / Sesuaikan Pemilik'),
@@ -844,6 +903,13 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
     );
 
     if (updated == true) {
+      if (mounted) {
+        setState(() {
+          _busy = true;
+          _busyMessage = 'Menyimpan perubahan nama & alamat...';
+          _busyIcon = Icons.save_outlined;
+        });
+      }
       final updatedRecord = record.copyWith(
         namaWajibPajak: namaController.text.trim().isEmpty
             ? record.namaWajibPajak
@@ -961,7 +1027,11 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
     );
 
     if (!mounted) return;
-    await _loadRecords();
+    await _loadRecords(
+      setBusy: true,
+      busyMessage: 'Memperbarui status bayar dari hasil pengecekan...',
+      busyIcon: Icons.fact_check_outlined,
+    );
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
@@ -1003,10 +1073,20 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
     if (action == 'file') {
       try {
         final files = await FilePicker.pickFiles(
-          type: FileType.custom,
-          allowedExtensions: ['dkhp', 'zip', 'csv', 'xlsx', 'xls', 'txt'],
+          type: FileType.any,
         );
         if (files.isEmpty || files.first.path == null) {
+          return;
+        }
+        if (!GoogleDriveService.isSupportedDkhpFileName(files.first.name)) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Format berkas tidak didukung. Pilih berkas .dhkp, .dkhp, .zip, .csv, .xlsx, .xls, atau .txt.',
+              ),
+            ),
+          );
           return;
         }
         await _importDkhpFromPath(files.first.path!, sourceLabel: 'berkas lokal');
@@ -1040,88 +1120,66 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
     String path, {
     required String sourceLabel,
   }) async {
-    final lower = path.toLowerCase();
+    if (mounted) {
+      setState(() {
+        _busy = true;
+        _busyMessage = 'Mengekstrak & memuat berkas DHKP ($sourceLabel)...';
+        _busyIcon = Icons.upload_file_rounded;
+      });
+    }
+    try {
+      if (DhkpPackageHelper.isDkhpArchivePath(path)) {
+        final newRecords = await DhkpPackageHelper.unpackDkhp(path);
+        await _load();
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Paket DHKP berhasil diimpor ($sourceLabel): ${newRecords.length} data & gambar dokumentasi berhasil dimuat.',
+            ),
+          ),
+        );
+        return;
+      }
 
-    if (lower.endsWith('.dkhp') || lower.endsWith('.zip')) {
-      final passwordProtected = await DhkpCrypto.isPasswordProtectedFile(path);
-      final password = passwordProtected ? await _promptBackupPassword() : null;
-      if (passwordProtected && password == null) return;
-      final newRecords = await DhkpPackageHelper.unpackDkhp(
-        path,
-        password: password,
+      final taxRecords = await FileImporter.importFrom(path);
+      if (taxRecords.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Tidak ditemukan NOP yang valid di file ini.'),
+          ),
+        );
+        return;
+      }
+
+      final nowYear = '${DateTime.now().year}';
+      final newRecords = taxRecords.map(
+        (t) => BlokRecord(
+          nop: t.nop,
+          namaWajibPajak:
+              t.namaWajibPajak ?? 'WP ${nopBlok(t.nop)}/${nopWilayah(t.nop)}',
+          tahunBayar: nowYear,
+          tanggalBayar: t.isPaid ? 'Sudah Bayar' : '',
+          jumlahPbb: '',
+          statusBayar: t.isPaid ? 'Sudah Bayar' : 'Belum Bayar',
+        ),
       );
+      await BlokDataStore.instance.upsertAll(newRecords);
       await _load();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Paket .dkhp berhasil diimpor ($sourceLabel): ${newRecords.length} data & foto berhasil dimuat.',
+            '${newRecords.length} data DHKP berhasil diunggah ($sourceLabel).',
           ),
         ),
       );
-      return;
+    } finally {
+      if (mounted) {
+        setState(() => _busy = false);
+      }
     }
-
-    final taxRecords = await FileImporter.importFrom(path);
-    if (taxRecords.isEmpty) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Tidak ditemukan NOP yang valid di file ini.'),
-        ),
-      );
-      return;
-    }
-
-    final nowYear = '${DateTime.now().year}';
-    final newRecords = taxRecords.map(
-      (t) => BlokRecord(
-        nop: t.nop,
-        namaWajibPajak:
-            t.namaWajibPajak ?? 'WP ${nopBlok(t.nop)}/${nopWilayah(t.nop)}',
-        tahunBayar: nowYear,
-        tanggalBayar: t.isPaid ? 'Sudah Bayar' : '',
-        jumlahPbb: '',
-        statusBayar: t.isPaid ? 'Sudah Bayar' : 'Belum Bayar',
-      ),
-    );
-    await BlokDataStore.instance.upsertAll(newRecords);
-    await _load();
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          '${newRecords.length} data DHKP berhasil diunggah ($sourceLabel).',
-        ),
-      ),
-    );
-  }
-
-  Future<String?> _promptBackupPassword() {
-    final controller = TextEditingController();
-    return showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Kata sandi backup'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          obscureText: true,
-          decoration: const InputDecoration(labelText: 'Masukkan kata sandi'),
-          onSubmitted: (value) => Navigator.of(ctx).pop(value),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Batal'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(controller.text),
-            child: const Text('Buka backup'),
-          ),
-        ],
-      ),
-    ).whenComplete(controller.dispose);
   }
 
   /// Pop-up preview foto ala profil WhatsApp (bisa di-zoom/pan, ganti/upload foto baru, atau hapus)
@@ -1222,7 +1280,7 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
                                     ),
                                     const SizedBox(height: 12),
                                     const Text(
-                                      'Belum Ada Foto Objek/SPPT',
+                                      'Belum Ada Gambar Dokumentasi',
                                       style: TextStyle(
                                         color: Colors.white,
                                         fontSize: 15,
@@ -1396,57 +1454,84 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
 
     if (imageBytes == null) return null;
 
-    // Potong otomatis dimensi gambar menjadi rasio 1:1 (persegi) agar rapi
-    final squareBytes = ImageCropHelper.cropToSquare(imageBytes);
-
-    final photosDir = await DhkpPackageHelper.photosDirectory();
-    final cleanNop = record.nop.replaceAll(RegExp(r'[^0-9]'), '');
-    final fileName = '$cleanNop.jpg';
-    final targetFile = File('${photosDir.path}/$fileName');
-    await targetFile.writeAsBytes(squareBytes);
-
-    final updatedRecord = record.copyWith(namaFoto: fileName);
-    await BlokDataStore.instance.upsert(updatedRecord);
-    unawaited(
-      BlokSyncService.instance.recordChange(
-        record: updatedRecord,
-        namaFoto: fileName,
-        sourcePhotoFile: targetFile,
-      ),
-    );
-    await _loadRecords();
-
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Foto berhasil disimpan.')),
-      );
+      setState(() {
+        _busy = true;
+        _busyMessage = 'Memotong & menyimpan gambar dokumentasi...';
+        _busyIcon = Icons.crop_square_rounded;
+      });
     }
-    return targetFile;
+
+    try {
+      // Potong otomatis dimensi gambar menjadi rasio 1:1 (persegi) agar rapi
+      final squareBytes = ImageCropHelper.cropToSquare(imageBytes);
+
+      final photosDir = await DhkpPackageHelper.photosDirectory();
+      final cleanNop = record.nop.replaceAll(RegExp(r'[^0-9]'), '');
+      final fileName = '$cleanNop.jpg';
+      final targetFile = File('${photosDir.path}/$fileName');
+      await targetFile.writeAsBytes(squareBytes);
+
+      final updatedRecord = record.copyWith(namaFoto: fileName);
+      await BlokDataStore.instance.upsert(updatedRecord);
+      unawaited(
+        BlokSyncService.instance.recordChange(
+          record: updatedRecord,
+          namaFoto: fileName,
+          sourcePhotoFile: targetFile,
+        ),
+      );
+      await _loadRecords();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Foto berhasil disimpan.')),
+        );
+      }
+      return targetFile;
+    } finally {
+      if (mounted) {
+        setState(() => _busy = false);
+      }
+    }
   }
 
   Future<void> _hapusFoto(BlokRecord record) async {
-    final photo = await DhkpPackageHelper.findPhotoForNop(
-      record.nop,
-      customFileName: record.namaFoto,
-    );
-    if (photo != null && await photo.exists()) {
-      try {
-        await photo.delete();
-      } catch (_) {}
-    }
-    final updated = record.copyWith(namaFoto: '');
-    await BlokDataStore.instance.upsert(updated);
-    unawaited(
-      BlokSyncService.instance.recordChange(
-        record: updated,
-        namaFoto: '',
-      ),
-    );
-    await _loadRecords();
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Foto telah dihapus.')),
+      setState(() {
+        _busy = true;
+        _busyMessage = 'Menghapus gambar dokumentasi...';
+        _busyIcon = Icons.delete_outline_rounded;
+      });
+    }
+    try {
+      final photo = await DhkpPackageHelper.findPhotoForNop(
+        record.nop,
+        customFileName: record.namaFoto,
       );
+      if (photo != null && await photo.exists()) {
+        try {
+          await photo.delete();
+        } catch (_) {}
+      }
+      final updated = record.copyWith(namaFoto: '');
+      await BlokDataStore.instance.upsert(updated);
+      unawaited(
+        BlokSyncService.instance.recordChange(
+          record: updated,
+          namaFoto: '',
+        ),
+      );
+      await _loadRecords();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Foto telah dihapus.')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _busy = false);
+      }
     }
   }
 
@@ -1510,7 +1595,11 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
     final format = await _pilihFormat('Unduh Sebagai');
     if (format == null) return;
 
-    setState(() => _busy = true);
+    setState(() {
+      _busy = true;
+      _busyMessage = 'Menyusun & menyimpan berkas ${format.label}...';
+      _busyIcon = Icons.download_rounded;
+    });
     try {
       final records = await _scopedRecordsForExport();
       final bytes = await BlokReportExporter.build(
@@ -1541,7 +1630,11 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
     final format = await _pilihFormat('Bagikan Sebagai');
     if (format == null) return;
 
-    setState(() => _busy = true);
+    setState(() {
+      _busy = true;
+      _busyMessage = 'Menyiapkan berkas ${format.label} untuk dibagikan...';
+      _busyIcon = Icons.share_rounded;
+    });
     try {
       final records = await _scopedRecordsForExport();
       final bytes = await BlokReportExporter.build(
@@ -1569,7 +1662,11 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
   }
 
   Future<void> _cetakLaporan() async {
-    setState(() => _busy = true);
+    setState(() {
+      _busy = true;
+      _busyMessage = 'Menyiapkan pratinjau cetak dokumen PDF...';
+      _busyIcon = Icons.print_rounded;
+    });
     try {
       final records = await _scopedRecordsForExport();
       if (records.isEmpty) {
@@ -1637,7 +1734,7 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
             IconButton(
               onPressed: _busy ? null : _bukaKolaseFoto,
               icon: const Icon(Icons.auto_awesome_mosaic_outlined),
-              tooltip: 'Kolase Foto Dokumentasi SPPT',
+              tooltip: 'Kolase Gambar Dokumentasi',
             ),
             IconButton(
               onPressed: _busy ? null : _cekStatusBayarMassal,
@@ -1667,8 +1764,13 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
           duration: const Duration(milliseconds: 380),
           switchInCurve: Curves.easeOutCubic,
           switchOutCurve: Curves.easeInCubic,
-          child: _loading
-              ? const _BlokCatatanLoadingView(key: ValueKey('loading-view'))
+          child: (_loading || (_busy && _allBloks.isEmpty))
+              ? _BlokCatatanLoadingView(
+                  key: const ValueKey('loading-view'),
+                  title: _loading
+                      ? 'Memuat Data DHKP & Status Bayar'
+                      : _busyMessage,
+                )
               : (_allBloks.isEmpty || (!_isOperator && _bloks.isEmpty))
                   ? const Center(
                       key: ValueKey('empty-view'),
@@ -1853,13 +1955,13 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
                         _loadRecords();
                       },
                     ),
-                    if (_busy)
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 4),
-                        child: LinearProgressIndicator(minHeight: 3),
-                      )
-                    else
-                      const SizedBox(height: 12),
+                    SmoothActivityBanner(
+                      isActive: _busy,
+                      message: _busyMessage,
+                      icon: _busyIcon,
+                      margin: const EdgeInsets.symmetric(vertical: 6),
+                    ),
+                    if (!_busy) const SizedBox(height: 12),
                     Expanded(
                       child: _records.isEmpty
                           ? const Center(
@@ -2467,106 +2569,22 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
 }
 
 class _BlokCatatanLoadingView extends StatelessWidget {
-  const _BlokCatatanLoadingView({super.key});
+  final String title;
+
+  const _BlokCatatanLoadingView({
+    super.key,
+    this.title = 'Memuat Data DHKP & Status Bayar',
+  });
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 420),
-        child: Card(
-          elevation: 2,
-          margin: const EdgeInsets.all(24),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-            side: BorderSide(
-              color: colorScheme.outlineVariant.withValues(alpha: 0.5),
-            ),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 32),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    SizedBox(
-                      width: 72,
-                      height: 72,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 3.5,
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          colorScheme.primary,
-                        ),
-                        backgroundColor:
-                            colorScheme.primary.withValues(alpha: 0.15),
-                      ),
-                    ),
-                    Icon(
-                      Icons.receipt_long_rounded,
-                      size: 32,
-                      color: colorScheme.primary,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 24),
-                Text(
-                  'Memuat Data DHKP & Status Bayar',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Menyiapkan seluruh catatan blok, bukti STTS, dan rekapitulasi data...',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.textTheme.bodySmall?.color ?? Colors.grey[600],
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 16),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: colorScheme.primaryContainer.withValues(alpha: 0.4),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      SizedBox(
-                        width: 12,
-                        height: 12,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: colorScheme.primary,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Flexible(
-                        child: Text(
-                          'Memastikan semua data termuat',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: colorScheme.onPrimaryContainer,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
+    return SmoothLoadingCard(
+      icon: Icons.receipt_long_rounded,
+      title: title,
+      subtitle:
+          'Menyiapkan seluruh catatan blok, bukti STTS, dan rekapitulasi data...',
+      badgeText: 'Memastikan semua data termuat',
     );
   }
 }
+

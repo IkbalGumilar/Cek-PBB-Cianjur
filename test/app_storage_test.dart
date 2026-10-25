@@ -35,14 +35,20 @@ void main() {
       final photosDir = await AppStorage.getPhotosDirectory();
       expect(await photosDir.exists(), isTrue);
       expect(photosDir.path, endsWith('photos'));
+      expect(File('${photosDir.path}/.nomedia').existsSync(), isTrue);
+      expect(File('${photosDir.path}/.nosearch').existsSync(), isTrue);
 
       final docDir = await AppStorage.getDocumentsDirectory();
       expect(await docDir.exists(), isTrue);
       expect(docDir.path, endsWith('documents'));
+      expect(File('${docDir.path}/.nomedia').existsSync(), isTrue);
+      expect(File('${docDir.path}/.nosearch').existsSync(), isTrue);
 
       final backupDir = await AppStorage.getBackupsDirectory();
       expect(await backupDir.exists(), isTrue);
       expect(backupDir.path, endsWith('backups'));
+      expect(File('${backupDir.path}/.nomedia').existsSync(), isTrue);
+      expect(File('${backupDir.path}/.nosearch').existsSync(), isTrue);
 
       final cookiesDir = await AppStorage.getCookiesDirectory();
       expect(await cookiesDir.exists(), isTrue);

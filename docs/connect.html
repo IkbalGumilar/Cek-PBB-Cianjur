@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tautkan Penyimpanan Bersama - Cek PBB Cianjur</title>
+  <meta name="description" content="Konfigurasi tautan folder penyimpanan bersama Google Drive untuk sinkronisasi cadangan DHKP kolektor desa di aplikasi Cek PBB Cianjur.">
+  <link rel="icon" type="image/png" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%230f766e'><path d='M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z'/></svg>">
+  <style>
+    :root {
+      --primary: #0f766e;
+      --primary-dark: #115e59;
+      --primary-light: #ccfbf1;
+      --accent: #2563eb;
+      --text-main: #1f2937;
+      --text-muted: #6b7280;
+      --bg: #f8fafc;
+      --card-bg: #ffffff;
+      --border: #e2e8f0;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      color: var(--text-main);
+      background-color: var(--bg);
+      line-height: 1.6;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      background: #ffffff;
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 1rem 1.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-weight: 700;
+      font-size: 1.25rem;
+      color: var(--primary);
+      text-decoration: none;
+    }
+    .brand svg {
+      width: 28px;
+      height: 28px;
+      fill: var(--primary);
+    }
+    .nav-links {
+      display: flex;
+      gap: 1.5rem;
+    }
+    .nav-links a {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 0.95rem;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+    .nav-links a:hover {
+      color: var(--primary);
+    }
+    main {
+      flex: 1;
+      max-width: 680px;
+      width: 100%;
+      margin: 2.5rem auto;
+      padding: 0 1.5rem;
+    }
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 2rem;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+      text-align: center;
+    }
+    .badge {
+      display: inline-block;
+      background: var(--primary-light);
+      color: var(--primary-dark);
+      padding: 0.35rem 0.85rem;
+      border-radius: 9999px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+    }
+    h1 {
+      font-size: 1.75rem;
+      font-weight: 800;
+      color: var(--text-main);
+      margin-bottom: 0.75rem;
+    }
+    .desc {
+      color: var(--text-muted);
+      font-size: 0.95rem;
+      margin-bottom: 1.5rem;
+    }
+    .info-box {
+      background: #f1f5f9;
+      border: 1px solid #cbd5e1;
+      border-radius: 12px;
+      padding: 1.25rem;
+      text-align: left;
+      margin-bottom: 1.75rem;
+    }
+    .info-label {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      margin-bottom: 0.25rem;
+    }
+    .info-value {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: var(--primary-dark);
+      word-break: break-all;
+      margin-bottom: 0.75rem;
+    }
+    .info-value:last-child {
+      margin-bottom: 0;
+    }
+    .btn-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.85rem;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.6rem;
+      padding: 0.9rem 1.5rem;
+      border-radius: 10px;
+      font-weight: 600;
+      font-size: 1rem;
+      text-decoration: none;
+      transition: all 0.2s;
+      cursor: pointer;
+      border: none;
+    }
+    .btn-primary {
+      background-color: var(--primary);
+      color: #ffffff;
+      box-shadow: 0 4px 6px -1px rgba(15, 118, 110, 0.3);
+    }
+    .btn-primary:hover {
+      background-color: var(--primary-dark);
+      transform: translateY(-1px);
+    }
+    .btn-secondary {
+      background-color: #ffffff;
+      color: var(--text-main);
+      border: 1px solid var(--border);
+    }
+    .btn-secondary:hover {
+      background-color: #f1f5f9;
+    }
+    .steps {
+      margin-top: 2rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid var(--border);
+      text-align: left;
+    }
+    .steps h3 {
+      font-size: 1rem;
+      font-weight: 700;
+      margin-bottom: 0.75rem;
+    }
+    .steps ol {
+      padding-left: 1.25rem;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+    .steps li {
+      margin-bottom: 0.5rem;
+    }
+    footer {
+      background: #ffffff;
+      border-top: 1px solid var(--border);
+      padding: 1.5rem;
+      text-align: center;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="nav-container">
+      <a href="index.html" class="brand">
+        <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+        Cek PBB Cianjur
+      </a>
+      <div class="nav-links">
+        <a href="index.html">Beranda</a>
+        <a href="privacy.html">Privasi</a>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <div class="card">
+      <div class="badge">🔗 Tautan Penyimpanan Bersama</div>
+      <h1 id="titleText">Tautkan Folder Bersama</h1>
+      <p class="desc" id="descText">
+        Undangan untuk menghubungkan aplikasi Anda ke folder penyimpanan cloud bersama demi kelancaran sinkronisasi data DHKP.
+      </p>
+
+      <div class="info-box">
+        <div class="info-label">Nama Wilayah / Kategori</div>
+        <div class="info-value" id="storageName">DHKP Bersama</div>
+
+        <div class="info-label">Folder Target</div>
+        <div class="info-value" id="folderVal">-</div>
+
+        <div id="senderSection" style="display: none;">
+          <div class="info-label">Dikirim Oleh</div>
+          <div class="info-value" id="senderVal">-</div>
+        </div>
+      </div>
+
+      <div class="btn-group">
+        <a href="#" id="openAppBtn" class="btn btn-primary">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+          </svg>
+          Buka di Aplikasi Cek PBB
+        </a>
+        <button id="copyBtn" class="btn btn-secondary">
+          📋 Salin Link Tautan
+        </button>
+        <a href="https://github.com/IkbalGumilar/Cek-PBB-Cianjur/releases/latest" class="btn btn-secondary" target="_blank" rel="noopener">
+          📥 Unduh APK Aplikasi Terbaru
+        </a>
+      </div>
+
+      <div class="steps">
+        <h3>Panduan Singkat untuk Kolektor:</h3>
+        <ol>
+          <li>Pastikan aplikasi <strong>Cek PBB Cianjur</strong> sudah terpasang di HP Anda.</li>
+          <li>Klik tombol <strong>"Buka di Aplikasi Cek PBB"</strong> di atas.</li>
+          <li>Aplikasi akan otomatis terbuka dan menampilkan konfirmasi penautan. Klik <strong>"Tautkan Sekarang"</strong>.</li>
+        </ol>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <p>&copy; 2026 Cek PBB Cianjur. Pengembang: Ikbal Gumilar.</p>
+  </footer>
+
+  <script>
+    (function() {
+      var params = new URLSearchParams(window.location.search);
+      var folder = params.get('folder') || '';
+      var name = params.get('name') || 'DHKP Bersama';
+      var sender = params.get('sender') || '';
+
+      if (folder) {
+        document.getElementById('folderVal').textContent = folder;
+      } else {
+        document.getElementById('folderVal').textContent = 'Folder bawaan ("Cek PBB Cianjur")';
+      }
+
+      document.getElementById('storageName').textContent = name;
+
+      if (sender) {
+        document.getElementById('senderSection').style.display = 'block';
+        document.getElementById('senderVal').textContent = sender;
+      }
+
+      // Bangun Custom Scheme URI: cekpbb://storage?folder=...&name=...
+      var customSchemeUri = 'cekpbb://storage' + window.location.search;
+      var openAppBtn = document.getElementById('openAppBtn');
+      openAppBtn.href = customSchemeUri;
+
+      // Coba buka aplikasi otomatis bila dibuka di peramban seluler
+      if (folder && /Android|iPhone|iPad/i.test(navigator.userAgent)) {
+        setTimeout(function() {
+          window.location.href = customSchemeUri;
+        }, 350);
+      }
+
+      // Tombol Salin
+      document.getElementById('copyBtn').addEventListener('click', function() {
+        navigator.clipboard.writeText(window.location.href).then(function() {
+          alert('Tautan berhasil disalin ke papan klip!');
+        }).catch(function() {
+          var input = document.createElement('input');
+          input.value = window.location.href;
+          document.body.appendChild(input);
+          input.select();
+          document.execCommand('copy');
+          document.body.removeChild(input);
+          alert('Tautan berhasil disalin!');
+        });
+      });
+    })();
+  </script>
+</body>
+</html>

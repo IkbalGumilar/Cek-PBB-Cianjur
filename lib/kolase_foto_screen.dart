@@ -10,6 +10,7 @@ import 'document_preview_screen.dart';
 import 'download_helper.dart';
 import 'image_crop_helper.dart';
 import 'kolase_foto_exporter.dart';
+import 'unity_lerp_widgets.dart';
 
 /// Layar untuk membuat dan mencetak kolase foto dokumentasi penyerahan SPPT.
 ///
@@ -39,6 +40,7 @@ class _KolaseFotoScreenState extends State<KolaseFotoScreen> {
   KolaseGridTemplate _template = KolaseGridTemplate.grid3x3;
   bool _loading = true;
   bool _busyExport = false;
+  String _busyExportMessage = 'Menyiapkan dokumen PDF F4...';
 
   final List<File> _photoFiles = [];
   final List<Uint8List> _photoBytes = [];
@@ -142,7 +144,10 @@ class _KolaseFotoScreenState extends State<KolaseFotoScreen> {
       return;
     }
 
-    setState(() => _busyExport = true);
+    setState(() {
+      _busyExport = true;
+      _busyExportMessage = 'Menyusun pratinjau kolase PDF F4...';
+    });
     try {
       final pdfBytes = await _generatePdfBytes();
       if (!mounted) return;
@@ -174,7 +179,10 @@ class _KolaseFotoScreenState extends State<KolaseFotoScreen> {
       return;
     }
 
-    setState(() => _busyExport = true);
+    setState(() {
+      _busyExport = true;
+      _busyExportMessage = 'Menyimpan dokumen PDF F4 ke perangkat...';
+    });
     final messenger = ScaffoldMessenger.of(context);
     try {
       final pdfBytes = await _generatePdfBytes();
@@ -208,7 +216,10 @@ class _KolaseFotoScreenState extends State<KolaseFotoScreen> {
       return;
     }
 
-    setState(() => _busyExport = true);
+    setState(() {
+      _busyExport = true;
+      _busyExportMessage = 'Menyiapkan dokumen F4 untuk dicetak...';
+    });
     try {
       final pdfBytes = await _generatePdfBytes();
       await Printing.layoutPdf(
@@ -235,7 +246,10 @@ class _KolaseFotoScreenState extends State<KolaseFotoScreen> {
       return;
     }
 
-    setState(() => _busyExport = true);
+    setState(() {
+      _busyExport = true;
+      _busyExportMessage = 'Menyiapkan dokumen PDF F4 untuk dibagikan...';
+    });
     try {
       final pdfBytes = await _generatePdfBytes();
       await Printing.sharePdf(
@@ -342,60 +356,80 @@ class _KolaseFotoScreenState extends State<KolaseFotoScreen> {
             ),
           ),
 
+          SmoothActivityBanner(
+            isActive: _busyExport,
+            message: _busyExportMessage,
+            icon: Icons.picture_as_pdf_outlined,
+            accentColor: Colors.tealAccent.shade700,
+            margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+          ),
+
           // Area Canvas Preview (Kertas F4 di background gelap)
           Expanded(
-            child: _loading
-                ? const Center(
-                    child: CircularProgressIndicator(color: Colors.teal),
-                  )
-                : _photoBytes.isEmpty
-                    ? Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(24),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.photo_library_outlined,
-                                size: 64,
-                                color: Colors.grey.shade600,
-                              ),
-                              const SizedBox(height: 16),
-                              Text(
-                                _selectedBlok == 'Semua'
-                                    ? 'Belum ada foto dokumentasi di semua blok.'
-                                    : 'Belum ada foto dokumentasi di Blok $_selectedBlok.',
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w600,
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 350),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              child: _loading
+                  ? const SmoothLoadingCard(
+                      key: ValueKey('kolase-loading'),
+                      isDarkCanvas: true,
+                      icon: Icons.auto_awesome_mosaic_outlined,
+                      title: 'Memuat Gambar Dokumentasi',
+                      subtitle:
+                          'Menyiapkan & memotong gambar dokumentasi ke rasio persegi 1:1...',
+                      badgeText: 'Memuat gambar dokumentasi',
+                    )
+                  : _photoBytes.isEmpty
+                      ? Center(
+                          key: const ValueKey('kolase-empty'),
+                          child: Padding(
+                            padding: const EdgeInsets.all(24),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.photo_library_outlined,
+                                  size: 64,
+                                  color: Colors.grey.shade600,
                                 ),
-                              ),
-                              const SizedBox(height: 8),
-                              const Text(
-                                'Kolase hanya memuat foto dokumentasi resmi penyerahan SPPT yang diambil di daftar catatan blok.',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(color: Colors.white70, fontSize: 13),
-                              ),
-                              const SizedBox(height: 20),
-                              OutlinedButton.icon(
-                                onPressed: _loadPhotos,
-                                icon: const Icon(Icons.refresh, color: Colors.tealAccent),
-                                label: const Text(
-                                  'Muat Ulang Foto',
-                                  style: TextStyle(color: Colors.white),
+                                const SizedBox(height: 16),
+                                Text(
+                                  _selectedBlok == 'Semua'
+                                      ? 'Belum ada foto dokumentasi di semua blok.'
+                                      : 'Belum ada foto dokumentasi di Blok $_selectedBlok.',
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
-                                style: OutlinedButton.styleFrom(
-                                  side: const BorderSide(color: Colors.teal),
+                                const SizedBox(height: 8),
+                                const Text(
+                                  'Kolase memuat gambar dokumentasi petugas yang diambil di daftar catatan blok.',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(color: Colors.white70, fontSize: 13),
                                 ),
-                              ),
-                            ],
+                                const SizedBox(height: 20),
+                                OutlinedButton.icon(
+                                  onPressed: _loadPhotos,
+                                  icon: const Icon(Icons.refresh, color: Colors.tealAccent),
+                                  label: const Text(
+                                    'Muat Ulang Foto',
+                                    style: TextStyle(color: Colors.white),
+                                  ),
+                                  style: OutlinedButton.styleFrom(
+                                    side: const BorderSide(color: Colors.teal),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                      )
-                    : Column(
-                        children: [
+                        )
+                      : Column(
+                          key: const ValueKey('kolase-content'),
+                          children: [
                           Expanded(
                             child: PageView.builder(
                               controller: _pageController,
@@ -450,6 +484,7 @@ class _KolaseFotoScreenState extends State<KolaseFotoScreen> {
                             ),
                         ],
                       ),
+            ),
           ),
 
           // Bagian Bawah: Selector Template Grid & Action Bar
