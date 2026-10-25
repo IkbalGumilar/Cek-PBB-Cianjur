@@ -10,7 +10,7 @@ Aplikasi manajemen, pengecekan, dan monitoring Pajak Bumi dan Bangunan Perdesaan
 
 > [!NOTE]
 > **Distribusi Mandiri (Sideload)**  
-> Aplikasi ini tidak didistribusikan melalui Google Play Store atau Apple App Store. Distribusi berkas resmi dilakukan secara internal melalui [GitHub Releases](https://github.com/IkbalGumilar/Cek-PBB-Cianjur/releases/latest) berupa APK untuk Android serta paket biner untuk Windows dan Linux.
+> Aplikasi ini tidak didistribusikan melalui Google Play Store atau Apple App Store. Distribusi berkas resmi dilakukan secara internal melalui [GitHub Releases](https://github.com/IkbalGumilar/Cek-PBB-Cianjur/releases/latest) berupa paket APK teroptimasi per arsitektur (*Split per ABI*) untuk Android serta paket biner mandiri untuk Windows dan Linux.
 
 ---
 
@@ -58,6 +58,9 @@ Aplikasi manajemen, pengecekan, dan monitoring Pajak Bumi dan Bangunan Perdesaan
   - Proteksi kunci biometrik (sidik jari/wajah), PIN 6-digit terenkripsi, atau kata sandi aplikasi dengan auto-lockout cerdas.
   - Enkripsi arsip `.dkhp` standar militer (PBKDF2-HMAC-SHA256 600.000 iterasi + AES-256-GCM).
   - Pengaktifan `FLAG_SECURE` pada Android untuk mencegah perekaman layar dan tangkapan layar tanpa izin.
+- **Performa Responsif & Efisiensi Penyimpanan**:
+  - Distribusi biner terpisah (*Split-per-ABI*) menghasilkan ukuran aplikasi yang sangat ramping (~20-25 MB) sehingga menghemat memori penyimpanan dan kuota internet perangkat petugas di lapangan.
+  - Animasi transisi pemuatan interaktif (*smooth activity & loading indicator*) pada seluruh alur kerja pengecekan NOP, pengelolaan DHKP, dan ekspor laporan.
 
 ---
 
@@ -206,24 +209,35 @@ Aplikasi dilengkapi mekanisme pemantauan rilis berkala yang terhubung ke REST AP
    flutter pub get
    ```
 
-3. **Jalankan Pengujian Unit & Widget**:
+3. **Jalankan Pengujian Otomatis (Unit & Widget Tests)**:
    ```bash
    flutter test -j 1
    ```
+   *Memverifikasi integritas logika bisnis, parsing data DHKP, enkripsi, dan komponen antarmuka pengguna.*
 
 4. **Kompilasi Biner Rilis**:
-   - **Android APK**:
+   - **Android Split APK (Rekomendasi untuk efisiensi ukuran berkas)**:
      ```bash
-     flutter build apk --release --target-platform android-arm64
+     flutter build apk --release --split-per-abi
+     ```
+     Menghasilkan paket APK terpisah berdasarkan arsitektur CPU pada direktori `build/app/outputs/flutter-apk/`:
+     - `app-arm64-v8a-release.apk` (Mayoritas smartphone Android 64-bit modern)
+     - `app-armeabi-v7a-release.apk` (Perangkat Android 32-bit legacy)
+     - `app-x86_64-release.apk` (Emulator / Tablet Intel)
+   - **Android Universal APK (Berkas gabungan seluruh ABI)**:
+     ```bash
+     flutter build apk --release
      ```
    - **Linux Desktop**:
      ```bash
      flutter build linux --release
      ```
+     Biner rilis dan pustaka pendukung dihasilkan di direktori `build/linux/x64/release/bundle/`. Dapat dipaketkan menjadi arsip `.tar.gz` portabel untuk distribusi mandiri.
    - **Windows Desktop**:
      ```bash
      flutter build windows --release
      ```
+     Biner rilis dihasilkan di direktori `build/windows/x64/runner/Release/`.
 
 > [!IMPORTANT]
 > **Penandatanganan Rilis Android (Keystore)**  

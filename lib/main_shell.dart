@@ -13,6 +13,7 @@ import 'import_view.dart';
 import 'kendaraan/kendaraan_view.dart';
 import 'monitoring_hub_screen.dart';
 import 'operator_mode_store.dart';
+import 'petugas_quote_banner.dart';
 import 'shared_storage_link_service.dart';
 import 'staff_login_screen.dart';
 import 'staff_portal_client.dart';
@@ -35,6 +36,7 @@ class _MainShellState extends State<MainShell> {
   CheckMode _mode = CheckMode.tagihan;
   _ActiveView _view = _ActiveView.check;
   int _formNonce = 0;
+  int _quoteNonce = 0;
   String? _prefillBlok;
   String? _prefillWilayah;
   String? _prefillTahun;
@@ -135,6 +137,7 @@ class _MainShellState extends State<MainShell> {
       _prefillBlok = null;
       _prefillWilayah = null;
       _prefillTahun = null;
+      _quoteNonce++;
     });
   }
 
@@ -146,6 +149,7 @@ class _MainShellState extends State<MainShell> {
       _prefillWilayah = wilayah;
       _prefillTahun = tahun;
       _formNonce += 1;
+      _quoteNonce++;
     });
   }
 
@@ -169,7 +173,7 @@ class _MainShellState extends State<MainShell> {
     final alreadyLoggedIn = await client.hasActiveSession();
     if (!mounted) return;
     Navigator.pop(context); // tutup dialog loading
-    Navigator.push(
+    await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => alreadyLoggedIn
@@ -183,10 +187,16 @@ class _MainShellState extends State<MainShell> {
               ),
       ),
     );
+    if (mounted) {
+      setState(() => _quoteNonce++);
+    }
   }
 
   void _backToCheck() {
-    setState(() => _view = _ActiveView.check);
+    setState(() {
+      _view = _ActiveView.check;
+      _quoteNonce++;
+    });
   }
 
   Future<void> _openBukuCatatan() async {
@@ -194,7 +204,11 @@ class _MainShellState extends State<MainShell> {
       context,
       MaterialPageRoute(builder: (_) => const BlokCatatanScreen()),
     );
-    if (request == null || !mounted) return;
+    if (!mounted) return;
+    if (request == null) {
+      setState(() => _quoteNonce++);
+      return;
+    }
     setState(() {
       _mode = request.targetMode;
       _view = _ActiveView.check;
@@ -203,6 +217,7 @@ class _MainShellState extends State<MainShell> {
       _prefillTahun =
           request.targetMode == CheckMode.tagihan ? null : request.tahun;
       _formNonce += 1;
+      _quoteNonce++;
     });
   }
 
@@ -273,22 +288,32 @@ class _MainShellState extends State<MainShell> {
           desilSelected: _view == _ActiveView.desil,
           kendaraanSelected: _view == _ActiveView.kendaraan,
         ),
-        body: IndexedStack(
-          index: _view.index,
+        body: Column(
           children: [
-            CheckFormView(
-              key: ValueKey('$_mode-$_formNonce'),
-              mode: _mode,
-              scrollController: _checkScrollController,
-              onImportPressed: _openImport,
-              onOpenStatusBayar: _openStatusBayar,
-              initialBlok: _prefillBlok,
-              initialWilayah: _prefillWilayah,
-              initialTahun: _prefillTahun,
+            PetugasQuoteBanner(
+              triggerNonce: _quoteNonce,
+              visible: _view == _ActiveView.check,
             ),
-            _ImportWithBack(mode: _mode, onBack: _backToCheck),
-            DesilView(key: _desilKey),
-            KendaraanView(scrollController: _kendaraanScrollController),
+            Expanded(
+              child: IndexedStack(
+                index: _view.index,
+                children: [
+                  CheckFormView(
+                    key: ValueKey('$_mode-$_formNonce'),
+                    mode: _mode,
+                    scrollController: _checkScrollController,
+                    onImportPressed: _openImport,
+                    onOpenStatusBayar: _openStatusBayar,
+                    initialBlok: _prefillBlok,
+                    initialWilayah: _prefillWilayah,
+                    initialTahun: _prefillTahun,
+                  ),
+                  _ImportWithBack(mode: _mode, onBack: _backToCheck),
+                  DesilView(key: _desilKey),
+                  KendaraanView(scrollController: _kendaraanScrollController),
+                ],
+              ),
+            ),
           ],
         ),
         floatingActionButton: _view == _ActiveView.check
