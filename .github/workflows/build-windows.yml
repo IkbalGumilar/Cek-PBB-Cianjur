@@ -1,0 +1,70 @@
+name: Build Windows Release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    name: Build Windows x64 Executable
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Check Flutter Version
+        run: flutter doctor -v
+
+      - name: Get Dependencies
+        run: flutter pub get
+
+      - name: Run Tests
+        run: flutter test -j 1
+
+      - name: Build Windows Desktop
+        run: flutter build windows --release
+
+      - name: Package Windows Binary
+        shell: pwsh
+        run: |
+          $buildDir = "build\windows\x64\runner\Release"
+          $packageDir = "Cek-PBB-Cianjur-Windows-x64"
+          $zipName = "Cek-PBB-Cianjur-Windows-x64.zip"
+
+          # Buat folder distribusi
+          New-Item -ItemType Directory -Force -Path $packageDir
+
+          # Salin seluruh berkas biner dan aset dependensi
+          Copy-Item -Path "$buildDir\*" -Destination $packageDir -Recurse
+
+          # Arsipkan menjadi berkas zip portabel
+          Compress-Archive -Path "$packageDir\*" -DestinationPath $zipName -Force
+
+          Write-Host "Paket rilis Windows berhasil dibuat: $zipName"
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Cek-PBB-Cianjur-Windows-x64
+          path: Cek-PBB-Cianjur-Windows-x64.zip
+          retention-days: 14
+
+      - name: Upload to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: Cek-PBB-Cianjur-Windows-x64.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
