@@ -54,9 +54,10 @@ class BlokRecord {
       tanggalBayar.isNotEmpty;
 
   bool get isBlacklist =>
-      statusBayar.toLowerCase().contains('black') ||
-      statusBayar.toLowerCase().contains('daftar hitam') ||
-      statusBayar.toLowerCase().contains('hitam');
+      !isPaid &&
+      (statusBayar.toLowerCase().contains('black') ||
+          statusBayar.toLowerCase().contains('daftar hitam') ||
+          statusBayar.toLowerCase().contains('hitam'));
 
   bool get hasPhoto => namaFoto != null && namaFoto!.trim().isNotEmpty;
 

@@ -32,9 +32,21 @@ class ApkInstaller {
       url,
       file.path,
       onReceiveProgress: onProgress,
+      deleteOnError: true,
       options: Options(receiveTimeout: const Duration(minutes: 10)),
     );
     return file;
+  }
+
+  /// Mengambil daftar arsitektur CPU (ABI) yang didukung perangkat Android.
+  static Future<List<String>> getSupportedAbis() async {
+    if (!Platform.isAndroid) return const [];
+    try {
+      final abis = await _channel.invokeListMethod<String>('getSupportedAbis');
+      return abis ?? const [];
+    } catch (_) {
+      return const [];
+    }
   }
 
   static Future<Directory> _desktopDownloadsFolder() async {

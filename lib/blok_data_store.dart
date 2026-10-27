@@ -74,10 +74,12 @@ class BlokDataStore {
       if (row.length < 4) continue;
       final nop = row[1].toString().trim();
       if (nop.length != 18) continue;
-      final status = row.length > 5 && row[5].toString().trim().isNotEmpty
-          ? row[5].toString().trim()
-          : (row[3].toString().trim().isNotEmpty
-              ? 'Sudah Bayar'
+      final tanggalBayar = row[3].toString().trim();
+      final rawStatus = row.length > 5 ? row[5].toString().trim() : '';
+      final status = (tanggalBayar.isNotEmpty && tanggalBayar != '0')
+          ? 'Sudah Bayar'
+          : (rawStatus.isNotEmpty
+              ? rawStatus
               : 'Belum Bayar');
       final namaFoto = row.length > 6 && row[6].toString().trim().isNotEmpty
           ? row[6].toString().trim()

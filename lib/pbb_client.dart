@@ -101,6 +101,68 @@ class PbbClient extends BaseHttpClient {
     return _classifyStatusBayar(response.data ?? '');
   }
 
+  /// Cek status bayar NOP secara langsung via endpoint dokumen print-pdf tanpa captcha.
+  /// Endpoint ini digunakan khusus untuk proses Cek Massal berurutan yang aman dan efisien.
+  /// Respons:
+  /// - Berkas PDF (%PDF / application/pdf) -> Terdapat tunggakan / Belum Bayar.
+  /// - Alert success HTML ("tidak ada tunggakan PBB (LUNAS)") -> Sudah Bayar.
+  /// - Alert danger HTML ("aktif sampai dengan tahun") -> Blacklist / SPPT tidak aktif.
+  Future<PbbResult> checkStatusViaDocument(String nop, {String? tahun}) async {
+    final cleanNop = nop.replaceAll(RegExp(r'[^0-9]'), '');
+    final response = await _dio.get<List<int>>(
+      'https://cektagihan.cianjurkab.v-tax.id/print-pdf.php',
+      queryParameters: {'nop': cleanNop},
+      options: Options(
+        responseType: ResponseType.bytes,
+        validateStatus: (status) => status != null && status < 500,
+      ),
+    );
+
+    final bytes = response.data ?? [];
+    final contentType =
+        response.headers.value('content-type')?.toLowerCase() ?? '';
+    final isPdf = (bytes.length >= 4 &&
+            bytes[0] == 0x25 && // %
+            bytes[1] == 0x50 && // P
+            bytes[2] == 0x44 && // D
+            bytes[3] == 0x46) || // F
+        contentType.contains('application/pdf');
+
+    if (isPdf) {
+      return PbbResult(
+        'Belum Bayar',
+        'Terdapat tagihan tunggakan PBB aktif',
+      );
+    }
+
+    final html = utf8.decode(bytes, allowMalformed: true);
+    final lowered = html.toLowerCase();
+
+    if (lowered.contains('tidak ada tunggakan') ||
+        lowered.contains('lunas') ||
+        lowered.contains('alert-success')) {
+      return PbbResult(
+        'Sudah Bayar',
+        'NOP ini tidak ada tunggakan PBB (LUNAS)',
+      );
+    }
+
+    if (lowered.contains('alert-danger') ||
+        lowered.contains('aktif sampai dengan') ||
+        lowered.contains('peratian') ||
+        lowered.contains('perhatian')) {
+      return PbbResult(
+        'Blacklist',
+        'NOP aktif sampai dengan tahun lampau / SPPT tidak aktif',
+      );
+    }
+
+    return PbbResult(
+      'Perlu Cek Manual',
+      html,
+    );
+  }
+
   Future<TagihanResult> checkTagihan({
     required String nop,
     required String captchaCode,

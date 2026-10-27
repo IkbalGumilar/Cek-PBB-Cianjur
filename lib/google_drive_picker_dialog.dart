@@ -304,6 +304,7 @@ class GoogleDriveService {
     final lower = name.trim().toLowerCase();
     return lower.endsWith('.dkhp') ||
         lower.endsWith('.dhkp') ||
+        lower.endsWith('.dat') ||
         lower.endsWith('.zip') ||
         lower.endsWith('.csv') ||
         lower.endsWith('.xlsx') ||
@@ -654,15 +655,15 @@ class _GoogleDrivePickerDialogState extends State<GoogleDrivePickerDialog>
         String friendlyError;
         if (errStr.contains('403')) {
           friendlyError =
-              'Akses Google Drive API ditolak (403). Pastikan "Google Drive API" sudah diaktifkan di Google Cloud Console, atau pilih berkas langsung melalui File Manager HP di bawah.';
+              'Akses folder Google Drive belum diizinkan. Anda tetap dapat memilih berkas langsung dari penyimpanan perangkat di bawah.';
         } else if (errStr.contains('SocketException') ||
             errStr.contains('Failed host lookup') ||
             errStr.contains('ClientException')) {
           friendlyError =
-              'Gagal terhubung ke Google Drive (Koneksi jaringan bermasalah). Silakan periksa koneksi atau gunakan File Manager HP.';
+              'Gagal terhubung ke Google Drive karena koneksi internet sedang bermasalah. Silakan periksa sinyal atau pilih berkas dari perangkat.';
         } else {
           friendlyError =
-              'Gagal memuat berkas Google Drive: ${errStr.replaceFirst('Exception: ', '')}';
+              'Belum dapat memuat daftar berkas dari Google Drive. Silakan coba lagi atau pilih berkas dari penyimpanan perangkat.';
         }
         setState(() {
           _error = friendlyError;
@@ -684,7 +685,7 @@ class _GoogleDrivePickerDialogState extends State<GoogleDrivePickerDialog>
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text(
-                'Format berkas tidak didukung. Pilih berkas .dhkp, .dkhp, .zip, .csv, .xlsx, .xls, atau .txt.',
+                'Format berkas belum didukung. Silakan pilih berkas data DHKP atau tabel Excel.',
               ),
             ),
           );
@@ -740,7 +741,7 @@ class _GoogleDrivePickerDialogState extends State<GoogleDrivePickerDialog>
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
-              'Format berkas tidak didukung. Pilih berkas .dhkp, .dkhp, .zip, .csv, .xlsx, .xls, atau .txt.',
+              'Format berkas belum didukung. Silakan pilih berkas data DHKP atau tabel Excel.',
             ),
           ),
         );
@@ -814,13 +815,13 @@ class _GoogleDrivePickerDialogState extends State<GoogleDrivePickerDialog>
   Future<void> _downloadFromLink() async {
     final raw = _linkController.text.trim();
     if (raw.isEmpty) {
-      setState(() => _error = 'Masukkan link atau ID berkas Google Drive.');
+      setState(() => _error = 'Masukkan tautan berkas Google Drive.');
       return;
     }
 
     final fileId = GoogleDriveBackupPolicy.extractFileId(raw);
     if (fileId == null || fileId.isEmpty) {
-      setState(() => _error = 'Link atau ID Google Drive tidak valid.');
+      setState(() => _error = 'Tautan Google Drive tidak dikenali.');
       return;
     }
 
@@ -849,7 +850,7 @@ class _GoogleDrivePickerDialogState extends State<GoogleDrivePickerDialog>
       if (!mounted) return;
       setState(() {
         _downloading = false;
-        _error = 'Gagal mengunduh berkas dari link Google Drive: $e';
+        _error = 'Gagal mengunduh berkas dari tautan Google Drive: $e';
       });
     }
   }
@@ -954,7 +955,7 @@ class _GoogleDrivePickerDialogState extends State<GoogleDrivePickerDialog>
                 ),
                 Tab(
                   icon: Icon(Icons.link),
-                  text: 'Tempel Link / ID',
+                  text: 'Tempel Tautan',
                 ),
               ],
             ),
@@ -1016,7 +1017,7 @@ class _GoogleDrivePickerDialogState extends State<GoogleDrivePickerDialog>
                         foregroundColor: Colors.white,
                       ),
                       icon: const FaIcon(FontAwesomeIcons.googleDrive, size: 16),
-                      label: const Text('Buka Google Drive (File Manager HP)'),
+                      label: const Text('Pilih Berkas dari Penyimpanan Perangkat'),
                     ),
                   ],
                 ),
@@ -1065,7 +1066,7 @@ class _GoogleDrivePickerDialogState extends State<GoogleDrivePickerDialog>
       return const SmoothLoadingCard(
         icon: Icons.cloud_sync_outlined,
         title: 'Menghubungkan ke Google Drive...',
-        subtitle: 'Memuat daftar berkas DHKP & cadangan dari folder cloud Anda...',
+        subtitle: 'Memuat daftar berkas data DHKP dan cadangan dari Google Drive Anda...',
         badgeText: 'Memuat daftar berkas Drive',
       );
     }
@@ -1089,7 +1090,7 @@ class _GoogleDrivePickerDialogState extends State<GoogleDrivePickerDialog>
               ),
               const SizedBox(height: 6),
               const Text(
-                'Hubungkan akun Google Anda untuk melihat dan memilih berkas DHKP (.dkhp, .zip, .csv) langsung dari Drive.',
+                'Hubungkan akun Google Anda untuk melihat dan memilih berkas data DHKP langsung dari Google Drive.',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 13),
               ),
@@ -1121,7 +1122,7 @@ class _GoogleDrivePickerDialogState extends State<GoogleDrivePickerDialog>
               ),
               const SizedBox(height: 6),
               const Text(
-                'Jika berkas Anda berada di folder lain atau akses REST API terhalang izin server, Anda dapat langsung memilih berkas dari Google Drive menggunakan File Manager HP.',
+                'Jika berkas berada di folder lain, Anda dapat langsung memilihnya dari aplikasi Google Drive atau penyimpanan perangkat.',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 12),
               ),
@@ -1143,7 +1144,7 @@ class _GoogleDrivePickerDialogState extends State<GoogleDrivePickerDialog>
                   foregroundColor: Colors.white,
                 ),
                 icon: const FaIcon(FontAwesomeIcons.googleDrive, size: 16),
-                label: const Text('Buka Drive via File Manager HP'),
+                label: const Text('Pilih dari Penyimpanan Perangkat'),
               ),
               const SizedBox(height: 10),
               OutlinedButton.icon(
@@ -1191,12 +1192,12 @@ class _GoogleDrivePickerDialogState extends State<GoogleDrivePickerDialog>
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Buka via File Manager HP',
+                                'Pilih dari Penyimpanan Perangkat',
                                 style: TextStyle(
                                     fontWeight: FontWeight.bold, fontSize: 13),
                               ),
                               Text(
-                                'Pilih Google Drive di menu samping HP tanpa hambatan API',
+                                'Pilih berkas langsung dari folder perangkat atau menu Google Drive',
                                 style: TextStyle(fontSize: 11),
                               ),
                             ],
@@ -1241,19 +1242,19 @@ class _GoogleDrivePickerDialogState extends State<GoogleDrivePickerDialog>
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const Text(
-            'Buka Berkas via Link Google Drive',
+            'Buka Berkas via Tautan Google Drive',
             style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
           ),
           const SizedBox(height: 6),
           const Text(
-            'Tempel link berkas Google Drive publik/bersama yang berisi data DHKP (.dkhp, .zip, .csv).',
+            'Tempel tautan berkas Google Drive bersama yang berisi data DHKP.',
             style: TextStyle(fontSize: 12),
           ),
           const SizedBox(height: 16),
           TextField(
             controller: _linkController,
             decoration: InputDecoration(
-              labelText: 'Link atau ID Berkas Google Drive',
+              labelText: 'Tautan Berkas Google Drive',
               hintText: 'https://drive.google.com/file/d/...',
               prefixIcon: const Icon(Icons.link),
               border: const OutlineInputBorder(),
@@ -1284,7 +1285,7 @@ class _GoogleDrivePickerDialogState extends State<GoogleDrivePickerDialog>
                 SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Pastikan izin akses berkas di Google Drive diatur ke "Siapa saja yang memiliki link" (Anyone with the link) agar aplikasi dapat mengunduhnya secara langsung.',
+                    'Pastikan akses berkas di Google Drive diatur ke "Siapa saja yang memiliki link" agar aplikasi dapat mengunduhnya secara langsung.',
                     style: TextStyle(fontSize: 11),
                   ),
                 ),

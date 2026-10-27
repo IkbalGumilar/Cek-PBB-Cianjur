@@ -73,27 +73,68 @@ abstract class BaseTableExporter {
     required List<List<String>> rows,
     PdfPageFormat? pageFormat,
     double fontSize = 7,
+    int rowsPerPage = 28,
   }) async {
     final effectivePageFormat = pageFormat ?? PdfPageFormat.a4.landscape;
     final doc = pw.Document();
-    doc.addPage(
-      pw.MultiPage(
-        pageFormat: effectivePageFormat,
-        build: (context) => [
-          pw.Header(level: 0, text: title),
-          pw.TableHelper.fromTextArray(
-            headers: headers,
-            data: rows,
-            cellStyle: pw.TextStyle(fontSize: fontSize),
-            headerStyle: pw.TextStyle(
-              fontSize: fontSize,
-              fontWeight: pw.FontWeight.bold,
-            ),
-            cellAlignment: pw.Alignment.centerLeft,
+
+    if (rows.isEmpty) {
+      doc.addPage(
+        pw.Page(
+          pageFormat: effectivePageFormat,
+          margin: const pw.EdgeInsets.all(20),
+          build: (context) => pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Text(title, style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
+              pw.SizedBox(height: 12),
+              pw.Text('Tidak ada data.', style: const pw.TextStyle(fontSize: 10)),
+            ],
           ),
-        ],
-      ),
-    );
+        ),
+      );
+      return doc.save();
+    }
+
+    final totalPages = (rows.length / rowsPerPage).ceil();
+
+    for (var pageIdx = 0; pageIdx < totalPages; pageIdx++) {
+      final start = pageIdx * rowsPerPage;
+      final end = (start + rowsPerPage < rows.length) ? start + rowsPerPage : rows.length;
+      final pageRows = rows.sublist(start, end);
+
+      doc.addPage(
+        pw.Page(
+          pageFormat: effectivePageFormat,
+          margin: const pw.EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+          build: (context) => pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text(title, style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
+                  pw.Text('Hal ${pageIdx + 1} dari $totalPages', style: const pw.TextStyle(fontSize: 9)),
+                ],
+              ),
+              pw.SizedBox(height: 8),
+              pw.TableHelper.fromTextArray(
+                headers: headers,
+                data: pageRows,
+                cellStyle: pw.TextStyle(fontSize: fontSize),
+                headerStyle: pw.TextStyle(
+                  fontSize: fontSize,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+                cellAlignment: pw.Alignment.centerLeft,
+                headerAlignment: pw.Alignment.centerLeft,
+                cellPadding: const pw.EdgeInsets.symmetric(horizontal: 3, vertical: 2),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
     return doc.save();
   }
 

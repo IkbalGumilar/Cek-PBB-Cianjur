@@ -9,11 +9,16 @@ import 'blok_backup_scheduler.dart';
 import 'blok_data_store.dart';
 import 'connectivity_monitor.dart';
 import 'desktop_accent_color_helper.dart';
+import 'dusun_data.dart';
 import 'main_shell.dart';
 import 'network_status_overlay.dart';
+import 'blok_batch_check_tracker.dart';
 import 'theme_controller.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await DusunData.instance.init();
+  await BlokBatchCheckTracker.instance.init();
   runApp(const RestartWidget(child: CekPbbApp()));
 }
 

@@ -14,6 +14,7 @@ import 'backup_crypto.dart';
 import 'backup_password_store.dart';
 import 'blok_data_store.dart';
 import 'blok_record.dart';
+import 'dusun_data.dart';
 import 'nop_helper.dart';
 
 /// Enkripsi paket `.dkhp` menggunakan PBKDF2-HMAC-SHA256 dan AES-256-GCM.
@@ -192,6 +193,7 @@ class DhkpPackageHelper {
     final lower = path.trim().toLowerCase();
     return lower.endsWith('.dkhp') ||
         lower.endsWith('.dhkp') ||
+        lower.endsWith('.dat') ||
         lower.endsWith('.zip');
   }
 
@@ -433,6 +435,24 @@ class DhkpPackageHelper {
         final decoded = jsonDecode(manifestContent);
         if (decoded is Map<String, dynamic>) {
           manifest = decoded;
+          if (manifest['dusuns'] is List) {
+            final rawList = manifest['dusuns'] as List;
+            final parsedDusuns = <Dusun>[];
+            for (final item in rawList) {
+              if (item is Map) {
+                parsedDusuns.add(
+                  Dusun.fromJson(Map<String, dynamic>.from(item)),
+                );
+              }
+            }
+            if (parsedDusuns.isNotEmpty) {
+              await DusunData.instance.setDusuns(parsedDusuns);
+            }
+          }
+          if (manifest['scope'] is Map) {
+            final scopeMap = Map<String, dynamic>.from(manifest['scope'] as Map);
+            await DusunData.instance.setScope(DusunScope.fromJson(scopeMap));
+          }
         }
       } catch (_) {}
     }
@@ -456,22 +476,28 @@ class DhkpPackageHelper {
               : currentYear;
           final tanggal = row.length > 3 ? row[3].toString().trim() : '';
           final pokok = row.length > 4 ? row[4].toString().trim() : '';
-          final status = row.length > 5 && row[5].toString().trim().isNotEmpty
-              ? row[5].toString().trim()
-              : (tanggal.isNotEmpty ? 'Sudah Bayar' : 'Belum Bayar');
+          final rawStatus = row.length > 5 ? row[5].toString().trim() : '';
+          final status = (tanggal.isNotEmpty && tanggal != '0')
+              ? 'Sudah Bayar'
+              : (rawStatus.isNotEmpty
+                  ? rawStatus
+                  : 'Belum Bayar');
           final namaFoto = row.length > 6 && row[6].toString().trim().isNotEmpty
               ? row[6].toString().trim()
               : null;
           final rawTargetPemda = row.length > 7
               ? row[7].toString().trim().toLowerCase()
               : '';
+          final pokokDigits = pokok.replaceAll(RegExp(r'[^0-9]'), '');
+          final pokokVal = int.tryParse(pokokDigits) ?? 0;
           final isTargetPemda =
               rawTargetPemda == '1' ||
               rawTargetPemda == 'true' ||
               rawTargetPemda == 'ya' ||
               rawTargetPemda == 'yes' ||
               rawTargetPemda.contains('target') ||
-              rawTargetPemda.contains('pemda');
+              rawTargetPemda.contains('pemda') ||
+              (rawTargetPemda.isEmpty && pokokVal >= 1500000);
           final catatan = row.length > 8 ? row[8].toString().trim() : '';
           final luasBumi = row.length > 9 ? row[9].toString().trim() : '';
           final luasBangunan = row.length > 10 ? row[10].toString().trim() : '';
@@ -521,8 +547,36 @@ class DhkpPackageHelper {
     final existingRecords = await BlokDataStore.instance.loadAll();
     final isDeltaArchive =
         manifest != null && (manifest['isDeltaOnly'] == true);
+    final isDatReport = filePath.toLowerCase().endsWith('.dat') ||
+        (manifest != null && manifest['format'] == 'laporan_dat_v1');
 
-    if (requireBaseDhkp || isDeltaArchive) {
+    if (isDatReport) {
+      final incomingBloks = <String>{};
+      for (final r in records) {
+        final b = int.tryParse(r.blok)?.toString() ?? r.blok.replaceAll(RegExp(r'[^0-9]'), '');
+        if (b.isNotEmpty) incomingBloks.add(b);
+      }
+      if (manifest != null && manifest['changes'] is List) {
+        for (final item in manifest['changes'] as List) {
+          if (item is Map) {
+            final rawB = (item['blok'] ?? '').toString();
+            final b = int.tryParse(rawB)?.toString() ?? rawB.replaceAll(RegExp(r'[^0-9]'), '');
+            if (b.isNotEmpty) incomingBloks.add(b);
+          }
+        }
+      }
+
+      final localBloks = existingRecords
+          .map((r) => int.tryParse(r.blok)?.toString() ?? r.blok.replaceAll(RegExp(r'[^0-9]'), ''))
+          .where((b) => b.isNotEmpty)
+          .toSet();
+
+      if (existingRecords.isEmpty ||
+          incomingBloks.isEmpty ||
+          !incomingBloks.every((b) => localBloks.contains(b))) {
+        throw const DhkpBackupValidationException('Data tidak sesuai');
+      }
+    } else if (requireBaseDhkp || isDeltaArchive) {
       if (requireBaseDhkp && existingRecords.isEmpty) {
         throw const DhkpBackupValidationException(
           'Berkas DHKP dasar belum dimuat. Muat berkas DHKP terlebih dahulu sebelum menggunakan berkas cadangan perubahan.',
@@ -581,14 +635,16 @@ class DhkpPackageHelper {
         }
 
         if (baseRecord != null) {
+          final tglStr = (item['tanggalBayar'] ?? baseRecord.tanggalBayar).toString().trim();
+          final rawSt = (item['statusBayar'] ?? baseRecord.statusBayar).toString().trim();
+          final effectiveSt = (tglStr.isNotEmpty && tglStr != '0')
+              ? 'Sudah Bayar'
+              : (rawSt.isNotEmpty ? rawSt : 'Belum Bayar');
           records.add(
             baseRecord.copyWith(
-              tahunBayar: (item['tahunBayar'] ?? baseRecord.tahunBayar)
-                  .toString(),
-              tanggalBayar: (item['tanggalBayar'] ?? baseRecord.tanggalBayar)
-                  .toString(),
-              statusBayar: (item['statusBayar'] ?? baseRecord.statusBayar)
-                  .toString(),
+              tahunBayar: (item['tahunBayar'] ?? baseRecord.tahunBayar).toString(),
+              tanggalBayar: tglStr,
+              statusBayar: effectiveSt,
               namaFoto: item['namaFoto']?.toString() ?? baseRecord.namaFoto,
               isTargetPemda: item['isTargetPemda'] is bool
                   ? item['isTargetPemda'] as bool
@@ -672,14 +728,25 @@ class DhkpPackageHelper {
     for (final r in records) {
       final cleanNop = r.nop.replaceAll(RegExp(r'[^0-9]'), '');
       final base = existingByNop[cleanNop];
-      if (base != null && isDeltaArchive) {
+      if (base != null && (isDeltaArchive || isDatReport)) {
         mergedRecords.add(
           base.copyWith(
             statusBayar: r.statusBayar,
-            tanggalBayar: r.tanggalBayar,
-            catatan: r.catatan,
-            namaFoto: r.namaFoto ?? base.namaFoto,
+            tanggalBayar: r.tanggalBayar.isNotEmpty ? r.tanggalBayar : base.tanggalBayar,
+            catatan: r.catatan.isNotEmpty ? r.catatan : base.catatan,
+            namaFoto: (r.namaFoto != null && r.namaFoto!.isNotEmpty) ? r.namaFoto : base.namaFoto,
             isTargetPemda: r.isTargetPemda,
+            namaWajibPajak: (r.namaWajibPajak.isNotEmpty && !r.namaWajibPajak.startsWith('WP '))
+                ? r.namaWajibPajak
+                : base.namaWajibPajak,
+            alamatObjek: r.alamatObjek.isNotEmpty ? r.alamatObjek : base.alamatObjek,
+            alamatWp: r.alamatWp.isNotEmpty ? r.alamatWp : base.alamatWp,
+            rtObjek: r.rtObjek.isNotEmpty ? r.rtObjek : base.rtObjek,
+            luasBumi: r.luasBumi.isNotEmpty ? r.luasBumi : base.luasBumi,
+            luasBangunan: r.luasBangunan.isNotEmpty ? r.luasBangunan : base.luasBangunan,
+            njopBumi: r.njopBumi.isNotEmpty ? r.njopBumi : base.njopBumi,
+            njopBangunan: r.njopBangunan.isNotEmpty ? r.njopBangunan : base.njopBangunan,
+            jumlahPbb: r.jumlahPbb.isNotEmpty ? r.jumlahPbb : base.jumlahPbb,
           ),
         );
       } else {
@@ -708,24 +775,32 @@ class DhkpPackageHelper {
     bool includePhotos = true,
     bool deltaOnly = false,
     String? password,
+    List<Dusun>? dusuns,
+    DusunScope? scope,
   }) async {
     final archive = Archive();
+    final isDatReport = outputPath.toLowerCase().endsWith('.dat');
     final effectiveBase = baseRecords ?? records;
     final dhkpFingerprint = computeDhkpFingerprint(effectiveBase);
     final changedList = extractChangedRecords(records);
-    final targetRecords = (deltaOnly && changedList.isNotEmpty)
+    final targetRecords = (deltaOnly && changedList.isNotEmpty && !isDatReport)
         ? changedList
         : records;
 
-    // 1. Buat manifest.json dengan sidik jari berkas DHKP dasar dan daftar perubahan (Hanya Blok & Nomor, tanpa NOP 18 digit)
-    if (effectiveBase.isNotEmpty) {
+    // 1. Buat manifest.json dengan sidik jari berkas DHKP dasar, daftar dusun dinamis, pembatas wilayah (scope), dan daftar perubahan
+    if (effectiveBase.isNotEmpty || isDatReport) {
+      final effectiveDusuns = dusuns ?? DusunData.instance.allDusuns;
+      final effectiveScope = scope ?? DusunData.instance.scope;
       final manifestMap = <String, dynamic>{
-        'format': 'dhkp_delta_v1',
-        'isDeltaOnly': deltaOnly,
+        'format': isDatReport ? 'laporan_dat_v1' : 'dhkp_delta_v1',
+        'isDeltaOnly': isDatReport ? false : deltaOnly,
         'dhkpFingerprint': dhkpFingerprint,
         'baseTotalNop': effectiveBase.length,
         'changedCount': changedList.length,
         'timestamp': DateTime.now().millisecondsSinceEpoch,
+        if (effectiveDusuns.isNotEmpty)
+          'dusuns': effectiveDusuns.map((d) => d.toJson()).toList(),
+        'scope': effectiveScope.toJson(),
         'changes': [
           for (final r in targetRecords)
             {
@@ -747,10 +822,9 @@ class DhkpPackageHelper {
       );
     }
 
-    // 2. Buat data.csv HANYA jika bukan deltaOnly (paket DHKP utuh).
-    // Saat deltaOnly == true, berkas cadangan tidak menyimpan Nama WP, Alamat, Luas, NJOP, atau Pokok PBB
-    // sama sekali untuk mencegah kebocoran data pribadi jika berkas cadangan bocor.
-    if (!deltaOnly) {
+    // 2. Buat data.csv jika bukan deltaOnly atau jika berkas merupakan laporan .dat.
+    // Saat deltaOnly == true (bukan .dat), berkas cadangan tidak menyimpan rincian objek.
+    if (!deltaOnly || isDatReport) {
       final csvRows = <List<String>>[
         [
           'Nama WP',

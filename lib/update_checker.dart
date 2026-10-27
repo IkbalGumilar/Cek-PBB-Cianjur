@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'apk_installer.dart';
 import 'update_info.dart';
 
 class UpdateCheckError implements Exception {
@@ -49,33 +50,48 @@ class UpdateChecker {
   }
 
   /// Cek ke GitHub sekarang juga, dipakai tombol "Periksa Pembaruan" manual.
-  static Future<UpdateInfo?> checkForUpdate() async {
+  static Future<UpdateInfo?> checkForUpdate({
+    bool? includePrereleases,
+    String? currentVersionOverride,
+    List<Map<String, dynamic>>? releasesOverride,
+    List<String>? supportedAbisOverride,
+    bool? isAndroidOverride,
+  }) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_lastCheckedKey, DateTime.now().millisecondsSinceEpoch);
 
-    final currentVersion = (await PackageInfo.fromPlatform()).version;
+    final currentVersion = currentVersionOverride ??
+        (await PackageInfo.fromPlatform()).version;
+    final allowPrerelease = includePrereleases ??
+        (currentVersion.contains('alpha') || currentVersion.contains('beta'));
 
-    final Response<List<dynamic>> response;
-    try {
-      response = await Dio().get<List<dynamic>>(
-        'https://api.github.com/repos/$_githubOwner/$_githubRepo/releases',
-        queryParameters: {'per_page': 100},
-        options: Options(
-          sendTimeout: const Duration(seconds: 10),
-          receiveTimeout: const Duration(seconds: 10),
-          headers: {'Accept': 'application/vnd.github+json'},
-        ),
-      );
-    } on DioException catch (e) {
-      if (e.response?.statusCode == 404) return null; // belum pernah rilis
-      throw UpdateCheckError(
-        'Gagal memeriksa pembaruan: ${e.message ?? e.type}',
-      );
+    final List<dynamic> rawReleases;
+    if (releasesOverride != null) {
+      rawReleases = releasesOverride;
+    } else {
+      final Response<List<dynamic>> response;
+      try {
+        response = await Dio().get<List<dynamic>>(
+          'https://api.github.com/repos/$_githubOwner/$_githubRepo/releases',
+          queryParameters: {'per_page': 100},
+          options: Options(
+            sendTimeout: const Duration(seconds: 10),
+            receiveTimeout: const Duration(seconds: 10),
+            headers: {'Accept': 'application/vnd.github+json'},
+          ),
+        );
+        rawReleases = response.data ?? const [];
+      } on DioException catch (e) {
+        if (e.response?.statusCode == 404) return null; // belum pernah rilis
+        throw UpdateCheckError(
+          'Gagal memeriksa pembaruan: ${e.message ?? e.type}',
+        );
+      }
     }
 
-    final releases = (response.data ?? const [])
+    final releases = rawReleases
         .whereType<Map<String, dynamic>>()
-        .where(isStableRelease)
+        .where((r) => isEligibleRelease(r, allowPrerelease: allowPrerelease))
         .toList();
     if (releases.isEmpty) return null;
 
@@ -99,7 +115,16 @@ class UpdateChecker {
     final assets = ((data['assets'] as List?) ?? const [])
         .map((e) => e as Map<String, dynamic>)
         .toList();
-    final asset = _findAssetForPlatform(assets);
+
+    final isAndroid = isAndroidOverride ?? Platform.isAndroid;
+    final supportedAbis = supportedAbisOverride ??
+        (isAndroid ? await ApkInstaller.getSupportedAbis() : null);
+
+    final asset = findAssetForPlatform(
+      assets,
+      supportedAbis: supportedAbis,
+      isAndroidOverride: isAndroidOverride,
+    );
     if (asset == null) {
       return null; // rilis ada tapi belum dilampiri berkas untuk platform ini
     }
@@ -116,23 +141,69 @@ class UpdateChecker {
   }
 
   /// Cari asset rilis GitHub yang cocok untuk platform yang sedang berjalan.
-  /// Android selalu cari `.apk` (satu-satunya format instal Android). Di
-  /// Windows/Linux belum ada konvensi baku, jadi dicocokkan lewat kata kunci
-  /// nama platform di nama berkas rilisnya (mis. "CekPBBCianjur-windows.zip",
-  /// "CekPBBCianjur-linux.tar.gz") — sesuaikan nama berkas rilis di GitHub
-  /// dengan kata kunci ini supaya terdeteksi.
-  static Map<String, dynamic>? _findAssetForPlatform(
-    List<Map<String, dynamic>> assets,
-  ) {
+  /// Android: dicocokkan dengan arsitektur CPU (ABI) perangkat (arm64-v8a, armeabi-v7a, x86_64).
+  /// Windows/Linux: dicocokkan lewat ekstensi berkas atau kata kunci platform.
+  static Map<String, dynamic>? findAssetForPlatform(
+    List<Map<String, dynamic>> assets, {
+    List<String>? supportedAbis,
+    bool? isAndroidOverride,
+    bool? isWindowsOverride,
+    bool? isLinuxOverride,
+  }) {
+    final isAndroid = isAndroidOverride ?? Platform.isAndroid;
+    final isWindows = isWindowsOverride ?? Platform.isWindows;
+    final isLinux = isLinuxOverride ?? Platform.isLinux;
+
     bool matches(Map<String, dynamic> asset, bool Function(String name) test) {
       return test((asset['name'] as String? ?? '').toLowerCase());
     }
 
-    if (Platform.isAndroid) {
-      for (final asset in assets) {
-        if (matches(asset, (name) => name.endsWith('.apk'))) return asset;
+    if (isAndroid) {
+      final apkAssets = assets
+          .where((a) => (a['name'] as String? ?? '').toLowerCase().endsWith('.apk'))
+          .toList();
+      if (apkAssets.isEmpty) return null;
+      if (apkAssets.length == 1) return apkAssets.first;
+
+      // Urutan prioritas ABI perangkat:
+      // Di Android nyata, supportedAbis dibaca dari Build.SUPPORTED_ABIS via MethodChannel.
+      // Jika kosong (fallback), default prioritas ARM64 -> ARMv7 -> universal -> x86_64.
+      final preferredAbis = (supportedAbis != null && supportedAbis.isNotEmpty)
+          ? supportedAbis
+          : const ['arm64-v8a', 'armeabi-v7a', 'x86_64'];
+
+      for (final abi in preferredAbis) {
+        final cleanAbi = abi.toLowerCase();
+        for (final asset in apkAssets) {
+          final name = (asset['name'] as String? ?? '').toLowerCase();
+          if (name.contains(cleanAbi)) return asset;
+          if (cleanAbi == 'arm64-v8a' && (name.contains('arm64') || name.contains('v8a'))) {
+            return asset;
+          }
+          if (cleanAbi == 'armeabi-v7a' && (name.contains('armeabi') || name.contains('v7a'))) {
+            return asset;
+          }
+          if (cleanAbi == 'x86_64' && name.contains('x86_64')) {
+            return asset;
+          }
+        }
       }
-    } else if (Platform.isWindows) {
+
+      // Jika tidak ada nama berkas yang mencantumkan ABI di atas, cari berkas APK universal
+      for (final asset in apkAssets) {
+        final name = (asset['name'] as String? ?? '').toLowerCase();
+        final hasSpecificAbi = name.contains('arm64') ||
+            name.contains('v8a') ||
+            name.contains('armeabi') ||
+            name.contains('v7a') ||
+            name.contains('x86');
+        if (!hasSpecificAbi || name.contains('universal')) {
+          return asset;
+        }
+      }
+
+      return apkAssets.first;
+    } else if (isWindows) {
       for (final asset in assets) {
         if (matches(
           asset,
@@ -144,7 +215,7 @@ class UpdateChecker {
           return asset;
         }
       }
-    } else if (Platform.isLinux) {
+    } else if (isLinux) {
       for (final asset in assets) {
         if (matches(
           asset,
@@ -161,18 +232,41 @@ class UpdateChecker {
     return null;
   }
 
+
+  /// Memeriksa apakah rilis memenuhi syarat untuk pengguna saat ini.
+  /// Pengguna versi beta/alpha diizinkan menerima pembaruan beta/alpha yang lebih baru.
+  /// Pengguna rilis stabil hanya menerima pembaruan rilis stabil resmi.
+  static bool isEligibleRelease(
+    Map<String, dynamic> release, {
+    required bool allowPrerelease,
+  }) {
+    if (release['draft'] == true) return false;
+    final version = _versionFromTag(release['tag_name']);
+    if (version == null) return false;
+    if (allowPrerelease) return true;
+    return isStableRelease(release);
+  }
+
   /// Memastikan rilis bukan draft dan bukan pre-release (alpha/beta/rc).
   static bool isStableRelease(Map<String, dynamic> release) {
     if (release['draft'] == true || release['prerelease'] == true) {
       return false;
     }
-    return _versionFromTag(release['tag_name']) != null;
+    final version = _versionFromTag(release['tag_name']);
+    if (version == null) return false;
+    return !version.contains('alpha') && !version.contains('beta');
   }
 
   static String? _versionFromTag(Object? tag) {
     if (tag is! String) return null;
-    final version = tag.trim().replaceFirst(RegExp(r'^v'), '');
-    return RegExp(r'^\d+\.\d+\.\d+$').hasMatch(version) ? version : null;
+    final version = tag
+        .trim()
+        .replaceFirst(RegExp(r'^v'), '')
+        .replaceFirst(RegExp(r'\+.*$'), '');
+    return RegExp(r'^\d+\.\d+\.\d+(?:-(?:alpha|beta)(?:\.?\d+)?)?$')
+            .hasMatch(version)
+        ? version
+        : null;
   }
 
   static bool isNewerVersion(String latest, String current) {
@@ -191,9 +285,13 @@ class UpdateChecker {
   }
 
   static List<int> _parseVersion(String version) {
+    final clean = version
+        .trim()
+        .replaceFirst(RegExp(r'^v'), '')
+        .replaceFirst(RegExp(r'\+.*$'), '');
     final match = RegExp(
       r'^(\d+)\.(\d+)\.(\d+)(?:-(alpha|beta)(?:\.?(\d+))?)?$',
-    ).firstMatch(version);
+    ).firstMatch(clean);
     if (match == null) return [0, 0, 0, 0];
 
     final stage = match.group(4);

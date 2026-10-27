@@ -30,6 +30,9 @@ class BlokReportExporter extends BaseTableExporter {
     BlokExportFormat format,
     List<BlokRecord> records, {
     String? tahun,
+    String? blokTitle,
+    Future<void> Function(int current, int total)? onProgress,
+    int pacingDelayMs = 120,
   }) async {
     final totalPbb = records.fold<int>(0, (sum, r) => sum + r.jumlahPbbValue);
     switch (format) {
@@ -44,7 +47,14 @@ class BlokReportExporter extends BaseTableExporter {
           _buildDataRows(records, totalPbb),
         );
       case BlokExportFormat.pdf:
-        return BlokReportPdf.build(records, tahun: tahun, totalPbb: totalPbb);
+        return BlokReportPdf.build(
+          records,
+          tahun: tahun,
+          blokTitle: blokTitle,
+          totalPbb: totalPbb,
+          onProgress: onProgress,
+          pacingDelayMs: pacingDelayMs,
+        );
     }
   }
 
@@ -72,9 +82,9 @@ class BlokReportExporter extends BaseTableExporter {
         '',
         '',
         '',
-        '',
         'Total Keseluruhan',
         formatRupiah(totalPbb),
+        '',
         '',
         '',
       ],

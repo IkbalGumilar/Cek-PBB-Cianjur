@@ -56,6 +56,103 @@
                     android:host="ikbalgumilar.github.io"
                     android:pathPrefix="/Cek-PBB-Cianjur/connect" />
             </intent-filter>
+
+            <!-- Intent Filter untuk membuka berkas DHKP (.dkhp / .dhkp / .dat) dari WhatsApp, File Manager, dll -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:mimeType="*/*" />
+                <data android:pathPattern=".*\\.dkhp" />
+                <data android:pathPattern=".*\\.DKHP" />
+                <data android:pathPattern=".*\\.dhkp" />
+                <data android:pathPattern=".*\\.DHKP" />
+                <data android:pathPattern=".*\\.dat" />
+                <data android:pathPattern=".*\\.DAT" />
+                <data android:pathSuffix=".dkhp" />
+                <data android:pathSuffix=".DKHP" />
+                <data android:pathSuffix=".dhkp" />
+                <data android:pathSuffix=".DHKP" />
+                <data android:pathSuffix=".dat" />
+                <data android:pathSuffix=".DAT" />
+            </intent-filter>
+
+            <!-- Intent Filter untuk aplikasi (seperti WhatsApp) yang mengirim MIME type application/octet-stream -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:mimeType="application/octet-stream" />
+                <data android:pathPattern=".*\\.dkhp" />
+                <data android:pathPattern=".*\\.DKHP" />
+                <data android:pathPattern=".*\\.dhkp" />
+                <data android:pathPattern=".*\\.DHKP" />
+                <data android:pathPattern=".*\\.dat" />
+                <data android:pathPattern=".*\\.DAT" />
+                <data android:pathSuffix=".dkhp" />
+                <data android:pathSuffix=".DKHP" />
+                <data android:pathSuffix=".dhkp" />
+                <data android:pathSuffix=".DHKP" />
+                <data android:pathSuffix=".dat" />
+                <data android:pathSuffix=".DAT" />
+            </intent-filter>
+
+            <!-- Intent Filter untuk File Manager tanpa MIME type (berdasarkan host & path/suffix) -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:host="*" />
+                <data android:pathPattern=".*\\.dkhp" />
+                <data android:pathPattern=".*\\.DKHP" />
+                <data android:pathPattern=".*\\.dhkp" />
+                <data android:pathPattern=".*\\.DHKP" />
+                <data android:pathPattern=".*\\.dat" />
+                <data android:pathPattern=".*\\.DAT" />
+                <data android:pathSuffix=".dkhp" />
+                <data android:pathSuffix=".DKHP" />
+                <data android:pathSuffix=".dhkp" />
+                <data android:pathSuffix=".DHKP" />
+                <data android:pathSuffix=".dat" />
+                <data android:pathSuffix=".DAT" />
+            </intent-filter>
+
+            <!-- Intent Filter untuk format berkas arsip zip yang terkait paket DHKP -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:mimeType="application/zip" />
+                <data android:pathSuffix=".dkhp" />
+                <data android:pathSuffix=".dat" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:mimeType="application/x-zip-compressed" />
+                <data android:pathSuffix=".dkhp" />
+                <data android:pathSuffix=".dat" />
+            </intent-filter>
+
+            <!-- Intent Filter saat pengguna memilih opsi "Bagikan" / "Share" berkas dari aplikasi lain -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
         </activity>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->

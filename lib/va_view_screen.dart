@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'bank_launcher.dart';
+import 'currency_format.dart';
 import 'va_result.dart';
 
 const _kodeBankAntarBank = '910200';
@@ -142,7 +143,7 @@ class _VaViewScreenState extends State<VaViewScreen> {
               Text('Nama: ${result.customerName}'),
               const SizedBox(height: 4),
               Text(
-                'Jumlah: Rp. ${result.amount}',
+                'Jumlah: ${formatRupiah(result.amount)}',
                 style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,

@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'blok_batch_check_tracker.dart';
 import 'blok_data_store.dart';
-import 'check_mode.dart';
-import 'download_helper.dart';
 import 'nop_helper.dart';
 import 'pbb_client.dart';
 import 'result_screen.dart';
@@ -13,15 +12,21 @@ import 'unity_lerp_widgets.dart';
 class BatchCheckScreen extends StatefulWidget {
   final List<TaxRecord> records;
   final String tahun;
-  final bool downloadBuktiBayar;
   final PbbClient? client;
+  final Duration pacingDelay;
+  final int cooldownBatchSize;
+  final Duration cooldownDuration;
+  final bool autoStart;
 
   const BatchCheckScreen({
     super.key,
     required this.records,
     required this.tahun,
-    this.downloadBuktiBayar = false,
     this.client,
+    this.pacingDelay = const Duration(milliseconds: 750),
+    this.cooldownBatchSize = 50,
+    this.cooldownDuration = const Duration(seconds: 3),
+    this.autoStart = true,
   });
 
   @override
@@ -30,144 +35,214 @@ class BatchCheckScreen extends StatefulWidget {
 
 class _BatchCheckScreenState extends State<BatchCheckScreen> {
   late final PbbClient _client;
-  final _captchaController = TextEditingController();
-  final _captchaFocusNode = FocusNode();
+  final ScrollController _scrollController = ScrollController();
 
-  int _index = 0;
-  Uint8List? _captchaBytes;
-  bool _loadingCaptcha = false;
-  bool _submitting = false;
-  String? _errorText;
+  int _currentIndex = 0;
+  bool _isRunning = false;
+  bool _isPaused = false;
+  bool _isCooldown = false;
+  bool _isCompleted = false;
+  String _statusMessage = 'Menyiapkan pengecekan...';
 
-  TaxRecord get _current => widget.records[_index];
+  TaxRecord? get _current =>
+      _currentIndex < widget.records.length ? widget.records[_currentIndex] : null;
 
   @override
   void initState() {
     super.initState();
     _client = widget.client ?? PbbClient();
-    _loadCaptcha();
+    if (widget.autoStart && widget.records.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _runBatch();
+      });
+    }
   }
 
   @override
   void dispose() {
-    _captchaController.dispose();
-    _captchaFocusNode.dispose();
+    _isRunning = false;
+    _scrollController.dispose();
     super.dispose();
   }
 
-  Future<void> _loadCaptcha({bool clearError = true}) async {
-    setState(() {
-      _loadingCaptcha = true;
-      if (clearError) _errorText = null;
-    });
-    try {
-      final bytes = await _client.fetchCaptchaImage(CheckMode.statusBayar);
-      if (!mounted) return;
-      setState(() {
-        _captchaBytes = bytes;
-        _loadingCaptcha = false;
-      });
-      _captchaFocusNode.requestFocus();
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _errorText = 'Gagal memuat kode gambar: $e';
-        _loadingCaptcha = false;
-      });
-    }
+  void _scrollToCurrent() {
+    if (!_scrollController.hasClients) return;
+    const itemExtent = 64.0;
+    final targetOffset = (_currentIndex * itemExtent) - 100.0;
+    final maxScroll = _scrollController.position.maxScrollExtent;
+    final clamped = targetOffset.clamp(0.0, maxScroll);
+    _scrollController.animateTo(
+      clamped,
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOut,
+    );
   }
 
-  void _goToNext() {
-    _captchaController.clear();
-    if (_index + 1 >= widget.records.length) {
-      HapticFeedback.mediumImpact();
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => ResultScreen(records: widget.records),
-        ),
-      );
-      return;
-    }
-    HapticFeedback.lightImpact();
-    setState(() => _index += 1);
-    _loadCaptcha();
-  }
-
-  Future<void> _submit() async {
-    final captcha = _captchaController.text.trim();
-    if (captcha.isEmpty) {
-      setState(() => _errorText = 'Kode verifikasi wajib diisi.');
-      _captchaFocusNode.requestFocus();
-      return;
-    }
-
+  Future<void> _runBatch() async {
+    if (_isRunning) return;
     setState(() {
-      _submitting = true;
-      _errorText = null;
+      _isRunning = true;
+      _isPaused = false;
     });
 
-    try {
-      final result = await _client.checkStatusBayar(
-        nop: _current.nop,
-        tahun: widget.tahun,
-        captchaCode: captcha,
-      );
-      if (!mounted) return;
-      _current.status = result.status;
-      _current.rawText = result.rawText;
-      _current.namaWajibPajak = result.namaWajibPajak;
+    while (_currentIndex < widget.records.length && _isRunning) {
+      if (_isPaused) break;
 
-      if (_current.isPaid) {
-        await BlokDataStore.instance.updateStatusBayarFromCheck(
-          nop: _current.nop,
+      final record = widget.records[_currentIndex];
+      if (mounted) {
+        setState(() {
+          _statusMessage = 'Sedang memeriksa NOP ${record.nop}...';
+        });
+        _scrollToCurrent();
+      }
+
+      // Jeda aman per NOP (750 ms) untuk mencegah beban berlebih ke server
+      if (widget.pacingDelay > Duration.zero) {
+        await Future<void>.delayed(widget.pacingDelay);
+      }
+      if (!_isRunning || _isPaused || !mounted) break;
+
+      try {
+        final result = await _client.checkStatusViaDocument(
+          record.nop,
           tahun: widget.tahun,
-          result: result,
         );
-      }
-
-      if (widget.downloadBuktiBayar && _current.isPaid) {
-        final buktiBayarDownloaded = await _downloadBuktiBayar(_current);
         if (!mounted) return;
-        _current.buktiBayarDownloaded = buktiBayarDownloaded;
+        record.status = result.status;
+        record.rawText = result.rawText;
+        if (result.namaWajibPajak != null &&
+            result.namaWajibPajak!.trim().isNotEmpty) {
+          record.namaWajibPajak = result.namaWajibPajak;
+        }
+
+        if (record.isPaid) {
+          await BlokDataStore.instance.updateStatusBayarFromCheck(
+            nop: record.nop,
+            tahun: widget.tahun,
+            result: result,
+          );
+        }
+        await BlokBatchCheckTracker.instance.recordChecked(record.nop);
+      } catch (e) {
+        if (!mounted) return;
+        record.status = 'Gagal Cek';
+        record.rawText = e.toString();
+        await BlokBatchCheckTracker.instance.recordChecked(record.nop);
       }
 
       if (!mounted) return;
-      _goToNext();
-    } on CaptchaError catch (e) {
-      if (!mounted) return;
-      setState(() => _errorText = e.message);
-      _captchaController.clear();
-      await Future<void>.delayed(const Duration(seconds: 1));
-      if (!mounted) return;
-      await _loadCaptcha(clearError: false);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _errorText = 'Gagal cek: $e');
-    } finally {
-      if (mounted) setState(() => _submitting = false);
+      setState(() {
+        _currentIndex++;
+      });
+
+      // Cooldown berkala (misal setiap 50 NOP jeda 3 detik) agar server Bapenda tetap aman
+      if (widget.cooldownBatchSize > 0 &&
+          _currentIndex > 0 &&
+          _currentIndex % widget.cooldownBatchSize == 0 &&
+          _currentIndex < widget.records.length &&
+          _isRunning &&
+          !_isPaused) {
+        final totalSecs = widget.cooldownDuration.inSeconds;
+        if (totalSecs > 0) {
+          for (int s = totalSecs; s > 0; s--) {
+            if (!_isRunning || _isPaused || !mounted) break;
+            setState(() {
+              _isCooldown = true;
+              _statusMessage = 'Cooldown $s detik...';
+            });
+            await Future<void>.delayed(const Duration(seconds: 1));
+          }
+        } else if (widget.cooldownDuration > Duration.zero) {
+          await Future<void>.delayed(widget.cooldownDuration);
+        }
+        if (mounted) {
+          setState(() {
+            _isCooldown = false;
+          });
+        }
+      }
+    }
+
+    if (!mounted) return;
+    if (_currentIndex >= widget.records.length) {
+      setState(() {
+        _isRunning = false;
+        _isCompleted = true;
+        _statusMessage = 'Semua NOP selesai diperiksa.';
+      });
+      HapticFeedback.mediumImpact();
+      await Future<void>.delayed(const Duration(milliseconds: 600));
+      if (mounted) _goToResult();
+    } else {
+      setState(() {
+        _isRunning = false;
+      });
     }
   }
 
-  Future<bool> _downloadBuktiBayar(TaxRecord record) async {
-    try {
-      final bytes = await _client.fetchBuktiBayarPdf(
-        nop: record.nop,
-        tahun: widget.tahun,
-      );
-      final fileName =
-          'Bukti Bayar (${record.namaWajibPajak ?? record.nop}) No. '
-          '(${nopBlok(record.nop)}) (${nopWilayah(record.nop)}) (${widget.tahun}).pdf';
-      await DownloadHelper.saveBytes(bytes, fileName);
+  void _pause() {
+    setState(() {
+      _isPaused = true;
+      _isRunning = false;
+      _isCooldown = false;
+      _statusMessage = 'Pengecekan dijeda.';
+    });
+  }
+
+  void _resume() {
+    _runBatch();
+  }
+
+  void _skipCurrent() {
+    if (_currentIndex < widget.records.length) {
+      widget.records[_currentIndex].status = 'Dilewati';
+      setState(() {
+        _currentIndex++;
+      });
+      if (_isRunning && !_isPaused) {
+        _runBatch();
+      }
+    }
+  }
+
+  void _goToResult() {
+    _isRunning = false;
+    _isPaused = false;
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ResultScreen(records: widget.records),
+      ),
+    );
+  }
+
+  Future<bool> _onWillPop() async {
+    if (!_isRunning) return true;
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Hentikan Pengecekan Massal?'),
+        content: const Text(
+          'Pengecekan sedang berjalan. Data yang sudah dicek tetap tersimpan di database lokal.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Lanjutkan Cek'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Hentikan & Keluar'),
+          ),
+        ],
+      ),
+    );
+    if (confirm == true) {
+      _isRunning = false;
+      _isPaused = false;
       return true;
-    } catch (_) {
-      return false;
     }
-  }
-
-  void _skip() {
-    _current.status = 'Dilewati';
-    _goToNext();
+    return false;
   }
 
   Widget _buildCounterBadge({
@@ -194,281 +269,405 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
     );
   }
 
+  Color _statusColor(String status, ColorScheme scheme) {
+    final s = status.toLowerCase();
+    if (s.contains('sudah') || s.contains('lunas')) return Colors.green;
+    if (s.contains('belum')) return Colors.orange;
+    if (s.contains('blacklist')) return Colors.deepPurple;
+    if (s.contains('lewat')) return Colors.grey;
+    if (s.contains('gagal') || s.contains('error')) return Colors.red;
+    return scheme.outline;
+  }
+
+  IconData _statusIcon(String status) {
+    final s = status.toLowerCase();
+    if (s.contains('sudah') || s.contains('lunas')) return Icons.check_circle;
+    if (s.contains('belum')) return Icons.schedule;
+    if (s.contains('blacklist')) return Icons.block;
+    if (s.contains('lewat')) return Icons.skip_next;
+    if (s.contains('gagal') || s.contains('error')) return Icons.error_outline;
+    return Icons.radio_button_unchecked;
+  }
+
   @override
   Widget build(BuildContext context) {
     final total = widget.records.length;
     final sudahBayarCount = widget.records.where((r) => r.isPaid).length;
     final belumBayarCount = widget.records
-        .where((r) => r.isChecked && !r.isPaid && r.status != 'Dilewati')
+        .where((r) =>
+            r.isChecked &&
+            !r.isPaid &&
+            r.status != 'Blacklist' &&
+            r.status != 'Dilewati' &&
+            r.status != 'Gagal Cek')
         .length;
+    final blacklistCount =
+        widget.records.where((r) => r.status.contains('Blacklist')).length;
+    final gagalCount =
+        widget.records.where((r) => r.status.contains('Gagal Cek')).length;
     final dilewatiCount =
         widget.records.where((r) => r.status == 'Dilewati').length;
-    final sisaCount = total - _index;
+    final sisaCount = (total - _currentIndex).clamp(0, total);
     final scheme = Theme.of(context).colorScheme;
 
-    return Scaffold(
-      appBar: AppBar(title: Text('Cek Status Bayar (${_index + 1}/$total)')),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
+    final progressVal = total == 0 ? 0.0 : (_currentIndex / total).clamp(0.0, 1.0);
+
+    return PopScope(
+      canPop: !_isRunning,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) return;
+        final shouldPop = await _onWillPop();
+        if (shouldPop && context.mounted) {
+          Navigator.pop(context);
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(
+            'Cek Massal (${_currentIndex.clamp(0, total)}/$total)',
+          ),
+          actions: [
+            if (_currentIndex > 0)
+              TextButton.icon(
+                onPressed: _goToResult,
+                icon: const Icon(Icons.fact_check_outlined, size: 18),
+                label: const Text('Hasil'),
+              ),
+          ],
+        ),
+        body: SafeArea(
           child: Center(
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 640),
+              constraints: const BoxConstraints(maxWidth: 720),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  LerpAnimatedProgress(
-                    value: total == 0 ? 0 : (_index + 1) / total,
-                    minHeight: 6,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      _buildCounterBadge(
-                        label: 'Sudah',
-                        count: sudahBayarCount,
-                        color: Colors.green,
-                      ),
-                      const SizedBox(width: 8),
-                      _buildCounterBadge(
-                        label: 'Belum',
-                        count: belumBayarCount,
-                        color: Colors.orange,
-                      ),
-                      if (dilewatiCount > 0) ...[
-                        const SizedBox(width: 8),
-                        _buildCounterBadge(
-                          label: 'Lewat',
-                          count: dilewatiCount,
-                          color: Colors.grey,
+                  // Progress and Counters Header
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        LerpAnimatedProgress(
+                          value: progressVal,
+                          minHeight: 8,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        const SizedBox(height: 10),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 6,
+                          children: [
+                            _buildCounterBadge(
+                              label: 'Sudah',
+                              count: sudahBayarCount,
+                              color: Colors.green,
+                            ),
+                            _buildCounterBadge(
+                              label: 'Belum',
+                              count: belumBayarCount,
+                              color: Colors.orange,
+                            ),
+                            if (blacklistCount > 0)
+                              _buildCounterBadge(
+                                label: 'Blacklist',
+                                count: blacklistCount,
+                                color: Colors.deepPurple,
+                              ),
+                            if (gagalCount > 0)
+                              _buildCounterBadge(
+                                label: 'Gagal',
+                                count: gagalCount,
+                                color: Colors.red,
+                              ),
+                            if (dilewatiCount > 0)
+                              _buildCounterBadge(
+                                label: 'Lewat',
+                                count: dilewatiCount,
+                                color: Colors.grey,
+                              ),
+                            _buildCounterBadge(
+                              label: 'Sisa',
+                              count: sisaCount,
+                              color: scheme.primary,
+                            ),
+                          ],
                         ),
                       ],
-                      const Spacer(),
-                      _buildCounterBadge(
-                        label: 'Sisa',
-                        count: sisaCount,
-                        color: scheme.primary,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  Card(
-                    elevation: 0,
-                    color: scheme.surfaceContainerLow,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      side: BorderSide(
-                        color: scheme.outlineVariant.withValues(alpha: 0.5),
-                      ),
                     ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                'NOP',
-                                style: Theme.of(context).textTheme.labelMedium,
-                              ),
-                              if (nopBlok(_current.nop).isNotEmpty)
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 3,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: scheme.secondaryContainer,
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
+                  ),
+
+                  // Active Item & Controls Card
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Card(
+                      elevation: 0,
+                      color: scheme.surfaceContainerLow,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        side: BorderSide(
+                          color: scheme.outlineVariant.withValues(alpha: 0.5),
+                        ),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(14),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Row(
+                              children: [
+                                if (_isCooldown)
+                                  const Icon(Icons.hourglass_top,
+                                      size: 18, color: Colors.cyan)
+                                else if (_isRunning)
+                                  const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                  )
+                                else if (_isPaused)
+                                  const Icon(Icons.pause_circle_outline,
+                                      size: 18, color: Colors.orange)
+                                else if (_isCompleted)
+                                  const Icon(Icons.check_circle_outline,
+                                      size: 18, color: Colors.green)
+                                else
+                                  const Icon(Icons.pending_outlined,
+                                      size: 18, color: Colors.grey),
+                                const SizedBox(width: 8),
+                                Expanded(
                                   child: Text(
-                                    'Blok ${nopBlok(_current.nop)}',
+                                    _statusMessage,
                                     style: Theme.of(context)
                                         .textTheme
-                                        .labelSmall
+                                        .bodySmall
                                         ?.copyWith(
-                                          color: scheme.onSecondaryContainer,
                                           fontWeight: FontWeight.w600,
+                                          color: _isCooldown
+                                              ? Colors.cyan.shade700
+                                              : scheme.onSurfaceVariant,
                                         ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
-                            ],
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            _current.nop,
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleLarge
-                                ?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: 1.1,
-                                ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Tahun Pajak: ${widget.tahun}',
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                  color: scheme.onSurfaceVariant,
-                                ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  Card(
-                    elevation: 0,
-                    color: scheme.surfaceContainerLow,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      side: BorderSide(
-                        color: scheme.outlineVariant.withValues(alpha: 0.5),
-                      ),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Center(
-                            child: _loadingCaptcha
-                                ? const Padding(
-                                    padding: EdgeInsets.all(24),
-                                    child: CircularProgressIndicator(),
-                                  )
-                                : _captchaBytes != null
-                                    ? Container(
-                                        decoration: BoxDecoration(
-                                          border: Border.all(
-                                            color: scheme.outlineVariant,
-                                          ),
-                                          borderRadius:
-                                              BorderRadius.circular(10),
-                                        ),
-                                        clipBehavior: Clip.antiAlias,
-                                        child: Image.memory(
-                                          _captchaBytes!,
-                                          height: 84,
-                                        ),
-                                      )
-                                    : const Text('Captcha belum dimuat'),
-                          ),
-                          const SizedBox(height: 6),
-                          Center(
-                            child: TextButton.icon(
-                              onPressed:
-                                  _loadingCaptcha ? null : () => _loadCaptcha(),
-                              icon: const Icon(Icons.refresh, size: 18),
-                              label: const Text('Ganti Captcha'),
+                              ],
                             ),
-                          ),
-                          const SizedBox(height: 8),
-                          ValueListenableBuilder<TextEditingValue>(
-                            valueListenable: _captchaController,
-                            builder: (context, value, _) {
-                              return TextField(
-                                controller: _captchaController,
-                                focusNode: _captchaFocusNode,
-                                autofocus: true,
-                                textInputAction: TextInputAction.go,
-                                textCapitalization: TextCapitalization.none,
-                                autocorrect: false,
-                                enableSuggestions: false,
-                                decoration: InputDecoration(
-                                  labelText: 'Kode Verifikasi',
-                                  hintText: 'Ketik huruf pada gambar di atas',
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  suffixIcon: value.text.isNotEmpty
-                                      ? IconButton(
-                                          icon:
-                                              const Icon(Icons.clear, size: 20),
-                                          tooltip: 'Hapus teks',
-                                          onPressed: () {
-                                            _captchaController.clear();
-                                            _captchaFocusNode.requestFocus();
-                                          },
-                                        )
-                                      : null,
-                                ),
-                                onSubmitted: (_) =>
-                                    _submitting ? null : _submit(),
-                              );
-                            },
-                          ),
-                          if (_errorText != null) ...[
-                            const SizedBox(height: 12),
-                            Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: scheme.errorContainer,
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Row(
+                            if (_current != null) ...[
+                              const Divider(height: 16),
+                              Row(
                                 children: [
-                                  Icon(
-                                    Icons.error_outline,
-                                    size: 18,
-                                    color: scheme.onErrorContainer,
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          _current!.nop,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .titleMedium
+                                              ?.copyWith(
+                                                fontWeight: FontWeight.bold,
+                                                letterSpacing: 1.05,
+                                              ),
+                                        ),
+                                        if (_current!.namaWajibPajak != null &&
+                                            _current!
+                                                .namaWajibPajak!.isNotEmpty)
+                                          Text(
+                                            _current!.namaWajibPajak!,
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .bodyMedium
+                                                ?.copyWith(
+                                                  color: scheme.onSurfaceVariant,
+                                                ),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                  if (nopBlok(_current!.nop).isNotEmpty)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 8, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: scheme.primaryContainer,
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Text(
+                                        'Blok ${nopBlok(_current!.nop)}',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: scheme.onPrimaryContainer,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ],
+                            const SizedBox(height: 12),
+                            // Action controls
+                            Row(
+                              children: [
+                                if (_isRunning) ...[
+                                  Expanded(
+                                    child: FilledButton.tonalIcon(
+                                      onPressed: _pause,
+                                      icon: const Icon(Icons.pause, size: 18),
+                                      label: const Text('Jeda'),
+                                    ),
                                   ),
                                   const SizedBox(width: 8),
                                   Expanded(
-                                    child: Text(
-                                      _errorText!,
-                                      style: TextStyle(
-                                        color: scheme.onErrorContainer,
-                                        fontSize: 13,
-                                      ),
+                                    child: OutlinedButton.icon(
+                                      onPressed: _goToResult,
+                                      icon: const Icon(Icons.stop_circle_outlined,
+                                          size: 18),
+                                      label: const Text('Hentikan'),
+                                    ),
+                                  ),
+                                ] else if (!_isCompleted) ...[
+                                  Expanded(
+                                    child: FilledButton.icon(
+                                      onPressed: _resume,
+                                      icon: const Icon(Icons.play_arrow,
+                                          size: 18),
+                                      label: const Text('Lanjutkan'),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  OutlinedButton(
+                                    onPressed: _skipCurrent,
+                                    child: const Text('Lewati'),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  IconButton.outlined(
+                                    tooltip: 'Lihat Hasil Sementara',
+                                    onPressed: _goToResult,
+                                    icon: const Icon(Icons.fact_check_outlined,
+                                        size: 18),
+                                  ),
+                                ] else ...[
+                                  Expanded(
+                                    child: FilledButton.icon(
+                                      onPressed: _goToResult,
+                                      icon: const Icon(Icons.check_circle,
+                                          size: 18),
+                                      label: const Text('Buka Hasil Pengecekan'),
                                     ),
                                   ),
                                 ],
-                              ),
+                              ],
                             ),
                           ],
-                          const SizedBox(height: 16),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: FilledButton.icon(
-                                  onPressed: _submitting ? null : _submit,
-                                  icon: _submitting
-                                      ? SizedBox(
-                                          height: 18,
-                                          width: 18,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                            color: scheme.onPrimary,
-                                          ),
-                                        )
-                                      : const Icon(Icons.check_circle_outline),
-                                  label: const Text('Cek & Lanjut'),
-                                  style: FilledButton.styleFrom(
-                                    padding: const EdgeInsets.symmetric(
-                                      vertical: 13,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              OutlinedButton(
-                                onPressed: _submitting ? null : _skip,
-                                style: OutlinedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 20,
-                                    vertical: 13,
-                                  ),
-                                ),
-                                child: const Text('Lewati'),
-                              ),
-                            ],
-                          ),
-                        ],
+                        ),
                       ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  // Live Records List
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Daftar NOP (${widget.records.length})',
+                          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
+                        ),
+                        Text(
+                          'Tahun Pajak: ${widget.tahun}',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: scheme.onSurfaceVariant,
+                              ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+
+                  Expanded(
+                    child: ListView.builder(
+                      controller: _scrollController,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 4),
+                      itemCount: widget.records.length,
+                      itemBuilder: (context, index) {
+                        final item = widget.records[index];
+                        final isCurrent = index == _currentIndex && _isRunning;
+                        final color = _statusColor(item.status, scheme);
+                        final icon = _statusIcon(item.status);
+
+                        return Container(
+                          margin: const EdgeInsets.symmetric(vertical: 3),
+                          decoration: BoxDecoration(
+                            color: isCurrent
+                                ? scheme.primaryContainer.withValues(alpha: 0.3)
+                                : scheme.surfaceContainerLowest,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: isCurrent
+                                  ? scheme.primary
+                                  : scheme.outlineVariant.withValues(alpha: 0.3),
+                              width: isCurrent ? 1.5 : 1,
+                            ),
+                          ),
+                          child: ListTile(
+                            dense: true,
+                            leading: Icon(
+                              isCurrent ? Icons.sync : icon,
+                              color: isCurrent ? scheme.primary : color,
+                              size: 20,
+                            ),
+                            title: Text(
+                              item.nop,
+                              style: TextStyle(
+                                fontWeight: isCurrent
+                                    ? FontWeight.bold
+                                    : FontWeight.w500,
+                                fontSize: 13,
+                              ),
+                            ),
+                            subtitle: item.namaWajibPajak != null &&
+                                    item.namaWajibPajak!.isNotEmpty
+                                ? Text(
+                                    item.namaWajibPajak!,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: scheme.onSurfaceVariant,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  )
+                                : null,
+                            trailing: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: color.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(
+                                    color: color.withValues(alpha: 0.3)),
+                              ),
+                              child: Text(
+                                item.status.isEmpty
+                                    ? (isCurrent ? 'Memeriksa...' : 'Antrean')
+                                    : item.status,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: color,
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      },
                     ),
                   ),
                 ],

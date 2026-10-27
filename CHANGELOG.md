@@ -4,6 +4,25 @@ Dokumentasi perubahan, peningkatan, dan perbaikan pada setiap rilis aplikasi. Fo
 
 ---
 
+## [v0.1.1-beta] - 2026-10-27
+
+### 🚀 Fitur Baru
+- **Buka Berkas Otomatis dari WhatsApp / File Manager**: Integrasi Intent-Filter Android (`ACTION_VIEW` dan `ACTION_SEND`) sehingga berkas `.dkhp`, `.dhkp`, dan `.dat` dapat langsung dibuka dan diimpor ke aplikasi hanya dengan mengetuk berkas di chat WhatsApp atau pengelola berkas.
+- **Deteksi Arsitektur Perangkat (ABI-Aware APK)**: Pembaruan aplikasi kini otomatis mengenali arsitektur CPU perangkat pengguna (`arm64-v8a`, `armeabi-v7a`, `x86_64`) dan mengunduh berkas APK yang paling sesuai dan optimal.
+
+### 🔄 Perubahan & Peningkatan
+- **Penyempurnaan Pembaruan Aplikasi (In-App Update)**:
+  - Dukungan penuh deteksi rilis GitHub berlabel `beta` dan `alpha` serta penanganan format versi dengan nomor build (`+build`).
+  - Pembersihan berkas gagal unduh secara otomatis (`deleteOnError: true`).
+  - Pengecekan keberadaan berkas sebelum mengunduh ulang guna menghemat kuota pengguna.
+  - Tombol interaktif "Pasang Sekarang" jika jendela konfirmasi installer sistem sempat tertutup.
+
+### 🛡️ Perbaikan Bug
+- **Format Mata Uang Rupiah**: Memperbaiki teks duplikat awalan `Rp Rp` pada struk/cetak tanda terima dan laporan blok.
+- **Pembaruan Data DHKP**: Sinkronisasi data DHKP terbaru Dusun 3 dan pembagian blok terkait.
+
+---
+
 ## [v0.1.0-beta] - 2026-10-25
 
 ### 🚀 Fitur Baru

@@ -306,35 +306,6 @@ class _ImportViewState extends State<ImportView> {
     setState(() => _savedNotice = null);
   }
 
-  /// null = batal (tombol Kembali), true/false = jawaban unduh bukti bayar.
-  Future<bool?> _confirmDownloadBuktiBayar() {
-    return showDialog<bool?>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Unduh Bukti Bayar Sekalian?'),
-        content: const Text(
-          'Untuk NOP yang statusnya "Sudah Bayar", apakah bukti bayarnya sekalian '
-          'diunduh semua ke folder Dokumen setelah dicek?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, null),
-            child: const Text('Kembali'),
-          ),
-          OutlinedButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Tidak'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Iya'),
-          ),
-        ],
-      ),
-    );
-  }
-
   Future<void> _startBatch() async {
     final tahun = _tahunController.text.trim();
     final combined = <String, TaxRecord>{};
@@ -357,13 +328,6 @@ class _ImportViewState extends State<ImportView> {
       return;
     }
 
-    var downloadBuktiBayar = false;
-    if (widget.mode == CheckMode.statusBayar) {
-      final choice = await _confirmDownloadBuktiBayar();
-      if (choice == null) return;
-      downloadBuktiBayar = choice;
-    }
-
     if (!mounted) return;
     Navigator.push(
       context,
@@ -371,7 +335,6 @@ class _ImportViewState extends State<ImportView> {
         builder: (_) => BatchCheckScreen(
           records: records,
           tahun: tahun,
-          downloadBuktiBayar: downloadBuktiBayar,
         ),
       ),
     );

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:screen_brightness/screen_brightness.dart';
 
+import 'currency_format.dart';
 import 'qris_result.dart';
 
 class QrisViewScreen extends StatefulWidget {
@@ -88,7 +89,7 @@ class _QrisViewScreenState extends State<QrisViewScreen> {
                 ),
                 const SizedBox(height: 24),
                 Text(
-                  widget.result.amount,
+                  formatRupiah(widget.result.amount),
                   style: const TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.bold,

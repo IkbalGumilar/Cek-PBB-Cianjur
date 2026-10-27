@@ -1,5 +1,6 @@
 # Cek PBB Cianjur
 
+[![Version](https://img.shields.io/badge/Version-v0.1.1--beta-orange.svg)](https://github.com/IkbalGumilar/Cek-PBB-Cianjur/releases/latest)
 [![Flutter](https://img.shields.io/badge/Flutter-3.x-02569B?logo=flutter)](https://flutter.dev)
 [![Dart](https://img.shields.io/badge/Dart-3.x-0175C2?logo=dart)](https://dart.dev)
 [![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20Windows%20%7C%20Linux-green.svg)]()
@@ -43,6 +44,8 @@ Aplikasi manajemen, pengecekan, dan monitoring Pajak Bumi dan Bangunan Perdesaan
   - Pelacakan 4 indikator metrik utama: **Sudah Bayar**, **Belum Bayar**, **Target Pemda**, dan **Blacklist (Menunggak ≥ 5 Tahun)**.
   - Pencatatan riwayat penagihan, status objek pajak, foto lokasi/bukti bayar dengan zoom interaktif, dan penambahan catatan khusus kolektor.
   - **Ekspor Kolase Foto**: Penggabungan foto objek pajak/SPPT per blok ke dalam dokumen laporan siap cetak atau dibagikan ke instansi pembina.
+- **Asosiasi Berkas Cerdas (WhatsApp & File Manager)**:
+  - Berkas arsip `.dkhp`, `.dhkp`, maupun laporan perubahan `.dat` dapat diketuk langsung dari chat WhatsApp atau pengelola berkas Android untuk membuka aplikasi dan memuat/memulihkan data secara otomatis via Intent-Filter native.
 - **Sinkronisasi Multi-Petugas & Cloud Backup**:
   - Terintegrasi langsung dengan Google Drive API untuk mengunduh dan menyinkronkan data antar-kolektor.
   - Protokol delta sync terenkripsi untuk penggabungan perubahan catatan tanpa menimpa data rekan kerja.
@@ -110,7 +113,8 @@ Aplikasi ini memprioritaskan kerahasiaan dan integritas data wajib pajak melalui
 | **Cek Desil & Bansos Kemensos** | ✅ | ✅ | ✅ | Input manual (semua OS) / Scan NIK (Android) |
 | **Cek Pajak Kendaraan Jabar** | ✅ | ✅ | ✅ | Input manual (semua OS) / Scan Plat (Android) |
 | **Kunci Biometrik / PIN / Password** | ✅ | ✅ | ✅ | Terintegrasi dengan sistem keamanan perangkat |
-| **Pembaruan Otomatis (In-App Update)** | ✅ | ⚠️ | ⚠️ | Android: Pasang mandiri; Desktop: Unduh biner |
+| **Buka Berkas (.dkhp, .dhkp, .dat)** | ✅ | ❌ | ❌ | Buka langsung dari WhatsApp / Pengelola Berkas Android |
+| **Pembaruan Otomatis (In-App Update)** | ✅ | ⚠️ | ⚠️ | Android: Pasang mandiri (Auto-ABI); Desktop: Unduh biner |
 
 ---
 
@@ -179,11 +183,13 @@ Pengecekan kewajiban PKB Jawa Barat secara instan:
 ---
 
 ## 🚀 Alur Pembaruan Otomatis
-
+ 
 Aplikasi dilengkapi mekanisme pemantauan rilis berkala yang terhubung ke REST API GitHub:
 1. Pengecekan otomatis berjalan maksimal sekali setiap 24 jam saat aplikasi dibuka, atau dapat dipicu manual melalui **Pengaturan → Tentang Aplikasi → Periksa Pembaruan**.
-2. **Android**: Aplikasi mengunduh berkas `.apk` rilis resmi langsung ke penyimpanan perangkat dan memanggil penginstal sistem Android secara otomatis.
-3. **Windows & Linux**: Aplikasi mengunduh paket biner rilis ke folder `Downloads/Cek PBB Cianjur` dan memberikan instruksi ekstraksi berkas kepada pengguna.
+2. **Deteksi Versi SemVer Cerdas**: Mendukung pembaruan rilis stabil maupun versi uji coba (`beta` / `alpha`), dengan pemfilteran nomor build (`+build`) dan proteksi dari berkas unduhan yang korup (`deleteOnError`).
+3. **Pencocokan Arsitektur CPU (ABI-Aware APK)**: Pada Android, aplikasi mendeteksi arsitektur perangkat secara native (`Build.SUPPORTED_ABIS`) sehingga ponsel 64-bit modern otomatis mengunduh paket `arm64-v8a.apk`, ponsel 32-bit mengunduh `armeabi-v7a.apk`, dan emulator mengunduh `x86_64.apk`.
+4. **Android**: Aplikasi mengunduh berkas `.apk` langsung ke cache privat, membuka installer sistem secara otomatis via `FileProvider`, dan menyediakan tombol buka ulang jika jendela konfirmasi sempat tertutup.
+5. **Windows & Linux**: Aplikasi mengunduh paket biner rilis ke folder `Downloads/Cek PBB Cianjur` dan memberikan instruksi ekstraksi berkas kepada pengguna.
 
 ---
 
@@ -209,13 +215,7 @@ Aplikasi dilengkapi mekanisme pemantauan rilis berkala yang terhubung ke REST AP
    flutter pub get
    ```
 
-3. **Jalankan Pengujian Otomatis (Unit & Widget Tests)**:
-   ```bash
-   flutter test -j 1
-   ```
-   *Memverifikasi integritas logika bisnis, parsing data DHKP, enkripsi, dan komponen antarmuka pengguna.*
-
-4. **Kompilasi Biner Rilis**:
+3. **Kompilasi Biner Rilis**:
    - **Android Split APK (Rekomendasi untuk efisiensi ukuran berkas)**:
      ```bash
      flutter build apk --release --split-per-abi

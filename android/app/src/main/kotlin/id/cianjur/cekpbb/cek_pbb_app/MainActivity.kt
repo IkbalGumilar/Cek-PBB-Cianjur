@@ -13,6 +13,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
+import android.provider.OpenableColumns
 import android.provider.Settings
 import android.view.WindowManager
 import androidx.core.content.FileProvider
@@ -28,9 +29,12 @@ class MainActivity : FlutterFragmentActivity() {
     private val filesChannelName = "id.cianjur.cekpbb.cek_pbb_app/files"
     private val bankChannelName = "id.cianjur.cekpbb.cek_pbb_app/bank"
     private val deepLinkChannelName = "id.cianjur.cekpbb.cek_pbb_app/deeplink"
+    private val incomingFileChannelName = "id.cianjur.cekpbb.cek_pbb_app/incoming_file"
 
     private var initialDeepLink: String? = null
+    private var initialIncomingFile: String? = null
     private var deepLinkChannel: MethodChannel? = null
+    private var incomingFileChannel: MethodChannel? = null
 
     // Nama folder publik tempat semua dokumen aplikasi ini disimpan:
     // Dokumen/Cek PBB Cianjur (hasil cek, bukti bayar, laporan blok, backup).
@@ -38,7 +42,7 @@ class MainActivity : FlutterFragmentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        handleDeepLink(intent)
+        handleIncomingIntent(intent)
         // Mencegah tangkapan layar (screenshot), perekaman layar (screen record),
         // dan pratinjau snapshot di recent apps / task switcher (anti shoulder-surfing & data leak).
         window.setFlags(
@@ -50,15 +54,86 @@ class MainActivity : FlutterFragmentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        handleDeepLink(intent)
+        handleIncomingIntent(intent)
     }
 
-    private fun handleDeepLink(intent: Intent?) {
-        val data: Uri? = intent?.data
-        if (data != null) {
-            val link = data.toString()
-            initialDeepLink = link
-            deepLinkChannel?.invokeMethod("onDeepLink", link)
+    private fun handleIncomingIntent(intent: Intent?) {
+        if (intent == null) return
+        val uri: Uri? = intent.data ?: if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            intent.getParcelableExtra(Intent.EXTRA_STREAM)
+        }
+
+        if (uri != null) {
+            val scheme = uri.scheme?.lowercase()
+            // 1. Cek apakah ini Deep Link Web atau Custom Scheme
+            if (scheme == "cekpbb" || (scheme == "https" && uri.host == "ikbalgumilar.github.io")) {
+                val link = uri.toString()
+                initialDeepLink = link
+                deepLinkChannel?.invokeMethod("onDeepLink", link)
+                return
+            }
+
+            // 2. Cek apakah ini Berkas (content:// atau file://)
+            if (scheme == "content" || scheme == "file") {
+                handleIncomingFile(uri)
+            }
+        }
+    }
+
+    private fun handleIncomingFile(uri: Uri) {
+        try {
+            var fileName: String? = null
+            if (uri.scheme == "content") {
+                val projection = arrayOf(OpenableColumns.DISPLAY_NAME)
+                contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
+                    if (cursor.moveToFirst()) {
+                        val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                        if (nameIndex >= 0) {
+                            fileName = cursor.getString(nameIndex)
+                        }
+                    }
+                }
+            }
+            if (fileName.isNullOrEmpty()) {
+                fileName = uri.lastPathSegment
+            }
+            if (fileName.isNullOrEmpty()) {
+                fileName = "berkas_dhkp.dkhp"
+            }
+
+            val cleanName = File(fileName!!).name
+            val lower = cleanName.lowercase()
+            val isSupported = lower.endsWith(".dkhp") ||
+                    lower.endsWith(".dhkp") ||
+                    lower.endsWith(".dat") ||
+                    lower.endsWith(".zip")
+
+            if (!isSupported) {
+                return
+            }
+
+            val incomingDir = File(cacheDir, "incoming_files")
+            if (!incomingDir.exists()) {
+                incomingDir.mkdirs()
+            }
+            val targetFile = File(incomingDir, cleanName)
+
+            contentResolver.openInputStream(uri)?.use { inputStream ->
+                targetFile.outputStream().use { outputStream ->
+                    inputStream.copyTo(outputStream)
+                }
+            }
+
+            if (targetFile.exists() && targetFile.length() > 0) {
+                val absolutePath = targetFile.absolutePath
+                initialIncomingFile = absolutePath
+                incomingFileChannel?.invokeMethod("onIncomingFile", absolutePath)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 
@@ -70,6 +145,7 @@ class MainActivity : FlutterFragmentActivity() {
                 "shareApk" -> shareApk(result)
                 "installApk" -> installApk(call, result)
                 "openInstallPermissionSettings" -> openInstallPermissionSettings(result)
+                "getSupportedAbis" -> result.success(Build.SUPPORTED_ABIS.toList())
                 else -> result.notImplemented()
             }
         }
@@ -105,6 +181,18 @@ class MainActivity : FlutterFragmentActivity() {
                         val link = initialDeepLink
                         initialDeepLink = null
                         result.success(link)
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+        }
+        incomingFileChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, incomingFileChannelName).apply {
+            setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "getInitialFile" -> {
+                        val file = initialIncomingFile
+                        initialIncomingFile = null
+                        result.success(file)
                     }
                     else -> result.notImplemented()
                 }

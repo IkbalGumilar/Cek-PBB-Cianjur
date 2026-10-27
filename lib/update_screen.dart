@@ -30,10 +30,10 @@ class _UpdateScreenState extends State<UpdateScreen> {
 
   String get _downloadFileName {
     final url = widget.info.apkDownloadUrl;
-    final urlName = url.split('/').last;
+    final urlName = Uri.tryParse(url)?.pathSegments.lastOrNull ?? url.split('/').last;
     return urlName.contains('.')
         ? urlName
-        : 'CekPBBCianjur-${widget.info.version}';
+        : 'CekPBBCianjur-${widget.info.version}.apk';
   }
 
   Future<void> _downloadAndInstall() async {
@@ -43,16 +43,17 @@ class _UpdateScreenState extends State<UpdateScreen> {
       _error = null;
     });
     try {
-      final file =
-          _downloadedFile ??
-          await ApkInstaller.download(
-            widget.info.apkDownloadUrl,
-            fileName: _downloadFileName,
-            onProgress: (received, total) {
-              if (total <= 0 || !mounted) return;
-              setState(() => _progress = received / total);
-            },
-          );
+      final existing = _downloadedFile;
+      final file = (existing != null && await existing.exists())
+          ? existing
+          : await ApkInstaller.download(
+              widget.info.apkDownloadUrl,
+              fileName: _downloadFileName,
+              onProgress: (received, total) {
+                if (total <= 0 || !mounted) return;
+                setState(() => _progress = received / total);
+              },
+            );
       _downloadedFile = file;
       if (!mounted) return;
       setState(() => _stage = _Stage.downloaded);
@@ -193,12 +194,18 @@ class _UpdateScreenState extends State<UpdateScreen> {
                   textAlign: TextAlign.center,
                 ),
               ] else if (_stage == _Stage.downloaded) ...[
-                if (_canSelfInstall)
+                if (_canSelfInstall) ...[
                   const Text(
-                    'Berkas sudah diunduh, menunggu konfirmasi instal...',
+                    'Berkas sudah diunduh. Jika jendela instalasi tidak muncul otomatis, tekan tombol di bawah:',
                     textAlign: TextAlign.center,
-                  )
-                else
+                  ),
+                  const SizedBox(height: 12),
+                  FilledButton.icon(
+                    onPressed: _retryInstallAfterPermission,
+                    icon: const Icon(Icons.install_mobile),
+                    label: const Text('Pasang Sekarang'),
+                  ),
+                ] else
                   Card(
                     color: Colors.green.withValues(alpha: 0.12),
                     child: Padding(

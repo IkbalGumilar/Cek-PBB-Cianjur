@@ -64,6 +64,10 @@ class DownloadHelper {
   static String mimeTypeFor(String fileName) {
     final lower = fileName.toLowerCase();
     if (lower.endsWith('.pdf')) return 'application/pdf';
+    if (lower.endsWith('.png')) return 'image/png';
+    if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) {
+      return 'image/jpeg';
+    }
     if (lower.endsWith('.csv')) return 'text/csv';
     if (lower.endsWith('.xlsx')) {
       return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';

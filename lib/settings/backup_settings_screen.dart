@@ -593,7 +593,7 @@ class _BackupSettingsSectionState extends State<BackupSettingsSection> {
                       if (_dhkpFingerprint.isNotEmpty) ...[
                         const SizedBox(height: 2),
                         Text(
-                          'Sidik Jari DHKP: ${_dhkpFingerprint.substring(0, 8).toUpperCase()} ($_changedNopCount perubahan dari $_totalNop NOP)',
+                          'Data tercatat: $_changedNopCount perubahan dari $_totalNop objek pajak',
                           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                 color: scheme.secondary,
                                 fontWeight: FontWeight.w600,
@@ -763,7 +763,7 @@ class _BackupSettingsSectionState extends State<BackupSettingsSection> {
                         ? 'Hubungkan akun Google terlebih dahulu untuk mengatur folder bersama'
                         : (_googleFolderLink.isEmpty
                             ? 'Gunakan folder bawaan ("${GoogleDriveBackupPolicy.dedicatedFolderName}")'
-                            : 'Folder bersama aktif: ${GoogleDriveBackupPolicy.extractFolderId(_googleFolderLink) ?? _googleFolderLink}'),
+                            : 'Folder bersama telah terhubung'),
                   ),
                   trailing: _googleFolderLink.isNotEmpty
                       ? Row(

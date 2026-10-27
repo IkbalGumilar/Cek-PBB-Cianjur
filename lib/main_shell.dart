@@ -10,6 +10,7 @@ import 'check_form_view.dart';
 import 'check_mode.dart';
 import 'desil/desil_view.dart';
 import 'import_view.dart';
+import 'incoming_file_service.dart';
 import 'kendaraan/kendaraan_view.dart';
 import 'monitoring_hub_screen.dart';
 import 'operator_mode_store.dart';
@@ -70,6 +71,7 @@ class _MainShellState extends State<MainShell> {
     await _checkForUpdateSilently();
     if (mounted) {
       unawaited(SharedStorageLinkService.instance.init(context));
+      unawaited(IncomingFileService.instance.init(context));
     }
   }
 
@@ -270,6 +272,8 @@ class _MainShellState extends State<MainShell> {
 
   @override
   Widget build(BuildContext context) {
+    SharedStorageLinkService.instance.updateContext(context);
+    IncomingFileService.instance.updateContext(context);
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
