@@ -3,23 +3,92 @@ import 'dart:io';
 
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'app_lock_gate.dart';
 import 'blok_backup_scheduler.dart';
 import 'blok_data_store.dart';
 import 'connectivity_monitor.dart';
 import 'desktop_accent_color_helper.dart';
+import 'dhkp_widget_sync_service.dart';
+import 'document_preview_screen.dart';
 import 'dusun_data.dart';
 import 'main_shell.dart';
 import 'network_status_overlay.dart';
+import 'batch_notification_service.dart';
 import 'blok_batch_check_tracker.dart';
+import 'incoming_file_service.dart';
+import 'spreadsheet_viewer_screen.dart';
 import 'theme_controller.dart';
+
+Widget _buildExternalViewer(String filePath) {
+  final file = File(filePath);
+  final fileName = file.uri.pathSegments.isNotEmpty
+      ? file.uri.pathSegments.last
+      : 'dokumen.pdf';
+  final lower = fileName.toLowerCase();
+
+  final isPdf = lower.endsWith('.pdf');
+  if (isPdf) {
+    return DocumentPreviewScreen(
+      pdfFile: file,
+      fileName: fileName,
+      isExternal: true,
+    );
+  }
+
+  final isSpreadsheet = lower.endsWith('.xlsx') ||
+      lower.endsWith('.xls') ||
+      lower.endsWith('.csv');
+  if (isSpreadsheet) {
+    return SpreadsheetViewerScreen(
+      file: file,
+      isDkhp: false,
+      fileName: fileName,
+      isExternal: true,
+    );
+  }
+
+  final isDkhp = lower.endsWith('.dkhp') ||
+      lower.endsWith('.dhkp') ||
+      lower.endsWith('.dat');
+  if (isDkhp) {
+    return SpreadsheetViewerScreen(
+      file: file,
+      isDkhp: true,
+      fileName: fileName,
+      isExternal: true,
+    );
+  }
+
+  return DocumentPreviewScreen(
+    pdfFile: file,
+    fileName: fileName,
+    isExternal: true,
+  );
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  String? initialIncomingFile;
+  if (Platform.isAndroid) {
+    try {
+      const incomingChannel =
+          MethodChannel('id.cianjur.cekpbb.cek_pbb_app/incoming_file');
+      initialIncomingFile =
+          await incomingChannel.invokeMethod<String>('getInitialFile');
+      debugPrint('main(): initialIncomingFile = $initialIncomingFile');
+    } catch (e) {
+      debugPrint('main(): getInitialFile error = $e');
+    }
+  }
   await DusunData.instance.init();
+  unawaited(DhkpWidgetSyncService.syncFromDatabase());
   await BlokBatchCheckTracker.instance.init();
-  runApp(const RestartWidget(child: CekPbbApp()));
+  await BatchNotificationService.instance.init();
+  runApp(RestartWidget(
+    child: CekPbbApp(initialExternalFilePath: initialIncomingFile),
+  ));
 }
 
 /// Bungkus seluruh aplikasi supaya bisa "direstart" tanpa mematikan proses
@@ -54,7 +123,9 @@ class _RestartWidgetState extends State<RestartWidget> {
 }
 
 class CekPbbApp extends StatefulWidget {
-  const CekPbbApp({super.key});
+  final String? initialExternalFilePath;
+
+  const CekPbbApp({super.key, this.initialExternalFilePath});
 
   @override
   State<CekPbbApp> createState() => _CekPbbAppState();
@@ -69,6 +140,7 @@ class _CekPbbAppState extends State<CekPbbApp> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     ConnectivityMonitor.instance.start();
+    unawaited(IncomingFileService.instance.init());
     unawaited(
       BlokBackupScheduler.instance.runIfNeeded(
         exportCsv: (fileName) =>
@@ -233,13 +305,24 @@ class _CekPbbAppState extends State<CekPbbApp> with WidgetsBindingObserver {
             );
 
             return MaterialApp(
+              navigatorKey: rootNavigatorKey,
               title: 'Cek PBB Cianjur',
               debugShowCheckedModeBanner: false,
               theme: lightTheme,
               darkTheme: darkTheme,
               themeMode: _flutterThemeMode(themeState.mode),
-              home: MainShell(themeController: _themeController),
+              onUnknownRoute: (settings) => MaterialPageRoute(
+                builder: (_) => const SizedBox.shrink(),
+              ),
+              home: widget.initialExternalFilePath != null &&
+                      widget.initialExternalFilePath!.isNotEmpty
+                  ? _buildExternalViewer(widget.initialExternalFilePath!)
+                  : MainShell(themeController: _themeController),
               builder: (context, child) {
+                if (widget.initialExternalFilePath != null &&
+                    widget.initialExternalFilePath!.isNotEmpty) {
+                  return Stack(children: [?child, const NetworkStatusOverlay()]);
+                }
                 return AppLockGate(
                   child: Stack(children: [?child, const NetworkStatusOverlay()]),
                 );

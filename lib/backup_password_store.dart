@@ -1,31 +1,18 @@
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'base_preferences_store.dart';
 
-class BackupPasswordStore {
+/// Penyimpanan kata sandi backup DHKP terenkripsi — mewarisi [BaseSecureStore]
+/// untuk operasi baca-tulis aman ke Android Keystore / libsecret / Windows DPAPI.
+class BackupPasswordStore extends BaseSecureStore {
   BackupPasswordStore._();
   static final instance = BackupPasswordStore._();
 
   static const _passwordKey = 'dhkp_backup_password';
-  final _storage = const FlutterSecureStorage();
 
-  Future<String?> read() async {
-    try {
-      return await _storage.read(key: _passwordKey);
-    } catch (_) {
-      return null;
-    }
-  }
+  Future<String?> read() => readSecure(_passwordKey);
 
   Future<bool> hasPassword() async => (await read())?.isNotEmpty ?? false;
 
-  Future<void> save(String password) async {
-    try {
-      await _storage.write(key: _passwordKey, value: password);
-    } catch (_) {}
-  }
+  Future<void> save(String password) => writeSecure(_passwordKey, password);
 
-  Future<void> clear() async {
-    try {
-      await _storage.delete(key: _passwordKey);
-    } catch (_) {}
-  }
+  Future<void> clear() => deleteSecure(_passwordKey);
 }

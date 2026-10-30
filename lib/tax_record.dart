@@ -3,6 +3,9 @@ class TaxRecord {
   String status;
   String rawText;
   String? namaWajibPajak;
+  String? tanggalBayar;
+  String? nomorStan;
+  String? jumlahPbb;
 
   /// null = belum dicoba unduh (mis. mode tidak minta unduh bukti bayar),
   /// true = berhasil diunduh, false = dicoba tapi gagal.
@@ -13,10 +16,15 @@ class TaxRecord {
     this.status = '',
     this.rawText = '',
     this.namaWajibPajak,
+    this.tanggalBayar,
+    this.nomorStan,
+    this.jumlahPbb,
     this.buktiBayarDownloaded,
   });
 
   bool get isChecked => status.isNotEmpty;
   bool get isPaid =>
-      status.startsWith('Sudah Bayar') || status.startsWith('Lunas');
+      status.startsWith('Sudah Bayar') ||
+      status.startsWith('Lunas') ||
+      (tanggalBayar != null && tanggalBayar!.trim().isNotEmpty);
 }

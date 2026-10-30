@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../currency_format.dart';
 import 'kendaraan_client.dart';
 import 'plat_scanner.dart';
 
@@ -699,8 +700,8 @@ class _KendaraanResult extends StatelessWidget {
                 rows: {
                   for (final entry in result.biaya.entries)
                     if (entry.key != 'total')
-                      _costLabel(entry.key): _rupiah(entry.value),
-                  'Total': _rupiah(result.total),
+                      _costLabel(entry.key): formatRupiah(entry.value),
+                  'Total': formatRupiah(result.total),
                 },
                 emphasizeLast: true,
               ),
@@ -743,16 +744,6 @@ class _KendaraanResult extends StatelessWidget {
       'total': 'Total',
     };
     return labels[key] ?? key;
-  }
-
-  static String _rupiah(int value) {
-    final text = value.toString();
-    final groups = <String>[];
-    for (var end = text.length; end > 0; end -= 3) {
-      final start = end - 3 < 0 ? 0 : end - 3;
-      groups.insert(0, text.substring(start, end));
-    }
-    return 'Rp ${groups.join('.')}';
   }
 }
 

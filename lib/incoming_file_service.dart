@@ -4,9 +4,12 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'batch_notification_service.dart';
 import 'blok_catatan_screen.dart';
 import 'blok_data_store.dart';
 import 'dkhp_package_helper.dart';
+import 'document_preview_screen.dart';
+import 'spreadsheet_viewer_screen.dart';
 
 /// Layanan untuk menangani pembukaan berkas `.dkhp` dan `.dat` secara otomatis
 /// saat diklik dari WhatsApp, File Manager, Telegram, atau Unduhan.
@@ -27,8 +30,10 @@ class IncomingFileService {
   }
 
   /// Menginisialisasi pendengar berkas masuk dari Android Native.
-  Future<void> init(BuildContext context) async {
-    _activeContext = context;
+  Future<void> init([BuildContext? context]) async {
+    if (context != null) {
+      _activeContext = context;
+    }
     if (_initialized) return;
     _initialized = true;
 
@@ -38,21 +43,14 @@ class IncomingFileService {
       _channel.setMethodCallHandler((call) async {
         if (call.method == 'onIncomingFile') {
           final filePath = call.arguments as String?;
-          if (filePath != null && filePath.isNotEmpty && _activeContext != null) {
-            await handleIncomingFile(_activeContext!, filePath);
+          if (filePath != null && filePath.isNotEmpty) {
+            final targetContext = _activeContext ?? rootNavigatorKey.currentContext;
+            if (targetContext != null) {
+              await handleIncomingFile(targetContext, filePath);
+            }
           }
         }
       });
-
-      // Periksa apakah aplikasi dibuka saat cold-start lewat klik berkas
-      final initialFile = await _channel.invokeMethod<String>('getInitialFile');
-      if (initialFile != null && initialFile.isNotEmpty) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (_activeContext != null) {
-            handleIncomingFile(_activeContext!, initialFile);
-          }
-        });
-      }
     } catch (_) {}
   }
 
@@ -68,7 +66,56 @@ class IncomingFileService {
       final fileName = file.uri.pathSegments.isNotEmpty
           ? file.uri.pathSegments.last
           : 'berkas.dkhp';
-      final isDat = fileName.toLowerCase().endsWith('.dat');
+
+      // 1. Jika berkas adalah dokumen PDF, langsung buka di pembaca PDF bawaan
+      final isPdf = fileName.toLowerCase().endsWith('.pdf') ||
+          await isPdfFile(file);
+      if (isPdf) {
+        if (!context.mounted) return;
+        await DocumentPreviewScreen.openPdfFile(
+          context,
+          file,
+          title: fileName,
+          isExternal: true,
+        );
+        return;
+      }
+
+      final lowerName = fileName.toLowerCase();
+
+      // 2. Jika berkas adalah Spreadsheet (Excel .xlsx/.xls atau CSV), buka di pembaca Spreadsheet (Hanya Lihat)
+      final isSpreadsheet = lowerName.endsWith('.xlsx') ||
+          lowerName.endsWith('.xls') ||
+          lowerName.endsWith('.csv');
+      if (isSpreadsheet) {
+        if (!context.mounted) return;
+        await SpreadsheetViewerScreen.openFile(
+          context,
+          file,
+          isDkhp: false,
+          title: fileName,
+          isExternal: true,
+        );
+        return;
+      }
+
+      // 3. Jika berkas adalah paket DHKP (.dkhp / .dhkp / .dat), buka di pratinjau DHKP (dengan tombol Impor)
+      final isDkhp = lowerName.endsWith('.dkhp') ||
+          lowerName.endsWith('.dhkp') ||
+          lowerName.endsWith('.dat');
+      if (isDkhp) {
+        if (!context.mounted) return;
+        await SpreadsheetViewerScreen.openFile(
+          context,
+          file,
+          isDkhp: true,
+          title: fileName,
+          isExternal: true,
+        );
+        return;
+      }
+
+      final isDat = lowerName.endsWith('.dat');
       final fileSize = await file.length();
       final sizeFormatted = _formatFileSize(fileSize);
 
@@ -277,6 +324,23 @@ class IncomingFileService {
       return '${(bytes / 1024).toStringAsFixed(1)} KB';
     }
     return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+  }
+
+  /// Memeriksa header berkas secara aman apakah berkas adalah dokumen PDF (%PDF-).
+  static Future<bool> isPdfFile(File file) async {
+    try {
+      if (!await file.exists()) return false;
+      final raf = await file.open(mode: FileMode.read);
+      try {
+        final header = await raf.read(5);
+        if (header.length < 5) return false;
+        return DocumentPreviewScreen.hasPdfHeader(header);
+      } finally {
+        await raf.close();
+      }
+    } catch (_) {
+      return false;
+    }
   }
 }
 

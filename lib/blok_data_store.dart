@@ -7,6 +7,7 @@ import 'app_storage.dart';
 import 'backup_crypto.dart';
 import 'blok_backup_scheduler.dart';
 import 'blok_record.dart';
+import 'dhkp_widget_sync_service.dart';
 import 'dkhp_package_helper.dart';
 import 'download_helper.dart';
 import 'pbb_client.dart';
@@ -61,6 +62,7 @@ class BlokDataStore {
     final content = file.readAsStringSync();
     _cache = _parseCsv(content);
     countNotifier.value = _cache!.length;
+    DhkpWidgetSyncService.syncFromRecords(_cache!);
     return _cache!;
   }
 
@@ -175,6 +177,7 @@ class BlokDataStore {
     file.writeAsStringSync(Csv().encode(rows));
     _cache = records;
     countNotifier.value = records.length;
+    DhkpWidgetSyncService.syncFromRecords(records);
   }
 
   /// Simpan/perbarui beberapa catatan sekaligus (upsert berdasar NOP+tahun).

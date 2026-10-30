@@ -30,6 +30,9 @@ class MainActivity : FlutterFragmentActivity() {
     private val bankChannelName = "id.cianjur.cekpbb.cek_pbb_app/bank"
     private val deepLinkChannelName = "id.cianjur.cekpbb.cek_pbb_app/deeplink"
     private val incomingFileChannelName = "id.cianjur.cekpbb.cek_pbb_app/incoming_file"
+    private val securityChannelName = "id.cianjur.cekpbb.cek_pbb_app/security"
+    private val batchForegroundChannelName = "id.cianjur.cekpbb.cek_pbb_app/batch_foreground_service"
+    private val widgetChannelName = "id.cianjur.cekpbb.cek_pbb_app/widget"
 
     private var initialDeepLink: String? = null
     private var initialIncomingFile: String? = null
@@ -40,19 +43,34 @@ class MainActivity : FlutterFragmentActivity() {
     // Dokumen/Cek PBB Cianjur (hasil cek, bukti bayar, laporan blok, backup).
     private val documentsFolderName = "Cek PBB Cianjur"
 
+    override fun getInitialRoute(): String {
+        val uri = intent?.data
+        if (uri != null) {
+            val scheme = uri.scheme?.lowercase()
+            // Hanya izinkan deep-link URL aplikasi yang diteruskan ke Flutter Router
+            if (scheme == "cekpbb" || (scheme == "https" && uri.host == "ikbalgumilar.github.io")) {
+                return uri.toString()
+            }
+        }
+        return "/"
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         handleIncomingIntent(intent)
-        // Mencegah tangkapan layar (screenshot), perekaman layar (screen record),
-        // dan pratinjau snapshot di recent apps / task switcher (anti shoulder-surfing & data leak).
-        window.setFlags(
-            WindowManager.LayoutParams.FLAG_SECURE,
-            WindowManager.LayoutParams.FLAG_SECURE
-        )
     }
 
     override fun onNewIntent(intent: Intent) {
-        super.onNewIntent(intent)
+        // Jika intent ini adalah berkas/dokumen, jangan teruskan data URI ke Flutter Navigation engine
+        // agar tidak memicu _WidgetsAppState._onUnknownRoute exception
+        val isFileIntent = intent.data != null && (intent.scheme == "content" || intent.scheme == "file")
+        if (isFileIntent) {
+            val stripped = Intent(intent)
+            stripped.data = null
+            super.onNewIntent(stripped)
+        } else {
+            super.onNewIntent(intent)
+        }
         setIntent(intent)
         handleIncomingIntent(intent)
     }
@@ -104,9 +122,32 @@ class MainActivity : FlutterFragmentActivity() {
                 fileName = "berkas_dhkp.dkhp"
             }
 
-            val cleanName = File(fileName!!).name
-            val lower = cleanName.lowercase()
-            val isSupported = lower.endsWith(".dkhp") ||
+            var cleanName = File(fileName!!).name
+            var lower = cleanName.lowercase()
+            val mimeType = if (uri.scheme == "content") contentResolver.getType(uri) else null
+
+            // Tolak mentah-mentah jika berkas adalah paket APK Android
+            if (lower.endsWith(".apk") || mimeType == "application/vnd.android.package-archive") {
+                return
+            }
+
+            val isPdf = lower.endsWith(".pdf") || mimeType == "application/pdf"
+            if (isPdf && !lower.endsWith(".pdf")) {
+                cleanName = "$cleanName.pdf"
+                lower = cleanName.lowercase()
+            }
+
+            val isSpreadsheet = lower.endsWith(".xlsx") ||
+                    lower.endsWith(".xls") ||
+                    lower.endsWith(".csv") ||
+                    mimeType == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
+                    mimeType == "application/vnd.ms-excel" ||
+                    mimeType == "text/csv" ||
+                    mimeType == "text/comma-separated-values"
+
+            val isSupported = isPdf ||
+                    isSpreadsheet ||
+                    lower.endsWith(".dkhp") ||
                     lower.endsWith(".dhkp") ||
                     lower.endsWith(".dat") ||
                     lower.endsWith(".zip")
@@ -121,19 +162,58 @@ class MainActivity : FlutterFragmentActivity() {
             }
             val targetFile = File(incomingDir, cleanName)
 
-            contentResolver.openInputStream(uri)?.use { inputStream ->
-                targetFile.outputStream().use { outputStream ->
-                    inputStream.copyTo(outputStream)
+            val inputStream = if (uri.scheme == "file") {
+                val filePath = uri.path
+                val localFile = if (filePath != null) File(filePath) else null
+                if (localFile != null && localFile.exists() && localFile.canRead()) {
+                    java.io.FileInputStream(localFile)
+                } else if (filePath != null) {
+                    var stream: java.io.InputStream? = null
+                    try {
+                        val projection = arrayOf(android.provider.BaseColumns._ID)
+                        val queryPath = localFile?.canonicalPath ?: filePath
+                        val cursor = contentResolver.query(
+                            android.provider.MediaStore.Files.getContentUri("external"),
+                            projection,
+                            "${android.provider.MediaStore.MediaColumns.DATA} = ?",
+                            arrayOf(queryPath),
+                            null
+                        )
+                        cursor?.use {
+                            if (it.moveToFirst()) {
+                                val id = it.getLong(0)
+                                val mediaUri = android.content.ContentUris.withAppendedId(
+                                    android.provider.MediaStore.Files.getContentUri("external"),
+                                    id
+                                )
+                                stream = contentResolver.openInputStream(mediaUri)
+                            }
+                        }
+                    } catch (_: Exception) {}
+                    stream ?: contentResolver.openInputStream(uri)
+                } else {
+                    contentResolver.openInputStream(uri)
+                }
+            } else {
+                contentResolver.openInputStream(uri)
+            }
+
+            inputStream?.use { input ->
+                targetFile.outputStream().use { output ->
+                    input.copyTo(output)
                 }
             }
 
             if (targetFile.exists() && targetFile.length() > 0) {
                 val absolutePath = targetFile.absolutePath
                 initialIncomingFile = absolutePath
+                android.util.Log.i("MainActivity", "Successfully saved incoming file to $absolutePath")
                 incomingFileChannel?.invokeMethod("onIncomingFile", absolutePath)
+            } else {
+                android.util.Log.w("MainActivity", "Target incoming file does not exist or empty: ${targetFile.absolutePath}")
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            android.util.Log.e("MainActivity", "Failed to handle incoming file: ${e.message}", e)
         }
     }
 
@@ -163,6 +243,7 @@ class MainActivity : FlutterFragmentActivity() {
                 "saveToDocuments" -> saveToDocuments(call, result)
                 "shareBytes" -> shareBytes(call, result)
                 "shareText" -> shareText(call, result)
+                "openWithExternalApp" -> openWithExternalApp(call, result)
                 else -> result.notImplemented()
             }
         }
@@ -196,6 +277,99 @@ class MainActivity : FlutterFragmentActivity() {
                     }
                     else -> result.notImplemented()
                 }
+            }
+        }
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, securityChannelName).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "setSecureMode" -> {
+                    val enabled = call.argument<Boolean>("enabled") ?: false
+                    setSecureMode(enabled)
+                    result.success(true)
+                }
+                "isSecureMode" -> {
+                    val isSecure = (window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE) != 0
+                    result.success(isSecure)
+                }
+                else -> result.notImplemented()
+            }
+        }
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, batchForegroundChannelName).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "startService" -> {
+                    val title = call.argument<String>("title") ?: "Pengecekan Massal PBB Berjalan"
+                    val content = call.argument<String>("content") ?: "Memeriksa status pembayaran..."
+                    val progress = call.argument<Int>("progress") ?: 0
+                    val max = call.argument<Int>("max") ?: 100
+                    val intent = Intent(this, BatchCheckForegroundService::class.java).apply {
+                        action = BatchCheckForegroundService.ACTION_START
+                        putExtra(BatchCheckForegroundService.EXTRA_TITLE, title)
+                        putExtra(BatchCheckForegroundService.EXTRA_CONTENT, content)
+                        putExtra(BatchCheckForegroundService.EXTRA_PROGRESS, progress)
+                        putExtra(BatchCheckForegroundService.EXTRA_MAX, max)
+                    }
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        startForegroundService(intent)
+                    } else {
+                        startService(intent)
+                    }
+                    result.success(true)
+                }
+                "updateService" -> {
+                    val title = call.argument<String>("title") ?: "Pengecekan Massal PBB Berjalan"
+                    val content = call.argument<String>("content") ?: "Memeriksa status pembayaran..."
+                    val progress = call.argument<Int>("progress") ?: 0
+                    val max = call.argument<Int>("max") ?: 100
+                    val intent = Intent(this, BatchCheckForegroundService::class.java).apply {
+                        action = BatchCheckForegroundService.ACTION_UPDATE
+                        putExtra(BatchCheckForegroundService.EXTRA_TITLE, title)
+                        putExtra(BatchCheckForegroundService.EXTRA_CONTENT, content)
+                        putExtra(BatchCheckForegroundService.EXTRA_PROGRESS, progress)
+                        putExtra(BatchCheckForegroundService.EXTRA_MAX, max)
+                    }
+                    startService(intent)
+                    result.success(true)
+                }
+                "stopService" -> {
+                    val intent = Intent(this, BatchCheckForegroundService::class.java).apply {
+                        action = BatchCheckForegroundService.ACTION_STOP
+                    }
+                    startService(intent)
+                    result.success(true)
+                }
+                "isRunning" -> {
+                    result.success(BatchCheckForegroundService.isRunning)
+                }
+                else -> result.notImplemented()
+            }
+        }
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, widgetChannelName).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "updateWidgetData" -> {
+                    val jsonStr = call.argument<String>("data")
+                    if (jsonStr != null) {
+                        val prefs = getSharedPreferences(DhkpGrafikWidgetProvider.PREFS_NAME, MODE_PRIVATE)
+                        prefs.edit().putString(DhkpGrafikWidgetProvider.KEY_DATA_JSON, jsonStr).apply()
+                        DhkpGrafikWidgetProvider.updateAllWidgets(this)
+                        result.success(true)
+                    } else {
+                        result.success(false)
+                    }
+                }
+                "refreshWidget" -> {
+                    DhkpGrafikWidgetProvider.updateAllWidgets(this)
+                    result.success(true)
+                }
+                else -> result.notImplemented()
+            }
+        }
+    }
+
+    private fun setSecureMode(enabled: Boolean) {
+        runOnUiThread {
+            if (enabled) {
+                window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+            } else {
+                window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
             }
         }
     }
@@ -491,6 +665,40 @@ class MainActivity : FlutterFragmentActivity() {
             result.success(null)
         } catch (e: Exception) {
             result.error("SHARE_TEXT_FAILED", e.message, null)
+        }
+    }
+
+    // Buka berkas dengan aplikasi lain lewat Intent.ACTION_VIEW + chooser Android ("Buka dengan...")
+    private fun openWithExternalApp(call: MethodCall, result: MethodChannel.Result) {
+        try {
+            val filePath = call.argument<String>("filePath")
+            val fileName = call.argument<String>("fileName") ?: "dokumen.pdf"
+            val bytes = call.argument<ByteArray>("bytes")
+            val mimeType = call.argument<String>("mimeType") ?: "application/pdf"
+
+            val file = if (filePath != null && File(filePath).exists()) {
+                File(filePath)
+            } else if (bytes != null) {
+                val f = File(cacheDir, fileName)
+                f.writeBytes(bytes)
+                f
+            } else {
+                throw Exception("Berkas tidak ditemukan.")
+            }
+
+            val uri = FileProvider.getUriForFile(this, "$packageName.apkprovider", file)
+            val viewIntent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, mimeType)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            val chooser = Intent.createChooser(viewIntent, "Buka dengan...").apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            startActivity(chooser)
+            result.success(true)
+        } catch (e: Exception) {
+            result.error("OPEN_WITH_FAILED", e.message, null)
         }
     }
 }

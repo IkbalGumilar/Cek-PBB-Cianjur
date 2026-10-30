@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'result_exporter.dart';
 import 'tax_record.dart';
 
 class ResultScreen extends StatelessWidget {
@@ -38,6 +39,34 @@ class ResultScreen extends StatelessWidget {
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.pop(context),
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.file_download_outlined),
+            tooltip: 'Ekspor Hasil (CSV)',
+            onPressed: () async {
+              try {
+                final path = await ResultExporter.saveCsv(records);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Laporan CSV tersimpan: $path'),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Gagal mengekspor: $e'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              }
+            },
+          ),
+        ],
       ),
       body: SafeArea(
         child: Center(
@@ -233,16 +262,38 @@ class ResultScreen extends StatelessWidget {
                                 fontSize: 13,
                               ),
                             ),
-                            subtitle: r.namaWajibPajak != null &&
-                                    r.namaWajibPajak!.isNotEmpty
-                                ? Text(
-                                    r.namaWajibPajak!,
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: scheme.onSurfaceVariant,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
+                            subtitle: (r.namaWajibPajak != null &&
+                                        r.namaWajibPajak!.isNotEmpty) ||
+                                    (r.tanggalBayar != null &&
+                                        r.tanggalBayar!.isNotEmpty)
+                                ? Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      if (r.namaWajibPajak != null &&
+                                          r.namaWajibPajak!.isNotEmpty)
+                                        Text(
+                                          r.namaWajibPajak!,
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: scheme.onSurfaceVariant,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      if (r.tanggalBayar != null &&
+                                          r.tanggalBayar!.isNotEmpty)
+                                        Text(
+                                          'Tgl Bayar: ${r.tanggalBayar}${r.nomorStan != null && r.nomorStan!.isNotEmpty ? ' • STAN: ${r.nomorStan}' : ''}',
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            color: Colors.green.shade700,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                    ],
                                   )
                                 : null,
                             trailing: Container(

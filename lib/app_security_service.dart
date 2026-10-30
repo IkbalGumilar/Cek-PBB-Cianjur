@@ -1,11 +1,11 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math';
 
 import 'package:crypto/crypto.dart' hide Hmac;
 import 'package:cryptography/cryptography.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:local_auth/local_auth.dart';
 
 import 'base_preferences_store.dart';
@@ -47,13 +47,6 @@ class AppSecurityService extends BasePreferencesStore {
   static const String _keyFailedAttempts = 'app_security_failed_pin_attempts';
   static const String _keyLockoutUntilMillis = 'app_security_lockout_until_millis';
 
-  FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
-
-  @visibleForTesting
-  void setSecureStorageForTesting(FlutterSecureStorage storage) {
-    _secureStorage = storage;
-  }
-
   static int pbkdf2Iterations = 100000;
 
   @visibleForTesting
@@ -61,27 +54,12 @@ class AppSecurityService extends BasePreferencesStore {
     pbkdf2Iterations = iterations;
   }
 
-  Future<String?> _readSecure(String key) async {
-    try {
-      final val = await _secureStorage.read(key: key);
-      if (val != null) return val;
-    } catch (_) {}
-    return getString(key);
-  }
+  Future<String?> _readSecure(String key) => readSecureWithFallback(key);
 
-  Future<void> _writeSecure(String key, String value) async {
-    try {
-      await _secureStorage.write(key: key, value: value);
-    } catch (_) {}
-    await setString(key, value);
-  }
+  Future<void> _writeSecure(String key, String value) =>
+      writeSecureWithFallback(key, value);
 
-  Future<void> _deleteSecure(String key) async {
-    try {
-      await _secureStorage.delete(key: key);
-    } catch (_) {}
-    await remove(key);
-  }
+  Future<void> _deleteSecure(String key) => deleteSecureWithFallback(key);
 
   Future<String> _hashSecretPbkdf2(String secret, String salt) async {
     final saltBytes = utf8.encode(salt);
@@ -110,6 +88,45 @@ class AppSecurityService extends BasePreferencesStore {
 
   /// Status apakah aplikasi saat ini sedang terkunci.
   bool get isAppLocked => isAppLockedNotifier.value;
+
+  /// Notifier status apakah pembaca dokumen sedang aktif dalam mode kotak pasir (Sandboxed Viewer).
+  final ValueNotifier<bool> isSandboxedViewerNotifier =
+      ValueNotifier<bool>(false);
+
+  /// Status apakah mode kotak pasir sedang aktif.
+  bool get isSandboxedViewerActive => isSandboxedViewerNotifier.value;
+
+  /// Masuk ke mode kotak pasir (membuka dokumen tanpa terhalang layar kunci).
+  void enterSandboxedViewer() {
+    isSandboxedViewerNotifier.value = true;
+  }
+
+  /// Keluar dari mode kotak pasir (segel kembali layar kunci jika aplikasi terkunci).
+  void exitSandboxedViewer() {
+    isSandboxedViewerNotifier.value = false;
+  }
+
+  static const MethodChannel _securityChannel =
+      MethodChannel('id.cianjur.cekpbb.cek_pbb_app/security');
+
+  bool _isScreenSecured = false;
+
+  /// Status apakah proteksi screenshot saat ini sedang aktif di layar.
+  bool get isScreenSecured => _isScreenSecured;
+
+  /// Mengaktifkan atau menonaktifkan proteksi tangkapan layar (FLAG_SECURE) secara dinamis.
+  /// Sesuai aturan: Hanya aktif saat berkas DHKP sedang terbuka dan memiliki data catatan.
+  Future<void> setScreenSecure(bool secure) async {
+    if (!Platform.isAndroid) return;
+    if (_isScreenSecured == secure) return;
+    try {
+      await _securityChannel
+          .invokeMethod<bool>('setSecureMode', {'enabled': secure});
+      _isScreenSecured = secure;
+    } catch (e) {
+      debugPrint('AppSecurityService: Gagal mengatur status screenshot (FLAG_SECURE): $e');
+    }
+  }
 
   DateTime? _lastPausedTime;
 
@@ -247,6 +264,35 @@ class AppSecurityService extends BasePreferencesStore {
       return false;
     } finally {
       _isAuthenticating = false;
+    }
+  }
+
+  /// Meminta autentikasi biometrik/kunci HP khusus untuk mendekripsi dan membuka paket DHKP
+  /// tanpa membuka status kunci aplikasi secara global jika aplikasi sedang terkunci di background.
+  Future<bool> authenticateToDecryptDhkp({
+    String fileName = 'paket DHKP',
+  }) async {
+    try {
+      final canCheck = await _localAuth.canCheckBiometrics;
+      final isSupported = await _localAuth.isDeviceSupported();
+      if (!canCheck && !isSupported) {
+        // Jika perangkat tidak memiliki biometrik atau kunci layar sistem,
+        // lanjutkan ke proses verifikasi kata sandi berkas
+        return true;
+      }
+
+      return await _localAuth.authenticate(
+        localizedReason:
+            'Pindai sidik jari Anda untuk mendekripsi dan membuka $fileName',
+        biometricOnly: false,
+        persistAcrossBackgrounding: true,
+      );
+    } on PlatformException catch (e) {
+      debugPrint('AppSecurityService: Gagal autentikasi DHKP: ${e.code} - ${e.message}');
+      return false;
+    } catch (e) {
+      debugPrint('AppSecurityService: Gagal autentikasi DHKP: $e');
+      return false;
     }
   }
 
@@ -408,8 +454,12 @@ class AppSecurityService extends BasePreferencesStore {
   /// Dipanggil saat aplikasi beralih ke latar belakang (background / paused).
   void onAppPaused() {
     // Jangan catat jika aplikasi sudah terkunci, sedang dalam proses autentikasi,
-    // atau sedang dalam dialog pihak ketiga (bypass sementara).
-    if (isAppLocked || _isAuthenticating || _temporaryLockBypass) return;
+    // atau bypass sementara (misal pemilih berkas sistem / dialog eksternal).
+    if (isAppLocked ||
+        _isAuthenticating ||
+        _temporaryLockBypass) {
+      return;
+    }
     _lastPausedTime = DateTime.now();
   }
 

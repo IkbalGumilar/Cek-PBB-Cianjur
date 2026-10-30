@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 
+import 'app_security_service.dart';
 import 'batch_check_screen.dart';
 import 'blok_batch_check_tracker.dart';
 import 'blok_data_store.dart';
@@ -133,10 +134,21 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
 
   @override
   void dispose() {
+    AppSecurityService.instance.setScreenSecure(false);
     _searchController.dispose();
     _verticalScrollController.dispose();
     _horizontalScrollController.dispose();
     super.dispose();
+  }
+
+  /// Menyesuaikan proteksi tangkapan layar (FLAG_SECURE) secara dinamis.
+  /// Aturan:
+  /// - Aktif jika sedang berada di tampilan tabel catatan DHKP DAN terdapat data catatan yang termuat.
+  /// - Nonaktif jika sedang di mode visual grafik (_tampilkanGrafik == true) atau belum ada data DHKP.
+  void _updateScreenSecurity() {
+    final hasData = _records.isNotEmpty || _allScopeRecords.isNotEmpty;
+    final shouldSecure = !_tampilkanGrafik && hasData;
+    AppSecurityService.instance.setScreenSecure(shouldSecure);
   }
 
   Future<void> _load() async {
@@ -376,6 +388,7 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
       }
       _busy = false;
     });
+    _updateScreenSecurity();
   }
 
   /// Data lingkup saat ini (mengikuti pilihan Blok & Tahun di layar atau blokOverride),
@@ -1763,8 +1776,12 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
           namaWajibPajak:
               t.namaWajibPajak ?? 'WP ${nopBlok(t.nop)}/${nopWilayah(t.nop)}',
           tahunBayar: nowYear,
-          tanggalBayar: t.isPaid ? 'Sudah Bayar' : '',
-          jumlahPbb: '',
+          tanggalBayar: t.isPaid
+              ? ((t.tanggalBayar != null && t.tanggalBayar!.trim().isNotEmpty)
+                  ? t.tanggalBayar!.trim()
+                  : DateTime.now().toIso8601String().substring(0, 10))
+              : '',
+          jumlahPbb: t.jumlahPbb ?? '',
           statusBayar: t.isPaid ? 'Sudah Bayar' : 'Belum Bayar',
         ),
       );
@@ -2586,6 +2603,7 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
             onPressed: () {
               setState(() {
                 _tampilkanGrafik = !_tampilkanGrafik;
+                _updateScreenSecurity();
               });
             },
             icon: Icon(

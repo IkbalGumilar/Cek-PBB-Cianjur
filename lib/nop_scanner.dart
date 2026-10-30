@@ -1,43 +1,28 @@
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:image_picker/image_picker.dart';
 
+import 'base_ocr_scanner.dart';
 import 'nop_helper.dart';
 
-class NopScanner {
-  NopScanner({ImagePicker? picker}) : _picker = picker ?? ImagePicker();
+/// Scanner OCR untuk membaca dan mengekstrak NOP dari foto SPPT.
+///
+/// Mewarisi [BaseOcrScanner] untuk mengelola lifecycle kamera, recovery low-memory,
+/// dan pemrosesan MLKit secara terpusat alih-alih menduplikasi fungsionalitas.
+class NopScanner extends BaseOcrScanner<List<String>> {
+  NopScanner({super.picker});
 
-  final ImagePicker _picker;
+  @override
+  int get maxWidth => 2200;
 
-  Future<List<String>?> scan({required ImageSource source}) async {
-    final image = await _picker.pickImage(
-      source: source,
-      imageQuality: 100,
-      maxWidth: 2200,
-      maxHeight: 2200,
-    );
-    if (image == null) return null;
-    return scanImage(image);
-  }
+  @override
+  int get maxHeight => 2200;
 
-  Future<List<String>> scanImage(XFile image) async {
-    final recognizer = TextRecognizer(script: TextRecognitionScript.latin);
-    try {
-      final recognizedText = await recognizer.processImage(
-        InputImage.fromFilePath(image.path),
-      );
-      return NopScanParser.extract(recognizedText.text);
-    } finally {
-      await recognizer.close();
-    }
-  }
-
-  Future<List<String>?> recoverLostScan() async {
-    final response = await _picker.retrieveLostData();
-    if (response.isEmpty) return null;
-    if (response.exception != null) throw response.exception!;
-    final image = response.file;
-    if (image == null) return null;
-    return scanImage(image);
+  @override
+  Future<List<String>> parseRecognizedText(
+    XFile image,
+    RecognizedText recognizedText,
+  ) async {
+    return NopScanParser.extract(recognizedText.text);
   }
 }
 

@@ -5,6 +5,7 @@ import 'package:cookie_jar/cookie_jar.dart';
 import 'package:dio/dio.dart';
 import 'package:html/dom.dart';
 import 'package:html/parser.dart' as html_parser;
+import 'package:syncfusion_flutter_pdf/pdf.dart';
 
 import 'base_http_client.dart';
 
@@ -14,12 +15,27 @@ import 'qris_result.dart';
 import 'tagihan_result.dart';
 import 'va_result.dart';
 
+class SttsExtractResult {
+  final String tanggalBayar;
+  final String? nomorStan;
+  final String? namaWajibPajak;
+  final String? jumlahPbb;
+
+  const SttsExtractResult({
+    required this.tanggalBayar,
+    this.nomorStan,
+    this.namaWajibPajak,
+    this.jumlahPbb,
+  });
+}
+
 class PbbResult {
   final String status;
   final String rawText;
   final String? namaWajibPajak;
   final String? tanggalBayar;
   final String? jumlahPbb;
+  final String? nomorStan;
 
   PbbResult(
     this.status,
@@ -27,6 +43,7 @@ class PbbResult {
     this.namaWajibPajak,
     this.tanggalBayar,
     this.jumlahPbb,
+    this.nomorStan,
   });
 
   bool get isPaid =>
@@ -141,9 +158,27 @@ class PbbClient extends BaseHttpClient {
     if (lowered.contains('tidak ada tunggakan') ||
         lowered.contains('lunas') ||
         lowered.contains('alert-success')) {
+      String? tanggalBayar;
+      String? stan;
+      String? namaWp;
+      String? jml;
+
+      final targetYear = tahun ?? DateTime.now().year.toString();
+      final stts = await extractSttsInMemory(nop: cleanNop, tahun: targetYear);
+      if (stts != null) {
+        tanggalBayar = stts.tanggalBayar;
+        stan = stts.nomorStan;
+        namaWp = stts.namaWajibPajak;
+        jml = stts.jumlahPbb;
+      }
+
       return PbbResult(
         'Sudah Bayar',
         'NOP ini tidak ada tunggakan PBB (LUNAS)',
+        namaWajibPajak: namaWp,
+        tanggalBayar: tanggalBayar,
+        jumlahPbb: jml,
+        nomorStan: stan,
       );
     }
 
@@ -161,6 +196,78 @@ class PbbClient extends BaseHttpClient {
       'Perlu Cek Manual',
       html,
     );
+  }
+
+  /// Mengekstrak rincian bukti bayar (STTS) secara in-memory (di RAM)
+  /// tanpa menyimpan berkas fisik PDF ke penyimpanan disk internal.
+  Future<SttsExtractResult?> extractSttsInMemory({
+    required String nop,
+    required String tahun,
+  }) async {
+    try {
+      final cleanNop = nop.replaceAll(RegExp(r'[^0-9]'), '');
+      final response = await _dio.get<List<int>>(
+        'https://cektagihan.cianjurkab.v-tax.id/stts-pdf-pbb.php',
+        queryParameters: {
+          'nop': cleanNop,
+          'thn': tahun,
+          'act': '(Cetak STTS)',
+          'fungsi': 'cek-stts-pbb',
+        },
+        options: Options(
+          responseType: ResponseType.bytes,
+          validateStatus: (status) => status != null && status < 500,
+        ),
+      );
+
+      final bytes = response.data;
+      if (bytes == null || bytes.isEmpty) return null;
+
+      final contentType =
+          response.headers.value('content-type')?.toLowerCase() ?? '';
+      final isPdf = (bytes.length >= 4 &&
+              bytes[0] == 0x25 && // %
+              bytes[1] == 0x50 && // P
+              bytes[2] == 0x44 && // D
+              bytes[3] == 0x46) || // F
+          contentType.contains('application/pdf');
+      if (!isPdf) return null;
+
+      final document = PdfDocument(inputBytes: bytes);
+      final text = PdfTextExtractor(document).extractText();
+      document.dispose();
+
+      if (text.isEmpty) return null;
+
+      final matchTanggal = RegExp(
+        r'Tanggal\s+Transaksi\s*:\s*([0-9\-\:\s]+)',
+        caseSensitive: false,
+      ).firstMatch(text);
+      final matchStan = RegExp(
+        r'Nomor\s+bukti/stan\s*:\s*([A-Za-z0-9]+)',
+        caseSensitive: false,
+      ).firstMatch(text);
+      final matchNama = RegExp(
+        r'Nama\s+Objek\s+Pajak\s*:\s*([^\n\r]+)',
+        caseSensitive: false,
+      ).firstMatch(text);
+      final matchJumlah = RegExp(
+        r'Jumlah\s*:\s*Rp\s*([0-9\.\,]+)',
+        caseSensitive: false,
+      ).firstMatch(text);
+
+      final tanggal = matchTanggal?.group(1)?.trim();
+      if (tanggal == null || tanggal.isEmpty) return null;
+
+      return SttsExtractResult(
+        tanggalBayar: tanggal,
+        nomorStan: matchStan?.group(1)?.trim(),
+        namaWajibPajak: matchNama?.group(1)?.trim(),
+        jumlahPbb: matchJumlah?.group(1)?.trim(),
+      );
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<TagihanResult> checkTagihan({

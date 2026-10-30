@@ -31,3 +31,9 @@
 -dontwarn com.google.mlkit.vision.text.devanagari.**
 -dontwarn com.google.mlkit.vision.text.japanese.**
 -dontwarn com.google.mlkit.vision.text.korean.**
+
+# flutter_local_notifications
+-keep class com.dexterous.flutterlocalnotifications.** { *; }
+
+# BatchCheckForegroundService
+-keep class id.cianjur.cekpbb.cek_pbb_app.BatchCheckForegroundService { *; }

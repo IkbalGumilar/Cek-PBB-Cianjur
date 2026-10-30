@@ -9,6 +9,13 @@
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- Izin untuk fitur Kunci Aplikasi berbasis Biometrik (Sidik Jari / Wajah) -->
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+    <!-- Izin untuk menampilkan notifikasi proses di latar belakang (Android 13+) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Izin untuk Foreground Service agar pengecekan massal tetap berjalan saat layar mati / app di latar belakang -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
     <application
         android:label="Cek PBB Cianjur"
         android:name="${applicationName}"
@@ -57,27 +64,7 @@
                     android:pathPrefix="/Cek-PBB-Cianjur/connect" />
             </intent-filter>
 
-            <!-- Intent Filter untuk membuka berkas DHKP (.dkhp / .dhkp / .dat) dari WhatsApp, File Manager, dll -->
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="content" />
-                <data android:scheme="file" />
-                <data android:mimeType="*/*" />
-                <data android:pathPattern=".*\\.dkhp" />
-                <data android:pathPattern=".*\\.DKHP" />
-                <data android:pathPattern=".*\\.dhkp" />
-                <data android:pathPattern=".*\\.DHKP" />
-                <data android:pathPattern=".*\\.dat" />
-                <data android:pathPattern=".*\\.DAT" />
-                <data android:pathSuffix=".dkhp" />
-                <data android:pathSuffix=".DKHP" />
-                <data android:pathSuffix=".dhkp" />
-                <data android:pathSuffix=".DHKP" />
-                <data android:pathSuffix=".dat" />
-                <data android:pathSuffix=".DAT" />
-            </intent-filter>
+
 
             <!-- Intent Filter untuk aplikasi (seperti WhatsApp) yang mengirim MIME type application/octet-stream -->
             <intent-filter>
@@ -145,13 +132,70 @@
                 <data android:pathSuffix=".dat" />
             </intent-filter>
 
+            <!-- Intent Filter untuk membuka dokumen PDF dari aplikasi lain (WhatsApp, File Manager, Unduhan, dll) -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:mimeType="application/pdf" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:host="*" />
+                <data android:pathPattern=".*\\.pdf" />
+                <data android:pathPattern=".*\\.PDF" />
+                <data android:pathSuffix=".pdf" />
+                <data android:pathSuffix=".PDF" />
+            </intent-filter>
+
+            <!-- Intent Filter untuk membuka dokumen Spreadsheet (Excel & CSV) dari aplikasi lain -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:mimeType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
+                <data android:mimeType="application/vnd.ms-excel" />
+                <data android:mimeType="text/csv" />
+                <data android:mimeType="text/comma-separated-values" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:host="*" />
+                <data android:pathPattern=".*\\.xlsx" />
+                <data android:pathPattern=".*\\.XLSX" />
+                <data android:pathPattern=".*\\.xls" />
+                <data android:pathPattern=".*\\.XLS" />
+                <data android:pathPattern=".*\\.csv" />
+                <data android:pathPattern=".*\\.CSV" />
+                <data android:pathSuffix=".xlsx" />
+                <data android:pathSuffix=".XLSX" />
+                <data android:pathSuffix=".xls" />
+                <data android:pathSuffix=".XLS" />
+                <data android:pathSuffix=".csv" />
+                <data android:pathSuffix=".CSV" />
+            </intent-filter>
+
             <!-- Intent Filter saat pengguna memilih opsi "Bagikan" / "Share" berkas dari aplikasi lain -->
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
-                <data android:scheme="content" />
-                <data android:scheme="file" />
-                <data android:mimeType="*/*" />
+                <data android:mimeType="application/pdf" />
+                <data android:mimeType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
+                <data android:mimeType="application/vnd.ms-excel" />
+                <data android:mimeType="text/csv" />
+                <data android:mimeType="text/comma-separated-values" />
             </intent-filter>
         </activity>
         <!-- Don't delete the meta-data below.
@@ -168,6 +212,24 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/apk_file_paths" />
         </provider>
+        <service
+            android:name=".BatchCheckForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
+        <!-- Receiver Widget Layar Depan (Home Screen AppWidget) Grafik DHKP -->
+        <receiver
+            android:name=".DhkpGrafikWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="id.cianjur.cekpbb.cek_pbb_app.ACTION_PREV_CHART" />
+                <action android:name="id.cianjur.cekpbb.cek_pbb_app.ACTION_NEXT_CHART" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/dhkp_grafik_widget_info" />
+        </receiver>
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

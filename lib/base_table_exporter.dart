@@ -6,6 +6,8 @@ import 'package:excel/excel.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
+import 'download_helper.dart';
+
 /// Format ekspor yang didukung secara universal oleh aplikasi (PDF, Excel, CSV).
 enum AppExportFormat {
   pdf('PDF', 'pdf'),
@@ -168,4 +170,12 @@ abstract class BaseTableExporter {
     final suffix = slug.isEmpty ? '' : '_$slug';
     return '$prefix${suffix}_${DateTime.now().millisecondsSinceEpoch}.${format.extension}';
   }
+
+  /// Simpan byte berkas hasil ekspor ke penyimpanan publik / dokumen.
+  static Future<String> saveExportedBytes({
+    required Uint8List bytes,
+    required String fileName,
+    String? subfolder,
+  }) =>
+      DownloadHelper.saveBytes(bytes, fileName, subfolder: subfolder);
 }

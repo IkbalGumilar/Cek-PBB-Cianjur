@@ -1,14 +1,15 @@
 import 'dart:math' as math;
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'blok_record.dart';
+import 'dhkp_widget_sync_service.dart';
 import 'document_preview_screen.dart';
 import 'download_helper.dart';
 import 'dusun_data.dart';
@@ -145,6 +146,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView> with SingleTickerProvid
     );
     _loadSavedPreferences();
     _animController.forward();
+    DhkpWidgetSyncService.syncFromRecords(widget.records);
   }
 
   Future<void> _loadSavedPreferences() async {
@@ -219,6 +221,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView> with SingleTickerProvid
       _selectedItemLabel = null;
       _animController.reset();
       _animController.forward();
+      DhkpWidgetSyncService.syncFromRecords(widget.records);
     }
   }
 
@@ -2210,25 +2213,74 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView> with SingleTickerProvid
           groups: monthGroups,
           child: Column(
             children: [
-              SizedBox(
-                height: 180,
-                child: CustomPaint(
-                  size: const Size(double.infinity, 180),
-                  painter: _GrassLineAreaPainter(
-                    data: monthlyNominal,
-                    maxVal: maxMonthVal > 0 ? maxMonthVal : 1,
-                    progress: _animation.value,
-                    lineColor: Colors.purple.shade600,
-                    isDark: isDark,
-                  ),
-                ),
+              LayoutBuilder(
+                builder: (context, c) {
+                  final w = c.maxWidth;
+                  void onTouch(Offset localPos) {
+                    if (monthGroups.isEmpty || w <= 0) return;
+                    final stepX = w / (monthGroups.length - 1);
+                    final idx = (localPos.dx / stepX).round().clamp(0, monthGroups.length - 1);
+                    final label = monthNames[idx];
+                    if (_selectedItemLabel != label) {
+                      HapticFeedback.selectionClick();
+                      setState(() {
+                        _selectedItemLabel = label;
+                      });
+                    }
+                  }
+
+                  final selIndex = _selectedItemLabel != null
+                      ? monthNames.indexOf(_selectedItemLabel!)
+                      : null;
+
+                  return GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTapDown: (d) => onTouch(d.localPosition),
+                    onPanUpdate: (d) => onTouch(d.localPosition),
+                    child: SizedBox(
+                      height: 180,
+                      child: CustomPaint(
+                        size: Size(w, 180),
+                        painter: _GrassLineAreaPainter(
+                          data: monthlyNominal,
+                          maxVal: maxMonthVal > 0 ? maxMonthVal : 1,
+                          progress: _animation.value,
+                          lineColor: Colors.purple.shade600,
+                          isDark: isDark,
+                          selectedIndex: selIndex != null && selIndex >= 0 ? selIndex : null,
+                        ),
+                      ),
+                    ),
+                  );
+                },
               ),
               const SizedBox(height: 8),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   for (final m in monthNames)
-                    Text(m, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Colors.grey)),
+                    InkWell(
+                      onTap: () {
+                        HapticFeedback.selectionClick();
+                        setState(() {
+                          _selectedItemLabel = _selectedItemLabel == m ? null : m;
+                        });
+                      },
+                      borderRadius: BorderRadius.circular(4),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+                        child: Text(
+                          m,
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: _selectedItemLabel == m ? FontWeight.bold : FontWeight.w600,
+                            color: _selectedItemLabel == m
+                                ? Colors.purple
+                                : (isDark ? Colors.grey.shade400 : Colors.grey),
+                          ),
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ],
@@ -2358,104 +2410,106 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView> with SingleTickerProvid
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               for (final g in groups) ...[
-                Builder(
-                  builder: (context) {
-                    final isSelected = _selectedItemLabel == g.label;
-                    return InkWell(
-                      onTap: () {
-                        setState(() {
-                          _selectedItemLabel = isSelected ? null : g.label;
-                        });
-                      },
-                      borderRadius: BorderRadius.circular(8),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 180),
-                        width: isScrollable ? 52 : null,
-                        constraints: isScrollable ? null : const BoxConstraints(minWidth: 36),
-                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: isSelected
-                              ? color1.withValues(alpha: isDark ? 0.2 : 0.12)
-                              : Colors.transparent,
-                          borderRadius: BorderRadius.circular(8),
-                          border: isSelected
-                              ? Border.all(color: color1, width: 1.2)
-                              : null,
-                        ),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            Text(
-                              topLabelExtractor(g),
-                              style: TextStyle(
-                                fontSize: 9.5,
-                                fontWeight: FontWeight.bold,
-                                color: isDark ? Colors.white : color2,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            if (subLabelExtractor(g).isNotEmpty)
-                              Text(
-                                subLabelExtractor(g),
-                                style: TextStyle(
-                                  fontSize: 8.5,
-                                  color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            const SizedBox(height: 5),
-                            Expanded(
-                              child: Align(
-                                alignment: Alignment.bottomCenter,
-                                child: LayoutBuilder(
-                                  builder: (context, c) {
-                                    final val = valueExtractor(g);
-                                    final heightRatio = (val / effectiveMax).clamp(0.0, 1.0);
-                                    final barHeight = math.max(4.0, c.maxHeight * heightRatio * _animation.value);
-
-                                    return Container(
-                                      width: isScrollable ? 22 : 26,
-                                      height: barHeight,
-                                      decoration: BoxDecoration(
-                                        gradient: LinearGradient(
-                                          begin: Alignment.topCenter,
-                                          end: Alignment.bottomCenter,
-                                          colors: [color1, color2],
-                                        ),
-                                        borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: color2.withValues(alpha: isSelected ? 0.45 : 0.22),
-                                            blurRadius: isSelected ? 6 : 3,
-                                            offset: const Offset(0, 2),
-                                          ),
-                                        ],
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              g.label,
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-                                color: isSelected ? color1 : null,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
-                        ),
+                () {
+                  final isSelected = _selectedItemLabel == g.label;
+                  final itemWidget = InkWell(
+                    onTap: () {
+                      HapticFeedback.selectionClick();
+                      setState(() {
+                        _selectedItemLabel = isSelected ? null : g.label;
+                      });
+                    },
+                    borderRadius: BorderRadius.circular(8),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 180),
+                      width: isScrollable ? math.max(64.0, constraints.maxWidth / 7.0) : null,
+                      padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? color1.withValues(alpha: isDark ? 0.2 : 0.12)
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(8),
+                        border: isSelected
+                            ? Border.all(color: color1, width: 1.2)
+                            : null,
                       ),
-                    );
-                  },
-                ),
-                if (!isScrollable) const Spacer(),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          Text(
+                            topLabelExtractor(g),
+                            style: TextStyle(
+                              fontSize: 9.5,
+                              fontWeight: FontWeight.bold,
+                              color: isDark ? Colors.white : color2,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          if (subLabelExtractor(g).isNotEmpty)
+                            Text(
+                              subLabelExtractor(g),
+                              style: TextStyle(
+                                fontSize: 8.5,
+                                color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          const SizedBox(height: 5),
+                          Expanded(
+                            child: Align(
+                              alignment: Alignment.bottomCenter,
+                              child: LayoutBuilder(
+                                builder: (context, c) {
+                                  final val = valueExtractor(g);
+                                  final heightRatio = (val / effectiveMax).clamp(0.0, 1.0);
+                                  final barHeight = math.max(4.0, c.maxHeight * heightRatio * _animation.value);
+
+                                  return Container(
+                                    width: isScrollable ? 26 : 28,
+                                    height: barHeight,
+                                    decoration: BoxDecoration(
+                                      gradient: LinearGradient(
+                                        begin: Alignment.topCenter,
+                                        end: Alignment.bottomCenter,
+                                        colors: [color1, color2],
+                                      ),
+                                      borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: color2.withValues(alpha: isSelected ? 0.45 : 0.22),
+                                          blurRadius: isSelected ? 6 : 3,
+                                          offset: const Offset(0, 2),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            g.label,
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                              color: isSelected ? color1 : null,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+
+                  if (!isScrollable) {
+                    return Expanded(child: itemWidget);
+                  }
+                  return itemWidget;
+                }(),
               ],
             ],
           );
@@ -2517,6 +2571,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView> with SingleTickerProvid
 
               return InkWell(
                 onTap: () {
+                  HapticFeedback.selectionClick();
                   setState(() {
                     _selectedItemLabel = isSelected ? null : g.label;
                   });
@@ -2524,7 +2579,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView> with SingleTickerProvid
                 borderRadius: BorderRadius.circular(8),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 180),
-                  padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 6),
+                  padding: const EdgeInsets.symmetric(vertical: 7.5, horizontal: 6),
                   decoration: BoxDecoration(
                     color: isSelected
                         ? barC1.withValues(alpha: isDark ? 0.18 : 0.1)
@@ -2657,39 +2712,78 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView> with SingleTickerProvid
 
     return Row(
       children: [
-        SizedBox(
-          width: 150,
-          height: 150,
-          child: CustomPaint(
-            painter: _ContributionPiePainter(
-              slices: slices,
-              selectedLabel: _selectedItemLabel,
-              progress: _animation.value,
-              isDark: isDark,
-            ),
-            child: Center(
-              child: Padding(
-                padding: const EdgeInsets.all(18),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      activeCenterLabel,
-                      style: TextStyle(
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.bold,
-                        color: selectedSlice?.color ?? centerColor.shade700,
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTapUp: (details) {
+            final center = const Offset(75, 75);
+            final dx = details.localPosition.dx - center.dx;
+            final dy = details.localPosition.dy - center.dy;
+            final dist = math.sqrt(dx * dx + dy * dy);
+
+            // Jika mengetuk lingkaran luar donat pie chart (radius <= 75)
+            if (dist <= 75) {
+              if (dist < 26) {
+                // Sentuhan di tengah: reset seleksi
+                HapticFeedback.selectionClick();
+                setState(() {
+                  _selectedItemLabel = null;
+                });
+                return;
+              }
+
+              // Hitung sudut sentuhan (dimulai dari -pi/2, searah jarum jam)
+              final tapAngle = math.atan2(dy, dx);
+              double angleFromTop = (tapAngle - (-math.pi / 2)) % (2 * math.pi);
+              if (angleFromTop < 0) angleFromTop += 2 * math.pi;
+
+              double accumulated = 0;
+              for (final s in slices) {
+                final sweep = 2 * math.pi * s.ratio;
+                if (angleFromTop >= accumulated && angleFromTop < accumulated + sweep) {
+                  HapticFeedback.selectionClick();
+                  setState(() {
+                    _selectedItemLabel = _selectedItemLabel == s.label ? null : s.label;
+                  });
+                  return;
+                }
+                accumulated += sweep;
+              }
+            }
+          },
+          child: SizedBox(
+            width: 150,
+            height: 150,
+            child: CustomPaint(
+              painter: _ContributionPiePainter(
+                slices: slices,
+                selectedLabel: _selectedItemLabel,
+                progress: _animation.value,
+                isDark: isDark,
+              ),
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(18),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        activeCenterLabel,
+                        style: TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.bold,
+                          color: selectedSlice?.color ?? centerColor.shade700,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    Text(
-                      activeCenterSub,
-                      style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w600, letterSpacing: 0.7),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
+                      Text(
+                        activeCenterSub,
+                        style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w600, letterSpacing: 0.7),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -2703,13 +2797,14 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView> with SingleTickerProvid
               for (final s in slices.take(8)) ...[
                 InkWell(
                   onTap: () {
+                    HapticFeedback.selectionClick();
                     setState(() {
                       _selectedItemLabel = _selectedItemLabel == s.label ? null : s.label;
                     });
                   },
                   borderRadius: BorderRadius.circular(6),
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 3.5, horizontal: 4),
+                    padding: const EdgeInsets.symmetric(vertical: 4.5, horizontal: 6),
                     child: Row(
                       children: [
                         Container(
@@ -2782,32 +2877,66 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView> with SingleTickerProvid
 
     return Row(
       children: [
-        SizedBox(
-          width: 150,
-          height: 150,
-          child: CustomPaint(
-            painter: _ContributionPiePainter(
-              slices: slices,
-              progress: _animation.value,
-              isDark: isDark,
-            ),
-            child: Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    centerLabel,
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: achievedColor,
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTapUp: (details) {
+            final center = const Offset(75, 75);
+            final dx = details.localPosition.dx - center.dx;
+            final dy = details.localPosition.dy - center.dy;
+            final dist = math.sqrt(dx * dx + dy * dy);
+
+            if (dist <= 75) {
+              if (dist < 26) {
+                HapticFeedback.selectionClick();
+                setState(() {
+                  _selectedItemLabel = null;
+                });
+                return;
+              }
+
+              final tapAngle = math.atan2(dy, dx);
+              double angleFromTop = (tapAngle - (-math.pi / 2)) % (2 * math.pi);
+              if (angleFromTop < 0) angleFromTop += 2 * math.pi;
+
+              final achievedSweep = 2 * math.pi * ratio;
+              HapticFeedback.selectionClick();
+              setState(() {
+                if (angleFromTop < achievedSweep) {
+                  _selectedItemLabel = _selectedItemLabel == achievedLabel ? null : achievedLabel;
+                } else {
+                  _selectedItemLabel = _selectedItemLabel == remainingLabel ? null : remainingLabel;
+                }
+              });
+            }
+          },
+          child: SizedBox(
+            width: 150,
+            height: 150,
+            child: CustomPaint(
+              painter: _ContributionPiePainter(
+                slices: slices,
+                selectedLabel: _selectedItemLabel,
+                progress: _animation.value,
+                isDark: isDark,
+              ),
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      centerLabel,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: achievedColor,
+                      ),
                     ),
-                  ),
-                  Text(
-                    centerSub,
-                    style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w600, letterSpacing: 0.8),
-                  ),
-                ],
+                    Text(
+                      centerSub,
+                      style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w600, letterSpacing: 0.8),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -2846,33 +2975,53 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView> with SingleTickerProvid
     required String desc,
     required bool isDark,
   }) {
-    return Row(
-      children: [
-        Container(
-          width: 14,
-          height: 14,
-          decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(4)),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    final isSelected = _selectedItemLabel == label;
+    return InkWell(
+      onTap: () {
+        HapticFeedback.selectionClick();
+        setState(() {
+          _selectedItemLabel = isSelected ? null : label;
+        });
+      },
+      borderRadius: BorderRadius.circular(6),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+        child: Row(
+          children: [
+            Container(
+              width: 14,
+              height: 14,
+              decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(4)),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                  Text(pct, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: color)),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        label,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                          color: isSelected ? color : null,
+                        ),
+                      ),
+                      Text(pct, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: color)),
+                    ],
+                  ),
+                  Text(
+                    desc,
+                    style: TextStyle(fontSize: 9, color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
+                  ),
                 ],
               ),
-              Text(
-                desc,
-                style: TextStyle(fontSize: 9, color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 
@@ -3217,6 +3366,7 @@ class _GrassLineAreaPainter extends CustomPainter {
   final double progress;
   final Color lineColor;
   final bool isDark;
+  final int? selectedIndex;
 
   _GrassLineAreaPainter({
     required this.data,
@@ -3224,6 +3374,7 @@ class _GrassLineAreaPainter extends CustomPainter {
     required this.progress,
     required this.lineColor,
     required this.isDark,
+    this.selectedIndex,
   });
 
   @override
@@ -3283,16 +3434,36 @@ class _GrassLineAreaPainter extends CustomPainter {
       ..strokeCap = StrokeCap.round;
     canvas.drawPath(path, strokePaint);
 
+    // Garis pandu & sorotan khusus saat salah satu bulan disentuh
+    if (selectedIndex != null && selectedIndex! >= 0 && selectedIndex! < points.length) {
+      final sp = points[selectedIndex!];
+      final guidePaint = Paint()
+        ..color = lineColor.withValues(alpha: 0.45)
+        ..strokeWidth = 1.5;
+      canvas.drawLine(Offset(sp.dx, 0), Offset(sp.dx, h), guidePaint);
+
+      final haloPaint = Paint()
+        ..color = lineColor.withValues(alpha: 0.25)
+        ..style = PaintingStyle.fill;
+      canvas.drawCircle(sp, 11.0, haloPaint);
+    }
+
     final dotPaint = Paint()..color = lineColor;
     final dotInner = Paint()..color = isDark ? Colors.black : Colors.white;
-    for (final p in points) {
-      canvas.drawCircle(p, 4.0, dotPaint);
-      canvas.drawCircle(p, 2.0, dotInner);
+    for (int i = 0; i < points.length; i++) {
+      final p = points[i];
+      final isPtSelected = selectedIndex == i;
+      final outerR = isPtSelected ? 6.0 : 4.0;
+      final innerR = isPtSelected ? 3.0 : 2.0;
+      canvas.drawCircle(p, outerR, isPtSelected ? (Paint()..color = Colors.amber.shade400) : dotPaint);
+      canvas.drawCircle(p, innerR, dotInner);
     }
   }
 
   @override
   bool shouldRepaint(covariant _GrassLineAreaPainter oldDelegate) {
-    return oldDelegate.progress != progress || oldDelegate.data != data;
+    return oldDelegate.progress != progress ||
+        oldDelegate.data != data ||
+        oldDelegate.selectedIndex != selectedIndex;
   }
 }

@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'batch_notification_service.dart';
 import 'blok_batch_check_tracker.dart';
 import 'blok_data_store.dart';
 import 'nop_helper.dart';
@@ -42,6 +45,7 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
   bool _isPaused = false;
   bool _isCooldown = false;
   bool _isCompleted = false;
+  bool _cancelledNotified = false;
   String _statusMessage = 'Menyiapkan pengecekan...';
 
   TaxRecord? get _current =>
@@ -62,7 +66,46 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
   void dispose() {
     _isRunning = false;
     _scrollController.dispose();
+    unawaited(BatchNotificationService.instance.stopForegroundService());
+    if (!_isCompleted) {
+      _notifyCancelledIfPartial();
+    }
     super.dispose();
+  }
+
+  void _notifyCancelledIfPartial() {
+    if (_cancelledNotified || _isCompleted) return;
+    _cancelledNotified = true;
+
+    if (_currentIndex > 0) {
+      final sudahCount = widget.records.where((r) => r.isPaid).length;
+      final belumCount = widget.records
+          .where((r) =>
+              r.isChecked &&
+              !r.isPaid &&
+              !r.status.contains('Blacklist') &&
+              r.status != 'Dilewati' &&
+              !r.status.contains('Gagal'))
+          .length;
+      final blacklistCount = widget.records
+          .where((r) => r.status.contains('Blacklist'))
+          .length;
+      final gagalCount =
+          widget.records.where((r) => r.status.contains('Gagal')).length;
+
+      unawaited(
+        BatchNotificationService.instance.showCancelled(
+          current: _currentIndex,
+          total: widget.records.length,
+          lunasCount: sudahCount,
+          belumCount: belumCount,
+          blacklistCount: blacklistCount,
+          gagalCount: gagalCount,
+        ),
+      );
+    } else {
+      unawaited(BatchNotificationService.instance.cancel());
+    }
   }
 
   void _scrollToCurrent() {
@@ -85,6 +128,15 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
       _isPaused = false;
     });
 
+    BatchNotificationService.instance.setActiveRecords(widget.records);
+    await BatchNotificationService.instance.requestPermission();
+    await BatchNotificationService.instance.startForegroundService(
+      title: 'Memeriksa PBB (${widget.records.length} NOP)',
+      content: 'Memulai pengecekan...',
+      progress: _currentIndex,
+      max: widget.records.length,
+    );
+
     while (_currentIndex < widget.records.length && _isRunning) {
       if (_isPaused) break;
 
@@ -102,17 +154,47 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
       }
       if (!_isRunning || _isPaused || !mounted) break;
 
-      try {
-        final result = await _client.checkStatusViaDocument(
-          record.nop,
-          tahun: widget.tahun,
-        );
-        if (!mounted) return;
+      PbbResult? result;
+      Object? lastError;
+
+      // Coba sampai 3x (retry 2x) jika terjadi gangguan soket/koneksi saat layar mati atau app di latar belakang
+      for (int attempt = 0; attempt < 3; attempt++) {
+        if (!_isRunning || _isPaused || !mounted) break;
+        try {
+          result = await _client.checkStatusViaDocument(
+            record.nop,
+            tahun: widget.tahun,
+          );
+          lastError = null;
+          break; // Sukses, keluar dari loop retry
+        } catch (e) {
+          lastError = e;
+          if (attempt < 2 && _isRunning && !_isPaused && mounted) {
+            await Future<void>.delayed(const Duration(milliseconds: 1000));
+          }
+        }
+      }
+
+      if (!mounted) return;
+
+      if (result != null) {
         record.status = result.status;
         record.rawText = result.rawText;
         if (result.namaWajibPajak != null &&
             result.namaWajibPajak!.trim().isNotEmpty) {
           record.namaWajibPajak = result.namaWajibPajak;
+        }
+        if (result.tanggalBayar != null &&
+            result.tanggalBayar!.trim().isNotEmpty) {
+          record.tanggalBayar = result.tanggalBayar;
+        }
+        if (result.nomorStan != null &&
+            result.nomorStan!.trim().isNotEmpty) {
+          record.nomorStan = result.nomorStan;
+        }
+        if (result.jumlahPbb != null &&
+            result.jumlahPbb!.trim().isNotEmpty) {
+          record.jumlahPbb = result.jumlahPbb;
         }
 
         if (record.isPaid) {
@@ -123,10 +205,9 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
           );
         }
         await BlokBatchCheckTracker.instance.recordChecked(record.nop);
-      } catch (e) {
-        if (!mounted) return;
+      } else {
         record.status = 'Gagal Cek';
-        record.rawText = e.toString();
+        record.rawText = lastError?.toString() ?? 'Koneksi terputus';
         await BlokBatchCheckTracker.instance.recordChecked(record.nop);
       }
 
@@ -134,6 +215,27 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
       setState(() {
         _currentIndex++;
       });
+
+      // Update notifikasi progress berjalan di status bar / drawer sistem
+      final sudahCount = widget.records.where((r) => r.isPaid).length;
+      final belumCount = widget.records
+          .where((r) =>
+              r.isChecked &&
+              !r.isPaid &&
+              !r.status.contains('Blacklist') &&
+              r.status != 'Dilewati' &&
+              !r.status.contains('Gagal'))
+          .length;
+
+      unawaited(
+        BatchNotificationService.instance.showProgress(
+          current: _currentIndex,
+          total: widget.records.length,
+          currentNop: record.nop,
+          lunasCount: sudahCount,
+          belumCount: belumCount,
+        ),
+      );
 
       // Cooldown berkala (misal setiap 50 NOP jeda 3 detik) agar server Bapenda tetap aman
       if (widget.cooldownBatchSize > 0 &&
@@ -171,6 +273,33 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
         _statusMessage = 'Semua NOP selesai diperiksa.';
       });
       HapticFeedback.mediumImpact();
+
+      final sudahCount = widget.records.where((r) => r.isPaid).length;
+      final belumCount = widget.records
+          .where((r) =>
+              r.isChecked &&
+              !r.isPaid &&
+              !r.status.contains('Blacklist') &&
+              r.status != 'Dilewati' &&
+              !r.status.contains('Gagal'))
+          .length;
+      final blacklistCount = widget.records
+          .where((r) => r.status.contains('Blacklist'))
+          .length;
+      final gagalCount =
+          widget.records.where((r) => r.status.contains('Gagal')).length;
+
+      // Munculkan notifikasi ke-2 yang menggantikan notifikasi progress (ID sama)
+      unawaited(
+        BatchNotificationService.instance.showCompleted(
+          total: widget.records.length,
+          lunasCount: sudahCount,
+          belumCount: belumCount,
+          blacklistCount: blacklistCount,
+          gagalCount: gagalCount,
+        ),
+      );
+
       await Future<void>.delayed(const Duration(milliseconds: 600));
       if (mounted) _goToResult();
     } else {
@@ -187,6 +316,7 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
       _isCooldown = false;
       _statusMessage = 'Pengecekan dijeda.';
     });
+    unawaited(BatchNotificationService.instance.stopForegroundService());
   }
 
   void _resume() {
@@ -208,6 +338,7 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
   void _goToResult() {
     _isRunning = false;
     _isPaused = false;
+    unawaited(BatchNotificationService.instance.stopForegroundService());
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
@@ -240,6 +371,8 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
     if (confirm == true) {
       _isRunning = false;
       _isPaused = false;
+      unawaited(BatchNotificationService.instance.stopForegroundService());
+      _notifyCancelledIfPartial();
       return true;
     }
     return false;
@@ -633,16 +766,38 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
                                 fontSize: 13,
                               ),
                             ),
-                            subtitle: item.namaWajibPajak != null &&
-                                    item.namaWajibPajak!.isNotEmpty
-                                ? Text(
-                                    item.namaWajibPajak!,
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: scheme.onSurfaceVariant,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
+                            subtitle: (item.namaWajibPajak != null &&
+                                        item.namaWajibPajak!.isNotEmpty) ||
+                                    (item.tanggalBayar != null &&
+                                        item.tanggalBayar!.isNotEmpty)
+                                ? Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      if (item.namaWajibPajak != null &&
+                                          item.namaWajibPajak!.isNotEmpty)
+                                        Text(
+                                          item.namaWajibPajak!,
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: scheme.onSurfaceVariant,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      if (item.tanggalBayar != null &&
+                                          item.tanggalBayar!.isNotEmpty)
+                                        Text(
+                                          'Tgl Bayar: ${item.tanggalBayar}',
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            color: Colors.green.shade700,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                    ],
                                   )
                                 : null,
                             trailing: Container(

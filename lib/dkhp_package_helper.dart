@@ -178,6 +178,21 @@ class DhkpBackupValidationException extends FormatException {
   const DhkpBackupValidationException(super.message);
 }
 
+/// Hasil ekstraksi pratinjau berkas paket DHKP / DAT tanpa memodifikasi penyimpanan lokal.
+class DhkpPreviewResult {
+  final Map<String, dynamic>? manifest;
+  final List<String> headers;
+  final List<List<String>> rows;
+  final bool isEncrypted;
+
+  const DhkpPreviewResult({
+    this.manifest,
+    required this.headers,
+    required this.rows,
+    this.isEncrypted = false,
+  });
+}
+
 /// Pengelola berkas paket `.dkhp` / `.dhkp` — format arsip terenkripsi khusus aplikasi Cek PBB Cianjur.
 ///
 /// Paket cadangan `.dkhp` / `.dhkp` berisi:
@@ -261,6 +276,119 @@ class DhkpPackageHelper {
       }
     } catch (_) {}
     return null;
+  }
+
+  /// Membaca data pratinjau (headers, baris data, dan manifest) dari berkas `.dkhp`, `.dhkp`, atau `.dat`
+  /// secara aman tanpa langsung menyimpannya ke database aplikasi.
+  static Future<DhkpPreviewResult> extractPreviewData(
+    String filePath, {
+    String? password,
+  }) async {
+    final file = File(filePath);
+    if (!await file.exists()) {
+      throw FileSystemException('Berkas tidak ditemukan', filePath);
+    }
+
+    final rawBytes = await file.readAsBytes();
+    Uint8List zipBytes;
+    final isEncrypted = DhkpCrypto.isEncrypted(rawBytes);
+
+    if (isEncrypted) {
+      final effectivePass =
+          password ?? await BackupPasswordStore.instance.read();
+      final decrypted = await DhkpCrypto.decryptBytes(
+        rawBytes,
+        password: effectivePass,
+      );
+      if (decrypted == null) {
+        throw const FormatException(
+          'Gagal mendekripsi berkas: format atau kunci enkripsi tidak cocok.',
+        );
+      }
+      zipBytes = decrypted;
+    } else {
+      final backupIdentities = [
+        'operator',
+        'unassigned',
+        for (var i = 1; i <= 5; i++) 'dusun-$i',
+      ];
+      final cpbbDecrypted = BackupCrypto.tryDecrypt(rawBytes, backupIdentities);
+      if (cpbbDecrypted != null) {
+        zipBytes = cpbbDecrypted;
+      } else {
+        zipBytes = rawBytes;
+      }
+    }
+
+    final archive = ZipDecoder().decodeBytes(zipBytes);
+    Map<String, dynamic>? manifest;
+    List<String> headers = [];
+    List<List<String>> rows = [];
+
+    for (final entry in archive.files) {
+      if (!entry.isFile) continue;
+      final nameLower = entry.name.toLowerCase();
+      if (nameLower.endsWith('manifest.json')) {
+        try {
+          final text = utf8.decode(entry.content as List<int>);
+          final decoded = jsonDecode(text);
+          if (decoded is Map<String, dynamic>) {
+            manifest = decoded;
+          }
+        } catch (_) {}
+      } else if (nameLower.endsWith('.csv')) {
+        try {
+          final content = utf8.decode(entry.content as List<int>);
+          final rawRows = Csv().decode(content);
+          if (rawRows.isNotEmpty) {
+            headers = rawRows.first.map((e) => e.toString().trim()).toList();
+            rows = rawRows
+                .skip(1)
+                .map((r) => r.map((c) => c.toString().trim()).toList())
+                .toList();
+          }
+        } catch (_) {}
+      }
+    }
+
+    // Jika tidak ada berkas CSV tapi terdapat rincian perubahan pada manifest
+    if (rows.isEmpty && manifest != null && manifest['changes'] is List) {
+      headers = [
+        'No',
+        'Blok',
+        'Nomor',
+        'NOP',
+        'Tahun',
+        'Status Bayar',
+        'Tanggal Bayar',
+      ];
+      final changes = manifest['changes'] as List;
+      for (var i = 0; i < changes.length; i++) {
+        final c = changes[i];
+        if (c is Map) {
+          rows.add([
+            '${i + 1}',
+            (c['blok'] ?? '').toString(),
+            (c['nomor'] ?? '').toString(),
+            (c['nop'] ?? '').toString(),
+            (c['tahunBayar'] ?? '').toString(),
+            (c['statusBayar'] ?? '').toString(),
+            (c['tanggalBayar'] ?? '').toString(),
+          ]);
+        }
+      }
+    }
+
+    if (headers.isEmpty) {
+      headers = ['Data'];
+    }
+
+    return DhkpPreviewResult(
+      manifest: manifest,
+      headers: headers,
+      rows: rows,
+      isEncrypted: isEncrypted,
+    );
   }
 
   static Set<String>? _cachedPhotoNames;

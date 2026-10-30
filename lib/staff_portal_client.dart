@@ -7,6 +7,7 @@ import 'package:dio_cookie_manager/dio_cookie_manager.dart';
 import 'package:html/parser.dart' as html_parser;
 
 import 'app_storage.dart';
+import 'base_http_client.dart';
 import 'kolektif_nop_berkas.dart';
 import 'staff_portal_token_extractor.dart';
 
@@ -285,7 +286,7 @@ class KolektifActionResult {
 /// paging/sorting standar DataTables yang di-generate otomatis oleh
 /// library-nya di browser, di sini direplikasi manual tanpa contoh respons
 /// JSON asli) jadi kemungkinan besar perlu penyesuaian setelah dites nyata.
-class StaffPortalClient {
+class StaffPortalClient extends BaseHttpClient {
   static const _baseUrl = 'https://cianjurkab.v-tax.id';
 
   /// `param=` tetap (base64 dari `a=aPBB&m=mMonitoringWilayahV3`) untuk masuk
@@ -302,21 +303,19 @@ class StaffPortalClient {
   List<BankOption>? _bankOptionsCache;
   bool _cookieManagerAttached = false;
 
-  final Dio _dio = Dio(
-    BaseOptions(
-      baseUrl: _baseUrl,
-      connectTimeout: const Duration(seconds: 15),
-      sendTimeout: const Duration(seconds: 15),
-      // Naik dua kali dari percobaan sebelumnya (15 -> 60 -> 120 detik).
-      // Tab "Belum Bayar" cuma punya satu tanggal cutoff (bukan rentang
-      // awal-akhir) — menghitung SEMUA piutang sejak awal sampai cutoff itu,
-      // jadi tetap berat walau kelurahan-nya kecil; 60 detik masih kena
-      // timeout saat dites nyata di tab ini.
-      receiveTimeout: const Duration(seconds: 120),
-      followRedirects: false,
-      validateStatus: (status) => status != null && status < 500,
-    ),
-  );
+  StaffPortalClient({
+    super.customDio,
+  }) : super(
+          baseUrl: _baseUrl,
+          connectTimeout: const Duration(seconds: 15),
+          sendTimeout: const Duration(seconds: 15),
+          receiveTimeout: const Duration(seconds: 120),
+        ) {
+    dio.options.followRedirects = false;
+    dio.options.validateStatus = (status) => status != null && status < 500;
+  }
+
+  Dio get _dio => dio;
 
   /// Cookie sesi (mis. `PHPSESSID`) disimpan ke berkas, bukan cuma di memori
   /// — supaya sesi login yang sudah terbentuk bertahan lewat restart
