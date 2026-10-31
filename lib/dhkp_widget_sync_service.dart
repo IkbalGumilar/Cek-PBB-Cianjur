@@ -10,7 +10,9 @@ import 'dusun_data.dart';
 /// Porsi Kontribusi Dusun, dan Tren Bulanan Jan–Des) ke SharedPreferences &
 /// memicu pembaruan canvas grafik pada RemoteViews widget secara langsung.
 class DhkpWidgetSyncService {
-  static const MethodChannel _channel = MethodChannel('id.cianjur.cekpbb.cek_pbb_app/widget');
+  static const MethodChannel _channel = MethodChannel(
+    'id.cianjur.cekpbb.cek_pbb_app/widget',
+  );
 
   static DateTime? _parsePaymentDate(String? raw) {
     if (raw == null) return null;
@@ -69,7 +71,20 @@ class DhkpWidgetSyncService {
       // Inisialisasi tren bulanan 12 bulan
       final monthNominals = List<int>.filled(12, 0);
       final monthCounts = List<int>.filled(12, 0);
-      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Ags', 'Sep', 'Okt', 'Nov', 'Des'];
+      const monthNames = [
+        'Jan',
+        'Feb',
+        'Mar',
+        'Apr',
+        'Mei',
+        'Jun',
+        'Jul',
+        'Ags',
+        'Sep',
+        'Okt',
+        'Nov',
+        'Des',
+      ];
 
       for (final r in records) {
         final val = r.jumlahPbbValue;
@@ -91,13 +106,16 @@ class DhkpWidgetSyncService {
         // Cari dusun yang menaungi blok catatan ini
         final d = DusunData.instance.byBlok(r.blok);
         final dNum = d?.number ?? 1;
-        final dStat = dusunStats.putIfAbsent(dNum, () => {
-          'name': d?.label ?? 'Dusun $dNum',
-          'targetRp': 0,
-          'lunasRp': 0,
-          'lunasNop': 0,
-          'totalNop': 0,
-        });
+        final dStat = dusunStats.putIfAbsent(
+          dNum,
+          () => {
+            'name': d?.label ?? 'Dusun $dNum',
+            'targetRp': 0,
+            'lunasRp': 0,
+            'lunasNop': 0,
+            'totalNop': 0,
+          },
+        );
 
         dStat['targetRp'] = (dStat['targetRp'] as int) + val;
         dStat['totalNop'] = (dStat['totalNop'] as int) + 1;
@@ -107,7 +125,9 @@ class DhkpWidgetSyncService {
         }
       }
 
-      final lunasPct = totalNominal > 0 ? (lunasNominal / totalNominal * 100.0) : 0.0;
+      final lunasPct = totalNominal > 0
+          ? (lunasNominal / totalNominal * 100.0)
+          : 0.0;
       final belumBayarNominal = totalNominal - lunasNominal;
       final belumBayarNop = totalNop - lunasNop;
 

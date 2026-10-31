@@ -10,15 +10,11 @@ class SecuritySettingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Keamanan Aplikasi'),
-      ),
+      appBar: AppBar(title: const Text('Keamanan Aplikasi')),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(16),
-          children: const [
-            SecuritySettingsSection(),
-          ],
+          children: const [SecuritySettingsSection()],
         ),
       ),
     );
@@ -165,8 +161,9 @@ class _SecuritySettingsSectionState extends State<SecuritySettingsSection> {
           autofocus: true,
           keyboardType: isPin ? TextInputType.number : TextInputType.text,
           maxLength: isPin ? 6 : null,
-          inputFormatters:
-              isPin ? [FilteringTextInputFormatter.digitsOnly] : null,
+          inputFormatters: isPin
+              ? [FilteringTextInputFormatter.digitsOnly]
+              : null,
           decoration: InputDecoration(
             labelText: isPin ? 'PIN 6 Angka' : 'Kata Sandi',
             border: const OutlineInputBorder(),
@@ -211,37 +208,34 @@ class _SecuritySettingsSectionState extends State<SecuritySettingsSection> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Pilih Cara Buka Kunci'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            RadioListTile<AppLockType>(
-              title: const Text('Sidik Jari / Kunci HP'),
-              subtitle: Text(
-                _biometricSupported
-                    ? 'Gunakan sidik jari, wajah, atau pola bawaan HP'
-                    : 'Tidak tersedia di perangkat ini',
+        content: RadioGroup<AppLockType>(
+          groupValue: _method,
+          onChanged: (val) => Navigator.of(ctx).pop(val),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              RadioListTile<AppLockType>(
+                title: const Text('Sidik Jari / Kunci HP'),
+                subtitle: Text(
+                  _biometricSupported
+                      ? 'Gunakan sidik jari, wajah, atau pola bawaan HP'
+                      : 'Tidak tersedia di perangkat ini',
+                ),
+                value: AppLockType.device,
+                enabled: _biometricSupported,
               ),
-              value: AppLockType.device,
-              groupValue: _method,
-              onChanged: _biometricSupported
-                  ? (val) => Navigator.of(ctx).pop(val)
-                  : null,
-            ),
-            RadioListTile<AppLockType>(
-              title: const Text('PIN 6 Angka'),
-              subtitle: const Text('Buka cepat dengan 6 angka pilihan Anda'),
-              value: AppLockType.pin,
-              groupValue: _method,
-              onChanged: (val) => Navigator.of(ctx).pop(val),
-            ),
-            RadioListTile<AppLockType>(
-              title: const Text('Kata Sandi'),
-              subtitle: const Text('Gunakan kombinasi huruf dan angka'),
-              value: AppLockType.password,
-              groupValue: _method,
-              onChanged: (val) => Navigator.of(ctx).pop(val),
-            ),
-          ],
+              const RadioListTile<AppLockType>(
+                title: Text('PIN 6 Angka'),
+                subtitle: Text('Buka cepat dengan 6 angka pilihan Anda'),
+                value: AppLockType.pin,
+              ),
+              const RadioListTile<AppLockType>(
+                title: Text('Kata Sandi'),
+                subtitle: Text('Gunakan kombinasi huruf dan angka'),
+                value: AppLockType.password,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -443,18 +437,20 @@ class _SecuritySettingsSectionState extends State<SecuritySettingsSection> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Waktu Kunci Otomatis'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: options
-              .map(
-                (sec) => RadioListTile<int>(
-                  title: Text(timeoutLabel(sec)),
-                  value: sec,
-                  groupValue: _timeoutSeconds,
-                  onChanged: (val) => Navigator.of(ctx).pop(val),
-                ),
-              )
-              .toList(),
+        content: RadioGroup<int>(
+          groupValue: _timeoutSeconds,
+          onChanged: (val) => Navigator.of(ctx).pop(val),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: options
+                .map(
+                  (sec) => RadioListTile<int>(
+                    title: Text(timeoutLabel(sec)),
+                    value: sec,
+                  ),
+                )
+                .toList(),
+          ),
         ),
       ),
     );
@@ -492,8 +488,8 @@ class _SecuritySettingsSectionState extends State<SecuritySettingsSection> {
                     Text(
                       'Keamanan Aplikasi',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ],
                 ),
@@ -550,7 +546,9 @@ class _SecuritySettingsSectionState extends State<SecuritySettingsSection> {
                     ListTile(
                       contentPadding: EdgeInsets.zero,
                       leading: const Icon(Icons.dialpad),
-                      title: Text(_hasPin ? 'Ubah PIN 6 Angka' : 'Atur PIN 6 Angka'),
+                      title: Text(
+                        _hasPin ? 'Ubah PIN 6 Angka' : 'Atur PIN 6 Angka',
+                      ),
                       trailing: const Icon(Icons.chevron_right),
                       onTap: _showPinSetupDialog,
                     ),

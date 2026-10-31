@@ -208,7 +208,9 @@ class _ModeMenu extends StatelessWidget {
     // atau warna gelap/terang kontras tinggi bila warna aksen terlalu pucat.
     final selectedTextColor = isBgBright
         ? (primaryColor.computeLuminance() > 0.4 ? darkTextColor : primaryColor)
-        : (primaryColor.computeLuminance() < 0.2 ? lightTextColor : primaryColor);
+        : (primaryColor.computeLuminance() < 0.2
+              ? lightTextColor
+              : primaryColor);
 
     // Teks chip belum terpilih: adaptif terhadap terang/kelamnya latar belakang
     final unselectedTextColor = isBgBright ? darkTextColor : lightTextColor;

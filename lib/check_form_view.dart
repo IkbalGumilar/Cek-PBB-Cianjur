@@ -7,15 +7,11 @@ import 'package:image_picker/image_picker.dart';
 import 'app_storage.dart';
 import 'blok_data_store.dart';
 import 'check_mode.dart';
-import 'document_preview_screen.dart';
 import 'nop_helper.dart';
 import 'nop_scanner.dart';
+import 'pbb/check_result_cards.dart';
 import 'pbb_client.dart';
-import 'qris_result.dart';
-import 'qris_view_screen.dart';
 import 'tagihan_result.dart';
-import 'va_result.dart';
-import 'va_view_screen.dart';
 
 class CheckFormView extends StatefulWidget {
   final CheckMode mode;
@@ -151,10 +147,10 @@ class _CheckFormViewState extends State<CheckFormView> {
         final wilayah = nopWilayah(nop);
         _blokController.text = int.tryParse(blok)?.toString() ?? blok;
         _wilayahController.text = int.tryParse(wilayah)?.toString() ?? wilayah;
-        
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('NOP berhasil dideteksi: $nop')),
-        );
+
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('NOP berhasil dideteksi: $nop')));
       } else {
         if (widget.mode == CheckMode.tagihan) {
           final selectedNop = await showDialog<String>(
@@ -183,26 +179,28 @@ class _CheckFormViewState extends State<CheckFormView> {
                             ),
                             borderRadius: BorderRadius.circular(4),
                           ),
-                          child: ListView.builder(
-                            itemCount: nops.length,
-                            itemBuilder: (context, index) {
-                              final n = nops[index];
-                              return RadioListTile<String>(
-                                value: n,
-                                groupValue: tempSelected,
-                                title: Text(
-                                  '${index + 1}. $n',
-                                  style: const TextStyle(fontSize: 14),
-                                ),
-                                contentPadding: const EdgeInsets.only(
-                                  left: 8,
-                                  right: 8,
-                                ),
-                                onChanged: (value) {
-                                  setState(() => tempSelected = value);
-                                },
-                              );
+                          child: RadioGroup<String>(
+                            groupValue: tempSelected,
+                            onChanged: (value) {
+                              setState(() => tempSelected = value);
                             },
+                            child: ListView.builder(
+                              itemCount: nops.length,
+                              itemBuilder: (context, index) {
+                                final n = nops[index];
+                                return RadioListTile<String>(
+                                  value: n,
+                                  title: Text(
+                                    '${index + 1}. $n',
+                                    style: const TextStyle(fontSize: 14),
+                                  ),
+                                  contentPadding: const EdgeInsets.only(
+                                    left: 8,
+                                    right: 8,
+                                  ),
+                                );
+                              },
+                            ),
                           ),
                         ),
                       ],
@@ -229,8 +227,9 @@ class _CheckFormViewState extends State<CheckFormView> {
             final blok = nopBlok(selectedNop);
             final wilayah = nopWilayah(selectedNop);
             _blokController.text = int.tryParse(blok)?.toString() ?? blok;
-            _wilayahController.text = int.tryParse(wilayah)?.toString() ?? wilayah;
-            
+            _wilayahController.text =
+                int.tryParse(wilayah)?.toString() ?? wilayah;
+
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(content: Text('NOP dipilih: $selectedNop')),
             );
@@ -264,7 +263,9 @@ class _CheckFormViewState extends State<CheckFormView> {
             // Tambahkan ke file draft NOP untuk ImportView
             final dir = await AppStorage.getDataDirectory();
             final file = File('${dir.path}/draft_nop.txt');
-            final existing = await file.exists() ? await file.readAsString() : '';
+            final existing = await file.exists()
+                ? await file.readAsString()
+                : '';
             final existingSet = existing
                 .split(RegExp(r'[,\n\r]+'))
                 .map((e) => e.trim())
@@ -273,25 +274,24 @@ class _CheckFormViewState extends State<CheckFormView> {
 
             final toAdd = nops.where((n) => !existingSet.contains(n)).toList();
             if (toAdd.isNotEmpty) {
-              final newContent =
-                  [existing.trim(), ...toAdd].where((e) => e.isNotEmpty).join('\n');
+              final newContent = [
+                existing.trim(),
+                ...toAdd,
+              ].where((e) => e.isNotEmpty).join('\n');
               await file.writeAsString(newContent);
             }
-            
+
             widget.onImportPressed();
           } else if (checkMassal == false) {
             final nop = nops.first;
             final blok = nopBlok(nop);
             final wilayah = nopWilayah(nop);
             _blokController.text = int.tryParse(blok)?.toString() ?? blok;
-            _wilayahController.text = int.tryParse(wilayah)?.toString() ?? wilayah;
-            
+            _wilayahController.text =
+                int.tryParse(wilayah)?.toString() ?? wilayah;
+
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  'Dipakai NOP pertama: $nop',
-                ),
-              ),
+              SnackBar(content: Text('Dipakai NOP pertama: $nop')),
             );
           }
         }
@@ -381,15 +381,18 @@ class _CheckFormViewState extends State<CheckFormView> {
         if (!mounted) return;
         setState(() => _statusBayarResult = result);
         if (result.isPaid) {
-          final outcome =
-              await _recordIfInWilayah(nop: nop, tahun: tahun, result: result);
+          final outcome = await _recordIfInWilayah(
+            nop: nop,
+            tahun: tahun,
+            result: result,
+          );
           if (!mounted) return;
           if (outcome != null) {
             final msg = outcome.changedFromUnpaid
                 ? 'Data DHKP diperbarui: Status menjadi Sudah Bayar!'
                 : (outcome.wasExisting
-                    ? 'Data DHKP sudah tercatat Sudah Bayar.'
-                    : 'Data baru berhasil dicatat ke DHKP (Sudah Bayar).');
+                      ? 'Data DHKP sudah tercatat Sudah Bayar.'
+                      : 'Data baru berhasil dicatat ke DHKP (Sudah Bayar).');
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Row(
@@ -519,21 +522,15 @@ class _CheckFormViewState extends State<CheckFormView> {
                                   isTagihan
                                       ? 'Cek Tagihan PBB'
                                       : 'Cek Status Bayar PBB',
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .titleMedium
-                                      ?.copyWith(
-                                        fontWeight: FontWeight.bold,
-                                      ),
+                                  style: Theme.of(context).textTheme.titleMedium
+                                      ?.copyWith(fontWeight: FontWeight.bold),
                                 ),
                                 const SizedBox(height: 2),
                                 Text(
                                   isTagihan
                                       ? 'Lihat rincian tunggakan dan bayar lewat QRIS atau VA'
                                       : 'Periksa bukti lunas pembayaran PBB per tahun',
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodySmall
+                                  style: Theme.of(context).textTheme.bodySmall
                                       ?.copyWith(
                                         color: scheme.onSurfaceVariant,
                                       ),
@@ -607,8 +604,8 @@ class _CheckFormViewState extends State<CheckFormView> {
                       Text(
                         'Cukup isi angka tanpa nol di depan (contoh: Blok 1, Nomor 1).',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: scheme.onSurfaceVariant,
-                            ),
+                          color: scheme.onSurfaceVariant,
+                        ),
                       ),
                       if (widget.mode == CheckMode.statusBayar) ...[
                         const SizedBox(height: 14),
@@ -629,20 +626,17 @@ class _CheckFormViewState extends State<CheckFormView> {
                                 child: CircularProgressIndicator(),
                               )
                             : _captchaBytes != null
-                                ? Container(
-                                    decoration: BoxDecoration(
-                                      border: Border.all(
-                                        color: scheme.outlineVariant,
-                                      ),
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    clipBehavior: Clip.antiAlias,
-                                    child: Image.memory(
-                                      _captchaBytes!,
-                                      height: 84,
-                                    ),
-                                  )
-                                : const Text('Captcha belum dimuat'),
+                            ? Container(
+                                decoration: BoxDecoration(
+                                  border: Border.all(
+                                    color: scheme.outlineVariant,
+                                  ),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                clipBehavior: Clip.antiAlias,
+                                child: Image.memory(_captchaBytes!, height: 84),
+                              )
+                            : const Text('Captcha belum dimuat'),
                       ),
                       const SizedBox(height: 6),
                       Center(
@@ -737,7 +731,7 @@ class _CheckFormViewState extends State<CheckFormView> {
               ),
               if (_statusBayarResult != null) ...[
                 const SizedBox(height: 16),
-                _StatusBayarResultCard(
+                StatusBayarResultCard(
                   result: _statusBayarResult!,
                   nop: buildNop(
                     blok: _blokController.text,
@@ -749,7 +743,7 @@ class _CheckFormViewState extends State<CheckFormView> {
               ],
               if (_tagihanResult != null) ...[
                 const SizedBox(height: 16),
-                _TagihanResultCard(
+                TagihanResultCard(
                   result: _tagihanResult!,
                   nop: buildNop(
                     blok: _blokController.text,
@@ -761,405 +755,6 @@ class _CheckFormViewState extends State<CheckFormView> {
               ],
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _StatusBayarResultCard extends StatelessWidget {
-  final PbbResult result;
-  final String nop;
-  final String tahun;
-  final PbbClient client;
-
-  const _StatusBayarResultCard({
-    required this.result,
-    required this.nop,
-    required this.tahun,
-    required this.client,
-  });
-
-  bool get _isPaid => result.status.startsWith('Sudah Bayar');
-
-  Future<void> _previewBuktiBayar(BuildContext context) async {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const Center(child: CircularProgressIndicator()),
-    );
-    try {
-      final bytes = await client.fetchBuktiBayarPdf(nop: nop, tahun: tahun);
-      if (!context.mounted) return;
-      Navigator.pop(context);
-      final fileName =
-          'Bukti Bayar (${result.namaWajibPajak ?? nop}) No. (${nopBlok(nop)}) (${nopWilayah(nop)}) ($tahun).pdf';
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) =>
-              DocumentPreviewScreen(pdfBytes: bytes, fileName: fileName),
-        ),
-      );
-    } catch (e) {
-      if (!context.mounted) return;
-      Navigator.pop(context);
-      showDialog(
-        context: context,
-        builder: (_) => AlertDialog(
-          title: const Text('Gagal'),
-          content: Text('Gagal memuat PDF: $e'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('OK'),
-            ),
-          ],
-        ),
-      );
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      color: _isPaid
-          ? Colors.green.withValues(alpha: 0.12)
-          : Colors.orange.withValues(alpha: 0.12),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                result.status,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-            if (_isPaid)
-              IconButton(
-                onPressed: () => _previewBuktiBayar(context),
-                icon: const Icon(Icons.visibility),
-                tooltip: 'Detail',
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _TagihanResultCard extends StatelessWidget {
-  final TagihanResult result;
-  final String nop;
-  final PbbClient client;
-  final void Function(String blok, String wilayah, String tahun)?
-  onOpenStatusBayar;
-
-  const _TagihanResultCard({
-    required this.result,
-    required this.nop,
-    required this.client,
-    this.onOpenStatusBayar,
-  });
-
-  Future<void> _payWithQris(BuildContext context, String tahun) async {
-    final agreed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text(
-          'PEMBAYARAN QRIS PBB KABUPATEN CIANJUR',
-          textAlign: TextAlign.center,
-        ),
-        content: const Text(
-          '1. Pembayaran QRIS berlaku selama 1 jam\n'
-          '2. Pembayaran dapat dilakukan melalui penyedia pembayaran QRIS\n'
-          '3. Jika Setuju, dalam 1 jam kedepan pembayaran hanya dapat dilakukan melalui QRIS\n'
-          '4. QRIS tersebut hanya berlaku untuk 1 x pembayaran',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Batal'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Setuju'),
-          ),
-        ],
-      ),
-    );
-
-    if (agreed != true || !context.mounted) return;
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const Center(child: CircularProgressIndicator()),
-    );
-
-    try {
-      final qris = await client.generateQrisPbb(nop: nop, tahun: tahun);
-      if (!context.mounted) return;
-      Navigator.pop(context);
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => QrisViewScreen(result: qris, nop: nop, tahun: tahun),
-        ),
-      );
-    } on QrisGenerationError catch (e) {
-      if (!context.mounted) return;
-      Navigator.pop(context);
-      _showError(context, e.message);
-    } catch (e) {
-      if (!context.mounted) return;
-      Navigator.pop(context);
-      _showError(context, 'Gagal generate QRIS: $e');
-    }
-  }
-
-  Future<void> _payWithVa(BuildContext context, TagihanYearRow row) async {
-    final paymentCode = row.paymentCodeVa;
-    if (paymentCode == null) {
-      _showError(
-        context,
-        'Pembayaran VA tidak tersedia untuk tahun ${row.tahun}.',
-      );
-      return;
-    }
-
-    final agreed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text(
-          'PEMBAYARAN VIRTUAL ACCOUNT BANK BJB',
-          textAlign: TextAlign.center,
-        ),
-        content: const Text(
-          '1. Pembayaran VA berlaku selama 1 jam\n'
-          '2. Pembayaran dapat dilakukan melalui penyedia pembayaran VA\n'
-          '3. Jika Setuju, dalam 1 jam kedepan pembayaran hanya dapat dilakukan melalui VA\n'
-          '4. VA tersebut hanya berlaku untuk 1 x pembayaran',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Batal'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Setuju'),
-          ),
-        ],
-      ),
-    );
-
-    if (agreed != true || !context.mounted) return;
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const Center(child: CircularProgressIndicator()),
-    );
-
-    try {
-      final va = await client.generateVaPbb(
-        nop: nop,
-        tahun: row.tahun,
-        paymentCode: paymentCode,
-      );
-      if (!context.mounted) return;
-      Navigator.pop(context);
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => VaViewScreen(
-            result: va,
-            nop: nop,
-            tahun: row.tahun,
-            paymentCode: paymentCode,
-          ),
-        ),
-      );
-    } on VaGenerationError catch (e) {
-      if (!context.mounted) return;
-      Navigator.pop(context);
-      _showError(context, e.message);
-    } catch (e) {
-      if (!context.mounted) return;
-      Navigator.pop(context);
-      _showError(context, 'Gagal generate VA: $e');
-    }
-  }
-
-  Future<void> _previewTagihan(BuildContext context) async {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const Center(child: CircularProgressIndicator()),
-    );
-    try {
-      final bytes = await client.fetchTagihanPdf(nop: nop);
-      if (!context.mounted) return;
-      Navigator.pop(context);
-      final fileName =
-          'Tagihan PBB (${result.namaWajibPajak}) No. (${nopBlok(nop)}) (${nopWilayah(nop)}).pdf';
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) =>
-              DocumentPreviewScreen(pdfBytes: bytes, fileName: fileName),
-        ),
-      );
-    } catch (e) {
-      if (!context.mounted) return;
-      Navigator.pop(context);
-      _showError(context, 'Gagal memuat PDF: $e');
-    }
-  }
-
-  void _showError(BuildContext context, String message) {
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Gagal'),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (result.serverMessage != null) {
-      return Card(
-        color: Colors.orange.withValues(alpha: 0.12),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                result.serverMessage!,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              if (result.inactiveUntilYear != null && onOpenStatusBayar != null)
-                TextButton(
-                  onPressed: () => onOpenStatusBayar!(
-                    nopBlok(nop),
-                    nopWilayah(nop),
-                    result.inactiveUntilYear!,
-                  ),
-                  child: Text(
-                    '[Cek status bayar tahun ${result.inactiveUntilYear}]',
-                  ),
-                ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    if (result.notFound) {
-      return Card(
-        color: Colors.green.withValues(alpha: 0.12),
-        child: const Padding(
-          padding: EdgeInsets.all(16),
-          child: Text(
-            'Data Tidak Ditemukan (tidak ada tunggakan tercatat)',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-          ),
-        ),
-      );
-    }
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                if (result.namaWajibPajak.isNotEmpty)
-                  Expanded(
-                    child: Text(
-                      result.namaWajibPajak,
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                  ),
-                OutlinedButton.icon(
-                  onPressed: () => _previewTagihan(context),
-                  icon: const Icon(Icons.picture_as_pdf),
-                  label: const Text('Cetak PDF'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: DataTable(
-                // VA hanya lewat aplikasi bank di HP (butuh channel native
-                // Android) — di Windows/Linux pembayaran cuma lewat QRIS.
-                columns: [
-                  const DataColumn(label: Text('Tahun')),
-                  const DataColumn(label: Text('PBB')),
-                  const DataColumn(label: Text('Denda')),
-                  const DataColumn(label: Text('Kurang Bayar')),
-                  const DataColumn(label: Text('Status')),
-                  const DataColumn(label: Text('QRIS')),
-                  if (Platform.isAndroid) const DataColumn(label: Text('VA')),
-                ],
-                rows: result.rows
-                    .map(
-                      (r) => DataRow(
-                        cells: [
-                          DataCell(Text(r.tahun)),
-                          DataCell(Text(formatRupiah(r.pbb))),
-                          DataCell(Text(formatRupiah(r.denda))),
-                          DataCell(Text(formatRupiah(r.kurangBayar))),
-                          DataCell(
-                            Text(r.statusBayar.isEmpty ? '-' : r.statusBayar),
-                          ),
-                          DataCell(
-                            FilledButton(
-                              onPressed: () => _payWithQris(context, r.tahun),
-                              child: const Text('Bayar QRIS'),
-                            ),
-                          ),
-                          if (Platform.isAndroid)
-                            DataCell(
-                              r.paymentCodeVa == null
-                                  ? const Text('-')
-                                  : FilledButton(
-                                      onPressed: () => _payWithVa(context, r),
-                                      child: const Text('Bayar VA'),
-                                    ),
-                            ),
-                        ],
-                      ),
-                    )
-                    .toList(),
-              ),
-            ),
-            const Divider(),
-            Text(
-              'Total Kurang Bayar: ${result.totalKurangBayar.isEmpty ? '-' : formatRupiah(result.totalKurangBayar)}',
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-          ],
         ),
       ),
     );

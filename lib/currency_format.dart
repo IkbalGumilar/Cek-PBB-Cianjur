@@ -26,7 +26,9 @@ String formatRupiah(Object? raw) {
     return '-';
   }
   // Bersihkan semua awalan "Rp", "Rp.", "rp", "RP" yang berulang agar tidak dobel/ganda
-  trimmed = trimmed.replaceAll(RegExp(r'^(?:rp\.?\s*)+', caseSensitive: false), '').trim();
+  trimmed = trimmed
+      .replaceAll(RegExp(r'^(?:rp\.?\s*)+', caseSensitive: false), '')
+      .trim();
   if (trimmed.isEmpty || trimmed == '-') {
     return '-';
   }

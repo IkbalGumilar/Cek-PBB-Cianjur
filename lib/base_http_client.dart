@@ -24,20 +24,18 @@ abstract class BaseHttpClient {
     bool enableCookies = false,
     CookieJar? customCookieJar,
     Dio? customDio,
-  })  : cookieJar = enableCookies ? (customCookieJar ?? CookieJar()) : null,
-        dio = customDio ??
-            Dio(
-              BaseOptions(
-                baseUrl: baseUrl ?? '',
-                connectTimeout: connectTimeout,
-                sendTimeout: sendTimeout,
-                receiveTimeout: receiveTimeout,
-                headers: {
-                  'User-Agent': defaultUserAgent,
-                  ...?headers,
-                },
-              ),
-            ) {
+  }) : cookieJar = enableCookies ? (customCookieJar ?? CookieJar()) : null,
+       dio =
+           customDio ??
+           Dio(
+             BaseOptions(
+               baseUrl: baseUrl ?? '',
+               connectTimeout: connectTimeout,
+               sendTimeout: sendTimeout,
+               receiveTimeout: receiveTimeout,
+               headers: {'User-Agent': defaultUserAgent, ...?headers},
+             ),
+           ) {
     if (cookieJar != null) {
       dio.interceptors.add(CookieManager(cookieJar!));
     }

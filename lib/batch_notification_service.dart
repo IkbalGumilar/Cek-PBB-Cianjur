@@ -15,8 +15,9 @@ class BatchNotificationService {
   BatchNotificationService._();
   static final BatchNotificationService instance = BatchNotificationService._();
 
-  static const MethodChannel _fgChannel =
-      MethodChannel('id.cianjur.cekpbb.cek_pbb_app/batch_foreground_service');
+  static const MethodChannel _fgChannel = MethodChannel(
+    'id.cianjur.cekpbb.cek_pbb_app/batch_foreground_service',
+  );
 
   final FlutterLocalNotificationsPlugin _notifications =
       FlutterLocalNotificationsPlugin();
@@ -34,8 +35,9 @@ class BatchNotificationService {
   Future<void> init() async {
     if (_isInitialized) return;
 
-    const androidSettings =
-        AndroidInitializationSettings('@mipmap/launcher_icon');
+    const androidSettings = AndroidInitializationSettings(
+      '@mipmap/launcher_icon',
+    );
     const darwinSettings = DarwinInitializationSettings(
       requestAlertPermission: false,
       requestBadgePermission: false,
@@ -71,8 +73,10 @@ class BatchNotificationService {
   Future<bool> requestPermission() async {
     try {
       if (Platform.isAndroid) {
-        final android = _notifications.resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>();
+        final android = _notifications
+            .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin
+            >();
         if (android != null) {
           final granted = await android.requestNotificationsPermission();
           return granted ?? false;
@@ -148,7 +152,9 @@ class BatchNotificationService {
     required int lunasCount,
     required int belumCount,
   }) async {
-    final percent = total > 0 ? ((current / total) * 100).toStringAsFixed(0) : '0';
+    final percent = total > 0
+        ? ((current / total) * 100).toStringAsFixed(0)
+        : '0';
     final title = 'Memeriksa PBB: $current/$total NOP ($percent%)';
     final content = 'NOP: $currentNop • Lunas: $lunasCount, Belum: $belumCount';
 
@@ -293,12 +299,12 @@ class BatchNotificationService {
 
   void _navigateToResult() {
     final nav = rootNavigatorKey.currentState;
-    if (nav == null || _activeRecords == null || _activeRecords!.isEmpty) return;
+    if (nav == null || _activeRecords == null || _activeRecords!.isEmpty) {
+      return;
+    }
 
     nav.push(
-      MaterialPageRoute(
-        builder: (_) => ResultScreen(records: _activeRecords!),
-      ),
+      MaterialPageRoute(builder: (_) => ResultScreen(records: _activeRecords!)),
     );
   }
 }

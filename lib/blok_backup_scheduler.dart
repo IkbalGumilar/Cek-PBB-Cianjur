@@ -61,10 +61,13 @@ class BlokBackupScheduler extends BasePreferencesStore {
   static const _googleAccountKey = 'blok_backup_google_account';
   static const _googleDisplayNameKey = 'blok_backup_google_display_name';
   static const _googlePhotoUrlKey = 'blok_backup_google_photo_url';
-  static const _googleDriveFolderLinkKey = 'blok_backup_google_drive_folder_link';
+  static const _googleDriveFolderLinkKey =
+      'blok_backup_google_drive_folder_link';
   static const _googleDriveFolderIdKey = 'blok_backup_google_drive_folder_id';
-  static const _googleDesktopAccessTokenKey = 'blok_backup_google_desktop_access_token';
-  static const _googleDesktopRefreshTokenKey = 'blok_backup_google_desktop_refresh_token';
+  static const _googleDesktopAccessTokenKey =
+      'blok_backup_google_desktop_access_token';
+  static const _googleDesktopRefreshTokenKey =
+      'blok_backup_google_desktop_refresh_token';
   static const _overCellularKey = 'blok_backup_over_cellular';
   static const _lastBackupTimeKey = 'blok_backup_last_time_millis';
   static const _lastBackupSizeKey = 'blok_backup_last_size_bytes';
@@ -268,7 +271,8 @@ class BlokBackupScheduler extends BasePreferencesStore {
     if (lastBackupTime == null) return true;
 
     if (frequencyDays == 1) {
-      final isSameDay = now.year == lastBackupTime.year &&
+      final isSameDay =
+          now.year == lastBackupTime.year &&
           now.month == lastBackupTime.month &&
           now.day == lastBackupTime.day;
 
@@ -324,7 +328,9 @@ class BlokBackupScheduler extends BasePreferencesStore {
 
   /// Memangkas berkas cadangan lokal lama agar jumlahnya tidak melebihi [maxFiles] (default: 3).
   /// Sesuai aturan: jika berkas cadangan > 3, berkas paling lama otomatis dihapus.
-  Future<List<File>> pruneOldBackups({int maxFiles = maxRetainedBackups}) async {
+  Future<List<File>> pruneOldBackups({
+    int maxFiles = maxRetainedBackups,
+  }) async {
     final dir = await AppStorage.getBackupsDirectory();
     if (!dir.existsSync()) return [];
 
@@ -385,7 +391,8 @@ class BlokBackupScheduler extends BasePreferencesStore {
     String pad2(int n) => n.toString().padLeft(2, '0');
     final dateStr =
         '${now.year}${pad2(now.month)}${pad2(now.day)}_${pad2(now.hour)}${pad2(now.minute)}${pad2(now.second)}';
-    final prefix = customPrefix ??
+    final prefix =
+        customPrefix ??
         (onlyData ? 'cadangan_dkhp_data' : 'cadangan_dkhp_lengkap');
     final fileName = '${prefix}_$dateStr';
 

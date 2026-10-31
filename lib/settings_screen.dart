@@ -66,10 +66,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _openSubScreen(Widget screen) async {
-    await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => screen),
-    );
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
     if (mounted) {
       await _loadSummaries();
     }
@@ -78,7 +75,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final themeLabel = ThemeSettingsSection.modeLabel(widget.themeController.mode);
+    final themeLabel = ThemeSettingsSection.modeLabel(
+      widget.themeController.mode,
+    );
     final securitySubtitle = _lockEnabled
         ? 'Aktif • ${SecuritySettingsSection.methodLabel(_lockMethod)}'
         : 'Nonaktif • Ketuk untuk mengaktifkan kunci aplikasi';
@@ -106,7 +105,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             const SizedBox(height: 12),
             _SettingsMenuCard(
-              icon: _lockEnabled ? Icons.lock_outlined : Icons.lock_open_outlined,
+              icon: _lockEnabled
+                  ? Icons.lock_outlined
+                  : Icons.lock_open_outlined,
               iconColor: _lockEnabled ? Colors.green.shade700 : scheme.primary,
               title: 'Keamanan Aplikasi',
               subtitle: securitySubtitle,
@@ -206,9 +207,7 @@ class _SettingsMenuCard extends StatelessWidget {
       color: scheme.surfaceContainerLow,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        side: BorderSide(
-          color: scheme.outlineVariant.withValues(alpha: 0.5),
-        ),
+        side: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.5)),
       ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -234,24 +233,21 @@ class _SettingsMenuCard extends StatelessWidget {
                     Text(
                       title,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       subtitle,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: scheme.onSurfaceVariant,
-                          ),
+                        color: scheme.onSurfaceVariant,
+                      ),
                     ),
                   ],
                 ),
               ),
               const SizedBox(width: 8),
-              Icon(
-                Icons.chevron_right,
-                color: scheme.onSurfaceVariant,
-              ),
+              Icon(Icons.chevron_right, color: scheme.onSurfaceVariant),
             ],
           ),
         ),

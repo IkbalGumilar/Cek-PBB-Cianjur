@@ -35,9 +35,9 @@ class DocumentPreviewScreen extends StatefulWidget {
     required this.fileName,
     this.isExternal = false,
   }) : assert(
-          pdfBytes != null || pdfFile != null,
-          'Salah satu dari pdfBytes atau pdfFile wajib disediakan.',
-        );
+         pdfBytes != null || pdfFile != null,
+         'Salah satu dari pdfBytes atau pdfFile wajib disediakan.',
+       );
 
   /// Batas ukuran maksimal berkas PDF yang aman diproses dalam memori (150 MB).
   static const int maxSafePdfSizeBytes = 150 * 1024 * 1024;
@@ -63,7 +63,9 @@ class DocumentPreviewScreen extends StatefulWidget {
     try {
       if (!await file.exists()) {
         messenger.showSnackBar(
-          const SnackBar(content: Text('Berkas PDF tidak ditemukan atau sudah dipindahkan.')),
+          const SnackBar(
+            content: Text('Berkas PDF tidak ditemukan atau sudah dipindahkan.'),
+          ),
         );
         return;
       }
@@ -71,7 +73,9 @@ class DocumentPreviewScreen extends StatefulWidget {
       final fileSize = await file.length();
       if (fileSize > maxSafePdfSizeBytes) {
         messenger.showSnackBar(
-          const SnackBar(content: Text('Ukuran berkas PDF terlalu besar (maksimal 150 MB).')),
+          const SnackBar(
+            content: Text('Ukuran berkas PDF terlalu besar (maksimal 150 MB).'),
+          ),
         );
         return;
       }
@@ -83,7 +87,11 @@ class DocumentPreviewScreen extends StatefulWidget {
 
       if (!hasPdfHeader(header)) {
         messenger.showSnackBar(
-          const SnackBar(content: Text('Format berkas tidak valid atau bukan dokumen PDF asli.')),
+          const SnackBar(
+            content: Text(
+              'Format berkas tidak valid atau bukan dokumen PDF asli.',
+            ),
+          ),
         );
         return;
       }
@@ -126,9 +134,9 @@ class DocumentPreviewScreen extends StatefulWidget {
       await openPdfFile(context, file, title: files.first.name);
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal memilih berkas PDF: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Gagal memilih berkas PDF: $e')));
       }
     } finally {
       Future.delayed(const Duration(milliseconds: 600), () {
@@ -145,10 +153,7 @@ class _PdfSearchMatch {
   final int pageIndex;
   final String snippet;
 
-  const _PdfSearchMatch({
-    required this.pageIndex,
-    required this.snippet,
-  });
+  const _PdfSearchMatch({required this.pageIndex, required this.snippet});
 }
 
 class _DocumentPreviewScreenState extends State<DocumentPreviewScreen> {
@@ -202,7 +207,8 @@ class _DocumentPreviewScreenState extends State<DocumentPreviewScreen> {
       final bytes = await widget.pdfFile!.readAsBytes();
       if (!DocumentPreviewScreen.hasPdfHeader(bytes)) {
         throw const FormatException(
-            'Berkas tidak memiliki header PDF yang valid (%PDF-).');
+          'Berkas tidak memiliki header PDF yang valid (%PDF-).',
+        );
       }
       if (mounted) {
         setState(() {
@@ -228,10 +234,9 @@ class _DocumentPreviewScreenState extends State<DocumentPreviewScreen> {
       final doc = sf.PdfDocument(inputBytes: bytes);
       _pageTexts.clear();
       for (int i = 0; i < doc.pages.count; i++) {
-        final text = sf.PdfTextExtractor(doc).extractText(
-          startPageIndex: i,
-          endPageIndex: i,
-        );
+        final text = sf.PdfTextExtractor(
+          doc,
+        ).extractText(startPageIndex: i, endPageIndex: i);
         _pageTexts.add(text);
       }
       doc.dispose();
@@ -288,10 +293,7 @@ class _DocumentPreviewScreenState extends State<DocumentPreviewScreen> {
         final suffix = end < text.length ? '...' : '';
         final snippet =
             '$prefix${text.substring(start, end).replaceAll(RegExp(r'\s+'), ' ')}$suffix';
-        _matches.add(_PdfSearchMatch(
-          pageIndex: p,
-          snippet: snippet,
-        ));
+        _matches.add(_PdfSearchMatch(pageIndex: p, snippet: snippet));
       }
     }
 
@@ -419,173 +421,178 @@ class _DocumentPreviewScreenState extends State<DocumentPreviewScreen> {
         appBar: _isFullscreen
             ? null
             : (_isSearchOpen
-                ? AppBar(
-                    leading: IconButton(
-                      icon: const Icon(Icons.arrow_back),
-                      tooltip: 'Tutup Pencarian',
-                      onPressed: _closeSearch,
-                    ),
-                    title: TextField(
-                      controller: _searchController,
-                      focusNode: _searchFocusNode,
-                      decoration: const InputDecoration(
-                        hintText: 'Cari di dokumen...',
-                        border: InputBorder.none,
+                  ? AppBar(
+                      leading: IconButton(
+                        icon: const Icon(Icons.arrow_back),
+                        tooltip: 'Tutup Pencarian',
+                        onPressed: _closeSearch,
                       ),
-                      style: const TextStyle(fontSize: 16),
-                      onChanged: _performSearch,
-                    ),
-                    actions: [
-                      if (_searchQuery.isNotEmpty)
-                        Center(
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                            child: Text(
-                              _matches.isEmpty
-                                  ? '0/0'
-                                  : '${_currentMatchIndex + 1}/${_matches.length}',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: theme.colorScheme.onSurfaceVariant,
+                      title: TextField(
+                        controller: _searchController,
+                        focusNode: _searchFocusNode,
+                        decoration: const InputDecoration(
+                          hintText: 'Cari di dokumen...',
+                          border: InputBorder.none,
+                        ),
+                        style: const TextStyle(fontSize: 16),
+                        onChanged: _performSearch,
+                      ),
+                      actions: [
+                        if (_searchQuery.isNotEmpty)
+                          Center(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8.0,
+                              ),
+                              child: Text(
+                                _matches.isEmpty
+                                    ? '0/0'
+                                    : '${_currentMatchIndex + 1}/${_matches.length}',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
                               ),
                             ),
                           ),
+                        IconButton(
+                          icon: const Icon(Icons.keyboard_arrow_up),
+                          tooltip: 'Sebelumnya',
+                          onPressed: _matches.isNotEmpty ? _prevMatch : null,
                         ),
-                      IconButton(
-                        icon: const Icon(Icons.keyboard_arrow_up),
-                        tooltip: 'Sebelumnya',
-                        onPressed: _matches.isNotEmpty ? _prevMatch : null,
+                        IconButton(
+                          icon: const Icon(Icons.keyboard_arrow_down),
+                          tooltip: 'Berikutnya',
+                          onPressed: _matches.isNotEmpty ? _nextMatch : null,
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close),
+                          tooltip: 'Bersihkan',
+                          onPressed: () {
+                            _searchController.clear();
+                            _performSearch('');
+                          },
+                        ),
+                      ],
+                    )
+                  : AppBar(
+                      leading: IconButton(
+                        icon: const Icon(Icons.arrow_back_rounded),
+                        tooltip: 'Kembali',
+                        onPressed: _handleBack,
                       ),
-                      IconButton(
-                        icon: const Icon(Icons.keyboard_arrow_down),
-                        tooltip: 'Berikutnya',
-                        onPressed: _matches.isNotEmpty ? _nextMatch : null,
+                      title: Text(
+                        widget.fileName,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      IconButton(
-                        icon: const Icon(Icons.close),
-                        tooltip: 'Bersihkan',
-                        onPressed: () {
-                          _searchController.clear();
-                          _performSearch('');
-                        },
-                      ),
-                    ],
-                  )
-                : AppBar(
-                    leading: IconButton(
-                      icon: const Icon(Icons.arrow_back_rounded),
-                      tooltip: 'Kembali',
-                      onPressed: _handleBack,
-                    ),
-                    title: Text(
-                      widget.fileName,
-                      style: const TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.w600),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    actions: [
-                      IconButton(
-                        icon: const Icon(Icons.search),
-                        tooltip: 'Cari di dokumen',
-                        onPressed: _openSearch,
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.fullscreen),
-                        tooltip: 'Layar Penuh',
-                        onPressed: _toggleFullscreen,
-                      ),
-                      PopupMenuButton<String>(
-                        icon: const Icon(Icons.more_vert),
-                        tooltip: 'Menu Lainnya',
-                        onSelected: (val) async {
-                          switch (val) {
-                            case 'share':
-                              if (_loadedBytes != null) {
-                                await Printing.sharePdf(
-                                  bytes: _loadedBytes!,
-                                  filename: widget.fileName,
-                                );
-                              }
-                              break;
-                            case 'open_with':
-                              await _openWithExternalApp();
-                              break;
-                            case 'download':
-                              await _download(context);
-                              break;
-                            case 'print':
-                              if (_loadedBytes != null) {
-                                await Printing.layoutPdf(
-                                  onLayout: (_) => _loadedBytes!,
-                                  name: widget.fileName,
-                                );
-                              }
-                              break;
-                            case 'open_other':
-                              if (context.mounted) {
-                                await DocumentPreviewScreen.pickAndOpenPdf(
-                                    context);
-                              }
-                              break;
-                          }
-                        },
-                        itemBuilder: (context) => [
-                          const PopupMenuItem(
-                            value: 'share',
-                            child: Row(
-                              children: [
-                                Icon(Icons.share_outlined, size: 20),
-                                SizedBox(width: 12),
-                                Text('Bagikan'),
-                              ],
-                            ),
-                          ),
-                          const PopupMenuItem(
-                            value: 'open_with',
-                            child: Row(
-                              children: [
-                                Icon(Icons.open_in_new_outlined, size: 20),
-                                SizedBox(width: 12),
-                                Text('Buka dengan...'),
-                              ],
-                            ),
-                          ),
-                          const PopupMenuItem(
-                            value: 'download',
-                            child: Row(
-                              children: [
-                                Icon(Icons.download_outlined, size: 20),
-                                SizedBox(width: 12),
-                                Text('Unduh'),
-                              ],
-                            ),
-                          ),
-                          const PopupMenuItem(
-                            value: 'print',
-                            child: Row(
-                              children: [
-                                Icon(Icons.print_outlined, size: 20),
-                                SizedBox(width: 12),
-                                Text('Cetak'),
-                              ],
-                            ),
-                          ),
-                          if (!widget.isExternal)
+                      actions: [
+                        IconButton(
+                          icon: const Icon(Icons.search),
+                          tooltip: 'Cari di dokumen',
+                          onPressed: _openSearch,
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.fullscreen),
+                          tooltip: 'Layar Penuh',
+                          onPressed: _toggleFullscreen,
+                        ),
+                        PopupMenuButton<String>(
+                          icon: const Icon(Icons.more_vert),
+                          tooltip: 'Menu Lainnya',
+                          onSelected: (val) async {
+                            switch (val) {
+                              case 'share':
+                                if (_loadedBytes != null) {
+                                  await Printing.sharePdf(
+                                    bytes: _loadedBytes!,
+                                    filename: widget.fileName,
+                                  );
+                                }
+                                break;
+                              case 'open_with':
+                                await _openWithExternalApp();
+                                break;
+                              case 'download':
+                                await _download(context);
+                                break;
+                              case 'print':
+                                if (_loadedBytes != null) {
+                                  await Printing.layoutPdf(
+                                    onLayout: (_) => _loadedBytes!,
+                                    name: widget.fileName,
+                                  );
+                                }
+                                break;
+                              case 'open_other':
+                                if (context.mounted) {
+                                  await DocumentPreviewScreen.pickAndOpenPdf(
+                                    context,
+                                  );
+                                }
+                                break;
+                            }
+                          },
+                          itemBuilder: (context) => [
                             const PopupMenuItem(
-                              value: 'open_other',
+                              value: 'share',
                               child: Row(
                                 children: [
-                                  Icon(Icons.folder_open_outlined, size: 20),
+                                  Icon(Icons.share_outlined, size: 20),
                                   SizedBox(width: 12),
-                                  Text('Buka Berkas PDF Lain'),
+                                  Text('Bagikan'),
                                 ],
                               ),
                             ),
-                        ],
-                      ),
-                    ],
-                  )),
+                            const PopupMenuItem(
+                              value: 'open_with',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.open_in_new_outlined, size: 20),
+                                  SizedBox(width: 12),
+                                  Text('Buka dengan...'),
+                                ],
+                              ),
+                            ),
+                            const PopupMenuItem(
+                              value: 'download',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.download_outlined, size: 20),
+                                  SizedBox(width: 12),
+                                  Text('Unduh'),
+                                ],
+                              ),
+                            ),
+                            const PopupMenuItem(
+                              value: 'print',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.print_outlined, size: 20),
+                                  SizedBox(width: 12),
+                                  Text('Cetak'),
+                                ],
+                              ),
+                            ),
+                            if (!widget.isExternal)
+                              const PopupMenuItem(
+                                value: 'open_other',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.folder_open_outlined, size: 20),
+                                    SizedBox(width: 12),
+                                    Text('Buka Berkas PDF Lain'),
+                                  ],
+                                ),
+                              ),
+                          ],
+                        ),
+                      ],
+                    )),
         body: Stack(
           children: [
             if (_isLoading)
@@ -606,8 +613,11 @@ class _DocumentPreviewScreenState extends State<DocumentPreviewScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.error_outline,
-                          size: 48, color: theme.colorScheme.error),
+                      Icon(
+                        Icons.error_outline,
+                        size: 48,
+                        color: theme.colorScheme.error,
+                      ),
                       const SizedBox(height: 16),
                       Text(
                         'Gagal Membaca PDF',
@@ -684,8 +694,9 @@ class _DocumentPreviewScreenState extends State<DocumentPreviewScreen> {
                                     color: Colors.white,
                                     boxShadow: [
                                       BoxShadow(
-                                        color: Colors.black
-                                            .withValues(alpha: 0.4),
+                                        color: Colors.black.withValues(
+                                          alpha: 0.4,
+                                        ),
                                         blurRadius: 10,
                                         offset: const Offset(0, 3),
                                       ),
@@ -717,12 +728,16 @@ class _DocumentPreviewScreenState extends State<DocumentPreviewScreen> {
                   color: theme.colorScheme.surfaceContainerHighest,
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 10),
+                      horizontal: 14,
+                      vertical: 10,
+                    ),
                     child: Row(
                       children: [
                         Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 4),
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
                           decoration: BoxDecoration(
                             color: theme.colorScheme.primaryContainer,
                             borderRadius: BorderRadius.circular(8),
@@ -750,7 +765,9 @@ class _DocumentPreviewScreenState extends State<DocumentPreviewScreen> {
                           tooltip: 'Sebelumnya',
                           padding: EdgeInsets.zero,
                           constraints: const BoxConstraints(
-                              minWidth: 32, minHeight: 32),
+                            minWidth: 32,
+                            minHeight: 32,
+                          ),
                           onPressed: _prevMatch,
                         ),
                         IconButton(
@@ -758,7 +775,9 @@ class _DocumentPreviewScreenState extends State<DocumentPreviewScreen> {
                           tooltip: 'Berikutnya',
                           padding: EdgeInsets.zero,
                           constraints: const BoxConstraints(
-                              minWidth: 32, minHeight: 32),
+                            minWidth: 32,
+                            minHeight: 32,
+                          ),
                           onPressed: _nextMatch,
                         ),
                       ],
@@ -776,8 +795,10 @@ class _DocumentPreviewScreenState extends State<DocumentPreviewScreen> {
                   color: Colors.black54,
                   borderRadius: BorderRadius.circular(24),
                   child: IconButton(
-                    icon:
-                        const Icon(Icons.fullscreen_exit, color: Colors.white),
+                    icon: const Icon(
+                      Icons.fullscreen_exit,
+                      color: Colors.white,
+                    ),
                     tooltip: 'Keluar Layar Penuh',
                     onPressed: _toggleFullscreen,
                   ),

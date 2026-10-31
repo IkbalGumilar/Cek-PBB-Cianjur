@@ -44,7 +44,9 @@ class AppStorage {
     if (_cachedDataDir != null) return _cachedDataDir!;
 
     if (isTestEnvironment) {
-      final tempDir = Directory.systemTemp.createTempSync('${appPackageName}_test_');
+      final tempDir = Directory.systemTemp.createTempSync(
+        '${appPackageName}_test_',
+      );
       _cachedDataDir = tempDir;
       return tempDir;
     }
@@ -80,7 +82,8 @@ class AppStorage {
       final home = Platform.environment['HOME'] ?? '';
       dir = Directory('$home/.local/share/$appPackageName');
     } else if (Platform.isWindows) {
-      final localAppData = Platform.environment['LOCALAPPDATA'] ??
+      final localAppData =
+          Platform.environment['LOCALAPPDATA'] ??
           Platform.environment['APPDATA'] ??
           '';
       dir = Directory('$localAppData\\$appPackageName');
@@ -102,7 +105,9 @@ class AppStorage {
     if (_cachedMediaDir != null) return _cachedMediaDir!;
 
     if (isTestEnvironment) {
-      final tempDir = Directory.systemTemp.createTempSync('${appPackageName}_media_test_');
+      final tempDir = Directory.systemTemp.createTempSync(
+        '${appPackageName}_media_test_',
+      );
       _cachedMediaDir = tempDir;
       return tempDir;
     }
@@ -150,13 +155,25 @@ class AppStorage {
 
       if (Platform.isLinux) {
         final home = Platform.environment['HOME'] ?? '';
-        candidateOldFiles.add(File('$home/.local/share/pbb.cianjur/blok_data.csv'));
-        candidateOldFiles.add(File('$home/.local/share/id.cianjur.cekpbb.cek_pbb_app/blok_data.csv'));
+        candidateOldFiles.add(
+          File('$home/.local/share/pbb.cianjur/blok_data.csv'),
+        );
+        candidateOldFiles.add(
+          File(
+            '$home/.local/share/id.cianjur.cekpbb.cek_pbb_app/blok_data.csv',
+          ),
+        );
       } else if (Platform.isWindows) {
         final localAppData = Platform.environment['LOCALAPPDATA'] ?? '';
-        candidateOldFiles.add(File('$localAppData\\pbb.cianjur\\blok_data.csv'));
+        candidateOldFiles.add(
+          File('$localAppData\\pbb.cianjur\\blok_data.csv'),
+        );
       } else if (Platform.isAndroid) {
-        candidateOldFiles.add(File('/storage/emulated/0/Android/data/pbb.cianjur/files/blok_data.csv'));
+        candidateOldFiles.add(
+          File(
+            '/storage/emulated/0/Android/data/pbb.cianjur/files/blok_data.csv',
+          ),
+        );
       }
 
       for (final oldFile in candidateOldFiles) {
@@ -194,7 +211,9 @@ class AppStorage {
           final localAppData = Platform.environment['LOCALAPPDATA'] ?? '';
           oldDirs.add(Directory('$localAppData\\pbb.cianjur\\photos'));
         } else if (Platform.isAndroid) {
-          oldDirs.add(Directory('/storage/emulated/0/Android/media/pbb.cianjur/photos'));
+          oldDirs.add(
+            Directory('/storage/emulated/0/Android/media/pbb.cianjur/photos'),
+          );
         }
 
         for (final oldPhotosDir in oldDirs) {

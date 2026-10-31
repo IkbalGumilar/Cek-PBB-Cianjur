@@ -53,9 +53,7 @@ class _TabPiutangState extends State<TabPiutang> {
     }
     final (bukuMin, bukuMax) = BukuDropdown.rangeFor(_buku);
     if (bukuMin.isEmpty || bukuMax.isEmpty) {
-      return const MonitoringTableResult(
-        errorMessage: 'Buku wajib dipilih.',
-      );
+      return const MonitoringTableResult(errorMessage: 'Buku wajib dipilih.');
     }
     return widget.client.fetchPiutang(
       tglBayarAwal: _tglAwal.text,
@@ -77,10 +75,7 @@ class _TabPiutangState extends State<TabPiutang> {
       onFetch: _fetch,
       formBuilder: (context, loading) => [
         const MonitoringSectionTitle('Buku'),
-        BukuDropdown(
-          value: _buku,
-          onChanged: (v) => setState(() => _buku = v),
-        ),
+        BukuDropdown(value: _buku, onChanged: (v) => setState(() => _buku = v)),
         const MonitoringSectionTitle('Tanggal Pembayaran'),
         Row(
           children: [

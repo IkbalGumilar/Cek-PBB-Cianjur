@@ -72,7 +72,9 @@ class FileImporter {
     // Cari baris header yang memuat kolom NOP
     int headerRowIdx = -1;
     for (var i = 0; i < rows.length && i < 15; i++) {
-      final line = rows[i].map((c) => c.toString().trim().toLowerCase()).toList();
+      final line = rows[i]
+          .map((c) => c.toString().trim().toLowerCase())
+          .toList();
       if (line.contains('nop')) {
         headerRowIdx = i;
         break;
@@ -96,8 +98,19 @@ class FileImporter {
     final nopCol = findCol(['nop']);
     final namaCol = findCol(['nama wp', 'nama_wp', 'nama']);
     final tahunCol = findCol(['tahun bayar', 'tahun_pajak', 'tahun']);
-    final tglCol = findCol(['tanggal bayar', 'tanggal_pembayaran', 'tgl bayar', 'tgl']);
-    final pokokCol = findCol(['jumlah pbb', 'pokok_tagihan', 'pokok_ketetapan', 'pokok', 'pbb']);
+    final tglCol = findCol([
+      'tanggal bayar',
+      'tanggal_pembayaran',
+      'tgl bayar',
+      'tgl',
+    ]);
+    final pokokCol = findCol([
+      'jumlah pbb',
+      'pokok_tagihan',
+      'pokok_ketetapan',
+      'pokok',
+      'pbb',
+    ]);
     final statusCol = findCol(['status bayar', 'status']);
     final fotoCol = findCol(['foto', 'nama foto', 'gambar']);
     final tpCol = findCol(['target pemda', 'target_pemda', 'pemda']);
@@ -128,7 +141,10 @@ class FileImporter {
       final nama = namaCol != -1 && row.length > namaCol
           ? row[namaCol].toString().trim()
           : '';
-      final tahun = tahunCol != -1 && row.length > tahunCol && row[tahunCol].toString().trim().isNotEmpty
+      final tahun =
+          tahunCol != -1 &&
+              row.length > tahunCol &&
+              row[tahunCol].toString().trim().isNotEmpty
           ? row[tahunCol].toString().trim()
           : currentYear;
       final tanggal = tglCol != -1 && row.length > tglCol
@@ -137,7 +153,10 @@ class FileImporter {
       final pokok = pokokCol != -1 && row.length > pokokCol
           ? row[pokokCol].toString().trim()
           : '';
-      var status = statusCol != -1 && row.length > statusCol && row[statusCol].toString().trim().isNotEmpty
+      var status =
+          statusCol != -1 &&
+              row.length > statusCol &&
+              row[statusCol].toString().trim().isNotEmpty
           ? row[statusCol].toString().trim()
           : (tanggal.isNotEmpty ? 'Sudah Bayar' : 'Belum Bayar');
 
@@ -145,7 +164,10 @@ class FileImporter {
       if (status.toLowerCase() == 'belum lunas') status = 'Belum Bayar';
       if (status.toLowerCase() == 'lunas') status = 'Sudah Bayar';
 
-      final namaFoto = fotoCol != -1 && row.length > fotoCol && row[fotoCol].toString().trim().isNotEmpty
+      final namaFoto =
+          fotoCol != -1 &&
+              row.length > fotoCol &&
+              row[fotoCol].toString().trim().isNotEmpty
           ? row[fotoCol].toString().trim()
           : null;
 
@@ -181,10 +203,16 @@ class FileImporter {
       final njopBng = njopBngCol != -1 && row.length > njopBngCol
           ? row[njopBngCol].toString().trim()
           : '';
-      final kec = kecCol != -1 && row.length > kecCol && row[kecCol].toString().trim().isNotEmpty
+      final kec =
+          kecCol != -1 &&
+              row.length > kecCol &&
+              row[kecCol].toString().trim().isNotEmpty
           ? row[kecCol].toString().trim()
           : 'MANDE';
-      final kel = kelCol != -1 && row.length > kelCol && row[kelCol].toString().trim().isNotEmpty
+      final kel =
+          kelCol != -1 &&
+              row.length > kelCol &&
+              row[kelCol].toString().trim().isNotEmpty
           ? row[kelCol].toString().trim()
           : 'BOBOJONG';
       final almtObj = almtObjCol != -1 && row.length > almtObjCol
@@ -239,8 +267,7 @@ class FileImporter {
       final detectedDusuns = dusunBlockMap.entries.map((e) {
         final bloksList = e.value.toList()..sort();
         return Dusun(number: e.key, bloks: bloksList);
-      }).toList()
-        ..sort((a, b) => a.number.compareTo(b.number));
+      }).toList()..sort((a, b) => a.number.compareTo(b.number));
       DusunData.instance.setDusuns(detectedDusuns);
     }
 

@@ -30,7 +30,8 @@ class _UpdateScreenState extends State<UpdateScreen> {
 
   String get _downloadFileName {
     final url = widget.info.apkDownloadUrl;
-    final urlName = Uri.tryParse(url)?.pathSegments.lastOrNull ?? url.split('/').last;
+    final urlName =
+        Uri.tryParse(url)?.pathSegments.lastOrNull ?? url.split('/').last;
     return urlName.contains('.')
         ? urlName
         : 'CekPBBCianjur-${widget.info.version}.apk';

@@ -1,291 +1,23 @@
-import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:cookie_jar/cookie_jar.dart';
 import 'package:dio/dio.dart';
 import 'package:dio_cookie_manager/dio_cookie_manager.dart';
-import 'package:html/parser.dart' as html_parser;
 
 import 'app_storage.dart';
 import 'base_http_client.dart';
 import 'kolektif_nop_berkas.dart';
+import 'staff_portal/staff_portal_models.dart';
+import 'staff_portal/staff_portal_parser.dart';
 import 'staff_portal_token_extractor.dart';
 
-class StaffLoginResult {
-  final bool needsMfa;
-  final String? errorMessage;
-
-  const StaffLoginResult({required this.needsMfa, this.errorMessage});
-}
-
-class StaffMfaResult {
-  final bool success;
-  final String? errorMessage;
-
-  const StaffMfaResult({required this.success, this.errorMessage});
-}
-
-/// Hasil tabel generik dari salah satu tab Monitoring Wilayah — kolomnya
-/// tidak di-hardcode karena belum ada contoh isi asli untuk dicocokkan;
-/// [headers] & [rows] mengikuti apa pun yang benar-benar dikembalikan server.
-class MonitoringTableResult {
-  final List<String> headers;
-  final List<List<String>> rows;
-  final String? errorMessage;
-
-  const MonitoringTableResult({
-    this.headers = const [],
-    this.rows = const [],
-    this.errorMessage,
-  });
-}
-
-/// Satu opsi pada dropdown filter Bank (dimuat dinamis dari server, bukan
-/// nilai tetap — daftar bank bisa berubah).
-class BankOption {
-  final String id;
-  final String name;
-
-  const BankOption({required this.id, required this.name});
-}
-
-/// Satu baris grup pada modul Pembayaran Kolektif (`m179`) — BEDA modul dari
-/// Monitoring Wilayah (`mMonitoringWilayahV3`). Yang bisa diubah dari sini
-/// hanya BUAT grup ([StaffPortalClient.createKolektifGroup]), HAPUS grup
-/// ([StaffPortalClient.deleteKolektifGroup]), dan FINALKAN grup
-/// ([StaffPortalClient.finalkanKolektifGroup]); Generate VA sengaja tidak
-/// dibuat karena membuat kode bayar sungguhan.
-class KolektifGroup {
-  /// `CPM_CG_ID` dari kolom Aksi — wajib untuk aksi hapus.
-  final String id;
-  final String namaGroup;
-  final String namaKolektor;
-  final String hpKolektor;
-  final String anggota;
-  final String kodeBayar;
-  final String status;
-  final String kecamatan;
-  final String kelurahan;
-
-  /// Kode kelurahan (`CPM_CG_AREA_CODE`). Server menaruhnya di kolom yang sama
-  /// dengan nama kelurahan, di dalam `<div class="kd-kel">` yang disembunyikan
-  /// — dan halaman aslinya memang mengambilnya dari situ saat membuka Kelola
-  /// Member. Dibutuhkan untuk menambah NOP ke grup ini.
-  final String kelurahanCode;
-
-  final String keterangan;
-  final String tanggalKadaluarsa;
-
-  /// Kode status mentah (`0` Draft, `1` Siap Dibayar, `2` Sudah Di Bayar,
-  /// `99` Expired) — dipakai untuk menjelaskan ke staf kenapa sebuah grup
-  /// tidak bisa dihapus.
-  final String statusCode;
-
-  /// Apakah server sendiri menampilkan tombol "Hapus Group" untuk baris ini.
-  /// Sengaja TIDAK disimpulkan sendiri dari [statusCode]: keputusan boleh
-  /// atau tidaknya menghapus ada di server (dia yang merender tombolnya),
-  /// jadi aplikasi cuma ikut apa yang dia render — kalau aturannya berubah
-  /// di sana, aplikasi otomatis ikut tanpa perlu diubah.
-  final bool canDelete;
-
-  /// Apakah server merender tombol "Ubah Data Group" (ikon pensil) untuk baris
-  /// ini — di sana muncul pada kondisi yang sama dengan tombol hapus.
-  final bool canEdit;
-
-  /// Apakah server merender tombol "Cetak Surat Pengantar" (ikon buku) —
-  /// hanya untuk grup yang sudah final atau sudah dibayar, karena suratnya
-  /// memuat kode bayar.
-  final bool canPrintSurat;
-
-  const KolektifGroup({
-    required this.id,
-    required this.namaGroup,
-    required this.namaKolektor,
-    required this.hpKolektor,
-    required this.anggota,
-    required this.kodeBayar,
-    required this.status,
-    required this.kecamatan,
-    required this.kelurahan,
-    required this.kelurahanCode,
-    required this.keterangan,
-    required this.tanggalKadaluarsa,
-    required this.statusCode,
-    required this.canDelete,
-    required this.canEdit,
-    required this.canPrintSurat,
-  });
-}
-
-class KolektifListResult {
-  final List<KolektifGroup> groups;
-  final String? errorMessage;
-
-  const KolektifListResult({this.groups = const [], this.errorMessage});
-}
-
-/// Server menuliskan sebagian nama wilayah dengan spasi di antara tiap huruf
-/// ("M A N D E", "J A M A L I"). Kalau SEMUA potongannya satu huruf, spasinya
-/// dirapatkan supaya terbaca wajar; nama yang memang bersuku kata banyak
-/// ("CIKIDANGBAYABANG") dibiarkan apa adanya.
-String rapikanNamaWilayah(String nama) {
-  final potongan = nama
-      .trim()
-      .split(RegExp(r'\s+'))
-      .where((p) => p.isNotEmpty)
-      .toList();
-  if (potongan.length > 1 && potongan.every((p) => p.length == 1))
-    return potongan.join();
-  return nama.trim();
-}
-
-/// Ubah angka rupiah kiriman server jadi bilangan bulat.
-///
-/// Server menulisnya bergaya Inggris — koma sebagai pemisah ribuan dan titik
-/// sebagai desimal ("87,453", "590,540.00"). Kalau semua tanda baca dibuang
-/// begitu saja, "590,540.00" akan terbaca 59054000, yaitu seratus kali lipat.
-/// Jadi koma dibuang lebih dulu, lalu bagian di belakang titik dipotong.
-int parseAngkaServer(String raw) {
-  var bersih = raw.replaceAll(RegExp(r'[^0-9.,]'), '').replaceAll(',', '');
-  final titik = bersih.indexOf('.');
-  if (titik >= 0) bersih = bersih.substring(0, titik);
-  return int.tryParse(bersih) ?? 0;
-}
-
-/// Satu anggota (satu NOP untuk satu tahun pajak) di dalam grup kolektif.
-/// [nop] + [tahunPajak] adalah pasangan yang dipakai server untuk menghapus
-/// anggota, jadi keduanya diambil dari atribut checkbox yang dirender server
-/// (bukan dari teks kolomnya) supaya persis sama dengan yang halaman aslinya
-/// kirim.
-class KolektifMember {
-  final String nop;
-  final String tahunPajak;
-  final String jatuhTempo;
-  final String namaWp;
-  final String kecamatan;
-  final String kelurahan;
-  final String pokok;
-  final String denda;
-  final String total;
-
-  const KolektifMember({
-    required this.nop,
-    required this.tahunPajak,
-    required this.jatuhTempo,
-    required this.namaWp,
-    required this.kecamatan,
-    required this.kelurahan,
-    required this.pokok,
-    required this.denda,
-    required this.total,
-  });
-
-  /// Kunci unik satu baris — satu NOP bisa muncul lebih dari sekali dengan
-  /// tahun pajak berbeda (tagihan tahun-tahun sebelumnya), jadi NOP saja
-  /// tidak cukup untuk membedakan baris.
-  String get kunci => '$nop|$tahunPajak';
-}
-
-class KolektifMemberListResult {
-  final List<KolektifMember> members;
-  final String? errorMessage;
-
-  const KolektifMemberListResult({this.members = const [], this.errorMessage});
-
-  /// Total seluruh anggota — halaman aslinya juga menghitung ini sendiri di
-  /// kaki tabel (`footerCallback`), bukan mengambilnya dari server.
-  int get totalPokok =>
-      members.fold(0, (a, m) => a + parseAngkaServer(m.pokok));
-  int get totalDenda =>
-      members.fold(0, (a, m) => a + parseAngkaServer(m.denda));
-  int get totalBayar =>
-      members.fold(0, (a, m) => a + parseAngkaServer(m.total));
-}
-
-/// Satu pilihan kelurahan pada form Tambah Group.
-class KolektifKelurahan {
-  final String code;
-  final String name;
-
-  const KolektifKelurahan({required this.code, required this.name});
-}
-
-/// Wilayah yang boleh dipakai akun ini saat membuat grup, digali dari halaman
-/// aslinya (bukan daftar bawaan aplikasi) supaya selalu ikut hak akses akun.
-class KolektifFormOptions {
-  final String kecamatanCode;
-
-  /// Nama kecamatan untuk ditampilkan. Form aslinya MENGIRIM kode
-  /// (mis. `3205200`) tapi MENAMPILKAN nama — namanya diambil terpisah lewat
-  /// ajax `showKecamatanAll()`. Kalau pengambilan nama gagal, dibiarkan kosong
-  /// dan yang tampil kembali ke kodenya; kode itu yang tetap dikirim, jadi
-  /// gagal-tidaknya pengambilan nama tidak mempengaruhi data yang tersimpan.
-  final String kecamatanName;
-
-  final List<KolektifKelurahan> kelurahan;
-  final String? errorMessage;
-
-  /// Apakah token aksi Tambah/Hapus benar-benar ketemu di halaman asli.
-  ///
-  /// Diperiksa lebih awal — saat menu dibuka, bukan saat tombol ditekan —
-  /// karena aksi ini meninggalkan jejak permanen di server: lebih baik
-  /// tombolnya mati sejak awal daripada staf sudah mengisi form, menekan
-  /// Simpan, lalu baru ketahuan tokennya tidak terbaca. Pemeriksaannya
-  /// sendiri tidak mengirim apa-apa, cuma membaca HTML halaman.
-  final bool bisaTambah;
-  final bool bisaHapus;
-
-  const KolektifFormOptions({
-    this.kecamatanCode = '',
-    this.kecamatanName = '',
-    this.kelurahan = const [],
-    this.errorMessage,
-    this.bisaTambah = false,
-    this.bisaHapus = false,
-  });
-}
-
-/// Hasil aksi yang MENGUBAH data di server pemda (buat/hapus grup).
-/// [rawBody] ikut disimpan supaya kalau responsnya di luar dugaan, isinya
-/// bisa dibaca langsung tanpa perlu mengulang aksinya — pengulangan tidak
-/// gratis, tiap percobaan tercatat permanen di log server.
-class KolektifActionResult {
-  final bool success;
-  final String? message;
-  final String? rawBody;
-
-  /// False kalau jawaban server sama sekali bukan JSON yang dikenali —
-  /// biasanya berarti sesi sudah berakhir dan yang terkirim balik adalah
-  /// halaman login. Dibedakan dari "gagal biasa" karena penambahan berkas
-  /// harus BERHENTI saat ini terjadi: meneruskan sisa NOP cuma menembakkan
-  /// puluhan permintaan lagi ke server pemda yang semuanya akan tertolak.
-  final bool responsDikenali;
-
-  const KolektifActionResult({
-    required this.success,
-    this.message,
-    this.rawBody,
-    this.responsDikenali = true,
-  });
-}
+export 'staff_portal/staff_portal_models.dart';
 
 /// Klien HTTP untuk portal staf `cianjurkab.v-tax.id` — BEDA dari portal
 /// publik `cektagihan.cianjurkab.v-tax.id` yang dipakai [PbbClient] (yang itu
 /// tidak butuh login sama sekali). Portal ini pakai alur login klasik:
 /// username + password + captcha, lalu verifikasi MFA (kode Google
 /// Authenticator) sebelum sesi dianggap masuk.
-///
-/// Deteksi sukses (redirect ke/dari mfa.php) sudah pasti sesuai halaman HTML
-/// yang jadi acuan. Deteksi pesan GAGAL (password salah, captcha salah, OTP
-/// salah) baru best-effort — belum ada contoh halaman gagal asli untuk
-/// dicocokkan, jadi kemungkinan perlu disesuaikan lagi setelah dites nyata.
-///
-/// Tab-tab Monitoring Wilayah (lihat [fetchSudahBayar] dst.) sudah dicocokkan
-/// field-per-field dengan HTML halaman aslinya. [fetchKolektifGroups] lebih
-/// spekulatif — modul itu pakai DataTables server-side (butuh parameter
-/// paging/sorting standar DataTables yang di-generate otomatis oleh
-/// library-nya di browser, di sini direplikasi manual tanpa contoh respons
-/// JSON asli) jadi kemungkinan besar perlu penyesuaian setelah dites nyata.
 class StaffPortalClient extends BaseHttpClient {
   static const _baseUrl = 'https://cianjurkab.v-tax.id';
 
@@ -303,14 +35,13 @@ class StaffPortalClient extends BaseHttpClient {
   List<BankOption>? _bankOptionsCache;
   bool _cookieManagerAttached = false;
 
-  StaffPortalClient({
-    super.customDio,
-  }) : super(
-          baseUrl: _baseUrl,
-          connectTimeout: const Duration(seconds: 15),
-          sendTimeout: const Duration(seconds: 15),
-          receiveTimeout: const Duration(seconds: 120),
-        ) {
+  StaffPortalClient({super.customDio})
+    : super(
+        baseUrl: _baseUrl,
+        connectTimeout: const Duration(seconds: 15),
+        sendTimeout: const Duration(seconds: 15),
+        receiveTimeout: const Duration(seconds: 120),
+      ) {
     dio.options.followRedirects = false;
     dio.options.validateStatus = (status) => status != null && status < 500;
   }
@@ -319,10 +50,7 @@ class StaffPortalClient extends BaseHttpClient {
 
   /// Cookie sesi (mis. `PHPSESSID`) disimpan ke berkas, bukan cuma di memori
   /// — supaya sesi login yang sudah terbentuk bertahan lewat restart
-  /// aplikasi, tidak perlu login + MFA ulang tiap kali. Dibuat lazy (bukan
-  /// di constructor) karena butuh path direktori dari `path_provider` yang
-  /// sifatnya async; constructor [StaffPortalClient] tetap sinkron supaya
-  /// tidak perlu ubah cara pemanggilannya di layar-layar yang sudah ada.
+  /// aplikasi, tidak perlu login + MFA ulang tiap kali.
   Future<void> _ensureCookieManager() async {
     if (_cookieManagerAttached) return;
     final dir = await AppStorage.getCookiesDirectory();
@@ -335,12 +63,7 @@ class StaffPortalClient extends BaseHttpClient {
   }
 
   /// Cek apakah sesi yang tersimpan (dari login sebelumnya) masih aktif di
-  /// server, tanpa perlu username/password/captcha — dipakai supaya
-  /// pengguna tidak perlu login ulang tiap buka menu Monitoring kalau sesi
-  /// sebelumnya belum kedaluwarsa. Deteksinya lewat penanda "sudah login"
-  /// yang muncul di halaman `/main.php` (link logout) — belum ada contoh
-  /// nyata sesi kedaluwarsa untuk dicocokkan, jadi kalau ternyata server
-  /// menampilkan halaman lain saat sesi habis, penanda ini perlu disesuaikan.
+  /// server, tanpa perlu username/password/captcha.
   Future<bool> hasActiveSession() async {
     await _ensureCookieManager();
     try {
@@ -356,8 +79,7 @@ class StaffPortalClient extends BaseHttpClient {
   }
 
   /// Keluar dari sesi — hubungi link logout asli di server (`logout=1`) lalu
-  /// hapus cookie & cache lokal, supaya panggilan [hasActiveSession]
-  /// berikutnya kembali false dan layar Login Portal Staf tampil lagi.
+  /// hapus cookie & cache lokal.
   Future<void> logout() async {
     await _ensureCookieManager();
     try {
@@ -397,9 +119,7 @@ class StaffPortalClient extends BaseHttpClient {
     return Uint8List.fromList(response.data!);
   }
 
-  /// Login tahap 1 (username + password + captcha). [needsMfa] true kalau
-  /// server mengarahkan ke halaman verifikasi MFA (kredensial & captcha
-  /// benar) — lanjutkan ke [verifyMfa]. False kalau ditolak.
+  /// Login tahap 1 (username + password + captcha).
   Future<StaffLoginResult> login({
     required String username,
     required String password,
@@ -430,7 +150,7 @@ class StaffPortalClient extends BaseHttpClient {
     return StaffLoginResult(
       needsMfa: false,
       errorMessage:
-          _extractErrorMessage(page) ??
+          StaffPortalParser.extractErrorMessage(page) ??
           'Login gagal — periksa username, password, dan kode verifikasi.',
     );
   }
@@ -457,7 +177,7 @@ class StaffPortalClient extends BaseHttpClient {
     return StaffMfaResult(
       success: false,
       errorMessage:
-          _extractErrorMessage(page) ??
+          StaffPortalParser.extractErrorMessage(page) ??
           'Kode verifikasi salah atau sudah kedaluwarsa.',
     );
   }
@@ -472,27 +192,14 @@ class StaffPortalClient extends BaseHttpClient {
     return next.data ?? '';
   }
 
-  /// Server ini kadang balikin header `Location:` relatif tanpa garis miring
-  /// di depan (mis. `main.php`, bukan `/main.php`). Dio menggabungkan baseUrl
-  /// + path dengan penyambungan string polos (lihat `RequestOptions.uri` di
-  /// paket dio) — tanpa garis miring, hasilnya jadi satu host rusak
-  /// (`cianjurkab.v-tax.idmain.php`) yang gagal di-DNS-lookup.
   String _normalizeLocation(String location) {
-    if (location.startsWith('http://') || location.startsWith('https://'))
+    if (location.startsWith('http://') || location.startsWith('https://')) {
       return location;
+    }
     return location.startsWith('/') ? location : '/$location';
   }
 
-  String? _extractErrorMessage(String html) {
-    final document = html_parser.parse(html);
-    final text = document.querySelector('.err-msg')?.text.trim();
-    return (text == null || text.isEmpty) ? null : text;
-  }
-
-  /// Muat halaman Monitoring Wilayah sekali per sesi login — dipakai untuk
-  /// menggali token `q` & `funcMode` yang disisipkan server ke tiap tab
-  /// (lihat [_fetchTab]), bukan nilai tetap karena terikat sesi/uid akun
-  /// yang login.
+  /// Muat halaman Monitoring Wilayah sekali per sesi login.
   Future<String> _ensureMonitoringPage() async {
     if (_monitoringHtml != null) return _monitoringHtml!;
     await _ensureCookieManager();
@@ -505,9 +212,7 @@ class StaffPortalClient extends BaseHttpClient {
     return _monitoringHtml!;
   }
 
-  /// Token `q` dari grup fungsi "s=23" (Sudah Bayar / Belum Bayar / kedua tab
-  /// Kolektif / `showBank`) — sama untuk semuanya di satu sesi, jadi cukup
-  /// digali sekali lalu dipakai ulang.
+  /// Token `q` dari grup fungsi "s=23".
   Future<String?> _ensurePageQ23() async {
     if (_pageQ23 != null) return _pageQ23;
     final html = await _ensureMonitoringPage();
@@ -545,7 +250,7 @@ class StaffPortalClient extends BaseHttpClient {
         responseType: ResponseType.plain,
       ),
     );
-    return _parseGenericTable(response.data ?? '');
+    return StaffPortalParser.parseGenericTable(response.data ?? '');
   }
 
   /// Tab "Sudah Bayar" — replika `onSubmitSudahBayar(1)`.
@@ -796,8 +501,7 @@ class StaffPortalClient extends BaseHttpClient {
     );
   }
 
-  /// Daftar Bank untuk dropdown filter (tab Sudah Bayar & Realisasi) —
-  /// dimuat sekali lalu di-cache untuk sesi ini.
+  /// Daftar Bank untuk dropdown filter (tab Sudah Bayar & Realisasi).
   Future<List<BankOption>> fetchBankOptions() async {
     if (_bankOptionsCache != null) return _bankOptionsCache!;
     final html = await _ensureMonitoringPage();
@@ -815,74 +519,12 @@ class StaffPortalClient extends BaseHttpClient {
         responseType: ResponseType.plain,
       ),
     );
-    final options = _parseBankJson(response.data ?? '');
+    final options = StaffPortalParser.parseBankJson(response.data ?? '');
     _bankOptionsCache = options;
     return options;
   }
 
-  List<BankOption> _parseBankJson(String body) {
-    try {
-      final decoded = jsonDecode(body);
-      final list = decoded is Map ? decoded['msg'] : null;
-      if (list is! List) return const [];
-      return list
-          .whereType<Map>()
-          .map(
-            (m) =>
-                BankOption(id: '${m['CDC_B_ID']}', name: '${m['CDC_B_NAME']}'),
-          )
-          .toList();
-    } on FormatException {
-      return const [];
-    }
-  }
-
-  /// Ambil tabel terbesar (paling banyak sel `<td>`) dari HTML respons —
-  /// kolomnya dibaca apa adanya dari header tabel, tidak di-hardcode, karena
-  /// belum ada contoh isi asli hasil "Tampilkan" untuk dicocokkan.
-  MonitoringTableResult _parseGenericTable(String html) {
-    final document = html_parser.parse(html);
-    final tables = document.querySelectorAll('table');
-    if (tables.isEmpty) {
-      final text = document.body?.text.trim();
-      return MonitoringTableResult(
-        errorMessage: (text == null || text.isEmpty) ? 'Tidak ada data.' : text,
-      );
-    }
-    tables.sort(
-      (a, b) => b
-          .querySelectorAll('td')
-          .length
-          .compareTo(a.querySelectorAll('td').length),
-    );
-    final table = tables.first;
-    final trs = table.querySelectorAll('tr');
-    if (trs.isEmpty)
-      return const MonitoringTableResult(errorMessage: 'Tidak ada data.');
-
-    final headers = trs.first
-        .querySelectorAll('th, td')
-        .map((c) => c.text.trim())
-        .toList();
-    final rows = trs
-        .skip(1)
-        .map(
-          (tr) => tr.querySelectorAll('td').map((c) => c.text.trim()).toList(),
-        )
-        .where((r) => r.isNotEmpty)
-        .toList();
-
-    if (rows.isEmpty)
-      return const MonitoringTableResult(errorMessage: 'Tidak ada data.');
-    return MonitoringTableResult(headers: headers, rows: rows);
-  }
-
   /// Muat halaman Pembayaran Kolektif sekali per sesi login.
-  ///
-  /// [forceReload] dipakai aksi yang mengubah data (buat/hapus grup): token
-  /// `funcMode` berbeda tiap kali halaman dibuka, dan untuk aksi yang cuma
-  /// boleh dicoba sekali lebih aman mengambil token yang baru saja diterbitkan
-  /// server daripada memakai token hasil cache yang mungkin sudah basi.
   Future<String> _ensureKolektifPage({bool forceReload = false}) async {
     if (_kolektifHtml != null && !forceReload) return _kolektifHtml!;
     await _ensureCookieManager();
@@ -896,12 +538,6 @@ class StaffPortalClient extends BaseHttpClient {
   }
 
   /// Kecamatan & daftar kelurahan yang boleh dipilih saat membuat grup.
-  ///
-  /// Kecamatan diambil dari `var myKecamatan` (baris JS mentah dari server),
-  /// bukan dari `<option>` dropdown-nya — dropdown Kecamatan di halaman asli
-  /// baru terisi setelah ajax `showKecamatanAll()` jalan di browser, jadi di
-  /// HTML yang kita terima isinya belum tentu ada. Kelurahan sebaliknya:
-  /// dropdown `#data-kelurahan-group-2` memang dirender server apa adanya.
   Future<KolektifFormOptions> fetchKolektifFormOptions() async {
     final html = await _ensureKolektifPage();
     final kecamatan = StaffPortalTokenExtractor.extractKolektifKecamatanCode(
@@ -914,21 +550,7 @@ class StaffPortalClient extends BaseHttpClient {
       );
     }
 
-    final document = html_parser.parse(html);
-    final options = <KolektifKelurahan>[];
-    for (final selector in [
-      'select#data-kelurahan-group-2',
-      'select#data-kelurahan',
-    ]) {
-      for (final option in document.querySelectorAll('$selector option')) {
-        final code = option.attributes['value']?.trim() ?? '';
-        if (code.isEmpty) continue;
-        if (options.any((o) => o.code == code)) continue;
-        options.add(KolektifKelurahan(code: code, name: option.text.trim()));
-      }
-      if (options.isNotEmpty) break;
-    }
-
+    final options = StaffPortalParser.parseKolektifKelurahanOptions(html);
     if (options.isEmpty) {
       return const KolektifFormOptions(
         errorMessage:
@@ -948,12 +570,7 @@ class StaffPortalClient extends BaseHttpClient {
     );
   }
 
-  /// Nama kecamatan untuk sebuah kode — replika `showKecamatanAll()`, yang di
-  /// halaman aslinya dipakai untuk mengisi dropdown Kecamatan. Murni baca.
-  ///
-  /// Gagalnya pengambilan nama TIDAK dianggap error: pemanggilnya cukup
-  /// menampilkan kode wilayah apa adanya, dan yang dikirim ke server saat
-  /// menyimpan grup tetap kodenya.
+  /// Nama kecamatan untuk sebuah kode — replika `showKecamatanAll()`.
   Future<String> _fetchKecamatanName(String html, String code) async {
     final funcMode = StaffPortalTokenExtractor.extractFuncMode(
       html,
@@ -964,39 +581,22 @@ class StaffPortalClient extends BaseHttpClient {
     try {
       final response = await _dio.post<String>(
         '/main.php',
-        // `3205` = kode Kabupaten Cianjur, tertulis apa adanya di halaman
-        // aslinya (`data: {id: "3205", funcMode: funcMode}`). Aplikasi ini
-        // memang khusus Cianjur — lihat juga baseUrl & prefix NOP.
         data: {'id': '3205', 'funcMode': funcMode},
         options: Options(
           contentType: Headers.formUrlEncodedContentType,
           responseType: ResponseType.plain,
         ),
       );
-      final decoded = jsonDecode(response.data ?? '');
-      if (decoded is! Map || decoded['msg'] is! List) return '';
-      for (final item in decoded['msg'] as List) {
-        if (item is Map && '${item['id']}'.trim() == code) {
-          return rapikanNamaWilayah('${item['name']}');
-        }
-      }
+      return StaffPortalParser.parseKecamatanNameFromJson(
+        response.data ?? '',
+        code,
+      );
     } on DioException {
       return '';
-    } on FormatException {
-      return '';
     }
-    return '';
   }
 
   /// BUAT grup kolektif baru — replika `tambahGroup()`.
-  ///
-  /// Nama field-nya sengaja ditulis persis seperti hasil
-  /// `$("#form-tambah-group").serialize()` di halaman asli, termasuk urutannya
-  /// dan dua field kosong (`data-edit-group-id`, `data-id-group`) yang di sana
-  /// ikut terkirim karena berada di dalam form. `data-edit-group-id` yang
-  /// kosong itulah yang membedakan BUAT dari UBAH, jadi tidak boleh dihapus.
-  ///
-  /// Grup yang terbuat berstatus Draft dan tercatat permanen di server pemda.
   Future<KolektifActionResult> createKolektifGroup({
     required String namaGroup,
     required String keterangan,
@@ -1017,13 +617,6 @@ class StaffPortalClient extends BaseHttpClient {
   }
 
   /// UBAH data grup yang sudah ada.
-  ///
-  /// Endpoint & tokennya SAMA PERSIS dengan Tambah Group — di halaman aslinya
-  /// tombol Simpan memanggil `tambahGroup()` untuk keduanya. Yang membedakan
-  /// cuma satu field: `data-edit-group-id`. Kosong berarti buat baru, terisi
-  /// berarti ubah. Karena itu [editGroupId] di bawah diperiksa tidak boleh
-  /// kosong — kalau lolos kosong, yang terjadi bukan gagal, melainkan
-  /// terbuatnya grup baru yang tidak diminta siapa pun.
   Future<KolektifActionResult> updateKolektifGroup({
     required String editGroupId,
     required String namaGroup,
@@ -1055,9 +648,6 @@ class StaffPortalClient extends BaseHttpClient {
   }
 
   /// FINALKAN grup kolektif — replika fungsi `finalkan()` pada halaman asli.
-  ///
-  /// Aksi ini mengunci grup dan menerbitkan kode bayar, sehingga token dibaca
-  /// ulang dari halaman terbaru dan ID/user dikirim persis seperti AJAX asli.
   Future<KolektifActionResult> finalkanKolektifGroup({
     required String groupId,
   }) async {
@@ -1090,7 +680,7 @@ class StaffPortalClient extends BaseHttpClient {
       ),
     );
     _kolektifHtml = null;
-    return _parseKolektifActionJson(response.data ?? '');
+    return StaffPortalParser.parseKolektifActionJson(response.data ?? '');
   }
 
   Future<KolektifActionResult> _simpanKolektifGroup({
@@ -1135,17 +725,10 @@ class StaffPortalClient extends BaseHttpClient {
       ),
     );
     _kolektifHtml = null;
-    return _parseKolektifActionJson(response.data ?? '');
+    return StaffPortalParser.parseKolektifActionJson(response.data ?? '');
   }
 
-  /// Unduh "Surat Pengantar" satu grup sebagai PDF — replika
-  /// `pdfGroupInfo(group_id)`, yang di halaman aslinya sekadar membuka
-  /// `view/PBB/pembayaran_va/setPDFGroupInfo.php?id=…` di tab baru. Murni
-  /// baca, tidak mengubah apa pun di server.
-  ///
-  /// Berkasnya hanya bisa diambil sambil membawa cookie sesi login, jadi tidak
-  /// bisa diserahkan begitu saja ke browser luar — di sini diunduh sendiri
-  /// lalu ditampilkan di dalam aplikasi.
+  /// Unduh "Surat Pengantar" satu grup sebagai PDF — replika `pdfGroupInfo(group_id)`.
   Future<Uint8List> fetchSuratPengantarPdf(String groupId) async {
     await _ensureCookieManager();
     final response = await _dio.get<List<int>>(
@@ -1154,9 +737,6 @@ class StaffPortalClient extends BaseHttpClient {
       options: Options(responseType: ResponseType.bytes),
     );
     final bytes = Uint8List.fromList(response.data ?? const []);
-    // Kalau sesi sudah habis, server membalas halaman login (HTML) dengan
-    // status 200 — bukan PDF. Tanpa pemeriksaan ini, pratinjau akan terbuka
-    // kosong tanpa keterangan apa-apa.
     if (bytes.length < 5 || String.fromCharCodes(bytes.take(4)) != '%PDF') {
       throw StateError(
         'Server tidak mengirim berkas PDF. Sesi mungkin sudah berakhir — buka ulang menu Monitoring lalu coba lagi.',
@@ -1166,10 +746,6 @@ class StaffPortalClient extends BaseHttpClient {
   }
 
   /// HAPUS grup kolektif — replika handler tombol `#btn-confirm-delete-group`.
-  ///
-  /// [alasan] wajib diisi (halaman aslinya menolak alasan kosong) dan ikut
-  /// tercatat permanen di "Log History Penghapusan" bersama nama user yang
-  /// menghapus — penghapusan ini tidak bisa dibatalkan.
   Future<KolektifActionResult> deleteKolektifGroup({
     required String groupId,
     required String alasan,
@@ -1209,7 +785,7 @@ class StaffPortalClient extends BaseHttpClient {
       ),
     );
     _kolektifHtml = null;
-    return _parseKolektifActionJson(response.data ?? '');
+    return StaffPortalParser.parseKolektifActionJson(response.data ?? '');
   }
 
   static const _kolektifMemberColumns = [
@@ -1226,10 +802,6 @@ class StaffPortalClient extends BaseHttpClient {
   ];
 
   /// Daftar anggota (NOP) sebuah grup — replika `getGroupData(group_id, status)`.
-  ///
-  /// [status] adalah kode status grup apa adanya dari kolom Aksi; server
-  /// memakainya untuk menentukan bentuk kolom Aksi tiap baris, jadi ikut
-  /// dikirim sama seperti halaman aslinya.
   Future<KolektifMemberListResult> fetchKolektifMembers({
     required String groupId,
     required String status,
@@ -1270,63 +842,10 @@ class StaffPortalClient extends BaseHttpClient {
       queryParameters: queryParameters,
       options: Options(responseType: ResponseType.plain),
     );
-    return _parseKolektifMemberJson(response.data ?? '');
-  }
-
-  KolektifMemberListResult _parseKolektifMemberJson(String body) {
-    try {
-      final decoded = jsonDecode(body);
-      if (decoded is! Map || decoded['data'] is! List) {
-        return const KolektifMemberListResult(
-          errorMessage: 'Format respons daftar anggota tidak dikenali.',
-        );
-      }
-      final members = (decoded['data'] as List).whereType<List>().map((row) {
-        String cell(int i) => i < row.length ? _stripHtml('${row[i]}') : '';
-        final checkbox = row.isNotEmpty
-            ? html_parser
-                  .parseFragment('${row[0]}')
-                  .querySelector('input[value]')
-            : null;
-        return KolektifMember(
-          nop: checkbox?.attributes['value']?.trim().isNotEmpty == true
-              ? checkbox!.attributes['value']!.trim()
-              : cell(1),
-          tahunPajak: checkbox?.attributes['year']?.trim().isNotEmpty == true
-              ? checkbox!.attributes['year']!.trim()
-              : cell(2),
-          jatuhTempo: cell(3),
-          namaWp: cell(4),
-          kecamatan: cell(5),
-          kelurahan: cell(6),
-          pokok: cell(7),
-          denda: cell(8),
-          total: cell(9),
-        );
-      }).toList();
-      if (members.isEmpty) {
-        return const KolektifMemberListResult(
-          errorMessage: 'Grup ini belum punya anggota.',
-        );
-      }
-      return KolektifMemberListResult(members: members);
-    } on FormatException {
-      return const KolektifMemberListResult(
-        errorMessage:
-            'Gagal membaca daftar anggota — format respons tidak sesuai dugaan.',
-      );
-    }
+    return StaffPortalParser.parseKolektifMemberJson(response.data ?? '');
   }
 
   /// TAMBAH NOP ke dalam grup — replika `cariNOP()`.
-  ///
-  /// [nop] wajib diisi. Di halaman aslinya, `data-nop` yang KOSONG memicu
-  /// penambahan MASSAL — seluruh NOP yang belum bayar di satu kelurahan
-  /// sekaligus. Aksi seluas itu sengaja tidak disediakan lewat aplikasi ini,
-  /// jadi permintaan dengan NOP kosong ditolak di sini sebelum sampai jaringan.
-  ///
-  /// Aksi ini menambah tagihan ke grup Draft dan masih bisa dibatalkan lewat
-  /// [deleteKolektifMembers] selama grup belum difinalkan.
   Future<KolektifActionResult> addKolektifMember({
     required String groupId,
     required String nop,
@@ -1354,11 +873,6 @@ class StaffPortalClient extends BaseHttpClient {
       );
     }
 
-    // Urutan & nama field mengikuti hasil $("#form-cari").serialize() di
-    // halaman asli, termasuk `data-group-name` yang di sana selalu terkirim
-    // kosong (JS-nya memakai .html(), bukan .val(), jadi nilainya tak pernah
-    // terisi) serta `blok`/`blok2` kosong. Input file `berkas` tidak ikut —
-    // jQuery memang tidak menyertakan input bertipe file.
     final response = await _dio.post<String>(
       '/main.php',
       data: {
@@ -1379,31 +893,10 @@ class StaffPortalClient extends BaseHttpClient {
       ),
     );
     _kolektifHtml = null;
-    return _parseKolektifActionJson(response.data ?? '');
+    return StaffPortalParser.parseKolektifActionJson(response.data ?? '');
   }
 
   /// Tambahkan BANYAK NOP sekaligus dari berkas — satu NOP satu permintaan.
-  ///
-  /// Kenapa tidak sekali kirim dengan NOP dipisah koma (yang juga didukung
-  /// server)? Karena jawaban server untuk kiriman gabungan cuma SATU pesan
-  /// untuk seluruh daftar. Padahal yang dibutuhkan justru nasib per NOP:
-  /// mana yang masuk, mana yang sudah bayar, mana yang tidak ketemu. Satu NOP
-  /// satu permintaan adalah satu-satunya cara mendapat jawaban per NOP.
-  ///
-  /// Kenapa tidak memakai jalur unggah CSV milik server sendiri
-  /// (`cariNOPCSV()`)? Selain jawabannya juga digabung jadi satu pesan,
-  /// tokennya duduk persis di sebelah token `generateva()` — aksi yang
-  /// menerbitkan virtual account sungguhan dan tidak boleh tersentuh aplikasi
-  /// ini sama sekali. Jalur di bawah memakai ulang token `cariNOP()` yang
-  /// sudah dikunci pengujian, jadi tidak ada token baru yang perlu digali di
-  /// dekat aksi berbahaya itu.
-  ///
-  /// Tokennya diambil SEKALI di awal lalu dipakai untuk seluruh daftar —
-  /// persis seperti halaman aslinya, yang menambahkan NOP berkali-kali dengan
-  /// satu token dari sekali muat halaman.
-  ///
-  /// [batal] diperiksa sebelum tiap NOP supaya penggunanya bisa menghentikan
-  /// proses di tengah jalan; yang sudah telanjur terkirim tetap dilaporkan.
   Future<HasilImporNop> addKolektifMembersFromList({
     required String groupId,
     required List<String> nopList,
@@ -1462,11 +955,8 @@ class StaffPortalClient extends BaseHttpClient {
             responseType: ResponseType.plain,
           ),
         );
-        hasil = _parseKolektifActionJson(response.data ?? '');
+        hasil = StaffPortalParser.parseKolektifActionJson(response.data ?? '');
       } on DioException catch (e) {
-        // Jaringan putus di tengah permintaan: NOP ini nasibnya BELUM PASTI —
-        // bisa jadi sudah masuk sebelum jawabannya hilang. Karena itu dicatat
-        // sebagai "perlu diperiksa", bukan sebagai gagal.
         gagalBeruntun++;
         item.add(
           ItemImporNop(
@@ -1488,9 +978,6 @@ class StaffPortalClient extends BaseHttpClient {
         continue;
       }
 
-      // Jawaban bukan JSON = hampir pasti halaman login, artinya sesi habis.
-      // Diteruskan pun sisanya cuma menembakkan permintaan sia-sia ke server
-      // pemda, jadi berhenti di sini.
       if (!hasil.responsDikenali) {
         errorFatal =
             'Server berhenti menjawab dalam format yang dikenali di NOP ke-${i + 1} — '
@@ -1519,9 +1006,6 @@ class StaffPortalClient extends BaseHttpClient {
   }
 
   /// HAPUS anggota terpilih dari grup — replika handler `#btn-delete-all`.
-  ///
-  /// Bentuk datanya array of object (`data[0][nop]`, `data[0][tahun]`, …)
-  /// persis seperti yang dikirim jQuery di sana.
   Future<KolektifActionResult> deleteKolektifMembers({
     required List<KolektifMember> members,
   }) async {
@@ -1559,40 +1043,7 @@ class StaffPortalClient extends BaseHttpClient {
       ),
     );
     _kolektifHtml = null;
-    return _parseKolektifActionJson(response.data ?? '');
-  }
-
-  /// Baca respons aksi buat/hapus grup. Halaman aslinya cuma melihat
-  /// `data.success` lalu menampilkan `data.message` kalau gagal, jadi itu
-  /// yang ditiru. Kalau responsnya bukan JSON yang dikenali, isi mentahnya
-  /// ikut dibawa pulang — statusnya jadi "tidak pasti", dan itu yang paling
-  /// jujur: request-nya sudah telanjur sampai ke server.
-  KolektifActionResult _parseKolektifActionJson(String body) {
-    final trimmed = body.trim();
-    try {
-      final decoded = jsonDecode(trimmed);
-      if (decoded is Map) {
-        final message = decoded['message']?.toString();
-        return KolektifActionResult(
-          success: decoded['success'] == true,
-          message: (message == null || message.isEmpty) ? null : message,
-          rawBody: trimmed,
-        );
-      }
-    } on FormatException {
-      // Bukan JSON — jatuh ke penanganan di bawah.
-    }
-    final cuplikan = trimmed.length > 300
-        ? '${trimmed.substring(0, 300)}…'
-        : trimmed;
-    return KolektifActionResult(
-      success: false,
-      message:
-          'Server menjawab dengan format yang tidak dikenali, jadi hasilnya belum pasti. '
-          'Periksa dulu daftar grup sebelum mencoba lagi.\n\nJawaban server:\n$cuplikan',
-      rawBody: trimmed,
-      responsDikenali: false,
-    );
+    return StaffPortalParser.parseKolektifActionJson(response.data ?? '');
   }
 
   static const _kolektifColumns = [
@@ -1610,11 +1061,7 @@ class StaffPortalClient extends BaseHttpClient {
     'CPM_CG_EXPIRED_DATE',
   ];
 
-  /// Daftar grup Pembayaran Kolektif (read-only) — replika `reloadDataGroup()`
-  /// yang di sana dijalankan oleh library DataTables (server-side mode), jadi
-  /// di sini parameter paging/sorting standar DataTables direplikasi manual.
-  /// Belum ada contoh respons JSON asli untuk dicocokkan — kalau format
-  /// respons meleset, [KolektifListResult.errorMessage] akan menjelaskan itu.
+  /// Daftar grup Pembayaran Kolektif (read-only) — replika `reloadDataGroup()`.
   Future<KolektifListResult> fetchKolektifGroups({
     String bulan = '0',
     String status = '',
@@ -1651,11 +1098,6 @@ class StaffPortalClient extends BaseHttpClient {
       'length': '50',
       'search[value]': '',
       'search[regex]': 'false',
-      // Kolom 11 = "Tanggal Buat" — kolom terakhir yang di halaman aslinya
-      // sengaja disembunyikan dan cuma dipakai sebagai kunci urutan default
-      // (`"order": [[ 11, "desc" ]]`), supaya grup terbaru tampil di atas.
-      // Sebelumnya di sini keliru memakai kolom 10 (Tanggal Kadaluarsa), yang
-      // untuk grup Draft isinya kosong sehingga urutannya jadi tidak keruan.
       'order[0][column]': '11',
       'order[0][dir]': 'desc',
     };
@@ -1673,112 +1115,6 @@ class StaffPortalClient extends BaseHttpClient {
       queryParameters: queryParameters,
       options: Options(responseType: ResponseType.plain),
     );
-    return _parseKolektifJson(response.data ?? '');
+    return StaffPortalParser.parseKolektifGroupsJson(response.data ?? '');
   }
-
-  KolektifListResult _parseKolektifJson(String body) {
-    try {
-      final decoded = jsonDecode(body);
-      if (decoded is! Map || decoded['data'] is! List) {
-        return const KolektifListResult(
-          errorMessage: 'Format respons daftar grup tidak dikenali.',
-        );
-      }
-      final rows = (decoded['data'] as List).whereType<List>();
-      final groups = rows.map((row) {
-        String cell(int i) => i < row.length ? _stripHtml('${row[i]}') : '';
-        final aksi = _parseKolektifAksiCell(row.isNotEmpty ? '${row[0]}' : '');
-        final kel = _parseKolektifKelurahanCell(
-          row.length > 8 ? '${row[8]}' : '',
-        );
-        return KolektifGroup(
-          id: aksi.id,
-          statusCode: aksi.statusCode,
-          canDelete: aksi.canDelete,
-          canEdit: aksi.canEdit,
-          canPrintSurat: aksi.canPrintSurat,
-          kelurahanCode: kel.kode,
-          namaGroup: cell(1),
-          namaKolektor: cell(2),
-          hpKolektor: cell(3),
-          anggota: cell(4),
-          kodeBayar: cell(5),
-          status: cell(6),
-          kecamatan: cell(7),
-          kelurahan: kel.nama,
-          keterangan: cell(9),
-          tanggalKadaluarsa: cell(10),
-        );
-      }).toList();
-      if (groups.isEmpty)
-        return const KolektifListResult(errorMessage: 'Tidak ada data.');
-      return KolektifListResult(groups: groups);
-    } on FormatException {
-      return const KolektifListResult(
-        errorMessage:
-            'Gagal membaca daftar grup — format respons tidak sesuai dugaan.',
-      );
-    }
-  }
-
-  /// Bongkar kolom "Aksi" — satu-satunya tempat server menaruh `CPM_CG_ID`,
-  /// kode status, dan (lewat ada/tidaknya tombol `.btn-delete-group`) izin
-  /// menghapus baris itu.
-  ///
-  /// Perhatikan ejaan atributnya beda antar tombol di halaman asli: tombol
-  /// Kelola Member memakai `group-id` (strip), tombol Hapus memakai
-  /// `group_id` (garis bawah). Keduanya berisi ID yang sama, jadi dua-duanya
-  /// dicoba.
-  ({
-    String id,
-    String statusCode,
-    bool canDelete,
-    bool canEdit,
-    bool canPrintSurat,
-  })
-  _parseKolektifAksiCell(String cellHtml) {
-    if (cellHtml.isEmpty) {
-      return (
-        id: '',
-        statusCode: '',
-        canDelete: false,
-        canEdit: false,
-        canPrintSurat: false,
-      );
-    }
-    final fragment = html_parser.parseFragment(cellHtml);
-    final id =
-        (fragment.querySelector('[group-id]')?.attributes['group-id'] ??
-                fragment.querySelector('[group_id]')?.attributes['group_id'] ??
-                '')
-            .trim();
-    final statusCode =
-        fragment.querySelector('[status]')?.attributes['status'] ?? '';
-    final punyaId = id.isNotEmpty;
-    return (
-      id: id,
-      statusCode: statusCode.trim(),
-      canDelete: punyaId && fragment.querySelector('.btn-delete-group') != null,
-      canEdit: punyaId && fragment.querySelector('.btn-edit-group') != null,
-      canPrintSurat:
-          punyaId && fragment.querySelector('.btn-cetak-info-group') != null,
-    );
-  }
-
-  /// Bongkar kolom "Kelurahan", yang berisi DUA elemen sekaligus: nama yang
-  /// tampil (`.nm-kel`) dan kode wilayah yang disembunyikan (`.kd-kel`).
-  /// Kalau keduanya diambil sebagai teks polos, hasilnya menyatu jadi
-  /// "BOBOJONG3205200004" — jadi masing-masing dibaca terpisah.
-  ({String nama, String kode}) _parseKolektifKelurahanCell(String cellHtml) {
-    if (cellHtml.isEmpty) return (nama: '', kode: '');
-    final fragment = html_parser.parseFragment(cellHtml);
-    final nama = fragment.querySelector('.nm-kel')?.text.trim();
-    final kode = fragment.querySelector('.kd-kel')?.text.trim();
-    if (nama != null || kode != null)
-      return (nama: nama ?? '', kode: kode ?? '');
-    return (nama: _stripHtml(cellHtml), kode: '');
-  }
-
-  String _stripHtml(String value) =>
-      (html_parser.parseFragment(value).text ?? value).trim();
 }

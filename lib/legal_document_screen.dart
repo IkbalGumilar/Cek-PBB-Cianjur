@@ -2,10 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-enum LegalDocumentType {
-  privacyPolicy,
-  termsOfService,
-}
+enum LegalDocumentType { privacyPolicy, termsOfService }
 
 /// Layar terpadu untuk menampilkan Kebijakan Privasi dan Syarat & Ketentuan Layanan.
 /// Dapat dibaca secara offline di dalam aplikasi dan dilengkapi tombol untuk membuka versi web resmi.
@@ -38,7 +35,9 @@ class _LegalDocumentScreenState extends State<LegalDocumentScreen>
     _tabController = TabController(
       length: 2,
       vsync: this,
-      initialIndex: widget.initialType == LegalDocumentType.privacyPolicy ? 0 : 1,
+      initialIndex: widget.initialType == LegalDocumentType.privacyPolicy
+          ? 0
+          : 1,
     );
   }
 
@@ -51,7 +50,10 @@ class _LegalDocumentScreenState extends State<LegalDocumentScreen>
   Future<void> _openWebUrl(String url) async {
     final uri = Uri.parse(url);
     try {
-      final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      final launched = await launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication,
+      );
       if (!launched && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Tidak dapat membuka browser: $url')),
@@ -59,9 +61,9 @@ class _LegalDocumentScreenState extends State<LegalDocumentScreen>
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal membuka tautan: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Gagal membuka tautan: $e')));
       }
     }
   }
@@ -92,10 +94,7 @@ class _LegalDocumentScreenState extends State<LegalDocumentScreen>
               icon: Icon(Icons.privacy_tip_outlined),
               text: 'Kebijakan Privasi',
             ),
-            Tab(
-              icon: Icon(Icons.gavel_outlined),
-              text: 'Syarat & Ketentuan',
-            ),
+            Tab(icon: Icon(Icons.gavel_outlined), text: 'Syarat & Ketentuan'),
           ],
         ),
       ),
@@ -152,7 +151,9 @@ class _LegalDocumentScreenState extends State<LegalDocumentScreen>
                     style: TextStyle(fontSize: 13, height: 1.5),
                   ),
                   const Divider(height: 24),
-                  _buildSubHeading('B. Informasi Akun Google (Otentikasi Sukarela)'),
+                  _buildSubHeading(
+                    'B. Informasi Akun Google (Otentikasi Sukarela)',
+                  ),
                   const Text(
                     'Jika Anda secara sukarela menautkan akun Google untuk sinkronisasi cadangan DHKP, aplikasi hanya menerima data profil dasar: alamat email, nama tampilan profil, dan URL foto profil. Data ini semata-mata digunakan untuk menampilkan identitas akun aktif dan memvalidasi kepemilikan cadangan data.',
                     style: TextStyle(fontSize: 13, height: 1.5),
@@ -160,7 +161,9 @@ class _LegalDocumentScreenState extends State<LegalDocumentScreen>
                 ],
               ),
               const SizedBox(height: 16),
-              _buildSectionTitle('2. Penggunaan Izin Google Drive (Least-Privilege)'),
+              _buildSectionTitle(
+                '2. Penggunaan Izin Google Drive (Least-Privilege)',
+              ),
               _buildCard(
                 isDark: isDark,
                 children: [
@@ -186,7 +189,9 @@ class _LegalDocumentScreenState extends State<LegalDocumentScreen>
                 ],
               ),
               const SizedBox(height: 16),
-              _buildSectionTitle('3. Kepatuhan Kebijakan Data Pengguna Google API'),
+              _buildSectionTitle(
+                '3. Kepatuhan Kebijakan Data Pengguna Google API',
+              ),
               _buildCard(
                 isDark: isDark,
                 children: [
@@ -195,9 +200,15 @@ class _LegalDocumentScreenState extends State<LegalDocumentScreen>
                     style: TextStyle(fontSize: 13, height: 1.5),
                   ),
                   const SizedBox(height: 8),
-                  _buildBulletItem('TIDAK PERNAH menjual atau membagikan data ke pihak ketiga.'),
-                  _buildBulletItem('TIDAK MENGGUNAKAN data untuk periklanan atau penargetan iklan.'),
-                  _buildBulletItem('TIDAK ADA manusia yang membaca berkas cadangan Anda; seluruh proses transfer data dilakukan terenkripsi mesin.'),
+                  _buildBulletItem(
+                    'TIDAK PERNAH menjual atau membagikan data ke pihak ketiga.',
+                  ),
+                  _buildBulletItem(
+                    'TIDAK MENGGUNAKAN data untuk periklanan atau penargetan iklan.',
+                  ),
+                  _buildBulletItem(
+                    'TIDAK ADA manusia yang membaca berkas cadangan Anda; seluruh proses transfer data dilakukan terenkripsi mesin.',
+                  ),
                 ],
               ),
               const SizedBox(height: 16),
@@ -339,7 +350,9 @@ class _LegalDocumentScreenState extends State<LegalDocumentScreen>
                     contentPadding: EdgeInsets.zero,
                     leading: const FaIcon(FontAwesomeIcons.github, size: 24),
                     title: const Text('IkbalGumilar/Cek-PBB-Cianjur'),
-                    subtitle: const Text('github.com/IkbalGumilar/Cek-PBB-Cianjur'),
+                    subtitle: const Text(
+                      'github.com/IkbalGumilar/Cek-PBB-Cianjur',
+                    ),
                     trailing: const Icon(Icons.open_in_new, size: 18),
                     onTap: () => _openWebUrl(LegalDocumentScreen.githubRepoUrl),
                   ),
@@ -429,18 +442,12 @@ class _LegalDocumentScreenState extends State<LegalDocumentScreen>
       padding: const EdgeInsets.only(bottom: 4),
       child: Text(
         title,
-        style: const TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.w600,
-        ),
+        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
       ),
     );
   }
 
-  Widget _buildCard({
-    required List<Widget> children,
-    required bool isDark,
-  }) {
+  Widget _buildCard({required List<Widget> children, required bool isDark}) {
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(
@@ -466,7 +473,10 @@ class _LegalDocumentScreenState extends State<LegalDocumentScreen>
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('• ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+          const Text(
+            '• ',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+          ),
           Expanded(
             child: Text(
               text,
@@ -509,10 +519,7 @@ class _LegalDocumentScreenState extends State<LegalDocumentScreen>
             ],
           ),
           const SizedBox(height: 6),
-          Text(
-            body,
-            style: const TextStyle(fontSize: 12, height: 1.45),
-          ),
+          Text(body, style: const TextStyle(fontSize: 12, height: 1.45)),
         ],
       ),
     );

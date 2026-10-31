@@ -42,8 +42,10 @@ class DesktopAccentColorHelper {
         'accent-color',
       ]);
       if (gsettingsResult.exitCode == 0) {
-        final raw =
-            gsettingsResult.stdout.toString().trim().replaceAll("'", "");
+        final raw = gsettingsResult.stdout.toString().trim().replaceAll(
+          "'",
+          "",
+        );
         if (_gnomeColors.containsKey(raw)) {
           return _gnomeColors[raw];
         }

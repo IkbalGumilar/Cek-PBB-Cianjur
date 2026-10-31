@@ -1,24 +1,17 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:csv/csv.dart';
 import 'package:flutter/foundation.dart';
 import 'app_storage.dart';
 import 'backup_crypto.dart';
 import 'blok_backup_scheduler.dart';
 import 'blok_record.dart';
+import 'dhkp/blok_csv_codec.dart';
 import 'dhkp_widget_sync_service.dart';
 import 'dkhp_package_helper.dart';
 import 'download_helper.dart';
 import 'pbb_client.dart';
 
-const _csvHeader = [
-  'Nama WP',
-  'NOP',
-  'Tahun Bayar',
-  'Tanggal Bayar',
-  'Jumlah PBB',
-];
 const _backupExtension = '.dkhp';
 
 /// Penyimpanan lokal "Buku Catatan Blok" — daftar NOP yang sudah terkonfirmasi
@@ -60,121 +53,15 @@ class BlokDataStore {
     }
 
     final content = file.readAsStringSync();
-    _cache = _parseCsv(content);
+    _cache = BlokCsvCodec.decodeDatabaseCsv(content);
     countNotifier.value = _cache!.length;
     DhkpWidgetSyncService.syncFromRecords(_cache!);
     return _cache!;
   }
 
-  List<BlokRecord> _parseCsv(String content) {
-    if (content.trim().isEmpty) return [];
-    final rows = Csv().decode(content);
-    final records = <BlokRecord>[];
-    for (final row in rows.skip(1)) {
-      // >= 4 (bukan == 5) supaya backup lama (sebelum kolom Jumlah PBB ada)
-      // tetap bisa diimpor.
-      if (row.length < 4) continue;
-      final nop = row[1].toString().trim();
-      if (nop.length != 18) continue;
-      final tanggalBayar = row[3].toString().trim();
-      final rawStatus = row.length > 5 ? row[5].toString().trim() : '';
-      final status = (tanggalBayar.isNotEmpty && tanggalBayar != '0')
-          ? 'Sudah Bayar'
-          : (rawStatus.isNotEmpty
-              ? rawStatus
-              : 'Belum Bayar');
-      final namaFoto = row.length > 6 && row[6].toString().trim().isNotEmpty
-          ? row[6].toString().trim()
-          : null;
-      final rawTargetPemda = row.length > 7 ? row[7].toString().trim().toLowerCase() : '';
-      final isTargetPemda = rawTargetPemda == '1' ||
-          rawTargetPemda == 'true' ||
-          rawTargetPemda == 'ya' ||
-          rawTargetPemda == 'yes' ||
-          rawTargetPemda.contains('target') ||
-          rawTargetPemda.contains('pemda');
-      final catatan = row.length > 8 ? row[8].toString().trim() : '';
-      final luasBumi = row.length > 9 ? row[9].toString().trim() : '';
-      final luasBangunan = row.length > 10 ? row[10].toString().trim() : '';
-      final njopBumi = row.length > 11 ? row[11].toString().trim() : '';
-      final njopBangunan = row.length > 12 ? row[12].toString().trim() : '';
-      final kecamatan = row.length > 13 && row[13].toString().trim().isNotEmpty
-          ? row[13].toString().trim()
-          : 'MANDE';
-      final kelurahan = row.length > 14 && row[14].toString().trim().isNotEmpty
-          ? row[14].toString().trim()
-          : 'BOBOJONG';
-      final alamatObjek = row.length > 15 ? row[15].toString().trim() : '';
-      final alamatWp = row.length > 16 ? row[16].toString().trim() : '';
-      final rtObjek = row.length > 17 ? row[17].toString().trim() : '';
-      records.add(
-        BlokRecord(
-          namaWajibPajak: row[0].toString().trim(),
-          nop: nop,
-          tahunBayar: row[2].toString().trim(),
-          tanggalBayar: row[3].toString().trim(),
-          jumlahPbb: row.length > 4 ? row[4].toString().trim() : '',
-          statusBayar: status,
-          namaFoto: namaFoto,
-          isTargetPemda: isTargetPemda,
-          catatan: catatan,
-          luasBumi: luasBumi,
-          luasBangunan: luasBangunan,
-          njopBumi: njopBumi,
-          njopBangunan: njopBangunan,
-          kecamatan: kecamatan,
-          kelurahan: kelurahan,
-          alamatObjek: alamatObjek,
-          alamatWp: alamatWp,
-          rtObjek: rtObjek,
-        ),
-      );
-    }
-    return records;
-  }
-
   Future<void> _persist(List<BlokRecord> records) async {
-    final rows = <List<String>>[
-      [
-        ..._csvHeader,
-        'Status Bayar',
-        'Foto',
-        'Target Pemda',
-        'Catatan',
-        'Luas Bumi',
-        'Luas Bangunan',
-        'NJOP Bumi',
-        'NJOP Bangunan',
-        'Kecamatan',
-        'Kelurahan',
-        'Alamat Objek',
-        'Alamat WP',
-        'RT Objek',
-      ],
-      for (final r in records)
-        [
-          r.namaWajibPajak,
-          r.nop,
-          r.tahunBayar,
-          r.tanggalBayar,
-          r.jumlahPbb,
-          r.statusBayar,
-          r.namaFoto ?? '',
-          r.isTargetPemda ? '1' : '0',
-          r.catatan,
-          r.luasBumi,
-          r.luasBangunan,
-          r.njopBumi,
-          r.njopBangunan,
-          r.kecamatan,
-          r.kelurahan,
-          r.alamatObjek,
-          r.alamatWp,
-          r.rtObjek,
-        ],
-    ];
     final file = await _dataFile();
-    file.writeAsStringSync(Csv().encode(rows));
+    file.writeAsStringSync(BlokCsvCodec.encodeRecords(records));
     _cache = records;
     countNotifier.value = records.length;
     DhkpWidgetSyncService.syncFromRecords(records);
@@ -232,15 +119,20 @@ class BlokDataStore {
       }
 
       final updatedStatus = isPaid ? 'Sudah Bayar' : existing.statusBayar;
-      final updatedTanggal = (result.tanggalBayar != null && result.tanggalBayar!.trim().isNotEmpty)
+      final updatedTanggal =
+          (result.tanggalBayar != null &&
+              result.tanggalBayar!.trim().isNotEmpty)
           ? result.tanggalBayar!.trim()
           : (isPaid && existing.tanggalBayar.isEmpty
-              ? DateTime.now().toIso8601String().substring(0, 10)
-              : existing.tanggalBayar);
-      final updatedJumlah = (result.jumlahPbb != null && result.jumlahPbb!.trim().isNotEmpty)
+                ? DateTime.now().toIso8601String().substring(0, 10)
+                : existing.tanggalBayar);
+      final updatedJumlah =
+          (result.jumlahPbb != null && result.jumlahPbb!.trim().isNotEmpty)
           ? result.jumlahPbb!.trim()
           : existing.jumlahPbb;
-      final updatedNama = (result.namaWajibPajak != null && result.namaWajibPajak!.trim().isNotEmpty)
+      final updatedNama =
+          (result.namaWajibPajak != null &&
+              result.namaWajibPajak!.trim().isNotEmpty)
           ? result.namaWajibPajak!.trim()
           : existing.namaWajibPajak;
 
@@ -266,7 +158,9 @@ class BlokDataStore {
         nop: nop,
         namaWajibPajak: result.namaWajibPajak ?? '',
         tahunBayar: tahun,
-        tanggalBayar: (result.tanggalBayar != null && result.tanggalBayar!.trim().isNotEmpty)
+        tanggalBayar:
+            (result.tanggalBayar != null &&
+                result.tanggalBayar!.trim().isNotEmpty)
             ? result.tanggalBayar!.trim()
             : DateTime.now().toIso8601String().substring(0, 10),
         jumlahPbb: result.jumlahPbb ?? '',
@@ -378,10 +272,7 @@ class BlokDataStore {
   }
 
   /// Alias kompatibilitas mundur untuk [exportDkhp].
-  Future<String> exportCsv({
-    String? fileName,
-    bool includePhotos = true,
-  }) =>
+  Future<String> exportCsv({String? fileName, bool includePhotos = true}) =>
       exportDkhp(fileName: fileName, includePhotos: includePhotos);
 
   /// Laporan data blok (opsional per tahun) untuk diunduh sebagai CSV —
@@ -389,20 +280,7 @@ class BlokDataStore {
   /// kolom Blok & Nomor Wilayah terpisah supaya langsung terbaca saat dibuka.
   Future<String> exportReportCsv({String? tahun}) async {
     final records = await forReport(tahun: tahun);
-    final rows = <List<String>>[
-      ['Blok', 'Nomor Wilayah', ..._csvHeader],
-      for (final r in records)
-        [
-          r.blok,
-          r.wilayah,
-          r.namaWajibPajak,
-          r.nop,
-          r.tahunBayar,
-          r.tanggalBayar,
-          r.jumlahPbb,
-        ],
-    ];
-    final content = Csv().encode(rows);
+    final content = BlokCsvCodec.encodeReportCsv(records);
     final tahunPart = (tahun == null || tahun.isEmpty) ? 'semua_tahun' : tahun;
     final fileName =
         'laporan_data_blok_${tahunPart}_${DateTime.now().millisecondsSinceEpoch}.csv';
@@ -434,33 +312,18 @@ class BlokDataStore {
     final decrypted = BackupCrypto.tryDecrypt(fileBytes, identities);
     final content = decrypted != null
         ? utf8.decode(decrypted)
-        : _legacyPlainCsv(fileBytes);
+        : BlokCsvCodec.tryDecodeLegacyPlainCsv(fileBytes);
     if (content == null) {
       throw const BackupAccessDeniedException(
         'Berkas ini bukan backup untuk wilayah/mode Anda saat ini (kunci tidak cocok) — impor dibatalkan.',
       );
     }
 
-    final imported = _parseCsv(content);
+    final imported = BlokCsvCodec.decodeDatabaseCsv(content);
     if (imported.isEmpty) return 0;
 
     await upsertAll(imported);
     return imported.length;
-  }
-
-  /// Backward-compat: backup lama (sebelum format terenkripsi ada) masih
-  /// berupa CSV polos tanpa penguncian wilayah — kalau berkas gagal
-  /// didekripsi sama sekali tapi isinya kebetulan teks CSV dengan header
-  /// yang dikenali, tetap diterima supaya backup lama tidak hilang begitu
-  /// saja.
-  String? _legacyPlainCsv(Uint8List fileBytes) {
-    try {
-      final text = utf8.decode(fileBytes);
-      if (!text.trimLeft().startsWith(_csvHeader.first)) return null;
-      return text;
-    } catch (_) {
-      return null;
-    }
   }
 }
 
@@ -476,4 +339,3 @@ class DhkpCheckUpdateOutcome {
     required this.record,
   });
 }
-

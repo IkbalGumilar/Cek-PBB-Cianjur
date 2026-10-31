@@ -1,197 +1,22 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
 import 'package:crypto/crypto.dart' as legacy_crypto;
-import 'package:cryptography/cryptography.dart';
 import 'package:csv/csv.dart';
-import 'package:encrypt/encrypt.dart' as enc;
 
 import 'app_storage.dart';
 import 'backup_crypto.dart';
 import 'backup_password_store.dart';
 import 'blok_data_store.dart';
 import 'blok_record.dart';
+import 'dhkp/blok_csv_codec.dart';
+import 'dhkp/dhkp_crypto.dart';
 import 'dusun_data.dart';
 import 'nop_helper.dart';
 
-/// Enkripsi paket `.dkhp` menggunakan PBKDF2-HMAC-SHA256 dan AES-256-GCM.
-class DhkpCrypto {
-  DhkpCrypto._();
-
-  static const magic = [0x44, 0x4B, 0x48, 0x50]; // Legacy "DKHP"
-  static const _passwordMagic = [0x44, 0x4B, 0x48, 0x32]; // "DKH2"
-  static const _saltLength = 16;
-  static const _nonceLength = 12;
-  static const _tagLength = 16;
-  static const _iterations = 600000;
-  static const _legacySecret = 'CekPBBCianjur-DKHP-Package-Secret-v1';
-  static final _pbkdf2 = Pbkdf2(
-    macAlgorithm: Hmac.sha256(),
-    iterations: _iterations,
-    bits: 256,
-  );
-  static final _aesGcm = AesGcm.with256bits();
-
-  static Future<Uint8List> encryptBytes(
-    Uint8List plainBytes, {
-    required String password,
-  }) async {
-    if (password.length < 8) {
-      throw const FormatException(
-        'Kata sandi backup harus terdiri dari minimal 8 karakter.',
-      );
-    }
-    final salt = Uint8List.fromList(
-      List<int>.generate(_saltLength, (_) => Random.secure().nextInt(256)),
-    );
-    final nonce = _aesGcm.newNonce();
-    final header = Uint8List.fromList([..._passwordMagic, ...salt, ...nonce]);
-    final key = await _pbkdf2.deriveKey(
-      secretKey: SecretKey(utf8.encode(password)),
-      nonce: salt,
-    );
-    final box = await _aesGcm.encrypt(
-      plainBytes,
-      secretKey: key,
-      nonce: nonce,
-      aad: header,
-    );
-    return Uint8List.fromList([...header, ...box.cipherText, ...box.mac.bytes]);
-  }
-
-  /// Enkripsi bawaan AES-256-CBC (`DKHP`) saat pengguna belum mengatur kata sandi kustom.
-  static Uint8List encryptLegacyBytes(Uint8List plainBytes) {
-    final digest = legacy_crypto.sha256.convert(utf8.encode(_legacySecret));
-    final key = enc.Key(Uint8List.fromList(digest.bytes));
-    final ivBytes = Uint8List.fromList(
-      List<int>.generate(16, (_) => Random.secure().nextInt(256)),
-    );
-    final iv = enc.IV(ivBytes);
-    final encrypter = enc.Encrypter(enc.AES(key, mode: enc.AESMode.cbc));
-    final encrypted = encrypter.encryptBytes(plainBytes, iv: iv);
-    return Uint8List.fromList([...magic, ...ivBytes, ...encrypted.bytes]);
-  }
-
-  static Future<Uint8List?> decryptBytes(
-    Uint8List fileBytes, {
-    String? password,
-  }) async {
-    if (_hasMagic(fileBytes, _passwordMagic)) {
-      final headerLength = _passwordMagic.length + _saltLength + _nonceLength;
-      if (fileBytes.length < headerLength + _tagLength) {
-        throw const FormatException('Berkas backup terenkripsi tidak lengkap.');
-      }
-      if (password == null || password.isEmpty) {
-        throw const DkhpPasswordException(
-          'Kata sandi diperlukan untuk membuka backup ini.',
-        );
-      }
-
-      final salt = fileBytes.sublist(
-        _passwordMagic.length,
-        _passwordMagic.length + _saltLength,
-      );
-      final nonce = fileBytes.sublist(
-        _passwordMagic.length + _saltLength,
-        headerLength,
-      );
-      final header = fileBytes.sublist(0, headerLength);
-      final body = fileBytes.sublist(headerLength);
-      final cipherText = body.sublist(0, body.length - _tagLength);
-      final tag = body.sublist(body.length - _tagLength);
-      final key = await _pbkdf2.deriveKey(
-        secretKey: SecretKey(utf8.encode(password)),
-        nonce: salt,
-      );
-      try {
-        final plainBytes = await _aesGcm.decrypt(
-          SecretBox(cipherText, nonce: nonce, mac: Mac(tag)),
-          secretKey: key,
-          aad: header,
-        );
-        return Uint8List.fromList(plainBytes);
-      } on SecretBoxAuthenticationError {
-        throw const DkhpPasswordException(
-          'Kata sandi salah atau berkas backup telah berubah/rusak.',
-        );
-      }
-    }
-
-    if (!_hasMagic(fileBytes, magic) || fileBytes.length < magic.length + 16) {
-      return null;
-    }
-    return _decryptLegacyCbc(fileBytes);
-  }
-
-  static Uint8List? _decryptLegacyCbc(Uint8List fileBytes) {
-    final digest = legacy_crypto.sha256.convert(utf8.encode(_legacySecret));
-    final key = enc.Key(Uint8List.fromList(digest.bytes));
-    final iv = enc.IV(fileBytes.sublist(magic.length, magic.length + 16));
-    final encrypted = enc.Encrypted(fileBytes.sublist(magic.length + 16));
-    try {
-      final encrypter = enc.Encrypter(enc.AES(key, mode: enc.AESMode.cbc));
-      return Uint8List.fromList(encrypter.decryptBytes(encrypted, iv: iv));
-    } catch (_) {
-      return null;
-    }
-  }
-
-  static bool _hasMagic(List<int> bytes, List<int> prefix) {
-    if (bytes.length < prefix.length) return false;
-    for (var i = 0; i < prefix.length; i++) {
-      if (bytes[i] != prefix[i]) return false;
-    }
-    return true;
-  }
-
-  static bool isEncrypted(List<int> bytes) {
-    return _hasMagic(bytes, magic) || _hasMagic(bytes, _passwordMagic);
-  }
-
-  static bool isPasswordProtected(List<int> bytes) =>
-      _hasMagic(bytes, _passwordMagic);
-
-  static Future<bool> isPasswordProtectedFile(String path) async {
-    final handle = await File(path).open();
-    try {
-      return isPasswordProtected(await handle.read(4));
-    } finally {
-      await handle.close();
-    }
-  }
-}
-
-class DkhpPasswordException implements Exception {
-  final String message;
-  const DkhpPasswordException(this.message);
-
-  @override
-  String toString() => message;
-}
-
-/// Dilempar ketika berkas cadangan perubahan tidak cocok dengan sidik jari DHKP dasar
-/// atau ketika berkas DHKP dasar belum dimuat di aplikasi.
-class DhkpBackupValidationException extends FormatException {
-  const DhkpBackupValidationException(super.message);
-}
-
-/// Hasil ekstraksi pratinjau berkas paket DHKP / DAT tanpa memodifikasi penyimpanan lokal.
-class DhkpPreviewResult {
-  final Map<String, dynamic>? manifest;
-  final List<String> headers;
-  final List<List<String>> rows;
-  final bool isEncrypted;
-
-  const DhkpPreviewResult({
-    this.manifest,
-    required this.headers,
-    required this.rows,
-    this.isEncrypted = false,
-  });
-}
+export 'dhkp/dhkp_crypto.dart';
 
 /// Pengelola berkas paket `.dkhp` / `.dhkp` — format arsip terenkripsi khusus aplikasi Cek PBB Cianjur.
 ///
@@ -202,6 +27,16 @@ class DhkpPreviewResult {
 class DhkpPackageHelper {
   static const extensionName = 'dkhp';
   static const altExtensionName = 'dhkp';
+
+  static const _fallbackBackupIdentities = [
+    'operator',
+    'unassigned',
+    'dusun-1',
+    'dusun-2',
+    'dusun-3',
+    'dusun-4',
+    'dusun-5',
+  ];
 
   /// Memeriksa apakah nama/path berkas merupakan paket DHKP (`.dkhp`, `.dhkp`, atau `.zip`).
   static bool isDkhpArchivePath(String path) {
@@ -216,12 +51,13 @@ class DhkpPackageHelper {
   /// Murni dihitung dari isi berkas DHKP (bukan ID perangkat/HP), sehingga tetap cocok 100%
   /// saat berpindah HP selama berkas DHKP dasarnya sama, dan otomatis menolak jika berkas DHKP berbeda.
   static String computeDhkpFingerprint(Iterable<BlokRecord> records) {
-    final sortedNops = records
-        .map((r) => r.nop.replaceAll(RegExp(r'[^0-9]'), ''))
-        .where((n) => n.length == 18)
-        .toSet()
-        .toList()
-      ..sort();
+    final sortedNops =
+        records
+            .map((r) => r.nop.replaceAll(RegExp(r'[^0-9]'), ''))
+            .where((n) => n.length == 18)
+            .toSet()
+            .toList()
+          ..sort();
     if (sortedNops.isEmpty) return '';
     return legacy_crypto.sha256
         .convert(utf8.encode(sortedNops.join('\n')))
@@ -241,6 +77,31 @@ class DhkpPackageHelper {
   /// Mengambil daftar baris DHKP yang mengalami perubahan saja.
   static List<BlokRecord> extractChangedRecords(Iterable<BlokRecord> records) {
     return records.where(isChangedRecord).toList();
+  }
+
+  static Future<Uint8List> _resolveArchiveZipBytes(
+    Uint8List rawBytes, {
+    String? password,
+    required String errorMsgOnNull,
+  }) async {
+    if (DhkpCrypto.isEncrypted(rawBytes)) {
+      final effectivePassword =
+          password ?? await BackupPasswordStore.instance.read();
+      final decrypted = await DhkpCrypto.decryptBytes(
+        rawBytes,
+        password: effectivePassword,
+      );
+      if (decrypted == null) {
+        throw FormatException(errorMsgOnNull);
+      }
+      return decrypted;
+    }
+
+    final cpbbDecrypted = BackupCrypto.tryDecrypt(
+      rawBytes,
+      _fallbackBackupIdentities,
+    );
+    return cpbbDecrypted ?? rawBytes;
   }
 
   /// Membaca metadata `manifest.json` dari berkas `.dkhp` (termasuk `dhkpFingerprint`) jika ada.
@@ -290,35 +151,13 @@ class DhkpPackageHelper {
     }
 
     final rawBytes = await file.readAsBytes();
-    Uint8List zipBytes;
     final isEncrypted = DhkpCrypto.isEncrypted(rawBytes);
-
-    if (isEncrypted) {
-      final effectivePass =
-          password ?? await BackupPasswordStore.instance.read();
-      final decrypted = await DhkpCrypto.decryptBytes(
-        rawBytes,
-        password: effectivePass,
-      );
-      if (decrypted == null) {
-        throw const FormatException(
+    final zipBytes = await _resolveArchiveZipBytes(
+      rawBytes,
+      password: password,
+      errorMsgOnNull:
           'Gagal mendekripsi berkas: format atau kunci enkripsi tidak cocok.',
-        );
-      }
-      zipBytes = decrypted;
-    } else {
-      final backupIdentities = [
-        'operator',
-        'unassigned',
-        for (var i = 1; i <= 5; i++) 'dusun-$i',
-      ];
-      final cpbbDecrypted = BackupCrypto.tryDecrypt(rawBytes, backupIdentities);
-      if (cpbbDecrypted != null) {
-        zipBytes = cpbbDecrypted;
-      } else {
-        zipBytes = rawBytes;
-      }
-    }
+    );
 
     final archive = ZipDecoder().decodeBytes(zipBytes);
     Map<String, dynamic>? manifest;
@@ -428,30 +267,14 @@ class DhkpPackageHelper {
     String? customFileName,
   }) async {
     final dir = await photosDirectory();
-    final cleanNop = nop.replaceAll(RegExp(r'[^0-9]'), '');
     var cached = _cachedPhotoNames;
     cached ??= await refreshPhotoNamesCache();
-
-    if (customFileName != null && customFileName.isNotEmpty) {
-      if (cached.contains(customFileName.toLowerCase())) {
-        return File('${dir.path}/$customFileName');
-      }
-    }
-
-    final candidates = [
-      '$cleanNop.jpg',
-      '$cleanNop.jpeg',
-      '$cleanNop.png',
-      '${nopBlok(cleanNop)}_${nopWilayah(cleanNop)}.jpg',
-      '${nopBlok(cleanNop)}_${nopWilayah(cleanNop)}.png',
-    ];
-
-    for (final name in candidates) {
-      if (cached.contains(name.toLowerCase())) {
-        return File('${dir.path}/$name');
-      }
-    }
-    return null;
+    return findPhotoForNopSync(
+      nop,
+      customFileName: customFileName,
+      photosDir: dir,
+      cachedNames: cached,
+    );
   }
 
   /// Versi sinkron dari pencarian foto yang memakai cache set nama file di memori.
@@ -488,10 +311,6 @@ class DhkpPackageHelper {
 
   /// Buka dan ekstrak berkas `.dkhp` (terenkripsi maupun tidak) atau `.zip`, lalu simpan datanya ke
   /// [BlokDataStore] dan foto-fotonya ke folder lokal aplikasi.
-  ///
-  /// Bila berkas merupakan cadangan perubahan (`manifest.json` dengan `isDeltaOnly == true` atau
-  /// [requireBaseDhkp] bernilai `true`), aplikasi memvalidasi bahwa sidik jari DHKP (`dhkpFingerprint`)
-  /// cocok dengan data DHKP yang sudah ada di aplikasi.
   static Future<List<BlokRecord>> unpackDkhp(
     String filePath, {
     String? password,
@@ -503,36 +322,12 @@ class DhkpPackageHelper {
     }
 
     final rawBytes = await file.readAsBytes();
-    Uint8List zipBytes;
-
-    if (DhkpCrypto.isEncrypted(rawBytes)) {
-      final effectivePassword =
-          password ?? await BackupPasswordStore.instance.read();
-      final decrypted = await DhkpCrypto.decryptBytes(
-        rawBytes,
-        password: effectivePassword,
-      );
-      if (decrypted == null) {
-        throw const FormatException(
+    final zipBytes = await _resolveArchiveZipBytes(
+      rawBytes,
+      password: password,
+      errorMsgOnNull:
           'Gagal mendekripsi berkas .dkhp: Kunci atau format enkripsi tidak cocok.',
-        );
-      }
-      zipBytes = decrypted;
-    } else {
-      // Periksa jika berkas dibungkus dengan BackupCrypto lama
-      final backupIdentities = [
-        'operator',
-        'unassigned',
-        for (var i = 1; i <= 5; i++) 'dusun-$i',
-      ];
-      final cpbbDecrypted = BackupCrypto.tryDecrypt(rawBytes, backupIdentities);
-      if (cpbbDecrypted != null) {
-        zipBytes = cpbbDecrypted;
-      } else {
-        // Berkas ZIP standar / tidak terenkripsi
-        zipBytes = rawBytes;
-      }
-    }
+    );
 
     final archive = ZipDecoder().decodeBytes(zipBytes);
     final photosDir = await photosDirectory();
@@ -578,7 +373,9 @@ class DhkpPackageHelper {
             }
           }
           if (manifest['scope'] is Map) {
-            final scopeMap = Map<String, dynamic>.from(manifest['scope'] as Map);
+            final scopeMap = Map<String, dynamic>.from(
+              manifest['scope'] as Map,
+            );
             await DusunData.instance.setScope(DusunScope.fromJson(scopeMap));
           }
         }
@@ -588,142 +385,29 @@ class DhkpPackageHelper {
     final records = <BlokRecord>[];
     final currentYear = '${DateTime.now().year}';
 
-    if (dataFile != null) {
+    if (dataFile != null && dataFile.name.toLowerCase().endsWith('.csv')) {
       final content = utf8.decode(dataFile.content as List<int>);
-      if (dataFile.name.toLowerCase().endsWith('.csv')) {
-        final rows = Csv().decode(content);
-        for (final row in rows.skip(1)) {
-          if (row.length < 2) continue;
-          final rawNop = row[1].toString().trim();
-          final nopDigits = rawNop.replaceAll(RegExp(r'[^0-9]'), '');
-          if (nopDigits.length != 18) continue;
-
-          final nama = row[0].toString().trim();
-          final tahun = row.length > 2 && row[2].toString().trim().isNotEmpty
-              ? row[2].toString().trim()
-              : currentYear;
-          final tanggal = row.length > 3 ? row[3].toString().trim() : '';
-          final pokok = row.length > 4 ? row[4].toString().trim() : '';
-          final rawStatus = row.length > 5 ? row[5].toString().trim() : '';
-          final status = (tanggal.isNotEmpty && tanggal != '0')
-              ? 'Sudah Bayar'
-              : (rawStatus.isNotEmpty
-                  ? rawStatus
-                  : 'Belum Bayar');
-          final namaFoto = row.length > 6 && row[6].toString().trim().isNotEmpty
-              ? row[6].toString().trim()
-              : null;
-          final rawTargetPemda = row.length > 7
-              ? row[7].toString().trim().toLowerCase()
-              : '';
-          final pokokDigits = pokok.replaceAll(RegExp(r'[^0-9]'), '');
-          final pokokVal = int.tryParse(pokokDigits) ?? 0;
-          final isTargetPemda =
-              rawTargetPemda == '1' ||
-              rawTargetPemda == 'true' ||
-              rawTargetPemda == 'ya' ||
-              rawTargetPemda == 'yes' ||
-              rawTargetPemda.contains('target') ||
-              rawTargetPemda.contains('pemda') ||
-              (rawTargetPemda.isEmpty && pokokVal >= 1500000);
-          final catatan = row.length > 8 ? row[8].toString().trim() : '';
-          final luasBumi = row.length > 9 ? row[9].toString().trim() : '';
-          final luasBangunan = row.length > 10 ? row[10].toString().trim() : '';
-          final njopBumi = row.length > 11 ? row[11].toString().trim() : '';
-          final njopBangunan = row.length > 12 ? row[12].toString().trim() : '';
-          final kecamatan =
-              row.length > 13 && row[13].toString().trim().isNotEmpty
-              ? row[13].toString().trim()
-              : 'MANDE';
-          final kelurahan =
-              row.length > 14 && row[14].toString().trim().isNotEmpty
-              ? row[14].toString().trim()
-              : 'BOBOJONG';
-          final alamatObjek = row.length > 15 ? row[15].toString().trim() : '';
-          final alamatWp = row.length > 16 ? row[16].toString().trim() : '';
-          final rtObjek = row.length > 17 ? row[17].toString().trim() : '';
-
-          records.add(
-            BlokRecord(
-              namaWajibPajak: nama.isEmpty
-                  ? 'WP ${nopBlok(nopDigits)}/${nopWilayah(nopDigits)}'
-                  : nama,
-              nop: nopDigits,
-              tahunBayar: tahun,
-              tanggalBayar: tanggal,
-              jumlahPbb: pokok,
-              statusBayar: status,
-              namaFoto: namaFoto,
-              isTargetPemda: isTargetPemda,
-              catatan: catatan,
-              luasBumi: luasBumi,
-              luasBangunan: luasBangunan,
-              njopBumi: njopBumi,
-              njopBangunan: njopBangunan,
-              kecamatan: kecamatan,
-              kelurahan: kelurahan,
-              alamatObjek: alamatObjek,
-              alamatWp: alamatWp,
-              rtObjek: rtObjek,
-            ),
-          );
-        }
-      }
+      records.addAll(
+        BlokCsvCodec.decodeArchiveCsv(content, fallbackYear: currentYear),
+      );
     }
 
     // Validasi kecocokan berkas DHKP dasar sebelum mengekstrak foto & menerapkan perubahan
     final existingRecords = await BlokDataStore.instance.loadAll();
     final isDeltaArchive =
         manifest != null && (manifest['isDeltaOnly'] == true);
-    final isDatReport = filePath.toLowerCase().endsWith('.dat') ||
+    final isDatReport =
+        filePath.toLowerCase().endsWith('.dat') ||
         (manifest != null && manifest['format'] == 'laporan_dat_v1');
 
-    if (isDatReport) {
-      final incomingBloks = <String>{};
-      for (final r in records) {
-        final b = int.tryParse(r.blok)?.toString() ?? r.blok.replaceAll(RegExp(r'[^0-9]'), '');
-        if (b.isNotEmpty) incomingBloks.add(b);
-      }
-      if (manifest != null && manifest['changes'] is List) {
-        for (final item in manifest['changes'] as List) {
-          if (item is Map) {
-            final rawB = (item['blok'] ?? '').toString();
-            final b = int.tryParse(rawB)?.toString() ?? rawB.replaceAll(RegExp(r'[^0-9]'), '');
-            if (b.isNotEmpty) incomingBloks.add(b);
-          }
-        }
-      }
-
-      final localBloks = existingRecords
-          .map((r) => int.tryParse(r.blok)?.toString() ?? r.blok.replaceAll(RegExp(r'[^0-9]'), ''))
-          .where((b) => b.isNotEmpty)
-          .toSet();
-
-      if (existingRecords.isEmpty ||
-          incomingBloks.isEmpty ||
-          !incomingBloks.every((b) => localBloks.contains(b))) {
-        throw const DhkpBackupValidationException('Data tidak sesuai');
-      }
-    } else if (requireBaseDhkp || isDeltaArchive) {
-      if (requireBaseDhkp && existingRecords.isEmpty) {
-        throw const DhkpBackupValidationException(
-          'Berkas DHKP dasar belum dimuat. Muat berkas DHKP terlebih dahulu sebelum menggunakan berkas cadangan perubahan.',
-        );
-      }
-
-      if (existingRecords.isNotEmpty && manifest != null) {
-        final backupFingerprint =
-            (manifest['dhkpFingerprint'] as String?)?.trim() ?? '';
-        final localFingerprint = computeDhkpFingerprint(existingRecords);
-        if (backupFingerprint.isNotEmpty &&
-            localFingerprint.isNotEmpty &&
-            localFingerprint != backupFingerprint) {
-          throw const DhkpBackupValidationException(
-            'Berkas cadangan ditolak: Data perubahan ini berasal dari berkas DHKP yang berbeda dengan data DHKP di aplikasi.',
-          );
-        }
-      }
-    }
+    _validateArchiveCompatibility(
+      isDatReport: isDatReport,
+      requireBaseDhkp: requireBaseDhkp,
+      isDeltaArchive: isDeltaArchive,
+      records: records,
+      existingRecords: existingRecords,
+      manifest: manifest,
+    );
 
     final existingByNop = <String, BlokRecord>{
       for (final r in existingRecords)
@@ -737,88 +421,15 @@ class DhkpPackageHelper {
 
     // Kalau di dalam arsip tidak ada data.csv tapi ada manifest changes (hanya blok & nomor)
     if (records.isEmpty && manifest != null && manifest['changes'] is List) {
-      final changesList = manifest['changes'] as List;
-      for (final item in changesList) {
-        if (item is! Map) continue;
-        final rawBlok = (item['blok'] ?? '')
-            .toString()
-            .trim()
-            .replaceAll(RegExp(r'[^0-9]'), '');
-        final rawNomor = (item['nomor'] ?? '')
-            .toString()
-            .trim()
-            .replaceAll(RegExp(r'[^0-9]'), '');
-        final rawNop = (item['nop'] ?? '')
-            .toString()
-            .trim()
-            .replaceAll(RegExp(r'[^0-9]'), '');
-
-        BlokRecord? baseRecord;
-        if (rawBlok.isNotEmpty && rawNomor.isNotEmpty) {
-          final key = '${rawBlok.padLeft(3, '0')}_${rawNomor.padLeft(4, '0')}';
-          baseRecord = existingByBlokNomor[key];
-        }
-        if (baseRecord == null && rawNop.length == 18) {
-          baseRecord = existingByNop[rawNop];
-        }
-
-        if (baseRecord != null) {
-          final tglStr = (item['tanggalBayar'] ?? baseRecord.tanggalBayar).toString().trim();
-          final rawSt = (item['statusBayar'] ?? baseRecord.statusBayar).toString().trim();
-          final effectiveSt = (tglStr.isNotEmpty && tglStr != '0')
-              ? 'Sudah Bayar'
-              : (rawSt.isNotEmpty ? rawSt : 'Belum Bayar');
-          records.add(
-            baseRecord.copyWith(
-              tahunBayar: (item['tahunBayar'] ?? baseRecord.tahunBayar).toString(),
-              tanggalBayar: tglStr,
-              statusBayar: effectiveSt,
-              namaFoto: item['namaFoto']?.toString() ?? baseRecord.namaFoto,
-              isTargetPemda: item['isTargetPemda'] is bool
-                  ? item['isTargetPemda'] as bool
-                  : baseRecord.isTargetPemda,
-              catatan: (item['catatan'] ?? baseRecord.catatan).toString(),
-            ),
-          );
-          continue;
-        }
-
-        // Fallback apabila berkas DHKP dasar memiliki prefix desa atau kompatibilitas mundur
-        String resolvedNop = rawNop;
-        if (resolvedNop.length != 18 &&
-            rawBlok.isNotEmpty &&
-            rawNomor.isNotEmpty &&
-            existingRecords.isNotEmpty) {
-          final sampleNop = existingRecords.first.nop.replaceAll(
-            RegExp(r'[^0-9]'),
-            '',
-          );
-          if (sampleNop.length == 18) {
-            final prefix = sampleNop.substring(0, 10);
-            final suffix = sampleNop.substring(17);
-            resolvedNop =
-                '$prefix${rawBlok.padLeft(3, '0')}${rawNomor.padLeft(4, '0')}$suffix';
-          }
-        }
-        if (resolvedNop.length != 18) continue;
-
-        records.add(
-          BlokRecord(
-            namaWajibPajak:
-                (item['namaWajibPajak'] ??
-                        'WP ${nopBlok(resolvedNop)}/${nopWilayah(resolvedNop)}')
-                    .toString(),
-            nop: resolvedNop,
-            tahunBayar: (item['tahunBayar'] ?? currentYear).toString(),
-            tanggalBayar: (item['tanggalBayar'] ?? '').toString(),
-            jumlahPbb: (item['jumlahPbb'] ?? '').toString(),
-            statusBayar: (item['statusBayar'] ?? 'Belum Bayar').toString(),
-            namaFoto: item['namaFoto']?.toString(),
-            isTargetPemda: item['isTargetPemda'] == true,
-            catatan: (item['catatan'] ?? '').toString(),
-          ),
-        );
-      }
+      records.addAll(
+        _recordsFromManifestChanges(
+          changesList: manifest['changes'] as List,
+          existingRecords: existingRecords,
+          existingByNop: existingByNop,
+          existingByBlokNomor: existingByBlokNomor,
+          currentYear: currentYear,
+        ),
+      );
     }
 
     // Kalau di dalam arsip tidak ada data.csv tapi ada kumpulan foto dengan nama NOP
@@ -857,26 +468,7 @@ class DhkpPackageHelper {
       final cleanNop = r.nop.replaceAll(RegExp(r'[^0-9]'), '');
       final base = existingByNop[cleanNop];
       if (base != null && (isDeltaArchive || isDatReport)) {
-        mergedRecords.add(
-          base.copyWith(
-            statusBayar: r.statusBayar,
-            tanggalBayar: r.tanggalBayar.isNotEmpty ? r.tanggalBayar : base.tanggalBayar,
-            catatan: r.catatan.isNotEmpty ? r.catatan : base.catatan,
-            namaFoto: (r.namaFoto != null && r.namaFoto!.isNotEmpty) ? r.namaFoto : base.namaFoto,
-            isTargetPemda: r.isTargetPemda,
-            namaWajibPajak: (r.namaWajibPajak.isNotEmpty && !r.namaWajibPajak.startsWith('WP '))
-                ? r.namaWajibPajak
-                : base.namaWajibPajak,
-            alamatObjek: r.alamatObjek.isNotEmpty ? r.alamatObjek : base.alamatObjek,
-            alamatWp: r.alamatWp.isNotEmpty ? r.alamatWp : base.alamatWp,
-            rtObjek: r.rtObjek.isNotEmpty ? r.rtObjek : base.rtObjek,
-            luasBumi: r.luasBumi.isNotEmpty ? r.luasBumi : base.luasBumi,
-            luasBangunan: r.luasBangunan.isNotEmpty ? r.luasBangunan : base.luasBangunan,
-            njopBumi: r.njopBumi.isNotEmpty ? r.njopBumi : base.njopBumi,
-            njopBangunan: r.njopBangunan.isNotEmpty ? r.njopBangunan : base.njopBangunan,
-            jumlahPbb: r.jumlahPbb.isNotEmpty ? r.jumlahPbb : base.jumlahPbb,
-          ),
-        );
+        mergedRecords.add(_mergeDeltaWithBase(r, base));
       } else {
         mergedRecords.add(r);
       }
@@ -889,11 +481,197 @@ class DhkpPackageHelper {
     return mergedRecords;
   }
 
+  static void _validateArchiveCompatibility({
+    required bool isDatReport,
+    required bool requireBaseDhkp,
+    required bool isDeltaArchive,
+    required List<BlokRecord> records,
+    required List<BlokRecord> existingRecords,
+    required Map<String, dynamic>? manifest,
+  }) {
+    if (isDatReport) {
+      final incomingBloks = <String>{};
+      for (final r in records) {
+        final b =
+            int.tryParse(r.blok)?.toString() ??
+            r.blok.replaceAll(RegExp(r'[^0-9]'), '');
+        if (b.isNotEmpty) incomingBloks.add(b);
+      }
+      if (manifest != null && manifest['changes'] is List) {
+        for (final item in manifest['changes'] as List) {
+          if (item is Map) {
+            final rawB = (item['blok'] ?? '').toString();
+            final b =
+                int.tryParse(rawB)?.toString() ??
+                rawB.replaceAll(RegExp(r'[^0-9]'), '');
+            if (b.isNotEmpty) incomingBloks.add(b);
+          }
+        }
+      }
+
+      final localBloks = existingRecords
+          .map(
+            (r) =>
+                int.tryParse(r.blok)?.toString() ??
+                r.blok.replaceAll(RegExp(r'[^0-9]'), ''),
+          )
+          .where((b) => b.isNotEmpty)
+          .toSet();
+
+      if (existingRecords.isEmpty ||
+          incomingBloks.isEmpty ||
+          !incomingBloks.every((b) => localBloks.contains(b))) {
+        throw const DhkpBackupValidationException('Data tidak sesuai');
+      }
+    } else if (requireBaseDhkp || isDeltaArchive) {
+      if (requireBaseDhkp && existingRecords.isEmpty) {
+        throw const DhkpBackupValidationException(
+          'Berkas DHKP dasar belum dimuat. Muat berkas DHKP terlebih dahulu sebelum menggunakan berkas cadangan perubahan.',
+        );
+      }
+
+      if (existingRecords.isNotEmpty && manifest != null) {
+        final backupFingerprint =
+            (manifest['dhkpFingerprint'] as String?)?.trim() ?? '';
+        final localFingerprint = computeDhkpFingerprint(existingRecords);
+        if (backupFingerprint.isNotEmpty &&
+            localFingerprint.isNotEmpty &&
+            localFingerprint != backupFingerprint) {
+          throw const DhkpBackupValidationException(
+            'Berkas cadangan ditolak: Data perubahan ini berasal dari berkas DHKP yang berbeda dengan data DHKP di aplikasi.',
+          );
+        }
+      }
+    }
+  }
+
+  static List<BlokRecord> _recordsFromManifestChanges({
+    required List<dynamic> changesList,
+    required List<BlokRecord> existingRecords,
+    required Map<String, BlokRecord> existingByNop,
+    required Map<String, BlokRecord> existingByBlokNomor,
+    required String currentYear,
+  }) {
+    final records = <BlokRecord>[];
+    for (final item in changesList) {
+      if (item is! Map) continue;
+      final rawBlok = (item['blok'] ?? '').toString().trim().replaceAll(
+        RegExp(r'[^0-9]'),
+        '',
+      );
+      final rawNomor = (item['nomor'] ?? '').toString().trim().replaceAll(
+        RegExp(r'[^0-9]'),
+        '',
+      );
+      final rawNop = (item['nop'] ?? '').toString().trim().replaceAll(
+        RegExp(r'[^0-9]'),
+        '',
+      );
+
+      BlokRecord? baseRecord;
+      if (rawBlok.isNotEmpty && rawNomor.isNotEmpty) {
+        final key = '${rawBlok.padLeft(3, '0')}_${rawNomor.padLeft(4, '0')}';
+        baseRecord = existingByBlokNomor[key];
+      }
+      if (baseRecord == null && rawNop.length == 18) {
+        baseRecord = existingByNop[rawNop];
+      }
+
+      if (baseRecord != null) {
+        final tglStr = (item['tanggalBayar'] ?? baseRecord.tanggalBayar)
+            .toString()
+            .trim();
+        final rawSt = (item['statusBayar'] ?? baseRecord.statusBayar)
+            .toString()
+            .trim();
+        final effectiveSt = (tglStr.isNotEmpty && tglStr != '0')
+            ? 'Sudah Bayar'
+            : (rawSt.isNotEmpty ? rawSt : 'Belum Bayar');
+        records.add(
+          baseRecord.copyWith(
+            tahunBayar: (item['tahunBayar'] ?? baseRecord.tahunBayar)
+                .toString(),
+            tanggalBayar: tglStr,
+            statusBayar: effectiveSt,
+            namaFoto: item['namaFoto']?.toString() ?? baseRecord.namaFoto,
+            isTargetPemda: item['isTargetPemda'] is bool
+                ? item['isTargetPemda'] as bool
+                : baseRecord.isTargetPemda,
+            catatan: (item['catatan'] ?? baseRecord.catatan).toString(),
+          ),
+        );
+        continue;
+      }
+
+      String resolvedNop = rawNop;
+      if (resolvedNop.length != 18 &&
+          rawBlok.isNotEmpty &&
+          rawNomor.isNotEmpty &&
+          existingRecords.isNotEmpty) {
+        final sampleNop = existingRecords.first.nop.replaceAll(
+          RegExp(r'[^0-9]'),
+          '',
+        );
+        if (sampleNop.length == 18) {
+          final prefix = sampleNop.substring(0, 10);
+          final suffix = sampleNop.substring(17);
+          resolvedNop =
+              '$prefix${rawBlok.padLeft(3, '0')}${rawNomor.padLeft(4, '0')}$suffix';
+        }
+      }
+      if (resolvedNop.length != 18) continue;
+
+      records.add(
+        BlokRecord(
+          namaWajibPajak:
+              (item['namaWajibPajak'] ??
+                      'WP ${nopBlok(resolvedNop)}/${nopWilayah(resolvedNop)}')
+                  .toString(),
+          nop: resolvedNop,
+          tahunBayar: (item['tahunBayar'] ?? currentYear).toString(),
+          tanggalBayar: (item['tanggalBayar'] ?? '').toString(),
+          jumlahPbb: (item['jumlahPbb'] ?? '').toString(),
+          statusBayar: (item['statusBayar'] ?? 'Belum Bayar').toString(),
+          namaFoto: item['namaFoto']?.toString(),
+          isTargetPemda: item['isTargetPemda'] == true,
+          catatan: (item['catatan'] ?? '').toString(),
+        ),
+      );
+    }
+    return records;
+  }
+
+  static BlokRecord _mergeDeltaWithBase(BlokRecord r, BlokRecord base) {
+    return base.copyWith(
+      statusBayar: r.statusBayar,
+      tanggalBayar: r.tanggalBayar.isNotEmpty
+          ? r.tanggalBayar
+          : base.tanggalBayar,
+      catatan: r.catatan.isNotEmpty ? r.catatan : base.catatan,
+      namaFoto: (r.namaFoto != null && r.namaFoto!.isNotEmpty)
+          ? r.namaFoto
+          : base.namaFoto,
+      isTargetPemda: r.isTargetPemda,
+      namaWajibPajak:
+          (r.namaWajibPajak.isNotEmpty && !r.namaWajibPajak.startsWith('WP '))
+          ? r.namaWajibPajak
+          : base.namaWajibPajak,
+      alamatObjek: r.alamatObjek.isNotEmpty ? r.alamatObjek : base.alamatObjek,
+      alamatWp: r.alamatWp.isNotEmpty ? r.alamatWp : base.alamatWp,
+      rtObjek: r.rtObjek.isNotEmpty ? r.rtObjek : base.rtObjek,
+      luasBumi: r.luasBumi.isNotEmpty ? r.luasBumi : base.luasBumi,
+      luasBangunan: r.luasBangunan.isNotEmpty
+          ? r.luasBangunan
+          : base.luasBangunan,
+      njopBumi: r.njopBumi.isNotEmpty ? r.njopBumi : base.njopBumi,
+      njopBangunan: r.njopBangunan.isNotEmpty
+          ? r.njopBangunan
+          : base.njopBangunan,
+      jumlahPbb: r.jumlahPbb.isNotEmpty ? r.jumlahPbb : base.jumlahPbb,
+    );
+  }
+
   /// Membungkus data perubahan DHKP dan gambar dokumentasi menjadi paket terenkripsi `.dkhp`.
-  ///
-  /// Secara bawaan menggunakan enkripsi sederhana otomatis (`DhkpCrypto.encryptLegacyBytes`)
-  /// tanpa memerlukan kata sandi manual, serta menyematkan sidik jari berkas DHKP dasar
-  /// (`dhkpFingerprint`) di dalam `manifest.json`.
   static Future<File> packDkhp({
     required String outputPath,
     required List<BlokRecord> records,
@@ -915,7 +693,7 @@ class DhkpPackageHelper {
         ? changedList
         : records;
 
-    // 1. Buat manifest.json dengan sidik jari berkas DHKP dasar, daftar dusun dinamis, pembatas wilayah (scope), dan daftar perubahan
+    // 1. Buat manifest.json
     if (effectiveBase.isNotEmpty || isDatReport) {
       final effectiveDusuns = dusuns ?? DusunData.instance.allDusuns;
       final effectiveScope = scope ?? DusunData.instance.scope;
@@ -951,52 +729,8 @@ class DhkpPackageHelper {
     }
 
     // 2. Buat data.csv jika bukan deltaOnly atau jika berkas merupakan laporan .dat.
-    // Saat deltaOnly == true (bukan .dat), berkas cadangan tidak menyimpan rincian objek.
     if (!deltaOnly || isDatReport) {
-      final csvRows = <List<String>>[
-        [
-          'Nama WP',
-          'NOP',
-          'Tahun Bayar',
-          'Tanggal Bayar',
-          'Jumlah PBB',
-          'Status Bayar',
-          'Foto',
-          'Target Pemda',
-          'Catatan',
-          'Luas Bumi',
-          'Luas Bangunan',
-          'NJOP Bumi',
-          'NJOP Bangunan',
-          'Kecamatan',
-          'Kelurahan',
-          'Alamat Objek',
-          'Alamat WP',
-          'RT Objek',
-        ],
-        for (final r in targetRecords)
-          [
-            r.namaWajibPajak,
-            r.nop,
-            r.tahunBayar,
-            r.tanggalBayar,
-            r.jumlahPbb,
-            r.statusBayar,
-            r.namaFoto ?? '',
-            r.isTargetPemda ? '1' : '0',
-            r.catatan,
-            r.luasBumi,
-            r.luasBangunan,
-            r.njopBumi,
-            r.njopBangunan,
-            r.kecamatan,
-            r.kelurahan,
-            r.alamatObjek,
-            r.alamatWp,
-            r.rtObjek,
-          ],
-      ];
-      final csvString = Csv().encode(csvRows);
+      final csvString = BlokCsvCodec.encodeRecords(targetRecords);
       final csvBytes = utf8.encode(csvString);
       archive.addFile(ArchiveFile('data.csv', csvBytes.length, csvBytes));
     }
@@ -1035,9 +769,7 @@ class DhkpPackageHelper {
         password: explicitPassword,
       );
     } else {
-      outputBytes = DhkpCrypto.encryptLegacyBytes(
-        Uint8List.fromList(zipBytes),
-      );
+      outputBytes = DhkpCrypto.encryptLegacyBytes(Uint8List.fromList(zipBytes));
     }
 
     final file = File(outputPath);

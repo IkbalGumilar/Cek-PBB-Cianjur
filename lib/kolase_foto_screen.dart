@@ -25,11 +25,7 @@ class KolaseFotoScreen extends StatefulWidget {
   final String? initialBlok;
   final List<String> bloks;
 
-  const KolaseFotoScreen({
-    super.key,
-    this.initialBlok,
-    this.bloks = const [],
-  });
+  const KolaseFotoScreen({super.key, this.initialBlok, this.bloks = const []});
 
   @override
   State<KolaseFotoScreen> createState() => _KolaseFotoScreenState();
@@ -51,7 +47,8 @@ class _KolaseFotoScreenState extends State<KolaseFotoScreen> {
   @override
   void initState() {
     super.initState();
-    _selectedBlok = (widget.initialBlok == null ||
+    _selectedBlok =
+        (widget.initialBlok == null ||
             widget.initialBlok!.isEmpty ||
             widget.initialBlok == 'Semua' ||
             widget.initialBlok == 'Semua Blok')
@@ -116,13 +113,14 @@ class _KolaseFotoScreenState extends State<KolaseFotoScreen> {
     }
   }
 
-
-
   /// Nama berkas PDF yang rapi
   String get _pdfFileName {
-    final cleanBlok = _selectedBlok == 'Semua' ? 'semua_wilayah' : 'blok_$_selectedBlok';
+    final cleanBlok = _selectedBlok == 'Semua'
+        ? 'semua_wilayah'
+        : 'blok_$_selectedBlok';
     final now = DateTime.now();
-    final stamp = '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}_${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}';
+    final stamp =
+        '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}_${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}';
     return 'Dokumentasi_SPPT_${cleanBlok}_$stamp.pdf';
   }
 
@@ -139,7 +137,9 @@ class _KolaseFotoScreenState extends State<KolaseFotoScreen> {
   Future<void> _bukaPratinjauLengkap() async {
     if (_photoBytes.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Belum ada foto dokumentasi untuk dicetak.')),
+        const SnackBar(
+          content: Text('Belum ada foto dokumentasi untuk dicetak.'),
+        ),
       );
       return;
     }
@@ -154,17 +154,15 @@ class _KolaseFotoScreenState extends State<KolaseFotoScreen> {
       await Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => DocumentPreviewScreen(
-            pdfBytes: pdfBytes,
-            fileName: _pdfFileName,
-          ),
+          builder: (_) =>
+              DocumentPreviewScreen(pdfBytes: pdfBytes, fileName: _pdfFileName),
         ),
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal membuat dokumen PDF: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Gagal membuat dokumen PDF: $e')));
     } finally {
       if (mounted) setState(() => _busyExport = false);
     }
@@ -174,7 +172,9 @@ class _KolaseFotoScreenState extends State<KolaseFotoScreen> {
   Future<void> _simpanKeMedia() async {
     if (_photoBytes.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Belum ada foto dokumentasi untuk disimpan.')),
+        const SnackBar(
+          content: Text('Belum ada foto dokumentasi untuk disimpan.'),
+        ),
       );
       return;
     }
@@ -211,7 +211,9 @@ class _KolaseFotoScreenState extends State<KolaseFotoScreen> {
   Future<void> _cetakLangsung() async {
     if (_photoBytes.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Belum ada foto dokumentasi untuk dicetak.')),
+        const SnackBar(
+          content: Text('Belum ada foto dokumentasi untuk dicetak.'),
+        ),
       );
       return;
     }
@@ -228,9 +230,9 @@ class _KolaseFotoScreenState extends State<KolaseFotoScreen> {
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal membuka printer: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Gagal membuka printer: $e')));
       }
     } finally {
       if (mounted) setState(() => _busyExport = false);
@@ -241,7 +243,9 @@ class _KolaseFotoScreenState extends State<KolaseFotoScreen> {
   Future<void> _bagikanPdf() async {
     if (_photoBytes.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Belum ada foto dokumentasi untuk dibagikan.')),
+        const SnackBar(
+          content: Text('Belum ada foto dokumentasi untuk dibagikan.'),
+        ),
       );
       return;
     }
@@ -252,15 +256,12 @@ class _KolaseFotoScreenState extends State<KolaseFotoScreen> {
     });
     try {
       final pdfBytes = await _generatePdfBytes();
-      await Printing.sharePdf(
-        bytes: pdfBytes,
-        filename: _pdfFileName,
-      );
+      await Printing.sharePdf(bytes: pdfBytes, filename: _pdfFileName);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal membagikan dokumen: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Gagal membagikan dokumen: $e')));
       }
     } finally {
       if (mounted) setState(() => _busyExport = false);
@@ -270,13 +271,17 @@ class _KolaseFotoScreenState extends State<KolaseFotoScreen> {
   @override
   Widget build(BuildContext context) {
     final totalCapacity = _template.capacity;
-    final totalPages = _photoBytes.isEmpty ? 1 : (_photoBytes.length / totalCapacity).ceil();
+    final totalPages = _photoBytes.isEmpty
+        ? 1
+        : (_photoBytes.length / totalCapacity).ceil();
     final judul = KolaseFotoExporter.formatJudul(
       blok: _selectedBlok == 'Semua' ? null : _selectedBlok,
     );
 
     return Scaffold(
-      backgroundColor: const Color(0xFF1E1E1E), // Dark theme canvas seperti screenshot
+      backgroundColor: const Color(
+        0xFF1E1E1E,
+      ), // Dark theme canvas seperti screenshot
       appBar: AppBar(
         backgroundColor: const Color(0xFF262626),
         foregroundColor: Colors.white,
@@ -304,10 +309,7 @@ class _KolaseFotoScreenState extends State<KolaseFotoScreen> {
               ),
               const PopupMenuDivider(),
               for (final b in widget.bloks)
-                PopupMenuItem(
-                  value: b,
-                  child: Text('Blok $b'),
-                ),
+                PopupMenuItem(value: b, child: Text('Blok $b')),
             ],
           ),
           IconButton(
@@ -338,7 +340,10 @@ class _KolaseFotoScreenState extends State<KolaseFotoScreen> {
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.teal.shade900,
                     borderRadius: BorderRadius.circular(12),
@@ -381,109 +386,126 @@ class _KolaseFotoScreenState extends State<KolaseFotoScreen> {
                       badgeText: 'Memuat gambar dokumentasi',
                     )
                   : _photoBytes.isEmpty
-                      ? Center(
-                          key: const ValueKey('kolase-empty'),
-                          child: Padding(
-                            padding: const EdgeInsets.all(24),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
+                  ? Center(
+                      key: const ValueKey('kolase-empty'),
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.photo_library_outlined,
+                              size: 64,
+                              color: Colors.grey.shade600,
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              _selectedBlok == 'Semua'
+                                  ? 'Belum ada foto dokumentasi di semua blok.'
+                                  : 'Belum ada foto dokumentasi di Blok $_selectedBlok.',
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            const Text(
+                              'Kolase memuat gambar dokumentasi petugas yang diambil di daftar catatan blok.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: Colors.white70,
+                                fontSize: 13,
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+                            OutlinedButton.icon(
+                              onPressed: _loadPhotos,
+                              icon: const Icon(
+                                Icons.refresh,
+                                color: Colors.tealAccent,
+                              ),
+                              label: const Text(
+                                'Muat Ulang Foto',
+                                style: TextStyle(color: Colors.white),
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                side: const BorderSide(color: Colors.teal),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  : Column(
+                      key: const ValueKey('kolase-content'),
+                      children: [
+                        Expanded(
+                          child: PageView.builder(
+                            controller: _pageController,
+                            itemCount: totalPages,
+                            onPageChanged: (idx) {
+                              setState(() => _currentPreviewPage = idx);
+                            },
+                            itemBuilder: (context, pageIdx) {
+                              return _buildF4PagePreview(
+                                pageIndex: pageIdx,
+                                totalPages: totalPages,
+                                judul: judul,
+                              );
+                            },
+                          ),
+                        ),
+                        // Indikator Halaman
+                        if (totalPages > 1)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 4),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Icon(
-                                  Icons.photo_library_outlined,
-                                  size: 64,
-                                  color: Colors.grey.shade600,
+                                IconButton(
+                                  icon: const Icon(
+                                    Icons.chevron_left,
+                                    color: Colors.white70,
+                                  ),
+                                  onPressed: _currentPreviewPage > 0
+                                      ? () => _pageController.previousPage(
+                                          duration: const Duration(
+                                            milliseconds: 300,
+                                          ),
+                                          curve: Curves.easeInOut,
+                                        )
+                                      : null,
                                 ),
-                                const SizedBox(height: 16),
                                 Text(
-                                  _selectedBlok == 'Semua'
-                                      ? 'Belum ada foto dokumentasi di semua blok.'
-                                      : 'Belum ada foto dokumentasi di Blok $_selectedBlok.',
-                                  textAlign: TextAlign.center,
+                                  'Halaman ${_currentPreviewPage + 1} dari $totalPages',
                                   style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w600,
+                                    color: Colors.white70,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w500,
                                   ),
                                 ),
-                                const SizedBox(height: 8),
-                                const Text(
-                                  'Kolase memuat gambar dokumentasi petugas yang diambil di daftar catatan blok.',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(color: Colors.white70, fontSize: 13),
-                                ),
-                                const SizedBox(height: 20),
-                                OutlinedButton.icon(
-                                  onPressed: _loadPhotos,
-                                  icon: const Icon(Icons.refresh, color: Colors.tealAccent),
-                                  label: const Text(
-                                    'Muat Ulang Foto',
-                                    style: TextStyle(color: Colors.white),
+                                IconButton(
+                                  icon: const Icon(
+                                    Icons.chevron_right,
+                                    color: Colors.white70,
                                   ),
-                                  style: OutlinedButton.styleFrom(
-                                    side: const BorderSide(color: Colors.teal),
-                                  ),
+                                  onPressed:
+                                      _currentPreviewPage < totalPages - 1
+                                      ? () => _pageController.nextPage(
+                                          duration: const Duration(
+                                            milliseconds: 300,
+                                          ),
+                                          curve: Curves.easeInOut,
+                                        )
+                                      : null,
                                 ),
                               ],
                             ),
                           ),
-                        )
-                      : Column(
-                          key: const ValueKey('kolase-content'),
-                          children: [
-                          Expanded(
-                            child: PageView.builder(
-                              controller: _pageController,
-                              itemCount: totalPages,
-                              onPageChanged: (idx) {
-                                setState(() => _currentPreviewPage = idx);
-                              },
-                              itemBuilder: (context, pageIdx) {
-                                return _buildF4PagePreview(
-                                  pageIndex: pageIdx,
-                                  totalPages: totalPages,
-                                  judul: judul,
-                                );
-                              },
-                            ),
-                          ),
-                          // Indikator Halaman
-                          if (totalPages > 1)
-                            Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 4),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  IconButton(
-                                    icon: const Icon(Icons.chevron_left, color: Colors.white70),
-                                    onPressed: _currentPreviewPage > 0
-                                        ? () => _pageController.previousPage(
-                                              duration: const Duration(milliseconds: 300),
-                                              curve: Curves.easeInOut,
-                                            )
-                                        : null,
-                                  ),
-                                  Text(
-                                    'Halaman ${_currentPreviewPage + 1} dari $totalPages',
-                                    style: const TextStyle(
-                                      color: Colors.white70,
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(Icons.chevron_right, color: Colors.white70),
-                                    onPressed: _currentPreviewPage < totalPages - 1
-                                        ? () => _pageController.nextPage(
-                                              duration: const Duration(milliseconds: 300),
-                                              curve: Curves.easeInOut,
-                                            )
-                                        : null,
-                                  ),
-                                ],
-                              ),
-                            ),
-                        ],
-                      ),
+                      ],
+                    ),
             ),
           ),
 
@@ -655,7 +677,10 @@ class _KolaseFotoScreenState extends State<KolaseFotoScreen> {
                     style: OutlinedButton.styleFrom(
                       foregroundColor: Colors.white,
                       side: const BorderSide(color: Colors.white24),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 12,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -668,7 +693,10 @@ class _KolaseFotoScreenState extends State<KolaseFotoScreen> {
                     style: OutlinedButton.styleFrom(
                       foregroundColor: Colors.white,
                       side: const BorderSide(color: Colors.white24),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 12,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -676,7 +704,10 @@ class _KolaseFotoScreenState extends State<KolaseFotoScreen> {
                   // Bagikan PDF
                   IconButton(
                     onPressed: _busyExport ? null : _bagikanPdf,
-                    icon: const Icon(Icons.share_outlined, color: Colors.white70),
+                    icon: const Icon(
+                      Icons.share_outlined,
+                      color: Colors.white70,
+                    ),
                     tooltip: 'Bagikan Dokumen PDF',
                   ),
 
@@ -724,7 +755,9 @@ class _KolaseFotoScreenState extends State<KolaseFotoScreen> {
       child: Container(
         width: 58,
         decoration: BoxDecoration(
-          color: isSelected ? Colors.teal.withAlpha(50) : const Color(0xFF333333),
+          color: isSelected
+              ? Colors.teal.withAlpha(50)
+              : const Color(0xFF333333),
           borderRadius: BorderRadius.circular(6),
           border: Border.all(
             color: isSelected ? Colors.tealAccent : Colors.white12,
@@ -735,7 +768,11 @@ class _KolaseFotoScreenState extends State<KolaseFotoScreen> {
         child: Column(
           children: [
             Expanded(
-              child: _buildMiniGridThumbnail(template.rows, template.cols, isSelected),
+              child: _buildMiniGridThumbnail(
+                template.rows,
+                template.cols,
+                isSelected,
+              ),
             ),
             const SizedBox(height: 2),
             Text(
@@ -771,7 +808,9 @@ class _KolaseFotoScreenState extends State<KolaseFotoScreen> {
                       child: Container(
                         margin: const EdgeInsets.all(1),
                         decoration: BoxDecoration(
-                          color: isSelected ? Colors.teal.shade200 : Colors.white60,
+                          color: isSelected
+                              ? Colors.teal.shade200
+                              : Colors.white60,
                           borderRadius: BorderRadius.circular(1),
                         ),
                       ),

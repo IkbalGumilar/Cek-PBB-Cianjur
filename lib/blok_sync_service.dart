@@ -128,7 +128,10 @@ class BlokChangeRecord {
   /// Mendekripsi berkas biner `.bin` dan mengembalikannya ke objek [BlokChangeRecord].
   /// Mencoba kunci rahasia aktif (atau kata sandi cadangan pengguna), lalu fallback
   /// ke kunci default agar tetap kompatibel dengan berkas lama.
-  static BlokChangeRecord? fromEncryptedBytes(Uint8List fileBytes, {String? secret}) {
+  static BlokChangeRecord? fromEncryptedBytes(
+    Uint8List fileBytes, {
+    String? secret,
+  }) {
     if (fileBytes.length < magic.length + 16) return null;
     for (var i = 0; i < magic.length; i++) {
       if (fileBytes[i] != magic[i]) return null;
@@ -139,7 +142,8 @@ class BlokChangeRecord {
 
     final candidates = <String>{
       if (secret != null && secret.isNotEmpty) secret,
-      if (_configuredSecret != null && _configuredSecret!.isNotEmpty) _configuredSecret!,
+      if (_configuredSecret != null && _configuredSecret!.isNotEmpty)
+        _configuredSecret!,
       _defaultSecret,
     };
 
@@ -220,7 +224,9 @@ class BlokSyncService extends BasePreferencesStore {
     final current = await getProcessedChangeIds();
     current.addAll(ids);
     // Batasi cache ID perubahan terakhir agar SharedPreferences tidak membengkak
-    final trimmed = current.length > 5000 ? current.skip(current.length - 5000).toSet() : current;
+    final trimmed = current.length > 5000
+        ? current.skip(current.length - 5000).toSet()
+        : current;
     await setString(_keyProcessedChanges, jsonEncode(trimmed.toList()));
   }
 
@@ -240,7 +246,8 @@ class BlokSyncService extends BasePreferencesStore {
 
     final now = DateTime.now();
     final cleanNop = record.nop.replaceAll(RegExp(r'[^0-9]'), '');
-    final changeId = 'change_${now.millisecondsSinceEpoch}_${cleanNop}_$petugas';
+    final changeId =
+        'change_${now.millisecondsSinceEpoch}_${cleanNop}_$petugas';
 
     final allRecords = await BlokDataStore.instance.loadAll();
     final dhkpFingerprint = DhkpPackageHelper.computeDhkpFingerprint(
@@ -268,8 +275,12 @@ class BlokSyncService extends BasePreferencesStore {
     final syncRoot = await getSyncRootDirectory();
 
     // 1. Simpan foto ke folder pribadi petugas di Drive jika ada foto baru
-    if (sourcePhotoFile != null && await sourcePhotoFile.exists() && change.namaFoto != null) {
-      final officerPhotosDir = Directory('${syncRoot.path}/$petugasFolder/photos');
+    if (sourcePhotoFile != null &&
+        await sourcePhotoFile.exists() &&
+        change.namaFoto != null) {
+      final officerPhotosDir = Directory(
+        '${syncRoot.path}/$petugasFolder/photos',
+      );
       if (!await officerPhotosDir.exists()) {
         await officerPhotosDir.create(recursive: true);
       }
@@ -310,7 +321,10 @@ class BlokSyncService extends BasePreferencesStore {
     }
 
     final targetFolders = <Directory>[];
-    if (blok != null && blok.isNotEmpty && blok != 'Semua' && blok != 'Semua Blok') {
+    if (blok != null &&
+        blok.isNotEmpty &&
+        blok != 'Semua' &&
+        blok != 'Semua Blok') {
       final cleanBlok = blok.replaceAll(RegExp(r'[^0-9]'), '');
       final dir = Directory('${changesBase.path}/blok_$cleanBlok');
       if (await dir.exists()) {
@@ -366,36 +380,45 @@ class BlokSyncService extends BasePreferencesStore {
         if (existingRecords.isNotEmpty &&
             change.dhkpFingerprint != null &&
             change.dhkpFingerprint!.isNotEmpty) {
-          final localFp = DhkpPackageHelper.computeDhkpFingerprint(existingRecords);
+          final localFp = DhkpPackageHelper.computeDhkpFingerprint(
+            existingRecords,
+          );
           if (localFp != change.dhkpFingerprint && targetRecord == null) {
             continue;
           }
         }
 
         // Terapkan perubahan data langsung
-        final updatedRecord = (targetRecord ??
-                BlokRecord(
-                  nop: change.nop,
-                  namaWajibPajak: change.namaWajibPajak ?? 'Wajib Pajak (Sync)',
-                  tahunBayar: change.tahunBayar.isEmpty ? '2026' : change.tahunBayar,
-                  tanggalBayar: change.tanggalBayar ?? '',
-                ))
-            .copyWith(
-          statusBayar: change.statusBayar,
-          tanggalBayar: change.tanggalBayar,
-          catatan: change.catatan,
-          namaFoto: change.namaFoto,
-          namaWajibPajak: change.namaWajibPajak,
-          alamatObjek: change.alamatObjek,
-          alamatWp: change.alamatWp,
-        );
+        final updatedRecord =
+            (targetRecord ??
+                    BlokRecord(
+                      nop: change.nop,
+                      namaWajibPajak:
+                          change.namaWajibPajak ?? 'Wajib Pajak (Sync)',
+                      tahunBayar: change.tahunBayar.isEmpty
+                          ? '2026'
+                          : change.tahunBayar,
+                      tanggalBayar: change.tanggalBayar ?? '',
+                    ))
+                .copyWith(
+                  statusBayar: change.statusBayar,
+                  tanggalBayar: change.tanggalBayar,
+                  catatan: change.catatan,
+                  namaFoto: change.namaFoto,
+                  namaWajibPajak: change.namaWajibPajak,
+                  alamatObjek: change.alamatObjek,
+                  alamatWp: change.alamatWp,
+                );
 
         // Jika ada foto dan belum ada di memori lokal, ambil langsung dari folder petugas
         if (change.namaFoto != null && change.namaFoto!.isNotEmpty) {
           final localPhoto = File('${localPhotosDir.path}/${change.namaFoto}');
           if (!await localPhoto.exists()) {
-            final officerFolder = change.petugasFolder ?? 'petugas_${change.petugas}';
-            final sourcePhoto = File('${syncRoot.path}/$officerFolder/photos/${change.namaFoto}');
+            final officerFolder =
+                change.petugasFolder ?? 'petugas_${change.petugas}';
+            final sourcePhoto = File(
+              '${syncRoot.path}/$officerFolder/photos/${change.namaFoto}',
+            );
             if (await sourcePhoto.exists()) {
               await sourcePhoto.copy(localPhoto.path);
             }

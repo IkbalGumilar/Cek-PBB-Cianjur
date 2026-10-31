@@ -21,9 +21,8 @@ class _TabRangkingRealisasiState extends State<TabRangkingRealisasi> {
   Widget build(BuildContext context) {
     return MonitoringTabScaffold(
       reportTitle: 'Rangking Realisasi',
-      onFetch: () => widget.client.fetchRangkingRealisasi(
-        bukuFilter: _bukuFilter,
-      ),
+      onFetch: () =>
+          widget.client.fetchRangkingRealisasi(bukuFilter: _bukuFilter),
       formBuilder: (context, loading) => [
         const MonitoringSectionTitle('Buku'),
         DropdownButtonFormField<String>(

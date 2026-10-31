@@ -50,9 +50,7 @@ class GoogleAuthService {
     GoogleDriveBackupPolicy.allowedScopeDriveReadonly,
   ];
 
-  GoogleSignIn _googleSignIn = GoogleSignIn(
-    scopes: _scopes,
-  );
+  GoogleSignIn _googleSignIn = GoogleSignIn(scopes: _scopes);
 
   /// Mengonfigurasi instance GoogleSignIn atau Client ID Desktop jika diperlukan.
   void configure({
@@ -95,7 +93,8 @@ class GoogleAuthService {
   Future<bool> hasDrivePermission() async {
     if (mockUser != null) return true;
     if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
-      final token = await BlokBackupScheduler.instance.getGoogleDesktopAccessToken();
+      final token = await BlokBackupScheduler.instance
+          .getGoogleDesktopAccessToken();
       return token.isNotEmpty;
     }
     if (kIsWeb) {
@@ -122,9 +121,7 @@ class GoogleAuthService {
     }
 
     if (!isSupportedPlatform) {
-      throw Exception(
-        'Platform saat ini tidak didukung untuk Google Sign-In.',
-      );
+      throw Exception('Platform saat ini tidak didukung untuk Google Sign-In.');
     }
 
     // Jika berjalan di platform desktop (Linux / Windows / macOS), gunakan Loopback Browser
@@ -174,7 +171,8 @@ class GoogleAuthService {
     } on PlatformException catch (e) {
       debugPrint('Google Sign-In PlatformException: ${e.code} - ${e.message}');
       // Kode pembatalan oleh pengguna (12501 atau sign_in_canceled)
-      if (e.code == 'sign_in_canceled' || e.message?.contains('12501') == true) {
+      if (e.code == 'sign_in_canceled' ||
+          e.message?.contains('12501') == true) {
         return null;
       }
       rethrow;
@@ -212,7 +210,10 @@ class GoogleAuthService {
     });
 
     // 4. Buka browser bawaan sistem (Chrome, Firefox, Edge, dll)
-    final launched = await launchUrl(authUri, mode: LaunchMode.externalApplication);
+    final launched = await launchUrl(
+      authUri,
+      mode: LaunchMode.externalApplication,
+    );
     if (!launched) {
       await server.close(force: true);
       throw Exception('Gagal membuka web browser sistem.');
@@ -223,7 +224,9 @@ class GoogleAuthService {
       // 5. Tunggu respon redirect dari browser (timeout 3 menit)
       request = await server.first.timeout(
         const Duration(minutes: 3),
-        onTimeout: () => throw TimeoutException('Waktu otorisasi di browser telah habis (timeout).'),
+        onTimeout: () => throw TimeoutException(
+          'Waktu otorisasi di browser telah habis (timeout).',
+        ),
       );
     } catch (e) {
       await server.close(force: true);
@@ -234,18 +237,30 @@ class GoogleAuthService {
 
     if (queryParams.containsKey('error')) {
       final errorMsg = queryParams['error'] ?? 'access_denied';
-      await _sendHtmlResponse(request.response, isSuccess: false, message: 'Otorisasi dibatalkan: $errorMsg');
+      await _sendHtmlResponse(
+        request.response,
+        isSuccess: false,
+        message: 'Otorisasi dibatalkan: $errorMsg',
+      );
       await server.close(force: true);
-      throw Exception('Otorisasi akun Google dibatalkan di browser ($errorMsg).');
+      throw Exception(
+        'Otorisasi akun Google dibatalkan di browser ($errorMsg).',
+      );
     }
 
     final returnedState = queryParams['state'];
     final authCode = queryParams['code'];
 
     if (returnedState != state || authCode == null || authCode.isEmpty) {
-      await _sendHtmlResponse(request.response, isSuccess: false, message: 'Parameter otorisasi tidak valid.');
+      await _sendHtmlResponse(
+        request.response,
+        isSuccess: false,
+        message: 'Parameter otorisasi tidak valid.',
+      );
       await server.close(force: true);
-      throw Exception('Kode otorisasi Google tidak valid atau sesi kadaluarsa.');
+      throw Exception(
+        'Kode otorisasi Google tidak valid atau sesi kadaluarsa.',
+      );
     }
 
     // Kirim tampilan HTML sukses ke browser
@@ -255,8 +270,14 @@ class GoogleAuthService {
     // 6. Tukarkan authorization code dengan Access Token di Google Token Endpoint
     final httpClient = HttpClient();
     try {
-      final tokenRequest = await httpClient.postUrl(Uri.parse('https://oauth2.googleapis.com/token'));
-      tokenRequest.headers.contentType = ContentType('application', 'x-www-form-urlencoded', charset: 'utf-8');
+      final tokenRequest = await httpClient.postUrl(
+        Uri.parse('https://oauth2.googleapis.com/token'),
+      );
+      tokenRequest.headers.contentType = ContentType(
+        'application',
+        'x-www-form-urlencoded',
+        charset: 'utf-8',
+      );
       final formBody = [
         'client_id=${Uri.encodeQueryComponent(_desktopClientId)}',
         'code=${Uri.encodeQueryComponent(authCode)}',
@@ -267,11 +288,17 @@ class GoogleAuthService {
       tokenRequest.write(formBody);
 
       final tokenResponse = await tokenRequest.close();
-      final tokenResponseBody = await tokenResponse.transform(utf8.decoder).join();
+      final tokenResponseBody = await tokenResponse
+          .transform(utf8.decoder)
+          .join();
       final tokenJson = jsonDecode(tokenResponseBody) as Map<String, dynamic>;
 
-      if (tokenResponse.statusCode != 200 || !tokenJson.containsKey('access_token')) {
-        final err = tokenJson['error_description'] ?? tokenJson['error'] ?? 'Gagal menukarkan token';
+      if (tokenResponse.statusCode != 200 ||
+          !tokenJson.containsKey('access_token')) {
+        final err =
+            tokenJson['error_description'] ??
+            tokenJson['error'] ??
+            'Gagal menukarkan token';
         throw Exception('Gagal mendapatkan token dari Google: $err');
       }
 
@@ -280,7 +307,8 @@ class GoogleAuthService {
       final grantedScope = tokenJson['scope'] as String? ?? '';
 
       // Verifikasi bahwa izin Google Drive benar-benar disetujui pengguna
-      if (!grantedScope.contains('drive.file') && !grantedScope.contains('drive.appdata')) {
+      if (!grantedScope.contains('drive.file') &&
+          !grantedScope.contains('drive.appdata')) {
         throw Exception(
           'Izin akses Google Drive ditolak. Cadangan data DHKP '
           'membutuhkan izin akses folder Google Drive agar dapat disinkronkan.',
@@ -288,10 +316,14 @@ class GoogleAuthService {
       }
 
       // 7. Ambil detail profil pengguna dari Google UserInfo Endpoint
-      final userInfoRequest = await httpClient.getUrl(Uri.parse('https://www.googleapis.com/oauth2/v3/userinfo'));
+      final userInfoRequest = await httpClient.getUrl(
+        Uri.parse('https://www.googleapis.com/oauth2/v3/userinfo'),
+      );
       userInfoRequest.headers.set('Authorization', 'Bearer $accessToken');
       final userInfoResponse = await userInfoRequest.close();
-      final userInfoBody = await userInfoResponse.transform(utf8.decoder).join();
+      final userInfoBody = await userInfoResponse
+          .transform(utf8.decoder)
+          .join();
       final userJson = jsonDecode(userInfoBody) as Map<String, dynamic>;
 
       final email = userJson['email'] as String? ?? '';
@@ -330,9 +362,13 @@ class GoogleAuthService {
   /// Menghasilkan string acak aman untuk PKCE verifier dan state.
   @visibleForTesting
   static String generateRandomString(int length) {
-    const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~';
+    const chars =
+        'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~';
     final rand = Random.secure();
-    return List.generate(length, (_) => chars[rand.nextInt(chars.length)]).join();
+    return List.generate(
+      length,
+      (_) => chars[rand.nextInt(chars.length)],
+    ).join();
   }
 
   /// Menghasilkan SHA-256 Code Challenge dari verifier sesuai RFC 7636 (PKCE).
@@ -350,16 +386,24 @@ class GoogleAuthService {
     String? message,
   }) async {
     response.statusCode = isSuccess ? HttpStatus.ok : HttpStatus.badRequest;
-    response.headers.contentType = ContentType('text', 'html', charset: 'utf-8');
+    response.headers.contentType = ContentType(
+      'text',
+      'html',
+      charset: 'utf-8',
+    );
 
     final title = isSuccess ? 'Otorisasi Berhasil' : 'Otorisasi Dibatalkan';
-    final heading = isSuccess ? '✅ Otorisasi Akun Google Berhasil' : '⚠️ Otorisasi Dibatalkan';
-    final desc = message ??
+    final heading = isSuccess
+        ? '✅ Otorisasi Akun Google Berhasil'
+        : '⚠️ Otorisasi Dibatalkan';
+    final desc =
+        message ??
         (isSuccess
             ? 'Aplikasi <strong>Cek PBB Cianjur</strong> telah terhubung dengan akun Google dan Google Drive Anda.<br><br><strong>Silakan tutup tab atau jendela browser ini dan kembali ke aplikasi.</strong>'
             : 'Proses otorisasi akun Google dibatalkan atau ditolak. Anda dapat menutup tab ini.');
 
-    final html = '''<!DOCTYPE html>
+    final html =
+        '''<!DOCTYPE html>
 <html lang="id">
 <head>
   <meta charset="utf-8">
@@ -415,7 +459,8 @@ class GoogleAuthService {
 
   /// Memutuskan sambungan akun Google (Sign Out).
   Future<void> signOut() async {
-    if (isSupportedPlatform && (Platform.isAndroid || Platform.isIOS || kIsWeb)) {
+    if (isSupportedPlatform &&
+        (Platform.isAndroid || Platform.isIOS || kIsWeb)) {
       try {
         await _googleSignIn.signOut();
       } catch (e) {
@@ -430,8 +475,8 @@ class GoogleAuthService {
     bool interactiveIfNeeded = false,
   }) async {
     if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
-      final token =
-          await BlokBackupScheduler.instance.getGoogleDesktopAccessToken();
+      final token = await BlokBackupScheduler.instance
+          .getGoogleDesktopAccessToken();
       if (token.isEmpty) return null;
       return {'Authorization': 'Bearer $token'};
     }
@@ -463,7 +508,9 @@ class GoogleAuthService {
       }
     }
     if (account == null) return null;
-    if (interactiveIfNeeded && !kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
+    if (interactiveIfNeeded &&
+        !kIsWeb &&
+        (Platform.isAndroid || Platform.isIOS)) {
       AppSecurityService.instance.setTemporaryLockBypass(true);
       try {
         await _googleSignIn.requestScopes(_scopes);

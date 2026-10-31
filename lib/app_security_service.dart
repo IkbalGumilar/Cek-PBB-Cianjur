@@ -45,7 +45,8 @@ class AppSecurityService extends BasePreferencesStore {
   static const String _keyPasswordHash = 'app_security_custom_password_hash';
   static const String _keyPasswordSalt = 'app_security_custom_password_salt';
   static const String _keyFailedAttempts = 'app_security_failed_pin_attempts';
-  static const String _keyLockoutUntilMillis = 'app_security_lockout_until_millis';
+  static const String _keyLockoutUntilMillis =
+      'app_security_lockout_until_millis';
 
   static int pbkdf2Iterations = 100000;
 
@@ -90,8 +91,9 @@ class AppSecurityService extends BasePreferencesStore {
   bool get isAppLocked => isAppLockedNotifier.value;
 
   /// Notifier status apakah pembaca dokumen sedang aktif dalam mode kotak pasir (Sandboxed Viewer).
-  final ValueNotifier<bool> isSandboxedViewerNotifier =
-      ValueNotifier<bool>(false);
+  final ValueNotifier<bool> isSandboxedViewerNotifier = ValueNotifier<bool>(
+    false,
+  );
 
   /// Status apakah mode kotak pasir sedang aktif.
   bool get isSandboxedViewerActive => isSandboxedViewerNotifier.value;
@@ -106,8 +108,9 @@ class AppSecurityService extends BasePreferencesStore {
     isSandboxedViewerNotifier.value = false;
   }
 
-  static const MethodChannel _securityChannel =
-      MethodChannel('id.cianjur.cekpbb.cek_pbb_app/security');
+  static const MethodChannel _securityChannel = MethodChannel(
+    'id.cianjur.cekpbb.cek_pbb_app/security',
+  );
 
   bool _isScreenSecured = false;
 
@@ -120,11 +123,14 @@ class AppSecurityService extends BasePreferencesStore {
     if (!Platform.isAndroid) return;
     if (_isScreenSecured == secure) return;
     try {
-      await _securityChannel
-          .invokeMethod<bool>('setSecureMode', {'enabled': secure});
+      await _securityChannel.invokeMethod<bool>('setSecureMode', {
+        'enabled': secure,
+      });
       _isScreenSecured = secure;
     } catch (e) {
-      debugPrint('AppSecurityService: Gagal mengatur status screenshot (FLAG_SECURE): $e');
+      debugPrint(
+        'AppSecurityService: Gagal mengatur status screenshot (FLAG_SECURE): $e',
+      );
     }
   }
 
@@ -211,7 +217,8 @@ class AppSecurityService extends BasePreferencesStore {
       }
 
       final biometrics = await getAvailableBiometrics();
-      final hasFinger = biometrics.contains(BiometricType.fingerprint) ||
+      final hasFinger =
+          biometrics.contains(BiometricType.fingerprint) ||
           biometrics.contains(BiometricType.strong);
       final hasFace = biometrics.contains(BiometricType.face);
 
@@ -249,7 +256,8 @@ class AppSecurityService extends BasePreferencesStore {
     try {
       final authenticated = await _localAuth.authenticate(
         localizedReason: reason,
-        biometricOnly: false, // Izinkan fallback ke PIN/Pola HP jika biometrik belum diatur/gagal
+        biometricOnly:
+            false, // Izinkan fallback ke PIN/Pola HP jika biometrik belum diatur/gagal
         persistAcrossBackgrounding: true,
       );
       if (authenticated) {
@@ -257,7 +265,9 @@ class AppSecurityService extends BasePreferencesStore {
       }
       return authenticated;
     } on PlatformException catch (e) {
-      debugPrint('AppSecurityService: PlatformException saat autentikasi biometrik: ${e.code} - ${e.message}');
+      debugPrint(
+        'AppSecurityService: PlatformException saat autentikasi biometrik: ${e.code} - ${e.message}',
+      );
       return false;
     } catch (e) {
       debugPrint('AppSecurityService: Gagal autentikasi biometrik: $e');
@@ -288,7 +298,9 @@ class AppSecurityService extends BasePreferencesStore {
         persistAcrossBackgrounding: true,
       );
     } on PlatformException catch (e) {
-      debugPrint('AppSecurityService: Gagal autentikasi DHKP: ${e.code} - ${e.message}');
+      debugPrint(
+        'AppSecurityService: Gagal autentikasi DHKP: ${e.code} - ${e.message}',
+      );
       return false;
     } catch (e) {
       debugPrint('AppSecurityService: Gagal autentikasi DHKP: $e');
@@ -455,9 +467,7 @@ class AppSecurityService extends BasePreferencesStore {
   void onAppPaused() {
     // Jangan catat jika aplikasi sudah terkunci, sedang dalam proses autentikasi,
     // atau bypass sementara (misal pemilih berkas sistem / dialog eksternal).
-    if (isAppLocked ||
-        _isAuthenticating ||
-        _temporaryLockBypass) {
+    if (isAppLocked || _isAuthenticating || _temporaryLockBypass) {
       return;
     }
     _lastPausedTime = DateTime.now();
@@ -482,8 +492,9 @@ class AppSecurityService extends BasePreferencesStore {
     if (_lastPausedTime == null) return;
 
     final timeout = await getTimeoutSeconds();
-    final elapsedSeconds =
-        DateTime.now().difference(_lastPausedTime!).inSeconds;
+    final elapsedSeconds = DateTime.now()
+        .difference(_lastPausedTime!)
+        .inSeconds;
 
     if (elapsedSeconds >= timeout) {
       lock();

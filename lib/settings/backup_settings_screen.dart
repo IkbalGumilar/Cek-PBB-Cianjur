@@ -3,7 +3,6 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import '../blok_backup_scheduler.dart';
 import '../blok_data_store.dart';
@@ -11,10 +10,10 @@ import '../dkhp_package_helper.dart';
 import '../google_auth_service.dart';
 import '../google_drive_backup_policy.dart';
 import '../google_drive_picker_dialog.dart';
-import '../legal_document_screen.dart';
 import '../native_file_helper.dart';
 import '../shared_storage_link_service.dart';
 import '../unity_lerp_widgets.dart';
+import 'google_drive_settings_dialogs.dart';
 
 /// Halaman terpisah untuk pengaturan Pencadangan Data DHKP.
 class BackupSettingsScreen extends StatelessWidget {
@@ -23,15 +22,11 @@ class BackupSettingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Pencadangan Data'),
-      ),
+      appBar: AppBar(title: const Text('Pencadangan Data')),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(16),
-          children: const [
-            BackupSettingsSection(),
-          ],
+          children: const [BackupSettingsSection()],
         ),
       ),
     );
@@ -104,7 +99,9 @@ class _BackupSettingsSectionState extends State<BackupSettingsSection> {
     final onlyDkhp = await scheduler.getOnlyDkhpData();
     final records = await BlokDataStore.instance.loadAll();
     final fingerprint = DhkpPackageHelper.computeDhkpFingerprint(records);
-    final changedCount = DhkpPackageHelper.extractChangedRecords(records).length;
+    final changedCount = DhkpPackageHelper.extractChangedRecords(
+      records,
+    ).length;
     final lastTime = await scheduler.getLastBackupTime();
     final lastSize = await scheduler.getLastBackupSize();
     final localFiles = await scheduler.getLocalBackups();
@@ -197,11 +194,7 @@ class _BackupSettingsSectionState extends State<BackupSettingsSection> {
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Gagal membuat berkas cadangan.',
-            ),
-          ),
+          const SnackBar(content: Text('Gagal membuat berkas cadangan.')),
         );
       }
     } catch (e) {
@@ -278,18 +271,20 @@ class _BackupSettingsSectionState extends State<BackupSettingsSection> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Frekuensi Cadangan Otomatis'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: options
-              .map(
-                (days) => RadioListTile<int>(
-                  title: Text(frequencyLabel(days)),
-                  value: days,
-                  groupValue: _frequencyDays,
-                  onChanged: (val) => Navigator.of(ctx).pop(val),
-                ),
-              )
-              .toList(),
+        content: RadioGroup<int>(
+          groupValue: _frequencyDays,
+          onChanged: (val) => Navigator.of(ctx).pop(val),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: options
+                .map(
+                  (days) => RadioListTile<int>(
+                    title: Text(frequencyLabel(days)),
+                    value: days,
+                  ),
+                )
+                .toList(),
+          ),
         ),
       ),
     );
@@ -304,7 +299,7 @@ class _BackupSettingsSectionState extends State<BackupSettingsSection> {
   Future<void> _showGoogleAccountDialog() async {
     final result = await showDialog<String>(
       context: context,
-      builder: (ctx) => _GoogleAccountDialog(
+      builder: (ctx) => GoogleAccountDialog(
         initialEmail: _googleAccount,
         initialDisplayName: _googleDisplayName,
         initialPhotoUrl: _googlePhotoUrl,
@@ -363,7 +358,7 @@ class _BackupSettingsSectionState extends State<BackupSettingsSection> {
 
     final result = await showDialog<String>(
       context: context,
-      builder: (ctx) => _GoogleFolderDialog(
+      builder: (ctx) => GoogleFolderDialog(
         currentAccount: _googleAccount,
         initialLink: _googleFolderLink,
       ),
@@ -384,8 +379,8 @@ class _BackupSettingsSectionState extends State<BackupSettingsSection> {
         );
       }
     } else {
-      final success =
-          await BlokBackupScheduler.instance.setGoogleDriveFolderLink(result);
+      final success = await BlokBackupScheduler.instance
+          .setGoogleDriveFolderLink(result);
       if (!mounted) return;
       if (success) {
         setState(() => _googleFolderLink = result);
@@ -410,24 +405,24 @@ class _BackupSettingsSectionState extends State<BackupSettingsSection> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Cadangkan Melalui'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            RadioListTile<bool>(
-              title: const Text('Hanya Wi-Fi'),
-              subtitle: const Text('Hemat kuota internet seluler'),
-              value: false,
-              groupValue: _overCellular,
-              onChanged: (val) => Navigator.of(ctx).pop(val),
-            ),
-            RadioListTile<bool>(
-              title: const Text('Wi-Fi atau Seluler'),
-              subtitle: const Text('Tetap mencadangkan saat memakai paket data'),
-              value: true,
-              groupValue: _overCellular,
-              onChanged: (val) => Navigator.of(ctx).pop(val),
-            ),
-          ],
+        content: RadioGroup<bool>(
+          groupValue: _overCellular,
+          onChanged: (val) => Navigator.of(ctx).pop(val),
+          child: const Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              RadioListTile<bool>(
+                title: Text('Hanya Wi-Fi'),
+                subtitle: Text('Hemat kuota internet seluler'),
+                value: false,
+              ),
+              RadioListTile<bool>(
+                title: Text('Wi-Fi atau Seluler'),
+                subtitle: Text('Tetap mencadangkan saat memakai paket data'),
+                value: true,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -465,9 +460,9 @@ class _BackupSettingsSectionState extends State<BackupSettingsSection> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal membagikan berkas: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Gagal membagikan berkas: $e')));
       }
     }
   }
@@ -510,9 +505,9 @@ class _BackupSettingsSectionState extends State<BackupSettingsSection> {
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Gagal menghapus berkas: $e')),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Gagal menghapus berkas: $e')));
         }
       } finally {
         if (mounted) {
@@ -552,8 +547,8 @@ class _BackupSettingsSectionState extends State<BackupSettingsSection> {
                     Text(
                       'Cadangan Data DHKP',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ],
                 ),
@@ -566,7 +561,9 @@ class _BackupSettingsSectionState extends State<BackupSettingsSection> {
                 Container(
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: scheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                    color: scheme.surfaceContainerHighest.withValues(
+                      alpha: 0.5,
+                    ),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Column(
@@ -575,8 +572,8 @@ class _BackupSettingsSectionState extends State<BackupSettingsSection> {
                       Text(
                         'Cadangan Terakhir',
                         style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                       const SizedBox(height: 4),
                       Text(
@@ -594,7 +591,8 @@ class _BackupSettingsSectionState extends State<BackupSettingsSection> {
                         const SizedBox(height: 2),
                         Text(
                           'Data tercatat: $_changedNopCount perubahan dari $_totalNop objek pajak',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
                                 color: scheme.secondary,
                                 fontWeight: FontWeight.w600,
                               ),
@@ -606,9 +604,8 @@ class _BackupSettingsSectionState extends State<BackupSettingsSection> {
                           _googleFolderLink.isNotEmpty
                               ? 'Google Drive: $_googleAccount (Folder Bersama)'
                               : 'Google Drive: $_googleAccount (Folder: ${GoogleDriveBackupPolicy.dedicatedFolderName})',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: scheme.primary,
-                              ),
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: scheme.primary),
                         ),
                       ],
                       SmoothActivityBanner(
@@ -623,7 +620,10 @@ class _BackupSettingsSectionState extends State<BackupSettingsSection> {
                         child: FilledButton.icon(
                           onPressed: _isBackingUp ? null : _performBackup,
                           icon: _isBackingUp
-                              ? const Icon(Icons.hourglass_top_outlined, size: 18)
+                              ? const Icon(
+                                  Icons.hourglass_top_outlined,
+                                  size: 18,
+                                )
                               : const Icon(Icons.backup_outlined),
                           label: Text(
                             _isBackingUp
@@ -642,8 +642,13 @@ class _BackupSettingsSectionState extends State<BackupSettingsSection> {
                       SizedBox(
                         width: double.infinity,
                         child: OutlinedButton.icon(
-                          onPressed: _isBackingUp ? null : _restoreFromDriveDialog,
-                          icon: const Icon(Icons.cloud_download_outlined, size: 18),
+                          onPressed: _isBackingUp
+                              ? null
+                              : _restoreFromDriveDialog,
+                          icon: const Icon(
+                            Icons.cloud_download_outlined,
+                            size: 18,
+                          ),
                           label: const Text('Pulihkan / Muat Berkas DHKP'),
                           style: OutlinedButton.styleFrom(
                             padding: const EdgeInsets.symmetric(vertical: 11),
@@ -762,8 +767,8 @@ class _BackupSettingsSectionState extends State<BackupSettingsSection> {
                     _googleAccount.isEmpty
                         ? 'Hubungkan akun Google terlebih dahulu untuk mengatur folder bersama'
                         : (_googleFolderLink.isEmpty
-                            ? 'Gunakan folder bawaan ("${GoogleDriveBackupPolicy.dedicatedFolderName}")'
-                            : 'Folder bersama telah terhubung'),
+                              ? 'Gunakan folder bawaan ("${GoogleDriveBackupPolicy.dedicatedFolderName}")'
+                              : 'Folder bersama telah terhubung'),
                   ),
                   trailing: _googleFolderLink.isNotEmpty
                       ? Row(
@@ -788,8 +793,9 @@ class _BackupSettingsSectionState extends State<BackupSettingsSection> {
                           ],
                         )
                       : const Icon(Icons.chevron_right),
-                  onTap:
-                      _googleAccount.isEmpty ? null : _showGoogleFolderDialog,
+                  onTap: _googleAccount.isEmpty
+                      ? null
+                      : _showGoogleFolderDialog,
                 ),
               ],
             ),
@@ -801,17 +807,16 @@ class _BackupSettingsSectionState extends State<BackupSettingsSection> {
             padding: const EdgeInsets.symmetric(horizontal: 4),
             child: Text(
               'Berkas Cadangan',
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
             ),
           ),
           const SizedBox(height: 4),
           ..._localBackups.map((file) {
             final fileName = file.uri.pathSegments.last;
             final size = file.existsSync() ? file.lengthSync() : 0;
-            final modTime =
-                file.existsSync() ? file.lastModifiedSync() : null;
+            final modTime = file.existsSync() ? file.lastModifiedSync() : null;
             return Card(
               elevation: 0,
               margin: const EdgeInsets.only(top: 8),
@@ -866,481 +871,6 @@ class _BackupSettingsSectionState extends State<BackupSettingsSection> {
             );
           }),
         ],
-      ],
-    );
-  }
-}
-
-class _GoogleAccountDialog extends StatefulWidget {
-  final String initialEmail;
-  final String initialDisplayName;
-  final String initialPhotoUrl;
-
-  const _GoogleAccountDialog({
-    required this.initialEmail,
-    this.initialDisplayName = '',
-    this.initialPhotoUrl = '',
-  });
-
-  @override
-  State<_GoogleAccountDialog> createState() => _GoogleAccountDialogState();
-}
-
-class _GoogleAccountDialogState extends State<_GoogleAccountDialog> {
-  bool _loading = false;
-  String? _errorMessage;
-
-  Future<void> _handleGoogleSignIn() async {
-    setState(() {
-      _loading = true;
-      _errorMessage = null;
-    });
-
-    try {
-      final user = await GoogleAuthService.instance.signIn();
-      if (!mounted) return;
-      if (user != null) {
-        unawaited(GoogleDriveService.instance.ensureDedicatedFolder());
-        Navigator.of(context).pop(user.email);
-      } else {
-        setState(() => _loading = false);
-      }
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _loading = false;
-        _errorMessage = e.toString().replaceFirst('Exception: ', '');
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final hasInitial = widget.initialEmail.isNotEmpty;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return AlertDialog(
-      title: const Row(
-        children: [
-          Icon(Icons.shield_outlined, color: Colors.green),
-          SizedBox(width: 8),
-          Text('Akun Google & Drive'),
-        ],
-      ),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.green.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Icon(Icons.lock_outline, size: 20, color: Colors.green),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          GoogleDriveBackupPolicy.privacyNoticeTitle,
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12,
-                            color: Colors.green,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        const Text(
-                          GoogleDriveBackupPolicy.privacyNoticeBody,
-                          style: TextStyle(fontSize: 11),
-                        ),
-                        const SizedBox(height: 6),
-                        GestureDetector(
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const LegalDocumentScreen(
-                                  initialType: LegalDocumentType.privacyPolicy,
-                                ),
-                              ),
-                            );
-                          },
-                          child: const Text(
-                            'Baca Kebijakan Privasi »',
-                            style: TextStyle(
-                              color: Colors.green,
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                              decoration: TextDecoration.underline,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            if (hasInitial) ...[
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: isDark ? Colors.grey.shade900 : Colors.grey.shade100,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: Colors.green.withValues(alpha: 0.5),
-                    width: 1.5,
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 22,
-                      backgroundColor: Colors.teal.shade100,
-                      backgroundImage: widget.initialPhotoUrl.isNotEmpty
-                          ? NetworkImage(widget.initialPhotoUrl)
-                          : null,
-                      onBackgroundImageError:
-                          widget.initialPhotoUrl.isNotEmpty ? (_, _) {} : null,
-                      child: widget.initialPhotoUrl.isEmpty
-                          ? const Icon(
-                              Icons.account_circle,
-                              color: Colors.teal,
-                              size: 28,
-                            )
-                          : null,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (widget.initialDisplayName.isNotEmpty)
-                            Text(
-                              widget.initialDisplayName,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 14,
-                              ),
-                            ),
-                          Text(
-                            widget.initialEmail,
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: isDark ? Colors.white70 : Colors.black87,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          const Row(
-                            children: [
-                              Icon(
-                                Icons.check_circle,
-                                color: Colors.green,
-                                size: 14,
-                              ),
-                              SizedBox(width: 4),
-                              Text(
-                                'Terhubung ke Google Drive',
-                                style: TextStyle(
-                                  color: Colors.green,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Cadangan disimpan di folder "${GoogleDriveBackupPolicy.dedicatedFolderName}".',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: isDark ? Colors.white60 : Colors.black54,
-                ),
-              ),
-            ] else ...[
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color:
-                      isDark ? Colors.blueGrey.shade900 : Colors.blue.shade50,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: isDark
-                        ? Colors.blueGrey.shade700
-                        : Colors.blue.shade200,
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.add_to_drive_outlined,
-                          size: 18,
-                          color: isDark
-                              ? Colors.blue.shade300
-                              : Colors.blue.shade800,
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          'Izin Akses Google Drive',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12,
-                            color: isDark
-                                ? Colors.blue.shade300
-                                : Colors.blue.shade800,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Hubungkan akun Google agar berkas cadangan DHKP otomatis disimpan ke folder "${GoogleDriveBackupPolicy.dedicatedFolderName}" di Google Drive Anda.',
-                      style: TextStyle(
-                        fontSize: 11,
-                        height: 1.35,
-                        color: isDark ? Colors.white70 : Colors.black87,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              SizedBox(
-                height: 48,
-                child: OutlinedButton.icon(
-                  onPressed: _loading ? null : _handleGoogleSignIn,
-                  icon: _loading
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const FaIcon(
-                          FontAwesomeIcons.google,
-                          color: Colors.red,
-                          size: 18,
-                        ),
-                  label: Text(
-                    _loading
-                        ? 'Menghubungkan...'
-                        : 'Masuk & Izinkan Google Drive',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 14,
-                      color: isDark ? Colors.white : Colors.black87,
-                    ),
-                  ),
-                  style: OutlinedButton.styleFrom(
-                    side: BorderSide(
-                      color:
-                          isDark ? Colors.grey.shade700 : Colors.grey.shade300,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    backgroundColor:
-                        isDark ? Colors.grey.shade800 : Colors.white,
-                  ),
-                ),
-              ),
-              if (_errorMessage != null) ...[
-                const SizedBox(height: 10),
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: Colors.red.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(6),
-                    border:
-                        Border.all(color: Colors.red.withValues(alpha: 0.3)),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Icon(
-                        Icons.error_outline,
-                        size: 16,
-                        color: Colors.red,
-                      ),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          _errorMessage!,
-                          style:
-                              const TextStyle(color: Colors.red, fontSize: 11),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ],
-          ],
-        ),
-      ),
-      actions: [
-        if (hasInitial)
-          TextButton(
-            onPressed: () => Navigator.of(context).pop('remove'),
-            child: const Text(
-              'Putuskan Akun',
-              style: TextStyle(color: Colors.red),
-            ),
-          ),
-        TextButton(
-          onPressed: () => Navigator.of(context).pop('cancel'),
-          child: Text(hasInitial ? 'Tutup' : 'Batal'),
-        ),
-      ],
-    );
-  }
-}
-
-class _GoogleFolderDialog extends StatefulWidget {
-  final String currentAccount;
-  final String initialLink;
-
-  const _GoogleFolderDialog({
-    required this.currentAccount,
-    required this.initialLink,
-  });
-
-  @override
-  State<_GoogleFolderDialog> createState() => _GoogleFolderDialogState();
-}
-
-class _GoogleFolderDialogState extends State<_GoogleFolderDialog> {
-  late final TextEditingController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = TextEditingController(text: widget.initialLink);
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final hasInitial = widget.initialLink.isNotEmpty;
-    return AlertDialog(
-      title: const Row(
-        children: [
-          Icon(Icons.folder_shared_outlined, color: Colors.blue),
-          SizedBox(width: 8),
-          Text('Folder Bersama'),
-        ],
-      ),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.blue.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
-              ),
-              child: const Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(Icons.info_outline, size: 20, color: Colors.blue),
-                  SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Syarat Hak Akses Folder',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12,
-                            color: Colors.blue,
-                          ),
-                        ),
-                        SizedBox(height: 4),
-                        Text(
-                          GoogleDriveBackupPolicy.editorRequirementNotice,
-                          style: TextStyle(fontSize: 11),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Akun Google: ${widget.currentAccount}\n\n'
-              'Tempel link folder Google Drive bersama tempat menyimpan cadangan:',
-              style: const TextStyle(fontSize: 13),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _controller,
-              keyboardType: TextInputType.url,
-              decoration: const InputDecoration(
-                labelText: 'Link Folder Google Drive',
-                hintText: 'https://drive.google.com/drive/folders/...',
-                prefixIcon: Icon(Icons.link),
-                border: OutlineInputBorder(),
-              ),
-            ),
-          ],
-        ),
-      ),
-      actions: [
-        if (hasInitial) ...[
-          IconButton(
-            tooltip: 'Bagikan Tautan ke Kolektor Lain',
-            icon: const Icon(Icons.share_outlined, color: Colors.blue),
-            onPressed: () {
-              final link = _controller.text.trim();
-              if (link.isNotEmpty) {
-                SharedStorageLinkService.shareStorageLink(
-                  context: context,
-                  folder: link,
-                  sender: widget.currentAccount,
-                );
-              }
-            },
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop('reset'),
-            child: const Text('Gunakan Bawaan'),
-          ),
-        ],
-        TextButton(
-          onPressed: () => Navigator.of(context).pop('cancel'),
-          child: const Text('Batal'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.of(context).pop(_controller.text.trim()),
-          child: const Text('Simpan'),
-        ),
       ],
     );
   }

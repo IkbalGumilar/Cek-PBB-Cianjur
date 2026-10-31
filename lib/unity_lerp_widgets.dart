@@ -52,10 +52,7 @@ class _LerpAnimatedCounterState extends State<LerpAnimatedCounter>
     _targetValue = widget.value.toDouble();
     _displayValue = _targetValue;
 
-    _controller = AnimationController(
-      vsync: this,
-      duration: widget.duration,
-    );
+    _controller = AnimationController(vsync: this, duration: widget.duration);
     _curved = CurvedAnimation(parent: _controller, curve: widget.curve);
     _controller.addListener(_onTick);
 
@@ -95,11 +92,7 @@ class _LerpAnimatedCounterState extends State<LerpAnimatedCounter>
         ? widget.formatter!(_displayValue)
         : _displayValue.round().toString();
 
-    return Text(
-      text,
-      style: widget.style,
-      textAlign: widget.textAlign,
-    );
+    return Text(text, style: widget.style, textAlign: widget.textAlign);
   }
 }
 
@@ -145,10 +138,7 @@ class _LerpAnimatedProgressState extends State<LerpAnimatedProgress>
     _targetValue = widget.value.clamp(0.0, 1.0);
     _displayValue = _targetValue;
 
-    _controller = AnimationController(
-      vsync: this,
-      duration: widget.duration,
-    );
+    _controller = AnimationController(vsync: this, duration: widget.duration);
     _curved = CurvedAnimation(parent: _controller, curve: widget.curve);
     _controller.addListener(_onTick);
 
@@ -223,14 +213,8 @@ class _LerpPressableState extends State<LerpPressable>
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: widget.duration,
-    );
-    _curved = CurvedAnimation(
-      parent: _controller,
-      curve: Curves.easeOutCubic,
-    );
+    _controller = AnimationController(vsync: this, duration: widget.duration);
+    _curved = CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic);
   }
 
   @override
@@ -272,10 +256,7 @@ class _LerpPressableState extends State<LerpPressable>
           builder: (context, child) {
             // Unity: Mathf.Lerp(1.0, pressedScale, t)
             final scale = unityLerp(1.0, widget.pressedScale, _curved.value);
-            return Transform.scale(
-              scale: scale,
-              child: child,
-            );
+            return Transform.scale(scale: scale, child: child);
           },
           child: widget.child,
         ),
@@ -326,10 +307,7 @@ class SmoothActivityBanner extends StatelessWidget {
           ).animate(animation);
           return FadeTransition(
             opacity: animation,
-            child: SlideTransition(
-              position: offsetAnimation,
-              child: child,
-            ),
+            child: SlideTransition(position: offsetAnimation, child: child),
           );
         },
         child: !isActive
@@ -340,9 +318,7 @@ class SmoothActivityBanner extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: color.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: color.withValues(alpha: 0.3),
-                  ),
+                  border: Border.all(color: color.withValues(alpha: 0.3)),
                 ),
                 clipBehavior: Clip.antiAlias,
                 child: Column(
@@ -366,8 +342,9 @@ class SmoothActivityBanner extends StatelessWidget {
                                   value: progress,
                                   strokeWidth: 2.4,
                                   color: color,
-                                  backgroundColor:
-                                      color.withValues(alpha: 0.18),
+                                  backgroundColor: color.withValues(
+                                    alpha: 0.18,
+                                  ),
                                 ),
                               ),
                               Icon(icon, size: 13, color: color),
@@ -453,7 +430,8 @@ class SmoothLoadingCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final primary = accentColor ?? (isDarkCanvas ? Colors.tealAccent : colorScheme.primary);
+    final primary =
+        accentColor ?? (isDarkCanvas ? Colors.tealAccent : colorScheme.primary);
 
     return TweenAnimationBuilder<double>(
       tween: Tween<double>(begin: 0.94, end: 1.0),
@@ -463,10 +441,7 @@ class SmoothLoadingCard extends StatelessWidget {
         final opacity = ((scale - 0.94) / 0.06).clamp(0.0, 1.0);
         return Opacity(
           opacity: opacity,
-          child: Transform.scale(
-            scale: scale,
-            child: child,
-          ),
+          child: Transform.scale(scale: scale, child: child),
         );
       },
       child: Center(
@@ -487,8 +462,10 @@ class SmoothLoadingCard extends StatelessWidget {
                 ),
               ),
               child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 24,
+                ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -504,11 +481,7 @@ class SmoothLoadingCard extends StatelessWidget {
                             backgroundColor: primary.withValues(alpha: 0.15),
                           ),
                         ),
-                        Icon(
-                          icon,
-                          size: 30,
-                          color: primary,
-                        ),
+                        Icon(icon, size: 30, color: primary),
                       ],
                     ),
                     const SizedBox(height: 18),
@@ -527,7 +500,7 @@ class SmoothLoadingCard extends StatelessWidget {
                         color: isDarkCanvas
                             ? Colors.white70
                             : (theme.textTheme.bodySmall?.color ??
-                                Colors.grey[600]),
+                                  Colors.grey[600]),
                       ),
                       textAlign: TextAlign.center,
                     ),
@@ -579,4 +552,3 @@ class SmoothLoadingCard extends StatelessWidget {
     );
   }
 }
-

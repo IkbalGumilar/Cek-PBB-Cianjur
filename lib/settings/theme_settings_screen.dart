@@ -23,9 +23,7 @@ class ThemeSettingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Tema & Tampilan'),
-      ),
+      appBar: AppBar(title: const Text('Tema & Tampilan')),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(16),
@@ -250,8 +248,8 @@ class _ThemeSettingsSectionState extends State<ThemeSettingsSection>
                     Text(
                       'Mode Tema',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ],
                 ),
@@ -318,9 +316,8 @@ class _ThemeSettingsSectionState extends State<ThemeSettingsSection>
                     Expanded(
                       child: Text(
                         'Warna Aplikasi',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.bold),
                       ),
                     ),
                     if (!useMaterialYou)
@@ -381,8 +378,8 @@ class _ThemeSettingsSectionState extends State<ThemeSettingsSection>
                   Text(
                     'Pilihan Warna Cepat',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   const SizedBox(height: 10),
                   Wrap(
@@ -441,8 +438,8 @@ class _ThemeSettingsSectionState extends State<ThemeSettingsSection>
                       Text(
                         'Atur Warna Sendiri',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              fontWeight: FontWeight.w600,
-                            ),
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                       TextButton.icon(
                         onPressed: () {
@@ -543,10 +540,7 @@ class _RgbSliderRow extends StatelessWidget {
           child: Text(
             value.round().toString(),
             textAlign: TextAlign.end,
-            style: const TextStyle(
-              fontFamily: 'monospace',
-              fontSize: 12,
-            ),
+            style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
           ),
         ),
       ],

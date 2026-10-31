@@ -11,11 +11,8 @@ class Dusun {
   final String name;
   final List<String> bloks;
 
-  const Dusun({
-    required this.number,
-    String? name,
-    required this.bloks,
-  }) : name = name ?? 'Dusun $number';
+  const Dusun({required this.number, String? name, required this.bloks})
+    : name = name ?? 'Dusun $number';
 
   String get label => name.isNotEmpty ? name : 'Dusun $number';
 
@@ -146,12 +143,11 @@ class DusunData {
       if (dusunsJson != null && dusunsJson.isNotEmpty) {
         final decoded = jsonDecode(dusunsJson);
         if (decoded is List) {
-          final list =
-              decoded
-                  .whereType<Map<String, dynamic>>()
-                  .map((j) => Dusun.fromJson(j))
-                  .where((d) => d.bloks.isNotEmpty)
-                  .toList();
+          final list = decoded
+              .whereType<Map<String, dynamic>>()
+              .map((j) => Dusun.fromJson(j))
+              .where((d) => d.bloks.isNotEmpty)
+              .toList();
           if (list.isNotEmpty) {
             _allDusuns = list;
           }

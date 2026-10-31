@@ -76,14 +76,14 @@ class PbbClient extends BaseHttpClient {
   Dio get _dio => dio;
 
   PbbClient({Dio? dio, CookieJar? cookieJar})
-      : super(
-          connectTimeout: const Duration(seconds: 10),
-          sendTimeout: const Duration(seconds: 10),
-          receiveTimeout: const Duration(seconds: 15),
-          enableCookies: true,
-          customCookieJar: cookieJar,
-          customDio: dio,
-        );
+    : super(
+        connectTimeout: const Duration(seconds: 10),
+        sendTimeout: const Duration(seconds: 10),
+        receiveTimeout: const Duration(seconds: 15),
+        enableCookies: true,
+        customCookieJar: cookieJar,
+        customDio: dio,
+      );
 
   Future<Uint8List> fetchCaptchaImage(CheckMode mode) async {
     await _dio.get(_baseUrl);
@@ -138,7 +138,8 @@ class PbbClient extends BaseHttpClient {
     final bytes = response.data ?? [];
     final contentType =
         response.headers.value('content-type')?.toLowerCase() ?? '';
-    final isPdf = (bytes.length >= 4 &&
+    final isPdf =
+        (bytes.length >= 4 &&
             bytes[0] == 0x25 && // %
             bytes[1] == 0x50 && // P
             bytes[2] == 0x44 && // D
@@ -146,10 +147,7 @@ class PbbClient extends BaseHttpClient {
         contentType.contains('application/pdf');
 
     if (isPdf) {
-      return PbbResult(
-        'Belum Bayar',
-        'Terdapat tagihan tunggakan PBB aktif',
-      );
+      return PbbResult('Belum Bayar', 'Terdapat tagihan tunggakan PBB aktif');
     }
 
     final html = utf8.decode(bytes, allowMalformed: true);
@@ -192,10 +190,7 @@ class PbbClient extends BaseHttpClient {
       );
     }
 
-    return PbbResult(
-      'Perlu Cek Manual',
-      html,
-    );
+    return PbbResult('Perlu Cek Manual', html);
   }
 
   /// Mengekstrak rincian bukti bayar (STTS) secara in-memory (di RAM)
@@ -225,7 +220,8 @@ class PbbClient extends BaseHttpClient {
 
       final contentType =
           response.headers.value('content-type')?.toLowerCase() ?? '';
-      final isPdf = (bytes.length >= 4 &&
+      final isPdf =
+          (bytes.length >= 4 &&
               bytes[0] == 0x25 && // %
               bytes[1] == 0x50 && // P
               bytes[2] == 0x44 && // D

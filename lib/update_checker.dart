@@ -60,9 +60,10 @@ class UpdateChecker {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_lastCheckedKey, DateTime.now().millisecondsSinceEpoch);
 
-    final currentVersion = currentVersionOverride ??
-        (await PackageInfo.fromPlatform()).version;
-    final allowPrerelease = includePrereleases ??
+    final currentVersion =
+        currentVersionOverride ?? (await PackageInfo.fromPlatform()).version;
+    final allowPrerelease =
+        includePrereleases ??
         (currentVersion.contains('alpha') || currentVersion.contains('beta'));
 
     final List<dynamic> rawReleases;
@@ -117,7 +118,8 @@ class UpdateChecker {
         .toList();
 
     final isAndroid = isAndroidOverride ?? Platform.isAndroid;
-    final supportedAbis = supportedAbisOverride ??
+    final supportedAbis =
+        supportedAbisOverride ??
         (isAndroid ? await ApkInstaller.getSupportedAbis() : null);
 
     final asset = findAssetForPlatform(
@@ -160,7 +162,9 @@ class UpdateChecker {
 
     if (isAndroid) {
       final apkAssets = assets
-          .where((a) => (a['name'] as String? ?? '').toLowerCase().endsWith('.apk'))
+          .where(
+            (a) => (a['name'] as String? ?? '').toLowerCase().endsWith('.apk'),
+          )
           .toList();
       if (apkAssets.isEmpty) return null;
       if (apkAssets.length == 1) return apkAssets.first;
@@ -177,10 +181,12 @@ class UpdateChecker {
         for (final asset in apkAssets) {
           final name = (asset['name'] as String? ?? '').toLowerCase();
           if (name.contains(cleanAbi)) return asset;
-          if (cleanAbi == 'arm64-v8a' && (name.contains('arm64') || name.contains('v8a'))) {
+          if (cleanAbi == 'arm64-v8a' &&
+              (name.contains('arm64') || name.contains('v8a'))) {
             return asset;
           }
-          if (cleanAbi == 'armeabi-v7a' && (name.contains('armeabi') || name.contains('v7a'))) {
+          if (cleanAbi == 'armeabi-v7a' &&
+              (name.contains('armeabi') || name.contains('v7a'))) {
             return asset;
           }
           if (cleanAbi == 'x86_64' && name.contains('x86_64')) {
@@ -192,7 +198,8 @@ class UpdateChecker {
       // Jika tidak ada nama berkas yang mencantumkan ABI di atas, cari berkas APK universal
       for (final asset in apkAssets) {
         final name = (asset['name'] as String? ?? '').toLowerCase();
-        final hasSpecificAbi = name.contains('arm64') ||
+        final hasSpecificAbi =
+            name.contains('arm64') ||
             name.contains('v8a') ||
             name.contains('armeabi') ||
             name.contains('v7a') ||
@@ -232,7 +239,6 @@ class UpdateChecker {
     return null;
   }
 
-
   /// Memeriksa apakah rilis memenuhi syarat untuk pengguna saat ini.
   /// Pengguna versi beta/alpha diizinkan menerima pembaruan beta/alpha yang lebih baru.
   /// Pengguna rilis stabil hanya menerima pembaruan rilis stabil resmi.
@@ -263,8 +269,9 @@ class UpdateChecker {
         .trim()
         .replaceFirst(RegExp(r'^v'), '')
         .replaceFirst(RegExp(r'\+.*$'), '');
-    return RegExp(r'^\d+\.\d+\.\d+(?:-(?:alpha|beta)(?:\.?\d+)?)?$')
-            .hasMatch(version)
+    return RegExp(
+          r'^\d+\.\d+\.\d+(?:-(?:alpha|beta)(?:\.?\d+)?)?$',
+        ).hasMatch(version)
         ? version
         : null;
   }

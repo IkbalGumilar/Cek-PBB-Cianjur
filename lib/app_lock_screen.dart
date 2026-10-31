@@ -77,7 +77,8 @@ class _AppLockScreenState extends State<AppLockScreen> {
         timer.cancel();
         return;
       }
-      final remaining = _lockoutUntil?.difference(DateTime.now()).inSeconds ?? 0;
+      final remaining =
+          _lockoutUntil?.difference(DateTime.now()).inSeconds ?? 0;
       if (remaining <= 0) {
         timer.cancel();
         _service.resetFailedPinAttempts();
@@ -88,7 +89,8 @@ class _AppLockScreenState extends State<AppLockScreen> {
         });
       } else {
         setState(() {
-          _errorMessage = 'Terlalu banyak percobaan salah. Coba lagi dalam $remaining detik.';
+          _errorMessage =
+              'Terlalu banyak percobaan salah. Coba lagi dalam $remaining detik.';
         });
       }
     });
@@ -111,7 +113,8 @@ class _AppLockScreenState extends State<AppLockScreen> {
       widget.onUnlocked?.call();
     } else {
       setState(() {
-        _errorMessage = 'Autentikasi belum berhasil. Ketuk tombol untuk mencoba lagi.';
+        _errorMessage =
+            'Autentikasi belum berhasil. Ketuk tombol untuk mencoba lagi.';
       });
     }
   }
@@ -181,7 +184,8 @@ class _AppLockScreenState extends State<AppLockScreen> {
         if (_failedAttempts >= 5) {
           _startLockoutTimer(30);
         } else {
-          _errorMessage = 'Kata sandi salah. Sisa percobaan: ${5 - _failedAttempts}';
+          _errorMessage =
+              'Kata sandi salah. Sisa percobaan: ${5 - _failedAttempts}';
         }
       });
     }
@@ -195,13 +199,18 @@ class _AppLockScreenState extends State<AppLockScreen> {
     return PopScope(
       canPop: false,
       child: Scaffold(
-        backgroundColor: isDark ? const Color(0xFF121212) : const Color(0xFFF8F9FA),
+        backgroundColor: isDark
+            ? const Color(0xFF121212)
+            : const Color(0xFFF8F9FA),
         body: SafeArea(
           child: _isLoading
               ? const Center(child: CircularProgressIndicator())
               : Center(
                   child: SingleChildScrollView(
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 16,
+                    ),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
@@ -211,7 +220,9 @@ class _AppLockScreenState extends State<AppLockScreen> {
                           height: 80,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: theme.colorScheme.primary.withValues(alpha: 0.12),
+                            color: theme.colorScheme.primary.withValues(
+                              alpha: 0.12,
+                            ),
                           ),
                           child: Icon(
                             Icons.lock_rounded,
@@ -232,8 +243,8 @@ class _AppLockScreenState extends State<AppLockScreen> {
                           _lockType == AppLockType.device
                               ? 'Gunakan Sidik Jari, Wajah, atau Kunci Layar HP'
                               : (_lockType == AppLockType.pin
-                                  ? 'Masukkan 6 Digit PIN Keamanan'
-                                  : 'Masukkan Kata Sandi Aplikasi'),
+                                    ? 'Masukkan 6 Digit PIN Keamanan'
+                                    : 'Masukkan Kata Sandi Aplikasi'),
                           textAlign: TextAlign.center,
                           style: theme.textTheme.bodyMedium?.copyWith(
                             color: theme.colorScheme.onSurfaceVariant,
@@ -244,7 +255,10 @@ class _AppLockScreenState extends State<AppLockScreen> {
                         // Pesan Error / Lockout
                         if (_errorMessage != null)
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 8,
+                            ),
                             margin: const EdgeInsets.only(bottom: 20),
                             decoration: BoxDecoration(
                               color: theme.colorScheme.errorContainer,
@@ -262,9 +276,12 @@ class _AppLockScreenState extends State<AppLockScreen> {
                           ),
 
                         // Form Konten Sesuai Tipe Kunci
-                        if (_lockType == AppLockType.device) _buildDeviceContent(theme),
-                        if (_lockType == AppLockType.pin) _buildPinContent(theme),
-                        if (_lockType == AppLockType.password) _buildPasswordContent(theme),
+                        if (_lockType == AppLockType.device)
+                          _buildDeviceContent(theme),
+                        if (_lockType == AppLockType.pin)
+                          _buildPinContent(theme),
+                        if (_lockType == AppLockType.password)
+                          _buildPasswordContent(theme),
                       ],
                     ),
                   ),
@@ -282,7 +299,9 @@ class _AppLockScreenState extends State<AppLockScreen> {
         ElevatedButton.icon(
           style: ElevatedButton.styleFrom(
             padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
             backgroundColor: theme.colorScheme.primary,
             foregroundColor: theme.colorScheme.onPrimary,
             elevation: 2,
@@ -368,7 +387,10 @@ class _AppLockScreenState extends State<AppLockScreen> {
                         onPressed: _enteredPin.isEmpty
                             ? null
                             : () => setState(() => _enteredPin = ''),
-                        child: const Text('Hapus', style: TextStyle(fontSize: 13)),
+                        child: const Text(
+                          'Hapus',
+                          style: TextStyle(fontSize: 13),
+                        ),
                       ),
                     ),
                     _buildKeypadButton(digit: '0', theme: theme),
@@ -378,7 +400,9 @@ class _AppLockScreenState extends State<AppLockScreen> {
                       height: 68,
                       child: IconButton(
                         icon: const Icon(Icons.backspace_outlined),
-                        onPressed: _enteredPin.isEmpty ? null : _handlePinBackspace,
+                        onPressed: _enteredPin.isEmpty
+                            ? null
+                            : _handlePinBackspace,
                       ),
                     ),
                   ],
@@ -398,13 +422,17 @@ class _AppLockScreenState extends State<AppLockScreen> {
       child: OutlinedButton(
         style: OutlinedButton.styleFrom(
           shape: const CircleBorder(),
-          side: BorderSide(color: theme.colorScheme.outline.withValues(alpha: 0.25)),
+          side: BorderSide(
+            color: theme.colorScheme.outline.withValues(alpha: 0.25),
+          ),
           padding: EdgeInsets.zero,
         ),
         onPressed: _isLockedOut() ? null : () => _handlePinDigit(digit),
         child: Text(
           digit,
-          style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+          style: theme.textTheme.headlineSmall?.copyWith(
+            fontWeight: FontWeight.bold,
+          ),
         ),
       ),
     );
@@ -425,9 +453,12 @@ class _AppLockScreenState extends State<AppLockScreen> {
               prefixIcon: const Icon(Icons.password_rounded),
               suffixIcon: IconButton(
                 icon: Icon(
-                  _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                  _obscurePassword
+                      ? Icons.visibility_outlined
+                      : Icons.visibility_off_outlined,
                 ),
-                onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                onPressed: () =>
+                    setState(() => _obscurePassword = !_obscurePassword),
               ),
             ),
             onSubmitted: (_) => _handlePasswordSubmit(),

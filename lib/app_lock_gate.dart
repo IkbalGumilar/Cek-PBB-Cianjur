@@ -59,9 +59,7 @@ class _AppLockGateState extends State<AppLockGate> with WidgetsBindingObserver {
     if (_isCheckingInitialLock) {
       // Tampilkan latar kosong aman selama status kunci async belum selesai dibaca
       // untuk mencegah layar utama muncul sekilas (frame flashing / UI flicker).
-      return ColoredBox(
-        color: Theme.of(context).scaffoldBackgroundColor,
-      );
+      return ColoredBox(color: Theme.of(context).scaffoldBackgroundColor);
     }
 
     return Stack(
@@ -72,9 +70,7 @@ class _AppLockGateState extends State<AppLockGate> with WidgetsBindingObserver {
           valueListenable: _securityService.isAppLockedNotifier,
           builder: (context, isLocked, child) {
             if (!isLocked) return const SizedBox.shrink();
-            return AppLockScreen(
-              onUnlocked: () => _securityService.unlock(),
-            );
+            return AppLockScreen(onUnlocked: () => _securityService.unlock());
           },
         ),
       ],

@@ -14,11 +14,7 @@ class StorageLinkPayload {
   final String? name;
   final String? sender;
 
-  const StorageLinkPayload({
-    required this.folder,
-    this.name,
-    this.sender,
-  });
+  const StorageLinkPayload({required this.folder, this.name, this.sender});
 
   /// Mengambil ID folder murni (jika link berupa URL Google Drive).
   String get cleanFolderId {
@@ -49,8 +45,9 @@ class SharedStorageLinkService {
   static const String webHost = 'ikbalgumilar.github.io';
   static const String webPath = '/Cek-PBB-Cianjur/connect';
 
-  static const MethodChannel _deepLinkChannel =
-      MethodChannel('id.cianjur.cekpbb.cek_pbb_app/deeplink');
+  static const MethodChannel _deepLinkChannel = MethodChannel(
+    'id.cianjur.cekpbb.cek_pbb_app/deeplink',
+  );
 
   bool _initialized = false;
   BuildContext? _activeContext;
@@ -62,9 +59,7 @@ class SharedStorageLinkService {
     String? name,
     String? sender,
   }) {
-    final params = <String, String>{
-      'folder': folder.trim(),
-    };
+    final params = <String, String>{'folder': folder.trim()};
     if (name != null && name.trim().isNotEmpty) {
       params['name'] = name.trim();
     }
@@ -80,9 +75,7 @@ class SharedStorageLinkService {
     String? name,
     String? sender,
   }) {
-    final params = <String, String>{
-      'folder': folder.trim(),
-    };
+    final params = <String, String>{'folder': folder.trim()};
     if (name != null && name.trim().isNotEmpty) {
       params['name'] = name.trim();
     }
@@ -225,8 +218,9 @@ class SharedStorageLinkService {
       });
 
       // Cek apakah aplikasi dibuka pertama kali lewat deep link saat dingin (cold start)
-      final initialLink =
-          await _deepLinkChannel.invokeMethod<String>('getInitialLink');
+      final initialLink = await _deepLinkChannel.invokeMethod<String>(
+        'getInitialLink',
+      );
       if (initialLink != null && initialLink.isNotEmpty) {
         final payload = parseString(initialLink);
         if (payload != null && _activeContext != null) {
@@ -250,10 +244,11 @@ class SharedStorageLinkService {
     BuildContext context,
     StorageLinkPayload payload,
   ) async {
-    final currentLink =
-        await BlokBackupScheduler.instance.getGoogleDriveFolderLink();
+    final currentLink = await BlokBackupScheduler.instance
+        .getGoogleDriveFolderLink();
     final currentClean =
-        GoogleDriveBackupPolicy.extractFolderId(currentLink) ?? currentLink.trim();
+        GoogleDriveBackupPolicy.extractFolderId(currentLink) ??
+        currentLink.trim();
 
     if (currentClean.isNotEmpty && currentClean == payload.cleanFolderId) {
       if (context.mounted) {
@@ -384,7 +379,11 @@ class _ConfirmStorageLinkDialog extends StatelessWidget {
                   if (payload.name != null && payload.name!.isNotEmpty) ...[
                     Row(
                       children: [
-                        const Icon(Icons.label_outline, size: 16, color: Colors.teal),
+                        const Icon(
+                          Icons.label_outline,
+                          size: 16,
+                          color: Colors.teal,
+                        ),
                         const SizedBox(width: 6),
                         Text(
                           payload.name!,
@@ -400,7 +399,11 @@ class _ConfirmStorageLinkDialog extends StatelessWidget {
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(Icons.folder_shared_outlined, size: 16, color: Colors.teal),
+                      const Icon(
+                        Icons.folder_shared_outlined,
+                        size: 16,
+                        color: Colors.teal,
+                      ),
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
@@ -408,7 +411,9 @@ class _ConfirmStorageLinkDialog extends StatelessWidget {
                           style: TextStyle(
                             fontFamily: 'monospace',
                             fontSize: 11,
-                            color: isDark ? Colors.tealAccent : Colors.teal.shade900,
+                            color: isDark
+                                ? Colors.tealAccent
+                                : Colors.teal.shade900,
                           ),
                         ),
                       ),
@@ -418,7 +423,10 @@ class _ConfirmStorageLinkDialog extends StatelessWidget {
                     const SizedBox(height: 6),
                     Text(
                       'Dikirim oleh: ${payload.sender}',
-                      style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.grey.shade600,
+                      ),
                     ),
                   ],
                 ],

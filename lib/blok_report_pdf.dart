@@ -68,7 +68,10 @@ void _pdfWorkerEntry(_PdfIsolateParam param) async {
             children: [
               pw.Text(
                 param.judul,
-                style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12),
+                style: pw.TextStyle(
+                  fontWeight: pw.FontWeight.bold,
+                  fontSize: 12,
+                ),
               ),
               pw.SizedBox(height: 12),
               pw.Text(
@@ -225,7 +228,10 @@ class BlokReportPdf {
             children: [
               pw.Text(
                 judul,
-                style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12),
+                style: pw.TextStyle(
+                  fontWeight: pw.FontWeight.bold,
+                  fontSize: 12,
+                ),
               ),
               pw.SizedBox(height: 12),
               pw.Text(

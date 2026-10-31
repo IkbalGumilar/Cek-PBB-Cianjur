@@ -20,15 +20,11 @@ class AboutAppScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Tentang & Bagikan Aplikasi'),
-      ),
+      appBar: AppBar(title: const Text('Tentang & Bagikan Aplikasi')),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(16),
-          children: const [
-            AboutAppSection(),
-          ],
+          children: const [AboutAppSection()],
         ),
       ),
     );
@@ -95,9 +91,9 @@ class _AboutAppSectionState extends State<AboutAppSection> {
     } catch (_) {
       await Clipboard.setData(ClipboardData(text: url));
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Tautan disalin: $url')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Tautan disalin: $url')));
     }
   }
 
@@ -110,9 +106,9 @@ class _AboutAppSectionState extends State<AboutAppSection> {
         final message = location != null
             ? 'APK tersimpan di $location'
             : 'Menu berbagi dibuka.';
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(message)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(message)));
       } else {
         await Clipboard.setData(
           const ClipboardData(text: UpdateChecker.releasesPageUrl),
@@ -120,17 +116,15 @@ class _AboutAppSectionState extends State<AboutAppSection> {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text(
-              'Link unduhan aplikasi berhasil disalin.',
-            ),
+            content: Text('Link unduhan aplikasi berhasil disalin.'),
           ),
         );
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal membagikan aplikasi: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Gagal membagikan aplikasi: $e')));
     } finally {
       if (mounted) setState(() => _sharing = false);
     }
@@ -155,9 +149,9 @@ class _AboutAppSectionState extends State<AboutAppSection> {
       );
     } on UpdateCheckError catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.message)));
     } finally {
       if (mounted) setState(() => _checking = false);
     }
@@ -309,8 +303,9 @@ class _AboutAppSectionState extends State<AboutAppSection> {
                         backgroundImage: _devAvatarUrl != null
                             ? NetworkImage(_devAvatarUrl!)
                             : null,
-                        onBackgroundImageError:
-                            _devAvatarUrl != null ? (_, _) {} : null,
+                        onBackgroundImageError: _devAvatarUrl != null
+                            ? (_, _) {}
+                            : null,
                         child: _devAvatarUrl == null
                             ? Text(
                                 'IG',

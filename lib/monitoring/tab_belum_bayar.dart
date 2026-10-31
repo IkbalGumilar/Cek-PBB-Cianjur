@@ -100,10 +100,7 @@ class _TabBelumBayarState extends State<TabBelumBayar> {
           ],
         ),
         const MonitoringSectionTitle('Filter lainnya (opsional)'),
-        BukuDropdown(
-          value: _buku,
-          onChanged: (v) => setState(() => _buku = v),
-        ),
+        BukuDropdown(value: _buku, onChanged: (v) => setState(() => _buku = v)),
         const SizedBox(height: 12),
         TextField(
           controller: _nop,

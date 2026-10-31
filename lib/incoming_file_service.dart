@@ -17,8 +17,9 @@ class IncomingFileService {
   IncomingFileService._();
   static final instance = IncomingFileService._();
 
-  static const MethodChannel _channel =
-      MethodChannel('id.cianjur.cekpbb.cek_pbb_app/incoming_file');
+  static const MethodChannel _channel = MethodChannel(
+    'id.cianjur.cekpbb.cek_pbb_app/incoming_file',
+  );
 
   BuildContext? _activeContext;
   bool _initialized = false;
@@ -44,7 +45,8 @@ class IncomingFileService {
         if (call.method == 'onIncomingFile') {
           final filePath = call.arguments as String?;
           if (filePath != null && filePath.isNotEmpty) {
-            final targetContext = _activeContext ?? rootNavigatorKey.currentContext;
+            final targetContext =
+                _activeContext ?? rootNavigatorKey.currentContext;
             if (targetContext != null) {
               await handleIncomingFile(targetContext, filePath);
             }
@@ -68,8 +70,8 @@ class IncomingFileService {
           : 'berkas.dkhp';
 
       // 1. Jika berkas adalah dokumen PDF, langsung buka di pembaca PDF bawaan
-      final isPdf = fileName.toLowerCase().endsWith('.pdf') ||
-          await isPdfFile(file);
+      final isPdf =
+          fileName.toLowerCase().endsWith('.pdf') || await isPdfFile(file);
       if (isPdf) {
         if (!context.mounted) return;
         await DocumentPreviewScreen.openPdfFile(
@@ -84,7 +86,8 @@ class IncomingFileService {
       final lowerName = fileName.toLowerCase();
 
       // 2. Jika berkas adalah Spreadsheet (Excel .xlsx/.xls atau CSV), buka di pembaca Spreadsheet (Hanya Lihat)
-      final isSpreadsheet = lowerName.endsWith('.xlsx') ||
+      final isSpreadsheet =
+          lowerName.endsWith('.xlsx') ||
           lowerName.endsWith('.xls') ||
           lowerName.endsWith('.csv');
       if (isSpreadsheet) {
@@ -100,7 +103,8 @@ class IncomingFileService {
       }
 
       // 3. Jika berkas adalah paket DHKP (.dkhp / .dhkp / .dat), buka di pratinjau DHKP (dengan tombol Impor)
-      final isDkhp = lowerName.endsWith('.dkhp') ||
+      final isDkhp =
+          lowerName.endsWith('.dkhp') ||
           lowerName.endsWith('.dhkp') ||
           lowerName.endsWith('.dat');
       if (isDkhp) {
@@ -209,9 +213,7 @@ class IncomingFileService {
             onPressed: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(
-                  builder: (_) => const BlokCatatanScreen(),
-                ),
+                MaterialPageRoute(builder: (_) => const BlokCatatanScreen()),
               );
             },
           ),
@@ -227,7 +229,11 @@ class IncomingFileService {
       await showDialog<void>(
         context: context,
         builder: (ctx) => AlertDialog(
-          icon: const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 36),
+          icon: const Icon(
+            Icons.warning_amber_rounded,
+            color: Colors.orange,
+            size: 36,
+          ),
           title: const Text('Validasi Data Gagal'),
           content: Text(e.message),
           actions: [
@@ -244,7 +250,11 @@ class IncomingFileService {
       await showDialog<void>(
         context: context,
         builder: (ctx) => AlertDialog(
-          icon: const Icon(Icons.error_outline_rounded, color: Colors.red, size: 36),
+          icon: const Icon(
+            Icons.error_outline_rounded,
+            color: Colors.red,
+            size: 36,
+          ),
           title: const Text('Gagal Membuka Berkas'),
           content: Text('$e'),
           actions: [
@@ -361,8 +371,11 @@ class _ConfirmIncomingFileDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final totalRecords = manifest?['totalRecords'] ??
-        (manifest?['changes'] is List ? (manifest!['changes'] as List).length : null);
+    final totalRecords =
+        manifest?['totalRecords'] ??
+        (manifest?['changes'] is List
+            ? (manifest!['changes'] as List).length
+            : null);
     final description = manifest?['description'] as String?;
     final createdAt = manifest?['createdAt'] ?? manifest?['timestamp'];
 
@@ -401,7 +414,11 @@ class _ConfirmIncomingFileDialog extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.description_rounded, size: 18, color: Colors.grey),
+                      const Icon(
+                        Icons.description_rounded,
+                        size: 18,
+                        color: Colors.grey,
+                      ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
@@ -419,7 +436,10 @@ class _ConfirmIncomingFileDialog extends StatelessWidget {
                   const SizedBox(height: 6),
                   Text(
                     'Ukuran Berkas: $fileSize',
-                    style: TextStyle(fontSize: 11.5, color: Colors.grey.shade600),
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      color: Colors.grey.shade600,
+                    ),
                   ),
                   if (totalRecords != null) ...[
                     const SizedBox(height: 4),
@@ -436,14 +456,20 @@ class _ConfirmIncomingFileDialog extends StatelessWidget {
                     const SizedBox(height: 4),
                     Text(
                       'Waktu Ekspor: $createdAt',
-                      style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.grey.shade600,
+                      ),
                     ),
                   ],
                   if (description != null && description.isNotEmpty) ...[
                     const SizedBox(height: 6),
                     Text(
                       description,
-                      style: const TextStyle(fontSize: 11.5, fontStyle: FontStyle.italic),
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        fontStyle: FontStyle.italic,
+                      ),
                     ),
                   ],
                 ],

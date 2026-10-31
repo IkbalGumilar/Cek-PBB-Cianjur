@@ -87,7 +87,10 @@ class KolaseFotoExporter {
               pw.Center(
                 child: pw.Text(
                   'Belum ada foto dokumentasi untuk dicetak.',
-                  style: const pw.TextStyle(fontSize: 12, color: PdfColors.grey700),
+                  style: const pw.TextStyle(
+                    fontSize: 12,
+                    color: PdfColors.grey700,
+                  ),
                 ),
               ),
             ],
@@ -181,10 +184,7 @@ class KolaseFotoExporter {
                 child: pw.Center(
                   child: pw.AspectRatio(
                     aspectRatio: 1.0,
-                    child: pw.Image(
-                      img,
-                      fit: pw.BoxFit.cover,
-                    ),
+                    child: pw.Image(img, fit: pw.BoxFit.cover),
                   ),
                 ),
               ),
@@ -194,9 +194,7 @@ class KolaseFotoExporter {
           // Kotak kosong bila foto di halaman terakhir tidak genap
           colWidgets.add(
             pw.Expanded(
-              child: pw.Container(
-                margin: const pw.EdgeInsets.all(3),
-              ),
+              child: pw.Container(margin: const pw.EdgeInsets.all(3)),
             ),
           );
         }

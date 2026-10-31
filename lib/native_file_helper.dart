@@ -31,7 +31,9 @@ class NativeFileHelper {
     required String mimeType,
   }) async {
     if (!Platform.isAndroid) {
-      throw UnsupportedError('Penyimpanan ke Media hanya didukung di Android saat ini.');
+      throw UnsupportedError(
+        'Penyimpanan ke Media hanya didukung di Android saat ini.',
+      );
     }
     try {
       final location = await _channel.invokeMethod<String>('saveToMedia', {
@@ -45,7 +47,9 @@ class NativeFileHelper {
       }
       return location;
     } on PlatformException catch (e) {
-      throw Exception('Gagal menyimpan berkas ke media: ${e.message ?? e.code}');
+      throw Exception(
+        'Gagal menyimpan berkas ke media: ${e.message ?? e.code}',
+      );
     }
   }
 

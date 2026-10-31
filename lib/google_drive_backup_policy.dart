@@ -54,7 +54,9 @@ class GoogleDriveBackupPolicy {
     if (trimmed == dedicatedFolderName || trimmed == appDataFolderId) {
       return true;
     }
-    if (customFolderId != null && customFolderId.isNotEmpty && trimmed == customFolderId.trim()) {
+    if (customFolderId != null &&
+        customFolderId.isNotEmpty &&
+        trimmed == customFolderId.trim()) {
       return true;
     }
     return false;
@@ -97,14 +99,12 @@ class GoogleDriveBackupPolicy {
       return fileMatch.group(1);
     }
 
-    final idParamMatch =
-        RegExp(r'[?&]id=([a-zA-Z0-9_-]+)').firstMatch(trimmed);
+    final idParamMatch = RegExp(r'[?&]id=([a-zA-Z0-9_-]+)').firstMatch(trimmed);
     if (idParamMatch != null) {
       return idParamMatch.group(1);
     }
 
-    final folderMatch =
-        RegExp(r'folders/([a-zA-Z0-9_-]+)').firstMatch(trimmed);
+    final folderMatch = RegExp(r'folders/([a-zA-Z0-9_-]+)').firstMatch(trimmed);
     if (folderMatch != null) {
       return folderMatch.group(1);
     }

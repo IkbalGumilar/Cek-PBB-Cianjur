@@ -4,7 +4,14 @@ import 'tax_record.dart';
 class ResultExporter extends BaseTableExporter {
   static Future<String> saveCsv(List<TaxRecord> records) async {
     final bytes = BaseTableExporter.buildCsvData(
-      const ['NOP', 'Nama WP', 'Status', 'Tanggal Bayar', 'No. STAN', 'Nominal'],
+      const [
+        'NOP',
+        'Nama WP',
+        'Status',
+        'Tanggal Bayar',
+        'No. STAN',
+        'Nominal',
+      ],
       [
         for (final r in records)
           [
@@ -14,7 +21,7 @@ class ResultExporter extends BaseTableExporter {
             r.tanggalBayar ?? '-',
             r.nomorStan ?? '-',
             r.jumlahPbb ?? '-',
-          ]
+          ],
       ],
     );
     final fileName = BaseTableExporter.formatFileName(

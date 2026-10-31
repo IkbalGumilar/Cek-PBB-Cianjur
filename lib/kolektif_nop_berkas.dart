@@ -291,8 +291,9 @@ class _Tabel {
 _Tabel _bacaTabel(String namaBerkas, Uint8List bytes) {
   final lower = namaBerkas.toLowerCase();
   try {
-    if (lower.endsWith('.xlsx') || lower.endsWith('.xls'))
+    if (lower.endsWith('.xlsx') || lower.endsWith('.xls')) {
       return _bacaExcel(bytes);
+    }
     if (lower.endsWith('.csv')) return _bacaCsv(bytes);
     if (lower.endsWith('.txt')) return _bacaTeks(bytes);
     return _Tabel(
@@ -450,8 +451,9 @@ StatusImporNop klasifikasiHasilTambahNop({
   if (success) return StatusImporNop.ditambahkan;
   final teks = (pesan ?? '').toLowerCase();
   if (teks.isEmpty) return StatusImporNop.perluDiperiksa;
-  if (_frasaTidakDitemukan.any(teks.contains))
+  if (_frasaTidakDitemukan.any(teks.contains)) {
     return StatusImporNop.tidakDitemukan;
+  }
   if (_frasaSudahBayar.any(teks.contains)) return StatusImporNop.sudahBayar;
   return StatusImporNop.perluDiperiksa;
 }

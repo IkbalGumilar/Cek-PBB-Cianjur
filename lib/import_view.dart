@@ -219,10 +219,7 @@ class _ImportViewState extends State<ImportView> {
                 if (duplicateCount > 0) ...[
                   Text(
                     '$duplicateCount NOP dilewati karena sudah ada.',
-                    style: const TextStyle(
-                      color: Colors.orange,
-                      fontSize: 12,
-                    ),
+                    style: const TextStyle(color: Colors.orange, fontSize: 12),
                   ),
                   const SizedBox(height: 8),
                 ],
@@ -332,10 +329,7 @@ class _ImportViewState extends State<ImportView> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => BatchCheckScreen(
-          records: records,
-          tahun: tahun,
-        ),
+        builder: (_) => BatchCheckScreen(records: records, tahun: tahun),
       ),
     );
   }
@@ -365,15 +359,15 @@ class _ImportViewState extends State<ImportView> {
                   Text(
                     'Cek Banyak NOP Sekaligus',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     'Pilih berkas daftar NOP (.xlsx, .csv, .txt) atau ketik langsung di bawah.',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: scheme.onSurfaceVariant,
-                        ),
+                      color: scheme.onSurfaceVariant,
+                    ),
                   ),
                   const SizedBox(height: 14),
                   OutlinedButton.icon(
@@ -392,8 +386,8 @@ class _ImportViewState extends State<ImportView> {
                     Text(
                       '${_records.length} NOP dari file',
                       style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     const SizedBox(height: 8),
                     Container(
@@ -422,15 +416,15 @@ class _ImportViewState extends State<ImportView> {
                   Text(
                     'Atau ketik langsung di sini',
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     'Tulis 18 angka NOP lengkap atau singkat (blok + nomor wilayah). Contoh: ${nopShortcutExamples.map((e) => '${e.$1} -> ${e.$2}').join(', ')}',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: scheme.onSurfaceVariant,
-                        ),
+                      color: scheme.onSurfaceVariant,
+                    ),
                   ),
                   const SizedBox(height: 10),
                   TextField(

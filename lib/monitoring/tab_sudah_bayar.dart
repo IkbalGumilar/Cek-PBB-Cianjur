@@ -131,10 +131,7 @@ class _TabSudahBayarState extends State<TabSudahBayar> {
           ],
         ),
         const MonitoringSectionTitle('Filter lainnya (opsional)'),
-        BukuDropdown(
-          value: _buku,
-          onChanged: (v) => setState(() => _buku = v),
-        ),
+        BukuDropdown(value: _buku, onChanged: (v) => setState(() => _buku = v)),
         const SizedBox(height: 12),
         BankDropdown(
           client: widget.client,

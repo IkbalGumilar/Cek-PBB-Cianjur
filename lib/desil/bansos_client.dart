@@ -107,17 +107,17 @@ class BansosClient extends BaseHttpClient {
   Dio get _dio => dio;
 
   BansosClient({Dio? dio})
-      : super(
-          connectTimeout: const Duration(seconds: 10),
-          sendTimeout: const Duration(seconds: 10),
-          receiveTimeout: const Duration(seconds: 20),
-          headers: const {
-            'Accept':
-                'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-          },
-          enableCookies: true,
-          customDio: dio,
-        );
+    : super(
+        connectTimeout: const Duration(seconds: 10),
+        sendTimeout: const Duration(seconds: 10),
+        receiveTimeout: const Duration(seconds: 20),
+        headers: const {
+          'Accept':
+              'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        },
+        enableCookies: true,
+        customDio: dio,
+      );
 
   Future<Uint8List> fetchCaptchaImage() async {
     try {

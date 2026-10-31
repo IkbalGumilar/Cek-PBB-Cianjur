@@ -13,22 +13,27 @@ class ResultScreen extends StatelessWidget {
     final total = records.length;
     final sudahBayar = records.where((r) => r.isPaid).length;
     final belumBayar = records
-        .where((r) =>
-            r.isChecked &&
-            !r.isPaid &&
-            !r.status.contains('Blacklist') &&
-            r.status != 'Dilewati' &&
-            !r.status.contains('Gagal'))
+        .where(
+          (r) =>
+              r.isChecked &&
+              !r.isPaid &&
+              !r.status.contains('Blacklist') &&
+              r.status != 'Dilewati' &&
+              !r.status.contains('Gagal'),
+        )
         .length;
-    final blacklist =
-        records.where((r) => r.status.contains('Blacklist')).length;
+    final blacklist = records
+        .where((r) => r.status.contains('Blacklist'))
+        .length;
     final dilewati = records.where((r) => r.status == 'Dilewati').length;
     final gagal = records.where((r) => r.status.contains('Gagal')).length;
 
-    final sudahPct =
-        total > 0 ? (sudahBayar / total * 100).toStringAsFixed(1) : '0';
-    final belumPct =
-        total > 0 ? (belumBayar / total * 100).toStringAsFixed(1) : '0';
+    final sudahPct = total > 0
+        ? (sudahBayar / total * 100).toStringAsFixed(1)
+        : '0';
+    final belumPct = total > 0
+        ? (belumBayar / total * 100).toStringAsFixed(1)
+        : '0';
 
     final scheme = Theme.of(context).colorScheme;
 
@@ -97,14 +102,14 @@ class ResultScreen extends StatelessWidget {
                             children: [
                               Text(
                                 'Ringkasan Pengecekan',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .titleMedium
+                                style: Theme.of(context).textTheme.titleMedium
                                     ?.copyWith(fontWeight: FontWeight.bold),
                               ),
                               Container(
                                 padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 3),
+                                  horizontal: 8,
+                                  vertical: 3,
+                                ),
                                 decoration: BoxDecoration(
                                   color: scheme.primaryContainer,
                                   borderRadius: BorderRadius.circular(8),
@@ -194,14 +199,14 @@ class ResultScreen extends StatelessWidget {
                       Text(
                         'Rincian Status NOP ($total)',
                         style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                       Text(
                         'Sudah: $sudahBayar | Belum: $belumBayar',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: scheme.onSurfaceVariant,
-                            ),
+                          color: scheme.onSurfaceVariant,
+                        ),
                       ),
                     ],
                   ),
@@ -222,30 +227,31 @@ class ResultScreen extends StatelessWidget {
                         final Color statusColor = isPaid
                             ? Colors.green
                             : isBlacklist
-                                ? Colors.deepPurple
-                                : isFailed
-                                    ? Colors.red
-                                    : isSkipped
-                                        ? Colors.grey
-                                        : Colors.orange;
+                            ? Colors.deepPurple
+                            : isFailed
+                            ? Colors.red
+                            : isSkipped
+                            ? Colors.grey
+                            : Colors.orange;
 
                         final IconData statusIcon = isPaid
                             ? Icons.check_circle
                             : isBlacklist
-                                ? Icons.block
-                                : isFailed
-                                    ? Icons.error_outline
-                                    : isSkipped
-                                        ? Icons.skip_next
-                                        : Icons.schedule;
+                            ? Icons.block
+                            : isFailed
+                            ? Icons.error_outline
+                            : isSkipped
+                            ? Icons.skip_next
+                            : Icons.schedule;
 
                         return Container(
                           decoration: BoxDecoration(
                             color: scheme.surfaceContainerLowest,
                             borderRadius: BorderRadius.circular(10),
                             border: Border.all(
-                              color: scheme.outlineVariant
-                                  .withValues(alpha: 0.3),
+                              color: scheme.outlineVariant.withValues(
+                                alpha: 0.3,
+                              ),
                             ),
                           ),
                           child: ListTile(
@@ -262,7 +268,8 @@ class ResultScreen extends StatelessWidget {
                                 fontSize: 13,
                               ),
                             ),
-                            subtitle: (r.namaWajibPajak != null &&
+                            subtitle:
+                                (r.namaWajibPajak != null &&
                                         r.namaWajibPajak!.isNotEmpty) ||
                                     (r.tanggalBayar != null &&
                                         r.tanggalBayar!.isNotEmpty)
@@ -298,12 +305,15 @@ class ResultScreen extends StatelessWidget {
                                 : null,
                             trailing: Container(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 3),
+                                horizontal: 8,
+                                vertical: 3,
+                              ),
                               decoration: BoxDecoration(
                                 color: statusColor.withValues(alpha: 0.12),
                                 borderRadius: BorderRadius.circular(6),
                                 border: Border.all(
-                                    color: statusColor.withValues(alpha: 0.3)),
+                                  color: statusColor.withValues(alpha: 0.3),
+                                ),
                               ),
                               child: Text(
                                 r.status.isEmpty ? '(Belum Dicek)' : r.status,

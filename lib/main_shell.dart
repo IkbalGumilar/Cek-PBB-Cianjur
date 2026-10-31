@@ -216,8 +216,9 @@ class _MainShellState extends State<MainShell> {
       _view = _ActiveView.check;
       _prefillBlok = request.blok;
       _prefillWilayah = request.wilayah;
-      _prefillTahun =
-          request.targetMode == CheckMode.tagihan ? null : request.tahun;
+      _prefillTahun = request.targetMode == CheckMode.tagihan
+          ? null
+          : request.tahun;
       _formNonce += 1;
       _quoteNonce++;
     });
@@ -288,7 +289,8 @@ class _MainShellState extends State<MainShell> {
           isOperator: _isOperator,
           onMonitoringPressed: _openMonitoring,
           onDesilPressed: () => setState(() => _view = _ActiveView.desil),
-          onKendaraanPressed: () => setState(() => _view = _ActiveView.kendaraan),
+          onKendaraanPressed: () =>
+              setState(() => _view = _ActiveView.kendaraan),
           desilSelected: _view == _ActiveView.desil,
           kendaraanSelected: _view == _ActiveView.kendaraan,
         ),

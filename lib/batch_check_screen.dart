@@ -48,8 +48,9 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
   bool _cancelledNotified = false;
   String _statusMessage = 'Menyiapkan pengecekan...';
 
-  TaxRecord? get _current =>
-      _currentIndex < widget.records.length ? widget.records[_currentIndex] : null;
+  TaxRecord? get _current => _currentIndex < widget.records.length
+      ? widget.records[_currentIndex]
+      : null;
 
   @override
   void initState() {
@@ -80,18 +81,21 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
     if (_currentIndex > 0) {
       final sudahCount = widget.records.where((r) => r.isPaid).length;
       final belumCount = widget.records
-          .where((r) =>
-              r.isChecked &&
-              !r.isPaid &&
-              !r.status.contains('Blacklist') &&
-              r.status != 'Dilewati' &&
-              !r.status.contains('Gagal'))
+          .where(
+            (r) =>
+                r.isChecked &&
+                !r.isPaid &&
+                !r.status.contains('Blacklist') &&
+                r.status != 'Dilewati' &&
+                !r.status.contains('Gagal'),
+          )
           .length;
       final blacklistCount = widget.records
           .where((r) => r.status.contains('Blacklist'))
           .length;
-      final gagalCount =
-          widget.records.where((r) => r.status.contains('Gagal')).length;
+      final gagalCount = widget.records
+          .where((r) => r.status.contains('Gagal'))
+          .length;
 
       unawaited(
         BatchNotificationService.instance.showCancelled(
@@ -188,12 +192,10 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
             result.tanggalBayar!.trim().isNotEmpty) {
           record.tanggalBayar = result.tanggalBayar;
         }
-        if (result.nomorStan != null &&
-            result.nomorStan!.trim().isNotEmpty) {
+        if (result.nomorStan != null && result.nomorStan!.trim().isNotEmpty) {
           record.nomorStan = result.nomorStan;
         }
-        if (result.jumlahPbb != null &&
-            result.jumlahPbb!.trim().isNotEmpty) {
+        if (result.jumlahPbb != null && result.jumlahPbb!.trim().isNotEmpty) {
           record.jumlahPbb = result.jumlahPbb;
         }
 
@@ -219,12 +221,14 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
       // Update notifikasi progress berjalan di status bar / drawer sistem
       final sudahCount = widget.records.where((r) => r.isPaid).length;
       final belumCount = widget.records
-          .where((r) =>
-              r.isChecked &&
-              !r.isPaid &&
-              !r.status.contains('Blacklist') &&
-              r.status != 'Dilewati' &&
-              !r.status.contains('Gagal'))
+          .where(
+            (r) =>
+                r.isChecked &&
+                !r.isPaid &&
+                !r.status.contains('Blacklist') &&
+                r.status != 'Dilewati' &&
+                !r.status.contains('Gagal'),
+          )
           .length;
 
       unawaited(
@@ -276,18 +280,21 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
 
       final sudahCount = widget.records.where((r) => r.isPaid).length;
       final belumCount = widget.records
-          .where((r) =>
-              r.isChecked &&
-              !r.isPaid &&
-              !r.status.contains('Blacklist') &&
-              r.status != 'Dilewati' &&
-              !r.status.contains('Gagal'))
+          .where(
+            (r) =>
+                r.isChecked &&
+                !r.isPaid &&
+                !r.status.contains('Blacklist') &&
+                r.status != 'Dilewati' &&
+                !r.status.contains('Gagal'),
+          )
           .length;
       final blacklistCount = widget.records
           .where((r) => r.status.contains('Blacklist'))
           .length;
-      final gagalCount =
-          widget.records.where((r) => r.status.contains('Gagal')).length;
+      final gagalCount = widget.records
+          .where((r) => r.status.contains('Gagal'))
+          .length;
 
       // Munculkan notifikasi ke-2 yang menggantikan notifikasi progress (ID sama)
       unawaited(
@@ -341,9 +348,7 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
     unawaited(BatchNotificationService.instance.stopForegroundService());
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(
-        builder: (_) => ResultScreen(records: widget.records),
-      ),
+      MaterialPageRoute(builder: (_) => ResultScreen(records: widget.records)),
     );
   }
 
@@ -427,23 +432,30 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
     final total = widget.records.length;
     final sudahBayarCount = widget.records.where((r) => r.isPaid).length;
     final belumBayarCount = widget.records
-        .where((r) =>
-            r.isChecked &&
-            !r.isPaid &&
-            r.status != 'Blacklist' &&
-            r.status != 'Dilewati' &&
-            r.status != 'Gagal Cek')
+        .where(
+          (r) =>
+              r.isChecked &&
+              !r.isPaid &&
+              r.status != 'Blacklist' &&
+              r.status != 'Dilewati' &&
+              r.status != 'Gagal Cek',
+        )
         .length;
-    final blacklistCount =
-        widget.records.where((r) => r.status.contains('Blacklist')).length;
-    final gagalCount =
-        widget.records.where((r) => r.status.contains('Gagal Cek')).length;
-    final dilewatiCount =
-        widget.records.where((r) => r.status == 'Dilewati').length;
+    final blacklistCount = widget.records
+        .where((r) => r.status.contains('Blacklist'))
+        .length;
+    final gagalCount = widget.records
+        .where((r) => r.status.contains('Gagal Cek'))
+        .length;
+    final dilewatiCount = widget.records
+        .where((r) => r.status == 'Dilewati')
+        .length;
     final sisaCount = (total - _currentIndex).clamp(0, total);
     final scheme = Theme.of(context).colorScheme;
 
-    final progressVal = total == 0 ? 0.0 : (_currentIndex / total).clamp(0.0, 1.0);
+    final progressVal = total == 0
+        ? 0.0
+        : (_currentIndex / total).clamp(0.0, 1.0);
 
     return PopScope(
       canPop: !_isRunning,
@@ -456,9 +468,7 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
       },
       child: Scaffold(
         appBar: AppBar(
-          title: Text(
-            'Cek Massal (${_currentIndex.clamp(0, total)}/$total)',
-          ),
+          title: Text('Cek Massal (${_currentIndex.clamp(0, total)}/$total)'),
           actions: [
             if (_currentIndex > 0)
               TextButton.icon(
@@ -549,30 +559,42 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
                             Row(
                               children: [
                                 if (_isCooldown)
-                                  const Icon(Icons.hourglass_top,
-                                      size: 18, color: Colors.cyan)
+                                  const Icon(
+                                    Icons.hourglass_top,
+                                    size: 18,
+                                    color: Colors.cyan,
+                                  )
                                 else if (_isRunning)
                                   const SizedBox(
                                     width: 16,
                                     height: 16,
-                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
                                   )
                                 else if (_isPaused)
-                                  const Icon(Icons.pause_circle_outline,
-                                      size: 18, color: Colors.orange)
+                                  const Icon(
+                                    Icons.pause_circle_outline,
+                                    size: 18,
+                                    color: Colors.orange,
+                                  )
                                 else if (_isCompleted)
-                                  const Icon(Icons.check_circle_outline,
-                                      size: 18, color: Colors.green)
+                                  const Icon(
+                                    Icons.check_circle_outline,
+                                    size: 18,
+                                    color: Colors.green,
+                                  )
                                 else
-                                  const Icon(Icons.pending_outlined,
-                                      size: 18, color: Colors.grey),
+                                  const Icon(
+                                    Icons.pending_outlined,
+                                    size: 18,
+                                    color: Colors.grey,
+                                  ),
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: Text(
                                     _statusMessage,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodySmall
+                                    style: Theme.of(context).textTheme.bodySmall
                                         ?.copyWith(
                                           fontWeight: FontWeight.w600,
                                           color: _isCooldown
@@ -606,14 +628,16 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
                                         ),
                                         if (_current!.namaWajibPajak != null &&
                                             _current!
-                                                .namaWajibPajak!.isNotEmpty)
+                                                .namaWajibPajak!
+                                                .isNotEmpty)
                                           Text(
                                             _current!.namaWajibPajak!,
                                             style: Theme.of(context)
                                                 .textTheme
                                                 .bodyMedium
                                                 ?.copyWith(
-                                                  color: scheme.onSurfaceVariant,
+                                                  color:
+                                                      scheme.onSurfaceVariant,
                                                 ),
                                           ),
                                       ],
@@ -622,7 +646,9 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
                                   if (nopBlok(_current!.nop).isNotEmpty)
                                     Container(
                                       padding: const EdgeInsets.symmetric(
-                                          horizontal: 8, vertical: 4),
+                                        horizontal: 8,
+                                        vertical: 4,
+                                      ),
                                       decoration: BoxDecoration(
                                         color: scheme.primaryContainer,
                                         borderRadius: BorderRadius.circular(8),
@@ -655,8 +681,10 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
                                   Expanded(
                                     child: OutlinedButton.icon(
                                       onPressed: _goToResult,
-                                      icon: const Icon(Icons.stop_circle_outlined,
-                                          size: 18),
+                                      icon: const Icon(
+                                        Icons.stop_circle_outlined,
+                                        size: 18,
+                                      ),
                                       label: const Text('Hentikan'),
                                     ),
                                   ),
@@ -664,8 +692,10 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
                                   Expanded(
                                     child: FilledButton.icon(
                                       onPressed: _resume,
-                                      icon: const Icon(Icons.play_arrow,
-                                          size: 18),
+                                      icon: const Icon(
+                                        Icons.play_arrow,
+                                        size: 18,
+                                      ),
                                       label: const Text('Lanjutkan'),
                                     ),
                                   ),
@@ -678,16 +708,22 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
                                   IconButton.outlined(
                                     tooltip: 'Lihat Hasil Sementara',
                                     onPressed: _goToResult,
-                                    icon: const Icon(Icons.fact_check_outlined,
-                                        size: 18),
+                                    icon: const Icon(
+                                      Icons.fact_check_outlined,
+                                      size: 18,
+                                    ),
                                   ),
                                 ] else ...[
                                   Expanded(
                                     child: FilledButton.icon(
                                       onPressed: _goToResult,
-                                      icon: const Icon(Icons.check_circle,
-                                          size: 18),
-                                      label: const Text('Buka Hasil Pengecekan'),
+                                      icon: const Icon(
+                                        Icons.check_circle,
+                                        size: 18,
+                                      ),
+                                      label: const Text(
+                                        'Buka Hasil Pengecekan',
+                                      ),
                                     ),
                                   ),
                                 ],
@@ -709,15 +745,13 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
                       children: [
                         Text(
                           'Daftar NOP (${widget.records.length})',
-                          style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
+                          style: Theme.of(context).textTheme.titleSmall
+                              ?.copyWith(fontWeight: FontWeight.bold),
                         ),
                         Text(
                           'Tahun Pajak: ${widget.tahun}',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: scheme.onSurfaceVariant,
-                              ),
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: scheme.onSurfaceVariant),
                         ),
                       ],
                     ),
@@ -728,7 +762,9 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
                     child: ListView.builder(
                       controller: _scrollController,
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 4),
+                        horizontal: 16,
+                        vertical: 4,
+                      ),
                       itemCount: widget.records.length,
                       itemBuilder: (context, index) {
                         final item = widget.records[index];
@@ -746,7 +782,9 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
                             border: Border.all(
                               color: isCurrent
                                   ? scheme.primary
-                                  : scheme.outlineVariant.withValues(alpha: 0.3),
+                                  : scheme.outlineVariant.withValues(
+                                      alpha: 0.3,
+                                    ),
                               width: isCurrent ? 1.5 : 1,
                             ),
                           ),
@@ -766,7 +804,8 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
                                 fontSize: 13,
                               ),
                             ),
-                            subtitle: (item.namaWajibPajak != null &&
+                            subtitle:
+                                (item.namaWajibPajak != null &&
                                         item.namaWajibPajak!.isNotEmpty) ||
                                     (item.tanggalBayar != null &&
                                         item.tanggalBayar!.isNotEmpty)
@@ -802,12 +841,15 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
                                 : null,
                             trailing: Container(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 3),
+                                horizontal: 8,
+                                vertical: 3,
+                              ),
                               decoration: BoxDecoration(
                                 color: color.withValues(alpha: 0.12),
                                 borderRadius: BorderRadius.circular(6),
                                 border: Border.all(
-                                    color: color.withValues(alpha: 0.3)),
+                                  color: color.withValues(alpha: 0.3),
+                                ),
                               ),
                               child: Text(
                                 item.status.isEmpty

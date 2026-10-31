@@ -34,10 +34,7 @@ class SimpleExportableTable implements ExportableTable {
   @override
   final List<List<String>> rows;
 
-  const SimpleExportableTable({
-    required this.headers,
-    required this.rows,
-  });
+  const SimpleExportableTable({required this.headers, required this.rows});
 }
 
 /// Kelas dasar pengekspor tabel yang mengenkapsulasi logika pembuatan berkas
@@ -88,9 +85,18 @@ abstract class BaseTableExporter {
           build: (context) => pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
-              pw.Text(title, style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
+              pw.Text(
+                title,
+                style: pw.TextStyle(
+                  fontSize: 12,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
               pw.SizedBox(height: 12),
-              pw.Text('Tidak ada data.', style: const pw.TextStyle(fontSize: 10)),
+              pw.Text(
+                'Tidak ada data.',
+                style: const pw.TextStyle(fontSize: 10),
+              ),
             ],
           ),
         ),
@@ -102,7 +108,9 @@ abstract class BaseTableExporter {
 
     for (var pageIdx = 0; pageIdx < totalPages; pageIdx++) {
       final start = pageIdx * rowsPerPage;
-      final end = (start + rowsPerPage < rows.length) ? start + rowsPerPage : rows.length;
+      final end = (start + rowsPerPage < rows.length)
+          ? start + rowsPerPage
+          : rows.length;
       final pageRows = rows.sublist(start, end);
 
       doc.addPage(
@@ -115,8 +123,17 @@ abstract class BaseTableExporter {
               pw.Row(
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 children: [
-                  pw.Text(title, style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
-                  pw.Text('Hal ${pageIdx + 1} dari $totalPages', style: const pw.TextStyle(fontSize: 9)),
+                  pw.Text(
+                    title,
+                    style: pw.TextStyle(
+                      fontSize: 11,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                  pw.Text(
+                    'Hal ${pageIdx + 1} dari $totalPages',
+                    style: const pw.TextStyle(fontSize: 9),
+                  ),
                 ],
               ),
               pw.SizedBox(height: 8),
@@ -130,7 +147,10 @@ abstract class BaseTableExporter {
                 ),
                 cellAlignment: pw.Alignment.centerLeft,
                 headerAlignment: pw.Alignment.centerLeft,
-                cellPadding: const pw.EdgeInsets.symmetric(horizontal: 3, vertical: 2),
+                cellPadding: const pw.EdgeInsets.symmetric(
+                  horizontal: 3,
+                  vertical: 2,
+                ),
               ),
             ],
           ),
@@ -176,6 +196,5 @@ abstract class BaseTableExporter {
     required Uint8List bytes,
     required String fileName,
     String? subfolder,
-  }) =>
-      DownloadHelper.saveBytes(bytes, fileName, subfolder: subfolder);
+  }) => DownloadHelper.saveBytes(bytes, fileName, subfolder: subfolder);
 }

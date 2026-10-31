@@ -37,7 +37,8 @@ Widget _buildExternalViewer(String filePath) {
     );
   }
 
-  final isSpreadsheet = lower.endsWith('.xlsx') ||
+  final isSpreadsheet =
+      lower.endsWith('.xlsx') ||
       lower.endsWith('.xls') ||
       lower.endsWith('.csv');
   if (isSpreadsheet) {
@@ -49,7 +50,8 @@ Widget _buildExternalViewer(String filePath) {
     );
   }
 
-  final isDkhp = lower.endsWith('.dkhp') ||
+  final isDkhp =
+      lower.endsWith('.dkhp') ||
       lower.endsWith('.dhkp') ||
       lower.endsWith('.dat');
   if (isDkhp) {
@@ -73,10 +75,12 @@ void main() async {
   String? initialIncomingFile;
   if (Platform.isAndroid) {
     try {
-      const incomingChannel =
-          MethodChannel('id.cianjur.cekpbb.cek_pbb_app/incoming_file');
-      initialIncomingFile =
-          await incomingChannel.invokeMethod<String>('getInitialFile');
+      const incomingChannel = MethodChannel(
+        'id.cianjur.cekpbb.cek_pbb_app/incoming_file',
+      );
+      initialIncomingFile = await incomingChannel.invokeMethod<String>(
+        'getInitialFile',
+      );
       debugPrint('main(): initialIncomingFile = $initialIncomingFile');
     } catch (e) {
       debugPrint('main(): getInitialFile error = $e');
@@ -86,9 +90,11 @@ void main() async {
   unawaited(DhkpWidgetSyncService.syncFromDatabase());
   await BlokBatchCheckTracker.instance.init();
   await BatchNotificationService.instance.init();
-  runApp(RestartWidget(
-    child: CekPbbApp(initialExternalFilePath: initialIncomingFile),
-  ));
+  runApp(
+    RestartWidget(
+      child: CekPbbApp(initialExternalFilePath: initialIncomingFile),
+    ),
+  );
 }
 
 /// Bungkus seluruh aplikasi supaya bisa "direstart" tanpa mematikan proses
@@ -228,12 +234,8 @@ class _CekPbbAppState extends State<CekPbbApp> with WidgetsBindingObserver {
             ? colorScheme.surface
             : (isAmoled ? Colors.black : colorScheme.surface),
       ),
-      cardTheme: const CardThemeData(
-        surfaceTintColor: Colors.transparent,
-      ),
-      dialogTheme: const DialogThemeData(
-        surfaceTintColor: Colors.transparent,
-      ),
+      cardTheme: const CardThemeData(surfaceTintColor: Colors.transparent),
+      dialogTheme: const DialogThemeData(surfaceTintColor: Colors.transparent),
       floatingActionButtonTheme: FloatingActionButtonThemeData(
         backgroundColor: colorScheme.primary,
         foregroundColor: colorScheme.onPrimary,
@@ -311,20 +313,24 @@ class _CekPbbAppState extends State<CekPbbApp> with WidgetsBindingObserver {
               theme: lightTheme,
               darkTheme: darkTheme,
               themeMode: _flutterThemeMode(themeState.mode),
-              onUnknownRoute: (settings) => MaterialPageRoute(
-                builder: (_) => const SizedBox.shrink(),
-              ),
-              home: widget.initialExternalFilePath != null &&
+              onUnknownRoute: (settings) =>
+                  MaterialPageRoute(builder: (_) => const SizedBox.shrink()),
+              home:
+                  widget.initialExternalFilePath != null &&
                       widget.initialExternalFilePath!.isNotEmpty
                   ? _buildExternalViewer(widget.initialExternalFilePath!)
                   : MainShell(themeController: _themeController),
               builder: (context, child) {
                 if (widget.initialExternalFilePath != null &&
                     widget.initialExternalFilePath!.isNotEmpty) {
-                  return Stack(children: [?child, const NetworkStatusOverlay()]);
+                  return Stack(
+                    children: [?child, const NetworkStatusOverlay()],
+                  );
                 }
                 return AppLockGate(
-                  child: Stack(children: [?child, const NetworkStatusOverlay()]),
+                  child: Stack(
+                    children: [?child, const NetworkStatusOverlay()],
+                  ),
                 );
               },
             );

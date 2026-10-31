@@ -141,12 +141,12 @@ class KendaraanClient extends BaseHttpClient {
   Future<String>? _loginInFlight;
 
   KendaraanClient({Dio? dio})
-      : super(
-          baseUrl: apiBaseUrl,
-          connectTimeout: const Duration(seconds: 15),
-          receiveTimeout: const Duration(seconds: 15),
-          customDio: dio,
-        );
+    : super(
+        baseUrl: apiBaseUrl,
+        connectTimeout: const Duration(seconds: 15),
+        receiveTimeout: const Duration(seconds: 15),
+        customDio: dio,
+      );
 
   Future<KendaraanInfo> check({
     required String platDepan,
@@ -313,7 +313,8 @@ class KendaraanClient extends BaseHttpClient {
           .where((s) => s.isNotEmpty)
           .join(', ');
       if (detailStr.isNotEmpty) {
-        resolvedMessage = (resolvedMessage != null && resolvedMessage.isNotEmpty)
+        resolvedMessage =
+            (resolvedMessage != null && resolvedMessage.isNotEmpty)
             ? '$resolvedMessage: $detailStr'
             : detailStr;
       }
