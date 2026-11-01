@@ -51,17 +51,40 @@ jobs:
 
           Write-Host "Paket rilis Windows berhasil dibuat: $zipName"
 
+      - name: Install Inno Setup
+        run: choco install innosetup -y --no-progress
+
+      - name: Build Inno Setup Installer
+        shell: pwsh
+        run: |
+          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            $iscc = "C:\Program Files\Inno Setup 6\ISCC.exe"
+          }
+          if (Test-Path $iscc) {
+            Write-Host "Compiling Inno Setup installer..."
+            & $iscc "windows\installer.iss"
+            Write-Host "Inno Setup installer created successfully."
+          } else {
+            Write-Host "ISCC compiler not found, skipping installer EXE."
+          }
+
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Cek-PBB-Cianjur-Windows-x64
-          path: Cek-PBB-Cianjur-Windows-x64.zip
+          name: Cek-PBB-Cianjur-Windows-Release
+          path: |
+            Cek-PBB-Cianjur-Windows-x64.zip
+            build/*.exe
           retention-days: 14
 
       - name: Upload to GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: Cek-PBB-Cianjur-Windows-x64.zip
+          files: |
+            Cek-PBB-Cianjur-Windows-x64.zip
+            build/*.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+

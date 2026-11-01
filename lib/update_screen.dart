@@ -23,10 +23,11 @@ class _UpdateScreenState extends State<UpdateScreen> {
   String? _error;
 
   // Android: unduh lalu langsung buka installer sistem (pasang sendiri).
-  // Windows/Linux: cuma unduh ke folder Downloads — tidak ada mekanisme
-  // pasang-sendiri yang aman/generik lintas platform, jadi user menjalankan
-  // berkasnya sendiri setelah selesai diunduh.
-  bool get _canSelfInstall => Platform.isAndroid;
+  // Windows: jika berkas .exe, langsung jalankan installer. Jika .zip, buka di explorer.
+  // Linux: unduh ke folder Downloads.
+  bool get _canSelfInstall =>
+      Platform.isAndroid ||
+      (Platform.isWindows && _downloadFileName.toLowerCase().endsWith('.exe'));
 
   String get _downloadFileName {
     final url = widget.info.apkDownloadUrl;
@@ -221,9 +222,27 @@ class _UpdateScreenState extends State<UpdateScreen> {
                             style: const TextStyle(fontWeight: FontWeight.bold),
                           ),
                           const SizedBox(height: 8),
-                          const Text(
-                            'Jalankan/ekstrak berkas ini sendiri untuk memasang pembaruan.',
+                          Text(
+                            Platform.isWindows
+                                ? 'Tekan tombol di bawah untuk membuka/memasang pembaruan:'
+                                : 'Jalankan/ekstrak berkas ini sendiri untuk memasang pembaruan.',
                           ),
+                          if (Platform.isWindows && _downloadedFile != null) ...[
+                            const SizedBox(height: 12),
+                            FilledButton.icon(
+                              onPressed: () => ApkInstaller.install(_downloadedFile!.path),
+                              icon: Icon(
+                                _downloadFileName.toLowerCase().endsWith('.exe')
+                                    ? Icons.install_desktop
+                                    : Icons.folder_open,
+                              ),
+                              label: Text(
+                                _downloadFileName.toLowerCase().endsWith('.exe')
+                                    ? 'Pasang Sekarang'
+                                    : 'Buka di File Explorer',
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ),

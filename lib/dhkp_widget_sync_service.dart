@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/services.dart';
 import 'blok_data_store.dart';
 import 'blok_record.dart';
@@ -45,7 +46,10 @@ class DhkpWidgetSyncService {
 
   /// Menghitung ringkasan data DHKP dan meneruskannya ke Android AppWidgetProvider.
   static Future<void> syncFromRecords(List<BlokRecord> records) async {
-    if (records.isEmpty) return;
+    if (!Platform.isAndroid) return;
+
+    final murniRecords = records.where((r) => !r.isTargetPemda).toList();
+    if (murniRecords.isEmpty) return;
 
     try {
       await DusunData.instance.init();
@@ -53,7 +57,7 @@ class DhkpWidgetSyncService {
 
       int totalNominal = 0;
       int lunasNominal = 0;
-      int totalNop = records.length;
+      int totalNop = murniRecords.length;
       int lunasNop = 0;
 
       // Inisialisasi statistik per Dusun
@@ -86,7 +90,7 @@ class DhkpWidgetSyncService {
         'Des',
       ];
 
-      for (final r in records) {
+      for (final r in murniRecords) {
         final val = r.jumlahPbbValue;
         totalNominal += val;
 

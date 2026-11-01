@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import 'app_storage.dart';
 import 'blok_data_store.dart';
 import 'check_mode.dart';
+import 'feature_tour/feature_tour.dart';
 import 'nop_helper.dart';
 import 'nop_scanner.dart';
 import 'pbb/check_result_cards.dart';
@@ -23,6 +24,11 @@ class CheckFormView extends StatefulWidget {
   final String? initialTahun;
   final ScrollController? scrollController;
   final PbbClient? client;
+  final GlobalKey? headerMenuKey;
+  final GlobalKey? headerSettingsKey;
+  final GlobalKey? dhkpFabKey;
+  final bool isActive;
+  final ValueChanged<VoidCallback>? onRegisterShowTour;
 
   const CheckFormView({
     super.key,
@@ -34,6 +40,11 @@ class CheckFormView extends StatefulWidget {
     this.initialTahun,
     this.scrollController,
     this.client,
+    this.headerMenuKey,
+    this.headerSettingsKey,
+    this.dhkpFabKey,
+    this.isActive = true,
+    this.onRegisterShowTour,
   });
 
   @override
@@ -50,6 +61,14 @@ class _CheckFormViewState extends State<CheckFormView> {
   final _captchaFocusNode = FocusNode();
   late final ScrollController _scrollController =
       widget.scrollController ?? ScrollController();
+
+  final _blokWilayahInputKey = GlobalKey(debugLabel: 'tour_blok_wilayah');
+  final _scanButtonKey = GlobalKey(debugLabel: 'tour_scan_sppt');
+  final _importButtonKey = GlobalKey(debugLabel: 'tour_import_file');
+  final _tahunInputKey = GlobalKey(debugLabel: 'tour_tahun_pajak');
+  final _captchaAreaKey = GlobalKey(debugLabel: 'tour_captcha_area');
+  final _captchaInputKey = GlobalKey(debugLabel: 'tour_captcha_input');
+  final _submitButtonKey = GlobalKey(debugLabel: 'tour_submit_cek');
 
   Uint8List? _captchaBytes;
   bool _loadingCaptcha = false;
@@ -69,12 +88,16 @@ class _CheckFormViewState extends State<CheckFormView> {
     if (widget.initialTahun != null) {
       _tahunController.text = widget.initialTahun!;
     }
+    widget.onRegisterShowTour?.call(showTour);
     _loadCaptcha();
   }
 
   @override
   void didUpdateWidget(CheckFormView oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.onRegisterShowTour != widget.onRegisterShowTour) {
+      widget.onRegisterShowTour?.call(showTour);
+    }
     if (oldWidget.mode != widget.mode) {
       if (_scrollController.hasClients) {
         _scrollController.jumpTo(0);
@@ -85,6 +108,8 @@ class _CheckFormViewState extends State<CheckFormView> {
         _errorText = null;
       });
       _loadCaptcha();
+    } else if (!oldWidget.isActive && widget.isActive && _ready) {
+      _maybeStartAutoTour();
     }
   }
 
@@ -314,15 +339,197 @@ class _CheckFormViewState extends State<CheckFormView> {
       setState(() => _captchaBytes = bytes);
     } catch (e) {
       if (!mounted) return;
-      setState(() => _errorText = 'Gagal ambil captcha: $e');
+      setState(() => _errorText = 'Gagal memuat gambar kode: $e');
     } finally {
       if (mounted) {
         setState(() {
           _loadingCaptcha = false;
           _ready = true;
         });
+        if (widget.isActive) {
+          _maybeStartAutoTour();
+        }
       }
     }
+  }
+
+  void _maybeStartAutoTour() {
+    if (!mounted || !widget.isActive || !_ready) return;
+    if (widget.mode == CheckMode.tagihan) {
+      FeatureTourController.startTourIfNeeded(
+        context: context,
+        tourId: 'check_tagihan_view',
+        steps: _buildTourSteps(fullTour: true),
+      );
+    } else {
+      FeatureTourController.startTourIfNeeded(
+        context: context,
+        tourId: 'check_status_bayar_view',
+        steps: _buildTourSteps(fullTour: false),
+      );
+    }
+  }
+
+  void showTour() {
+    if (!mounted || !_ready) return;
+    FeatureTourController.showTour(
+      context: context,
+      tourId: widget.mode == CheckMode.tagihan
+          ? 'check_tagihan_view'
+          : 'check_status_bayar_view',
+      steps: _buildTourSteps(fullTour: true),
+    );
+  }
+
+  List<FeatureTourStep> _buildTourSteps({required bool fullTour}) {
+    final isTagihan = widget.mode == CheckMode.tagihan;
+    final steps = <FeatureTourStep>[];
+
+    if (fullTour && widget.headerMenuKey != null) {
+      steps.add(
+        FeatureTourStep(
+          targetKey: widget.headerMenuKey!,
+          title: 'Baris Menu Layanan Utama',
+          description:
+              'Gunakan deretan tombol di bagian atas ini untuk berpindah layanan kapan saja:\n'
+              '• Cek Tagihan: Melihat daftar tunggakan pajak per tahun dan membayar lewat QRIS atau Bank BJB.\n'
+              '• Cek Status Bayar: Memeriksa bukti lunas pembayaran pajak pada tahun tertentu.\n'
+              '• Monitoring: Khusus petugas untuk melihat progres pelunasan desa dan mengatur rombongan bayar.\n'
+              '• Cek Kendaraan & Cek Desil: Memeriksa pajak kendaraan bermotor serta status kesejahteraan keluarga.',
+          actionHint:
+              'Geser baris menu ke kiri atau kanan jika layar ponsel Anda berukuran kecil.',
+          icon: Icons.apps_rounded,
+        ),
+      );
+    }
+
+    if (fullTour) {
+      steps.add(
+        FeatureTourStep(
+          targetKey: _blokWilayahInputKey,
+          title: 'Kolom Blok & Nomor Wilayah',
+          description:
+              'Ketik nomor Blok dan Nomor Urut Wilayah dari lembaran SPPT warga di kedua kotak ini. '
+              'Anda cukup mengetik angkanya saja tanpa perlu menambahkan angka nol di depan.',
+          actionHint:
+              'Contoh: untuk Blok 017 Nomor 0154, cukup ketik 17 pada kolom Blok dan 154 pada kolom Nomor Wilayah.',
+          icon: Icons.pin_outlined,
+        ),
+      );
+
+      steps.add(
+        FeatureTourStep(
+          targetKey: _scanButtonKey,
+          title: 'Tombol Pindai Foto SPPT Otomatis',
+          description:
+              'Malas mengetik nomor secara manual? Tekan tombol ini untuk memotret lembaran SPPT warga menggunakan kamera atau memilih foto dari galeri. '
+              'Aplikasi akan otomatis membaca nomor pajak dan mengisikannya ke kolom Blok & Nomor Wilayah.',
+          actionHint:
+              'Jika pada foto ditemukan lebih dari satu nomor pajak, Anda bisa memilih salah satu atau memeriksa semuanya sekaligus.',
+          icon: Icons.document_scanner_outlined,
+        ),
+      );
+    }
+
+    if (!isTagihan) {
+      steps.add(
+        FeatureTourStep(
+          targetKey: _importButtonKey,
+          title: 'Tombol Periksa Banyak Data Sekaligus',
+          description:
+              'Tekan tombol ini jika Anda ingin memeriksa status lunas puluhan atau ratusan warga sekaligus dari berkas daftar pajak (Excel, CSV, dokumen PDF, atau foto daftar).',
+          actionHint:
+              'Sangat berguna saat memeriksa daftar tagihan satu blok atau satu dusun secara otomatis.',
+          icon: Icons.upload_file_rounded,
+        ),
+      );
+
+      steps.add(
+        FeatureTourStep(
+          targetKey: _tahunInputKey,
+          title: 'Kolom Tahun Pajak',
+          description:
+              'Isi tahun pajak yang ingin Anda periksa bukti pembayarannya (secara bawaan terisi tahun berjalan). '
+              'Ubah angkanya jika warga ingin mengecek bukti lunas tahun-tahun sebelumnya.',
+          actionHint:
+              'Pastikan tahun diisi 4 angka, misalnya 2026 atau 2025.',
+          icon: Icons.calendar_today_outlined,
+        ),
+      );
+    }
+
+    if (fullTour) {
+      steps.add(
+        FeatureTourStep(
+          targetKey: _captchaAreaKey,
+          title: 'Gambar Kode Pengaman & Tombol Ganti Gambar',
+          description:
+              'Bagian ini menampilkan gambar huruf/angka pengaman dari layanan Bapenda. '
+              'Jika tulisan pada gambar terlihat buram atau sulit dibaca, tekan tombol "Ganti Kode Gambar" di bawahnya untuk menampilkan gambar baru yang lebih jelas.',
+          actionHint:
+              'Gambar kode akan diperbarui secara otomatis setiap kali Anda selesai melakukan pengecekan.',
+          icon: Icons.refresh_rounded,
+        ),
+      );
+
+      steps.add(
+        FeatureTourStep(
+          targetKey: _captchaInputKey,
+          title: 'Kolom Pengisian Kode Verifikasi',
+          description:
+              'Ketikkan huruf atau angka yang terlihat pada gambar kode pengaman di atas ke dalam kotak ini.',
+          actionHint:
+              'Setelah mengetik kode, Anda bisa langsung menekan tombol Masuk/Go di papan ketik atau menekan tombol Cek di bawah.',
+          icon: Icons.keyboard_alt_outlined,
+        ),
+      );
+    }
+
+    steps.add(
+      FeatureTourStep(
+        targetKey: _submitButtonKey,
+        title: isTagihan
+            ? 'Tombol Cek Rincian Tagihan'
+            : 'Tombol Cek Status Pembayaran',
+        description: isTagihan
+            ? 'Tekan tombol ini untuk menampilkan nama wajib pajak, rincian tagihan per tahun, denda (jika ada), serta tombol pembayaran langsung menggunakan QRIS atau Virtual Account Bank BJB.'
+            : 'Tekan tombol ini untuk memeriksa apakah pajak tahun tersebut sudah lunas. Jika sudah lunas, warga dapat melihat dan mengunduh lembar bukti bayar resminya, dan catatan DHKP otomatis diperbarui.',
+        actionHint:
+            'Hasil pemeriksaan akan langsung muncul di bagian bawah kartu formulir ini.',
+        icon: Icons.search_rounded,
+      ),
+    );
+
+    if (fullTour && widget.dhkpFabKey != null) {
+      steps.add(
+        FeatureTourStep(
+          targetKey: widget.dhkpFabKey!,
+          title: 'Tombol Buku Catatan DHKP',
+          description:
+              'Tekan tombol melayang ini untuk membuka Buku Catatan DHKP desa. '
+              'Di dalamnya Anda dapat melihat daftar seluruh wajib pajak per blok dan dusun, memantau grafik pelunasan, membuat kolase foto STTS, hingga mengekspor laporan lengkap.',
+          actionHint:
+              'Angka kecil di pojok tombol menunjukkan jumlah data wajib pajak yang sudah tersimpan di perangkat Anda.',
+          icon: Icons.table_chart_outlined,
+        ),
+      );
+    }
+
+    if (fullTour && widget.headerSettingsKey != null) {
+      steps.add(
+        FeatureTourStep(
+          targetKey: widget.headerSettingsKey!,
+          title: 'Tombol Pengaturan Aplikasi',
+          description:
+              'Tekan ikon roda gigi di pojok kanan atas untuk mengatur wilayah kerja dusun/blok, mengganti warna tampilan dan mode gelap, mengatur ukuran tulisan, mencadangkan data ke Google Drive, atau mengulang panduan fitur ini.',
+          actionHint:
+              'Anda juga selalu bisa menekan tombol tanda tanya (?) di sebelah tombol pengaturan untuk membuka kembali panduan layar yang sedang aktif.',
+          icon: Icons.settings_outlined,
+        ),
+      );
+    }
+
+    return steps;
   }
 
   void _scrollAfterResult() {
@@ -545,30 +752,39 @@ class _CheckFormViewState extends State<CheckFormView> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Expanded(
-                            child: TextField(
-                              controller: _blokController,
-                              decoration: const InputDecoration(
-                                labelText: 'Blok',
-                                hintText: 'Contoh: 17',
-                                border: OutlineInputBorder(),
-                                counterText: '',
-                              ),
-                              keyboardType: TextInputType.number,
-                              maxLength: 3,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: TextField(
-                              controller: _wilayahController,
-                              decoration: const InputDecoration(
-                                labelText: 'Nomor Wilayah',
-                                hintText: 'Contoh: 154',
-                                border: OutlineInputBorder(),
-                                counterText: '',
-                              ),
-                              keyboardType: TextInputType.number,
-                              maxLength: 4,
+                            flex: 2,
+                            child: Row(
+                              key: _blokWilayahInputKey,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: TextField(
+                                    controller: _blokController,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Blok',
+                                      hintText: 'Contoh: 17',
+                                      border: OutlineInputBorder(),
+                                      counterText: '',
+                                    ),
+                                    keyboardType: TextInputType.number,
+                                    maxLength: 3,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: TextField(
+                                    controller: _wilayahController,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Nomor Wilayah',
+                                      hintText: 'Contoh: 154',
+                                      border: OutlineInputBorder(),
+                                      counterText: '',
+                                    ),
+                                    keyboardType: TextInputType.number,
+                                    maxLength: 4,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                           const SizedBox(width: 8),
@@ -584,18 +800,20 @@ class _CheckFormViewState extends State<CheckFormView> {
                                   ),
                                 )
                               : IconButton.filledTonal(
+                                  key: _scanButtonKey,
                                   onPressed: _scanAndFill,
                                   icon: const Icon(
                                     Icons.document_scanner_outlined,
                                   ),
-                                  tooltip: 'Scan NOP dari dokumen',
+                                  tooltip: 'Pindai Nomor dari Foto SPPT',
                                 ),
                           if (!isTagihan) ...[
                             const SizedBox(width: 8),
                             IconButton.filledTonal(
+                              key: _importButtonKey,
                               onPressed: widget.onImportPressed,
                               icon: const Icon(Icons.upload_file),
-                              tooltip: 'Import File (cek banyak NOP)',
+                              tooltip: 'Periksa Banyak Data dari File',
                             ),
                           ],
                         ],
@@ -610,6 +828,7 @@ class _CheckFormViewState extends State<CheckFormView> {
                       if (widget.mode == CheckMode.statusBayar) ...[
                         const SizedBox(height: 14),
                         TextField(
+                          key: _tahunInputKey,
                           controller: _tahunController,
                           decoration: const InputDecoration(
                             labelText: 'Tahun Pajak',
@@ -619,40 +838,49 @@ class _CheckFormViewState extends State<CheckFormView> {
                         ),
                       ],
                       const SizedBox(height: 18),
-                      Center(
-                        child: _loadingCaptcha
-                            ? const Padding(
-                                padding: EdgeInsets.all(24),
-                                child: CircularProgressIndicator(),
-                              )
-                            : _captchaBytes != null
-                            ? Container(
-                                decoration: BoxDecoration(
-                                  border: Border.all(
-                                    color: scheme.outlineVariant,
-                                  ),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                clipBehavior: Clip.antiAlias,
-                                child: Image.memory(_captchaBytes!, height: 84),
-                              )
-                            : const Text('Captcha belum dimuat'),
-                      ),
-                      const SizedBox(height: 6),
-                      Center(
-                        child: TextButton.icon(
-                          onPressed: _loadingCaptcha || _submitting
-                              ? null
-                              : () => _loadCaptcha(),
-                          icon: const Icon(Icons.refresh, size: 18),
-                          label: const Text('Ganti Captcha'),
-                        ),
+                      Column(
+                        key: _captchaAreaKey,
+                        children: [
+                          Center(
+                            child: _loadingCaptcha
+                                ? const Padding(
+                                    padding: EdgeInsets.all(24),
+                                    child: CircularProgressIndicator(),
+                                  )
+                                : _captchaBytes != null
+                                ? Container(
+                                    decoration: BoxDecoration(
+                                      border: Border.all(
+                                        color: scheme.outlineVariant,
+                                      ),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    clipBehavior: Clip.antiAlias,
+                                    child: Image.memory(
+                                      _captchaBytes!,
+                                      height: 84,
+                                    ),
+                                  )
+                                : const Text('Gambar kode belum muncul'),
+                          ),
+                          const SizedBox(height: 6),
+                          Center(
+                            child: TextButton.icon(
+                              onPressed: _loadingCaptcha || _submitting
+                                  ? null
+                                  : () => _loadCaptcha(),
+                              icon: const Icon(Icons.refresh, size: 18),
+                              label: const Text('Ganti Kode Gambar'),
+                            ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 8),
                       ValueListenableBuilder<TextEditingValue>(
                         valueListenable: _captchaController,
                         builder: (context, value, _) {
                           return TextField(
+                            key: _captchaInputKey,
                             controller: _captchaController,
                             focusNode: _captchaFocusNode,
                             textInputAction: TextInputAction.go,
@@ -709,6 +937,7 @@ class _CheckFormViewState extends State<CheckFormView> {
                       ],
                       const SizedBox(height: 18),
                       FilledButton.icon(
+                        key: _submitButtonKey,
                         onPressed: _submitting ? null : _submit,
                         icon: _submitting
                             ? SizedBox(

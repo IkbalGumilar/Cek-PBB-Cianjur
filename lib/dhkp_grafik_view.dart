@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
@@ -15,6 +16,7 @@ import 'document_preview_screen.dart';
 import 'download_helper.dart';
 import 'dusun_data.dart';
 import 'native_file_helper.dart';
+import 'feature_tour/feature_tour.dart';
 import 'tagihan_result.dart' show formatRupiah;
 
 export 'dhkp/dhkp_grafik_analytics.dart';
@@ -23,12 +25,14 @@ class DhkpGrafikView extends StatefulWidget {
   final List<BlokRecord> records;
   final String? selectedBlok;
   final int? selectedWilayah;
+  final ValueChanged<VoidCallback>? onRegisterShowTour;
 
   const DhkpGrafikView({
     super.key,
     required this.records,
     this.selectedBlok,
     this.selectedWilayah,
+    this.onRegisterShowTour,
   });
 
   @override
@@ -42,12 +46,16 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
   static const _prefKeySort = 'dhkp_grafik_sort_mode';
   static const _prefKeyGroupByDusun = 'dhkp_grafik_group_by_dusun';
   static const _prefKeyCollapsed = 'dhkp_grafik_collapsed_sections';
+  static const _prefKeyFitColumnBars = 'dhkp_grafik_fit_column_bars';
 
   // Default: Data = Jumlah Persentase, Diagram = Batang, Desa = Semua Dusun
   DhkpGrafikTab _activeTab = DhkpGrafikTab.persentase;
   ChartStyle _selectedStyle = ChartStyle.batang;
   GrafikSortMode _sortMode = GrafikSortMode.wilayah;
   bool _groupByDusun = true;
+
+  /// Mode diagram batang: true = Pas Layar (dirapatkan muat semua blok), false = Bisa Digeser
+  bool _fitColumnBars = true;
 
   /// Drill-down khusus ketika pengguna mengeklik salah satu Dusun dari grafik
   int? _drillDownDusun;
@@ -60,6 +68,12 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
 
   /// GlobalKey per bagian grafik untuk tangkapan gambar (PNG) & dokumen (PDF)
   final Map<String, GlobalKey> _boundaryKeys = {};
+
+  final _topTabsKey = GlobalKey(debugLabel: 'tour_grafik_top_tabs');
+  final _scopeBarKey = GlobalKey(debugLabel: 'tour_grafik_scope_bar');
+  final _statCardsKey = GlobalKey(debugLabel: 'tour_grafik_stat_cards');
+  final _controlToolbarKey = GlobalKey(debugLabel: 'tour_grafik_toolbar');
+  final _chartContentKey = GlobalKey(debugLabel: 'tour_grafik_content');
 
   late AnimationController _animController;
   late Animation<double> _animation;
@@ -75,9 +89,90 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
       parent: _animController,
       curve: Curves.easeOutCubic,
     );
+    if (widget.selectedWilayah != null) {
+      _drillDownDusun = widget.selectedWilayah;
+      _groupByDusun = false;
+    }
+    if (widget.selectedBlok != null) {
+      _selectedItemLabel =
+          'Blok ${int.tryParse(widget.selectedBlok!) ?? widget.selectedBlok}';
+    }
+    widget.onRegisterShowTour?.call(showTour);
     _loadSavedPreferences();
     _animController.forward();
     DhkpWidgetSyncService.syncFromRecords(widget.records);
+    FeatureTourController.startTourIfNeeded(
+      context: context,
+      tourId: 'dhkp_grafik_view',
+      steps: _buildTourSteps(),
+    );
+  }
+
+  void showTour() {
+    if (!mounted) return;
+    FeatureTourController.showTour(
+      context: context,
+      tourId: 'dhkp_grafik_view',
+      steps: _buildTourSteps(),
+    );
+  }
+
+  List<FeatureTourStep> _buildTourSteps() {
+    return [
+      FeatureTourStep(
+        targetKey: _topTabsKey,
+        title: '5 Pilihan Jenis Laporan Grafik',
+        description:
+            'Pilih sudut pandang laporan yang ingin Anda amati:\n'
+            '• Jumlah Persentase: Perbandingan persentase capaian lunas antar dusun/blok.\n'
+            '• Jumlah Pendapatan: Total uang pajak yang sudah terkumpul dibanding target.\n'
+            '• Sudah Bayar & Belum Bayar: Rincian jumlah warga yang sudah lunas dan yang masih menunggak.\n'
+            '• Tren Bulanan: Perkembangan penerimaan pembayaran pajak dari bulan ke bulan.',
+        actionHint:
+            'Ketuk salah satu tombol kategori di atas untuk langsung mengganti isi grafik.',
+        icon: Icons.analytics_outlined,
+      ),
+      FeatureTourStep(
+        targetKey: _scopeBarKey,
+        title: 'Pilihan Cakupan Wilayah Cepat',
+        description:
+            'Atur wilayah mana yang ingin ditampilkan pada grafik:\n'
+            '• Semua Dusun: Membandingkan capaian antar dusun se-desa.\n'
+            '• Semua Blok: Membandingkan seluruh blok dari semua dusun sekaligus.\n'
+            '• Dusun 1, 2, 3, dst.: Melihat rincian blok khusus di dalam dusun tersebut saja.',
+        actionHint:
+            'Anda juga bisa mengetuk batang dusun langsung pada grafik untuk melihat blok-blok di dalamnya.',
+        icon: Icons.place_outlined,
+      ),
+      FeatureTourStep(
+        targetKey: _statCardsKey,
+        title: 'Kartu Ringkasan Capaian Utama',
+        description:
+            'Menampilkan 3 angka terpenting sesuai kategori grafik yang sedang Anda buka, lengkap dengan perbandingan jumlah warga (SPPT) dan nilai rupiah.',
+        icon: Icons.assessment_outlined,
+      ),
+      FeatureTourStep(
+        targetKey: _controlToolbarKey,
+        title: 'Pengaturan Bentuk Diagram & Urutan Data',
+        description:
+            '• Bentuk Diagram: Pilih tampilan Batang Tegak, Batang Mendatar, Diagram Lingkaran, atau tampilkan Semuanya sekaligus.\n'
+            '• Urutkan: Urutkan wilayah berdasarkan Nomor Wilayah, Nilai Tertinggi, atau Nilai Terendah.\n'
+            '• Lipat / Buka Semua: Merapikan kartu-kartu grafik di bawah.',
+        actionHint:
+            'Pilihan bentuk diagram dan urutan Anda akan otomatis diingat oleh aplikasi.',
+        icon: Icons.tune_rounded,
+      ),
+      FeatureTourStep(
+        targetKey: _chartContentKey,
+        title: 'Grafik Interaktif & Ekspor Gambar/PDF',
+        description:
+            'Ketuk salah satu batang atau bagian grafik untuk melihat rincian lengkap wilayah tersebut. '
+            'Di pojok kanan atas setiap kartu grafik, tersedia tombol untuk mengunduh gambar grafik (PNG), menyimpan laporan PDF, mencetak, atau membagikannya ke WhatsApp.',
+        actionHint:
+            'Geser layar ke bawah untuk melihat tabel perbandingan rincian di bawah grafik.',
+        icon: Icons.bar_chart_rounded,
+      ),
+    ];
   }
 
   Future<void> _loadSavedPreferences() async {
@@ -88,6 +183,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
       final savedSortName = prefs.getString(_prefKeySort);
       final savedGroupByDusun = prefs.getBool(_prefKeyGroupByDusun);
       final savedCollapsed = prefs.getStringList(_prefKeyCollapsed);
+      final savedFitColumnBars = prefs.getBool(_prefKeyFitColumnBars);
 
       if (!mounted) return;
       setState(() {
@@ -123,6 +219,9 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
             ..clear()
             ..addAll(savedCollapsed);
         }
+        if (savedFitColumnBars != null) {
+          _fitColumnBars = savedFitColumnBars;
+        }
       });
     } catch (_) {}
   }
@@ -135,6 +234,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
       await prefs.setString(_prefKeySort, _sortMode.name);
       await prefs.setBool(_prefKeyGroupByDusun, _groupByDusun);
       await prefs.setStringList(_prefKeyCollapsed, _collapsedSections.toList());
+      await prefs.setBool(_prefKeyFitColumnBars, _fitColumnBars);
     } catch (_) {}
   }
 
@@ -149,7 +249,18 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
     if (oldWidget.records != widget.records ||
         oldWidget.selectedBlok != widget.selectedBlok ||
         oldWidget.selectedWilayah != widget.selectedWilayah) {
-      _selectedItemLabel = null;
+      if (oldWidget.selectedWilayah != widget.selectedWilayah &&
+          widget.selectedWilayah != null) {
+        _drillDownDusun = widget.selectedWilayah;
+        _groupByDusun = false;
+      }
+      if (oldWidget.selectedBlok != widget.selectedBlok) {
+        _selectedItemLabel = widget.selectedBlok != null
+            ? 'Blok ${int.tryParse(widget.selectedBlok!) ?? widget.selectedBlok}'
+            : null;
+      } else {
+        _selectedItemLabel = null;
+      }
       _animController.reset();
       _animController.forward();
       DhkpWidgetSyncService.syncFromRecords(widget.records);
@@ -345,11 +456,19 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
         final bytes = await _captureSectionPng(sectionKey);
         if (bytes == null) throw Exception('Gagal menangkap tampilan grafik.');
         final fileName = DhkpGrafikExporter.buildSafeFileName(title, 'png');
-        await NativeFileHelper.shareBytes(
-          bytes: bytes,
-          fileName: fileName,
-          mimeType: 'image/png',
-        );
+        if (Platform.isAndroid) {
+          await NativeFileHelper.shareBytes(
+            bytes: bytes,
+            fileName: fileName,
+            mimeType: 'image/png',
+          );
+        } else {
+          final savedPath = await DownloadHelper.saveBytes(bytes, fileName);
+          await NativeFileHelper.showInFileManager(savedPath);
+          messenger.showSnackBar(
+            SnackBar(content: Text('Gambar grafik disimpan dan dibuka di: $savedPath')),
+          );
+        }
       } else {
         final pdfBytes = await _generateSectionPdf(
           sectionKey: sectionKey,
@@ -358,11 +477,19 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
           groups: groups,
         );
         final fileName = DhkpGrafikExporter.buildSafeFileName(title, 'pdf');
-        await NativeFileHelper.shareBytes(
-          bytes: pdfBytes,
-          fileName: fileName,
-          mimeType: 'application/pdf',
-        );
+        if (Platform.isAndroid) {
+          await NativeFileHelper.shareBytes(
+            bytes: pdfBytes,
+            fileName: fileName,
+            mimeType: 'application/pdf',
+          );
+        } else {
+          final savedPath = await DownloadHelper.saveBytes(pdfBytes, fileName);
+          await NativeFileHelper.showInFileManager(savedPath);
+          messenger.showSnackBar(
+            SnackBar(content: Text('Dokumen PDF grafik disimpan dan dibuka di: $savedPath')),
+          );
+        }
       }
     } catch (e) {
       messenger.showSnackBar(
@@ -460,39 +587,51 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // 1. TOP TAB BAR: 5 KATEGORI UTAMA
-          _buildTopCategoryTabs(isDark, colorScheme),
+          KeyedSubtree(
+            key: _topTabsKey,
+            child: _buildTopCategoryTabs(isDark, colorScheme),
+          ),
           const SizedBox(height: 10),
 
           // 2. FILTER CEPAT DUSUN (UNTUK DESA: SEMUA DUSUN / SEMUA BLOK / PER DUSUN)
           if (hasMultiDusun) ...[
-            _buildScopeQuickBar(
-              uniqueDusuns.toList()..sort(),
-              isDark,
-              colorScheme,
+            KeyedSubtree(
+              key: _scopeBarKey,
+              child: _buildScopeQuickBar(
+                uniqueDusuns.toList()..sort(),
+                isDark,
+                colorScheme,
+              ),
             ),
             const SizedBox(height: 10),
           ],
 
           // 3. KARTU RINGKASAN UTAMA DI ATAS (3 METRIK KUNCI SESUAI TAB)
-          buildDhkpStatRow(
-            DhkpGrafikAnalytics.buildHighlightStats(
-              activeTab: _activeTab,
-              totalNop: totalNop,
-              sudahBayarCount: sudahBayarList.length,
-              belumBayarCount: belumBayarList.length,
-              sudahBayarNominal: sudahBayarNominal,
-              belumBayarNominal: belumBayarNominal,
-              totalNominalTarget: totalNominalTarget,
-              lunasNominalPct: lunasNominalPct,
-              lunasNopPct: lunasNopPct,
-              records: murniRecords,
+          KeyedSubtree(
+            key: _statCardsKey,
+            child: buildDhkpStatRow(
+              DhkpGrafikAnalytics.buildHighlightStats(
+                activeTab: _activeTab,
+                totalNop: totalNop,
+                sudahBayarCount: sudahBayarList.length,
+                belumBayarCount: belumBayarList.length,
+                sudahBayarNominal: sudahBayarNominal,
+                belumBayarNominal: belumBayarNominal,
+                totalNominalTarget: totalNominalTarget,
+                lunasNominalPct: lunasNominalPct,
+                lunasNopPct: lunasNopPct,
+                records: murniRecords,
+              ),
+              isDark,
             ),
-            isDark,
           ),
           const SizedBox(height: 10),
 
           // 4. TOOLBAR KONTROL: PILIH DIAGRAM + URUTAN + LIPAT/BUKA SEMUA
-          _buildControlToolbar(hasMultiDusun, isDark, colorScheme),
+          KeyedSubtree(
+            key: _controlToolbarKey,
+            child: _buildControlToolbar(hasMultiDusun, isDark, colorScheme),
+          ),
           const SizedBox(height: 12),
 
           // 5. PANEL DETAIL INTERAKTIF (MUNCUL SAAT SALAH SATU WILAYAH DIKLIK)
@@ -502,43 +641,46 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
           ],
 
           // 6. KONTEN GRAFIK & TABEL DENGAN FITUR LIPAT + UNDUH/BAGIKAN/CETAK
-          AnimatedBuilder(
-            animation: _animation,
-            builder: (context, _) {
-              return switch (_activeTab) {
-                DhkpGrafikTab.pendapatan => _buildPendapatanSection(
-                  murniRecords,
-                  hasMultiDusun,
-                  sudahBayarNominal,
-                  totalNominalTarget,
-                  isDark,
-                ),
-                DhkpGrafikTab.persentase => _buildPersentaseSection(
-                  murniRecords,
-                  hasMultiDusun,
-                  lunasNominalPct,
-                  isDark,
-                ),
-                DhkpGrafikTab.belumBayar => _buildBelumBayarSection(
-                  murniRecords,
-                  hasMultiDusun,
-                  belumBayarNominal,
-                  totalNominalTarget,
-                  isDark,
-                ),
-                DhkpGrafikTab.sudahBayar => _buildSudahBayarSection(
-                  murniRecords,
-                  hasMultiDusun,
-                  sudahBayarList.length,
-                  sudahBayarNominal,
-                  isDark,
-                ),
-                DhkpGrafikTab.trenBulanan => _buildTrenBulananSection(
-                  murniRecords,
-                  isDark,
-                ),
-              };
-            },
+          KeyedSubtree(
+            key: _chartContentKey,
+            child: AnimatedBuilder(
+              animation: _animation,
+              builder: (context, _) {
+                return switch (_activeTab) {
+                  DhkpGrafikTab.pendapatan => _buildPendapatanSection(
+                    murniRecords,
+                    hasMultiDusun,
+                    sudahBayarNominal,
+                    totalNominalTarget,
+                    isDark,
+                  ),
+                  DhkpGrafikTab.persentase => _buildPersentaseSection(
+                    murniRecords,
+                    hasMultiDusun,
+                    lunasNominalPct,
+                    isDark,
+                  ),
+                  DhkpGrafikTab.belumBayar => _buildBelumBayarSection(
+                    murniRecords,
+                    hasMultiDusun,
+                    belumBayarNominal,
+                    totalNominalTarget,
+                    isDark,
+                  ),
+                  DhkpGrafikTab.sudahBayar => _buildSudahBayarSection(
+                    murniRecords,
+                    hasMultiDusun,
+                    sudahBayarList.length,
+                    sudahBayarNominal,
+                    isDark,
+                  ),
+                  DhkpGrafikTab.trenBulanan => _buildTrenBulananSection(
+                    murniRecords,
+                    isDark,
+                  ),
+                };
+              },
+            ),
           ),
         ],
       ),
@@ -821,17 +963,20 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
         // Pemilih Jenis Diagram (Batang / Mendatar / Lingkaran / Semua)
-        Container(
-          padding: const EdgeInsets.all(3),
-          decoration: BoxDecoration(
-            color: isDark
-                ? colorScheme.surfaceContainerHigh
-                : Colors.grey.shade200,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          physics: const BouncingScrollPhysics(),
+          child: Container(
+            padding: const EdgeInsets.all(3),
+            decoration: BoxDecoration(
+              color: isDark
+                  ? colorScheme.surfaceContainerHigh
+                  : Colors.grey.shade200,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
               for (final style in ChartStyle.values)
                 InkWell(
                   onTap: () => _switchStyle(style),
@@ -887,11 +1032,75 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
             ],
           ),
         ),
+      ),
 
         // Kanan: Pengurutan & Tombol Lipat/Buka Semua
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // Mode Pas Layar / Bisa Digeser (Khusus Diagram Batang)
+            if (_selectedStyle == ChartStyle.batang ||
+                _selectedStyle == ChartStyle.semua) ...[
+              Tooltip(
+                message: _fitColumnBars
+                    ? 'Mode Pas Layar: Semua blok dirapatkan agar muat dalam satu layar tanpa digeser. Ketuk untuk beralih ke Mode Geser.'
+                    : 'Mode Geser: Data dapat digeser secara horizontal dengan mouse atau sentuhan. Ketuk untuk beralih ke Mode Pas Layar.',
+                child: InkWell(
+                  onTap: () {
+                    setState(() => _fitColumnBars = !_fitColumnBars);
+                    _savePreferences();
+                  },
+                  borderRadius: BorderRadius.circular(10),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 7,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? colorScheme.surfaceContainerHigh
+                          : Colors.grey.shade200,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: _fitColumnBars
+                            ? accent.shade600
+                            : Colors.transparent,
+                        width: 1.2,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          _fitColumnBars
+                              ? Icons.fit_screen_rounded
+                              : Icons.open_with_rounded,
+                          size: 15,
+                          color: _fitColumnBars
+                              ? accent.shade700
+                              : colorScheme.onSurfaceVariant,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          _fitColumnBars ? 'Pas Layar' : 'Bisa Digeser',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: _fitColumnBars
+                                ? accent.shade700
+                                : (isDark
+                                    ? Colors.white
+                                    : Colors.grey.shade800),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+            ],
             if (_activeTab != DhkpGrafikTab.trenBulanan) ...[
               PopupMenuButton<GrafikSortMode>(
                 tooltip: 'Urutkan Grafik & Tabel',
@@ -1273,6 +1482,34 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
                     ),
                   ),
                   const SizedBox(width: 4),
+                  if (sectionKey == 'batang') ...[
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      constraints: const BoxConstraints(
+                        minWidth: 32,
+                        minHeight: 32,
+                      ),
+                      padding: const EdgeInsets.all(4),
+                      tooltip: _fitColumnBars
+                          ? 'Beralih ke Mode Geser (Lebarkan batang)'
+                          : 'Beralih ke Mode Pas Layar (Rapatkan semua blok)',
+                      icon: Icon(
+                        _fitColumnBars
+                            ? Icons.fit_screen_rounded
+                            : Icons.open_with_rounded,
+                        size: 18,
+                        color: _fitColumnBars
+                            ? accentColor.shade700
+                            : (isDark
+                                ? Colors.grey.shade300
+                                : Colors.grey.shade700),
+                      ),
+                      onPressed: () {
+                        setState(() => _fitColumnBars = !_fitColumnBars);
+                        _savePreferences();
+                      },
+                    ),
+                  ],
                   IconButton(
                     visualDensity: VisualDensity.compact,
                     constraints: const BoxConstraints(
@@ -1427,6 +1664,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
               selectedItemLabel: _selectedItemLabel,
               animationValue: _animation.value,
               onSelectLabel: _onSelectLabel,
+              fitScreen: _fitColumnBars,
             ),
           ),
           const SizedBox(height: 12),
@@ -1567,6 +1805,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
               selectedItemLabel: _selectedItemLabel,
               animationValue: _animation.value,
               onSelectLabel: _onSelectLabel,
+              fitScreen: _fitColumnBars,
             ),
           ),
           const SizedBox(height: 12),
@@ -1709,6 +1948,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
               selectedItemLabel: _selectedItemLabel,
               animationValue: _animation.value,
               onSelectLabel: _onSelectLabel,
+              fitScreen: _fitColumnBars,
             ),
           ),
           const SizedBox(height: 12),
@@ -1855,6 +2095,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
               selectedItemLabel: _selectedItemLabel,
               animationValue: _animation.value,
               onSelectLabel: _onSelectLabel,
+              fitScreen: _fitColumnBars,
             ),
           ),
           const SizedBox(height: 12),
@@ -1951,7 +2192,6 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
   // TAB: TREN PEMBAYARAN TIAP BULAN (JAN - DES)
   // =========================================================================
   Widget _buildTrenBulananSection(List<BlokRecord> records, bool isDark) {
-    const monthNames = DhkpGrafikAnalytics.monthNames;
     final monthGroups = DhkpGrafikAnalytics.buildMonthGroups(records);
     final monthlyNominal = monthGroups.map((g) => g.lunasNominal).toList();
     final totalDatedNominal = monthlyNominal.fold<int>(0, (sum, v) => sum + v);
@@ -1968,129 +2208,24 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // 1. Grafik Perkembangan Bulanan
-        _buildCollapsibleSectionCard(
-          sectionKey: 'kurva',
-          icon: Icons.show_chart_rounded,
-          title: 'Grafik Perkembangan Pembayaran Bulanan',
-          subtitle:
-              'Alur penerimaan pembayaran PBB dari Januari sampai Desember',
-          badgeText: 'Jan – Des',
-          accentColor: Colors.purple,
-          isDark: isDark,
-          groups: monthGroups,
-          child: Column(
-            children: [
-              LayoutBuilder(
-                builder: (context, c) {
-                  final w = c.maxWidth;
-                  void onTouch(Offset localPos) {
-                    if (monthGroups.isEmpty || w <= 0) return;
-                    final stepX = w / (monthGroups.length - 1);
-                    final idx = (localPos.dx / stepX).round().clamp(
-                      0,
-                      monthGroups.length - 1,
-                    );
-                    final label = monthNames[idx];
-                    if (_selectedItemLabel != label) {
-                      HapticFeedback.selectionClick();
-                      setState(() {
-                        _selectedItemLabel = label;
-                      });
-                    }
-                  }
-
-                  final selIndex = _selectedItemLabel != null
-                      ? monthNames.indexOf(_selectedItemLabel!)
-                      : null;
-
-                  return GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTapDown: (d) => onTouch(d.localPosition),
-                    onPanUpdate: (d) => onTouch(d.localPosition),
-                    child: SizedBox(
-                      height: 180,
-                      child: CustomPaint(
-                        size: Size(w, 180),
-                        painter: GrassLineAreaPainter(
-                          data: monthlyNominal,
-                          maxVal: maxMonthVal > 0 ? maxMonthVal : 1,
-                          progress: _animation.value,
-                          lineColor: Colors.purple.shade600,
-                          isDark: isDark,
-                          selectedIndex: selIndex != null && selIndex >= 0
-                              ? selIndex
-                              : null,
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-              const SizedBox(height: 8),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  for (final m in monthNames)
-                    InkWell(
-                      onTap: () {
-                        HapticFeedback.selectionClick();
-                        setState(() {
-                          _selectedItemLabel = _selectedItemLabel == m
-                              ? null
-                              : m;
-                        });
-                      },
-                      borderRadius: BorderRadius.circular(4),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 2,
-                          vertical: 2,
-                        ),
-                        child: Text(
-                          m,
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: _selectedItemLabel == m
-                                ? FontWeight.bold
-                                : FontWeight.w600,
-                            color: _selectedItemLabel == m
-                                ? Colors.purple
-                                : (isDark ? Colors.grey.shade400 : Colors.grey),
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 12),
-
+        // 1. Diagram Batang & Garis Tren Bulanan (Jan – Des) - Menggantikan kurva rumput seperti gambar Brainly
         if (showBatang) ...[
           _buildCollapsibleSectionCard(
             sectionKey: 'batang',
             icon: Icons.bar_chart_rounded,
-            title: 'Diagram Batang: Penerimaan per Bulan',
-            subtitle: 'Perbandingan uang masuk tiap bulan (Jan–Des)',
-            badgeText: '12 Bulan',
+            title: 'Diagram Batang & Garis Tren Bulanan',
+            subtitle:
+                'Penerimaan kas per bulan dengan garis poligon tren puncak (Jan–Des)',
+            badgeText: 'Jan – Des',
             accentColor: Colors.purple,
             isDark: isDark,
             groups: monthGroups,
-            child: renderDhkpColumnBars(
-              groups: monthGroups,
-              valueExtractor: (g) => g.lunasNominal.toDouble(),
-              maxVal: maxMonthVal.toDouble(),
-              topLabelExtractor: (g) =>
-                  g.lunasNominal > 0 ? formatShortRupiah(g.lunasNominal) : '-',
-              subLabelExtractor: (g) =>
-                  g.lunasNop > 0 ? '${g.lunasNop} objek' : '',
-              color1: Colors.purple.shade400,
-              color2: Colors.purple.shade800,
+            child: renderDhkpComboBarLineTrend(
+              monthGroups: monthGroups,
+              maxMonthVal: maxMonthVal,
+              animationValue: _animation.value,
               isDark: isDark,
               selectedItemLabel: _selectedItemLabel,
-              animationValue: _animation.value,
               onSelectLabel: _onSelectLabel,
             ),
           ),

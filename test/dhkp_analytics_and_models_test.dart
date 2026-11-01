@@ -1,6 +1,9 @@
+import 'dart:ui';
 import 'package:cek_pbb_app/blok_record.dart';
 import 'package:cek_pbb_app/dhkp/blok_catatan_models.dart';
+import 'package:cek_pbb_app/dhkp/dhkp_chart_widgets.dart';
 import 'package:cek_pbb_app/dhkp/dhkp_grafik_analytics.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -134,6 +137,185 @@ void main() {
       expect(groupsDesc.first.lunasNominal, 500000);
       expect(groupsDesc.last.label, 'Blok 1');
       expect(groupsDesc.last.lunasNominal, 100000);
+    });
+
+    test('ComboBarLineTrendPainter paints bars and trend line without error', () {
+      final painter = ComboBarLineTrendPainter(
+        data: List.filled(12, 100000),
+        counts: List.filled(12, 5),
+        monthNames: DhkpGrafikAnalytics.monthNames,
+        maxVal: 200000,
+        progress: 1.0,
+        barColor1: Colors.blue.shade600,
+        barColor2: Colors.blue.shade900,
+        lineColor: const Color(0xFFDC2626),
+        isDark: false,
+        selectedIndex: 2,
+      );
+
+      final recorder = PictureRecorder();
+      final canvas = Canvas(recorder);
+      expect(() => painter.paint(canvas, const Size(400, 220)), returnsNormally);
+      final picture = recorder.endRecording();
+      picture.dispose();
+    });
+
+    test('ColumnChartGridPainter paints gridlines and Y-axis scale without error', () {
+      final painter = ColumnChartGridPainter(
+        maxVal: 100.0,
+        isDark: false,
+        topOffset: 28.0,
+        bottomOffset: 48.0,
+        leftMargin: 42.0,
+        rightMargin: 8.0,
+      );
+
+      final recorder = PictureRecorder();
+      final canvas = Canvas(recorder);
+      expect(() => painter.paint(canvas, const Size(800, 250)), returnsNormally);
+      final picture = recorder.endRecording();
+      picture.dispose();
+    });
+
+    test('SlantedLabelPainter paints rotated and horizontal label without error', () {
+      final painter = SlantedLabelPainter(
+        label: 'Blok 1',
+        rotate: true,
+        isSelected: false,
+        isDark: false,
+        color1: Colors.green,
+        fontSize: 9.0,
+      );
+
+      final recorder = PictureRecorder();
+      final canvas = Canvas(recorder);
+      expect(() => painter.paint(canvas, const Size(24, 52)), returnsNormally);
+      final picture = recorder.endRecording();
+      picture.dispose();
+
+      final painterHorizontal = SlantedLabelPainter(
+        label: 'Dusun 1',
+        rotate: false,
+        isSelected: true,
+        isDark: true,
+        color1: Colors.teal,
+        fontSize: 10.0,
+      );
+      final recorder2 = PictureRecorder();
+      final canvas2 = Canvas(recorder2);
+      expect(() => painterHorizontal.paint(canvas2, const Size(120, 26)), returnsNormally);
+      final picture2 = recorder2.endRecording();
+      picture2.dispose();
+    });
+
+    testWidgets('renderDhkpColumnBars renders 41 blocks without overflow in fitScreen mode', (tester) async {
+      tester.view.physicalSize = const Size(1000, 600);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      final groups41 = List.generate(
+        41,
+        (i) {
+          final lunas = (i * 2) % 50;
+          return DhkpGroupInfo(
+            label: 'Blok ${i + 1}',
+            totalNop: 50,
+            lunasNop: lunas,
+            belumBayarNop: 50 - lunas,
+            totalNominal: 1000000,
+            lunasNominal: lunas * 20000,
+            belumBayarNominal: (50 - lunas) * 20000,
+            lunasPct: (lunas / 50.0) * 100.0,
+            lunasNopPct: (lunas / 50.0) * 100.0,
+          );
+        },
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: SizedBox(
+                width: 900,
+                child: renderDhkpColumnBars(
+                  groups: groups41,
+                  valueExtractor: (g) => g.lunasPct,
+                  maxVal: 100.0,
+                  topLabelExtractor: (g) => '${g.lunasPct.toStringAsFixed(1)}%',
+                  subLabelExtractor: (g) => '${g.lunasNop}/${g.totalNop}',
+                  color1: Colors.green.shade400,
+                  color2: Colors.green.shade700,
+                  isDark: false,
+                  selectedItemLabel: 'Blok 6',
+                  animationValue: 1.0,
+                  onSelectLabel: (_) {},
+                  fitScreen: true,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.byType(Tooltip), findsNWidgets(41));
+      expect(find.byType(CustomPaint), findsWidgets);
+      // In fitScreen mode on 900px, it fits without horizontal scrolling
+      expect(find.byType(DhkpScrollableBars), findsNothing);
+    });
+
+    testWidgets('renderDhkpColumnBars renders DhkpScrollableBars with scrollbar and supports mouse dragging', (tester) async {
+      tester.view.physicalSize = const Size(1000, 600);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      final groups41 = List.generate(
+        41,
+        (i) => DhkpGroupInfo(
+          label: 'Blok ${i + 1}',
+          totalNop: 50,
+          lunasNop: 25,
+          belumBayarNop: 25,
+          totalNominal: 1000000,
+          lunasNominal: 500000,
+          belumBayarNominal: 500000,
+          lunasPct: 50.0,
+          lunasNopPct: 50.0,
+        ),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: SizedBox(
+                width: 900,
+                child: renderDhkpColumnBars(
+                  groups: groups41,
+                  valueExtractor: (g) => g.lunasPct,
+                  maxVal: 100.0,
+                  topLabelExtractor: (g) => '${g.lunasPct.toStringAsFixed(1)}%',
+                  subLabelExtractor: (g) => '${g.lunasNop}/${g.totalNop}',
+                  color1: Colors.green.shade400,
+                  color2: Colors.green.shade700,
+                  isDark: false,
+                  selectedItemLabel: null,
+                  animationValue: 1.0,
+                  onSelectLabel: (_) {},
+                  fitScreen: false, // Explicit scrollable mode
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.byType(DhkpScrollableBars), findsOneWidget);
+      expect(find.byType(Scrollbar), findsOneWidget);
+
+      // Verify dragging with mouse gesture
+      await tester.drag(find.byType(DhkpScrollableBars), const Offset(-200, 0));
+      await tester.pumpAndSettle();
+      expect(find.byType(Tooltip), findsWidgets);
     });
   });
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'check_mode.dart';
+import 'feature_tour/feature_tour.dart';
 import 'settings_screen.dart';
 import 'theme_controller.dart';
 
@@ -14,6 +15,9 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
   final VoidCallback onMonitoringPressed;
   final VoidCallback onDesilPressed;
   final VoidCallback onKendaraanPressed;
+  final VoidCallback? onHelpPressed;
+  final GlobalKey? modeMenuKey;
+  final GlobalKey? settingsButtonKey;
   final bool desilSelected;
   final bool kendaraanSelected;
 
@@ -25,6 +29,9 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
     required this.onMonitoringPressed,
     required this.onDesilPressed,
     required this.onKendaraanPressed,
+    this.onHelpPressed,
+    this.modeMenuKey,
+    this.settingsButtonKey,
     this.desilSelected = false,
     this.kendaraanSelected = false,
     this.isOperator = false,
@@ -53,7 +60,8 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
           builder: (context, constraints) {
             final isNarrow = constraints.maxWidth < _narrowThreshold;
             final logoAndName = _LogoAndName(isOperator: isOperator);
-            final menu = _ModeMenu(
+            final Widget menu = _ModeMenu(
+              key: modeMenuKey,
               activeMode: activeMode,
               onModeChanged: onModeChanged,
               onMonitoringPressed: onMonitoringPressed,
@@ -62,10 +70,17 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
               desilSelected: desilSelected,
               kendaraanSelected: kendaraanSelected,
             );
+            final helpButton = onHelpPressed != null
+                ? FeatureTourHelpButton(
+                    onPressed: onHelpPressed!,
+                    color: onPrimary,
+                  )
+                : null;
             final settingsButton = IconButton(
+              key: settingsButtonKey,
               onPressed: () => _openSettings(context),
               icon: Icon(Icons.settings, color: onPrimary),
-              tooltip: 'Pengaturan',
+              tooltip: 'Pengaturan Aplikasi',
             );
 
             return Padding(
@@ -82,6 +97,7 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
                                 child: logoAndName,
                               ),
                             ),
+                            ?helpButton,
                             settingsButton,
                           ],
                         ),
@@ -97,6 +113,7 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
                         logoAndName,
                         const SizedBox(width: 24),
                         Expanded(child: menu),
+                        ?helpButton,
                         settingsButton,
                       ],
                     ),
@@ -174,6 +191,7 @@ class _ModeMenu extends StatelessWidget {
   final bool kendaraanSelected;
 
   const _ModeMenu({
+    super.key,
     required this.activeMode,
     required this.onModeChanged,
     required this.onMonitoringPressed,

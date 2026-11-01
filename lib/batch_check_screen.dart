@@ -254,7 +254,8 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
             if (!_isRunning || _isPaused || !mounted) break;
             setState(() {
               _isCooldown = true;
-              _statusMessage = 'Cooldown $s detik...';
+              _statusMessage =
+                  'Istirahat sejenak $s detik agar pencarian tetap lancar...';
             });
             await Future<void>.delayed(const Duration(seconds: 1));
           }
@@ -359,7 +360,7 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
       builder: (ctx) => AlertDialog(
         title: const Text('Hentikan Pengecekan Massal?'),
         content: const Text(
-          'Pengecekan sedang berjalan. Data yang sudah dicek tetap tersimpan di database lokal.',
+          'Pengecekan sedang berjalan. Data yang sudah selesai diperiksa tetap tersimpan aman di catatan perangkat Anda.',
         ),
         actions: [
           TextButton(

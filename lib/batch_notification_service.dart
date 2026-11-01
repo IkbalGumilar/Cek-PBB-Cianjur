@@ -46,18 +46,28 @@ class BatchNotificationService {
     const linuxSettings = LinuxInitializationSettings(
       defaultActionName: 'Buka Aplikasi',
     );
+    const windowsSettings = WindowsInitializationSettings(
+      appName: 'Cek PBB Cianjur',
+      appUserModelId: 'IkbalGumilar.CekPBBCianjur.App.1',
+      guid: '9B7E3E5D-4921-4F25-9B21-8848CBE1A964',
+    );
 
     const initSettings = InitializationSettings(
       android: androidSettings,
       iOS: darwinSettings,
       macOS: darwinSettings,
       linux: linuxSettings,
+      windows: windowsSettings,
     );
 
-    await _notifications.initialize(
-      settings: initSettings,
-      onDidReceiveNotificationResponse: _onNotificationTapped,
-    );
+    try {
+      await _notifications.initialize(
+        settings: initSettings,
+        onDidReceiveNotificationResponse: _onNotificationTapped,
+      );
+    } catch (e) {
+      debugPrint('Gagal inisialisasi flutter_local_notifications: $e');
+    }
 
     _isInitialized = true;
 

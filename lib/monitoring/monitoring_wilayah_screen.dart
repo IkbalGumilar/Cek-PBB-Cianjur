@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../feature_tour/feature_tour.dart';
 import '../settings_screen.dart';
 import '../staff_portal_client.dart';
 import '../theme_controller.dart';
@@ -17,7 +18,7 @@ import 'tab_sudah_bayar_kolektif.dart';
 /// tab dicocokkan langsung dengan HTML halaman aslinya (lihat masing-masing
 /// file `tab_*.dart`), tata letaknya dirombak jadi form bertumpuk yang lebih
 /// enak dipakai di layar sempit — bukan tabel 3 kolom seperti versi web.
-class MonitoringWilayahScreen extends StatelessWidget {
+class MonitoringWilayahScreen extends StatefulWidget {
   final StaffPortalClient client;
   final ThemeController themeController;
 
@@ -26,6 +27,21 @@ class MonitoringWilayahScreen extends StatelessWidget {
     required this.client,
     required this.themeController,
   });
+
+  @override
+  State<MonitoringWilayahScreen> createState() =>
+      _MonitoringWilayahScreenState();
+}
+
+class _MonitoringWilayahScreenState extends State<MonitoringWilayahScreen> {
+  static const String _tourId = 'monitoring_wilayah_screen';
+
+  final GlobalKey _tabBarKey = GlobalKey(
+    debugLabel: 'monitoring_wilayah_tab_bar',
+  );
+  final GlobalKey _tabContentKey = GlobalKey(
+    debugLabel: 'monitoring_wilayah_tab_content',
+  );
 
   static const _tabs = [
     'Sudah Bayar',
@@ -36,6 +52,48 @@ class MonitoringWilayahScreen extends StatelessWidget {
     'Belum Bayar Kolektif',
     'Rangking Realisasi',
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      FeatureTourController.showTourIfNeeded(
+        context: context,
+        tourId: _tourId,
+        steps: _buildTourSteps(),
+      );
+    });
+  }
+
+  void showTour() {
+    if (!mounted) return;
+    FeatureTourController.showTour(
+      context: context,
+      tourId: _tourId,
+      steps: _buildTourSteps(),
+    );
+  }
+
+  List<FeatureTourStep> _buildTourSteps() {
+    return [
+      FeatureTourStep(
+        targetKey: _tabBarKey,
+        title: '7 Jenis Laporan Pantauan Wilayah',
+        description:
+            'Geser ke kiri atau kanan untuk memilih laporan: Sudah Bayar, Belum Bayar, Realisasi, Tunggakan (Piutang), Kolektif, hingga Peringkat Realisasi Desa.',
+        icon: Icons.tab_rounded,
+        actionHint: 'Ketuk salah satu judul tab di atas untuk berpindah laporan',
+      ),
+      FeatureTourStep(
+        targetKey: _tabContentKey,
+        title: 'Formulir Penyaring & Tabel Hasil',
+        description:
+            'Pilih tahun pajak, buku ketetapan, atau tanggal, lalu ketuk tombol Tampilkan untuk melihat tabel data beserta tombol Unduh/Bagikan PDF & Excel.',
+        icon: Icons.table_view_rounded,
+      ),
+    ];
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -49,38 +107,52 @@ class MonitoringWilayahScreen extends StatelessWidget {
         appBar: AppBar(
           backgroundColor: primaryColor,
           foregroundColor: onPrimary,
-          title: const Text('Monitoring Wilayah'),
+          title: const Text('Pantauan Wilayah Desa'),
           actions: [
+            FeatureTourHelpButton(
+              onPressed: showTour,
+              color: onPrimary,
+              tooltip: 'Panduan Pantauan Wilayah',
+            ),
             IconButton(
               onPressed: () => Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (_) =>
-                      SettingsScreen(themeController: themeController),
+                      SettingsScreen(themeController: widget.themeController),
                 ),
               ),
               icon: const Icon(Icons.settings),
               tooltip: 'Pengaturan',
             ),
           ],
-          bottom: TabBar(
-            isScrollable: true,
-            labelColor: onPrimary,
-            unselectedLabelColor: onPrimary.withValues(alpha: 0.7),
-            indicatorColor: onPrimary,
-            tabs: [for (final t in _tabs) Tab(text: t)],
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(kTextTabBarHeight),
+            child: Container(
+              key: _tabBarKey,
+              child: TabBar(
+                isScrollable: true,
+                labelColor: onPrimary,
+                unselectedLabelColor: onPrimary.withValues(alpha: 0.7),
+                indicatorColor: onPrimary,
+                tabs: [for (final t in _tabs) Tab(text: t)],
+              ),
+            ),
           ),
         ),
-        body: TabBarView(
-          children: [
-            TabSudahBayar(client: client),
-            TabBelumBayar(client: client),
-            TabRealisasi(client: client),
-            TabPiutang(client: client),
-            TabSudahBayarKolektif(client: client),
-            TabBelumBayarKolektif(client: client),
-            TabRangkingRealisasi(client: client),
-          ],
+        body: Container(
+          key: _tabContentKey,
+          child: TabBarView(
+            children: [
+              TabSudahBayar(client: widget.client),
+              TabBelumBayar(client: widget.client),
+              TabRealisasi(client: widget.client),
+              TabPiutang(client: widget.client),
+              TabSudahBayarKolektif(client: widget.client),
+              TabBelumBayarKolektif(client: widget.client),
+              TabRangkingRealisasi(client: widget.client),
+            ],
+          ),
         ),
       ),
     );

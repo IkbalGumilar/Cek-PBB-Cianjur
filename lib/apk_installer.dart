@@ -63,8 +63,26 @@ class ApkInstaller {
   /// kalau izin "Instal aplikasi tidak dikenal" belum aktif untuk aplikasi
   /// ini (wajib diaktifkan manual oleh user di Android 8+).
   static Future<String> install(String filePath) async {
+    if (Platform.isWindows) {
+      try {
+        final lower = filePath.toLowerCase();
+        if (lower.endsWith('.exe')) {
+          await Process.start(filePath, [], runInShell: true);
+          return 'OPENED';
+        } else {
+          await Process.start(
+            'explorer.exe',
+            ['/select,', filePath],
+            runInShell: true,
+          );
+          return 'OPENED';
+        }
+      } catch (e) {
+        throw Exception('Gagal membuka berkas pembaruan Windows: $e');
+      }
+    }
     if (!Platform.isAndroid) {
-      throw Exception('Pembaruan otomatis hanya tersedia di Android.');
+      throw Exception('Pembaruan otomatis hanya tersedia di Android dan Windows.');
     }
     try {
       final status = await _channel.invokeMethod<String>('installApk', {

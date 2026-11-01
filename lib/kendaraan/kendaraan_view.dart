@@ -7,20 +7,27 @@ import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../currency_format.dart';
+import '../feature_tour/feature_tour.dart';
 import 'kendaraan_client.dart';
 import 'plat_scanner.dart';
 
 class KendaraanView extends StatefulWidget {
-  const KendaraanView({super.key, this.client, this.scrollController});
+  const KendaraanView({
+    super.key,
+    this.client,
+    this.scrollController,
+    this.isActive = false,
+  });
 
   final KendaraanClient? client;
   final ScrollController? scrollController;
+  final bool isActive;
 
   @override
-  State<KendaraanView> createState() => _KendaraanViewState();
+  State<KendaraanView> createState() => KendaraanViewState();
 }
 
-class _KendaraanViewState extends State<KendaraanView> {
+class KendaraanViewState extends State<KendaraanView> {
   late final KendaraanClient _client = widget.client ?? KendaraanClient();
   final _platScanner = PlatScanner();
   final _frontController = TextEditingController();
@@ -32,6 +39,12 @@ class _KendaraanViewState extends State<KendaraanView> {
   final _numberFocus = FocusNode();
   final _backFocus = FocusNode();
 
+  final _plateFormKey = GlobalKey(debugLabel: 'tour_kendaraan_plate');
+  final _scanPlateButtonKey = GlobalKey(debugLabel: 'tour_kendaraan_scan');
+  final _colorChipsKey = GlobalKey(debugLabel: 'tour_kendaraan_color');
+  final _submitButtonKey = GlobalKey(debugLabel: 'tour_kendaraan_submit');
+  final _officialLinkKey = GlobalKey(debugLabel: 'tour_kendaraan_official');
+
   KendaraanInfo? _result;
   String? _errorText;
   KendaraanErrorKind? _errorKind;
@@ -39,6 +52,94 @@ class _KendaraanViewState extends State<KendaraanView> {
   bool _loading = false;
   bool _scanningPlate = false;
   String? _plateOcrWarning;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.isActive) {
+      _maybeStartTour();
+    }
+  }
+
+  @override
+  void didUpdateWidget(KendaraanView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!oldWidget.isActive && widget.isActive) {
+      _maybeStartTour();
+    }
+  }
+
+  void _maybeStartTour() {
+    if (!mounted || !widget.isActive) return;
+    FeatureTourController.startTourIfNeeded(
+      context: context,
+      tourId: 'kendaraan_view',
+      steps: _buildTourSteps(),
+    );
+  }
+
+  void showTour() {
+    if (!mounted) return;
+    FeatureTourController.showTour(
+      context: context,
+      tourId: 'kendaraan_view',
+      steps: _buildTourSteps(),
+    );
+  }
+
+  List<FeatureTourStep> _buildTourSteps() {
+    return [
+      FeatureTourStep(
+        targetKey: _plateFormKey,
+        title: 'Kolom Nomor Polisi (Plat Kendaraan)',
+        description:
+            'Ketik nomor plat kendaraan Jawa Barat yang ingin diperiksa pada tiga bagian kotak ini:\n'
+            '• Kotak kiri: Kode wilayah huruf depan (contoh: F untuk Cianjur/Bogor/Sukabumi, atau D untuk Bandung).\n'
+            '• Kotak tengah: Angka nomor polisi (1 sampai 4 angka).\n'
+            '• Kotak kanan: Huruf seri belakang.',
+        actionHint:
+            'Kursor akan otomatis berpindah ke kotak berikutnya saat bagian depan selesai diisi.',
+        icon: Icons.directions_car_outlined,
+      ),
+      FeatureTourStep(
+        targetKey: _scanPlateButtonKey,
+        title: 'Tombol Foto / Pindai Plat Nomor',
+        description:
+            'Jika menggunakan ponsel, tekan tombol ini untuk memotret langsung plat nomor kendaraan atau memilih foto dari galeri agar nomor plat otomatis terisi.',
+        actionHint:
+            'Pastikan foto plat diambil dari jarak cukup dekat, lurus, dan tidak silau.',
+        icon: Icons.document_scanner_outlined,
+      ),
+      FeatureTourStep(
+        targetKey: _colorChipsKey,
+        title: 'Pilihan Warna Plat Kendaraan',
+        description:
+            'Pilih jenis warna dasar plat kendaraan:\n'
+            '• Hitam / Putih: Untuk kendaraan pribadi milik warga.\n'
+            '• Merah: Untuk kendaraan dinas pemerintahan.\n'
+            '• Kuning: Untuk kendaraan angkutan umum.',
+        actionHint:
+            'Kendaraan pribadi berplat putih terbaru maupun plat hitam lama sama-sama memilih "Hitam / Putih".',
+        icon: Icons.palette_outlined,
+      ),
+      FeatureTourStep(
+        targetKey: _submitButtonKey,
+        title: 'Tombol Lihat Info Pajak Kendaraan',
+        description:
+            'Tekan tombol ini untuk menampilkan merek/tipe kendaraan, masa berlaku pajak tahunan & STNK 5 tahunan, serta rincian nominal pokok dan denda pajak kendaraan.',
+        actionHint:
+            'Hasil rincian pajak kendaraan akan langsung ditampilkan di bagian bawah layar ini.',
+        icon: Icons.search_rounded,
+      ),
+      FeatureTourStep(
+        targetKey: _officialLinkKey,
+        title: 'Tautan Layanan Resmi Bapenda Jabar',
+        description:
+            'Tekan tombol ini jika Anda ingin membuka halaman informasi pembayaran pajak kendaraan resmi Pemerintah Provinsi Jawa Barat di peramban.',
+        icon: Icons.open_in_new_rounded,
+      ),
+    ];
+  }
 
   @override
   void dispose() {
@@ -284,6 +385,7 @@ class _KendaraanViewState extends State<KendaraanView> {
               ),
               const SizedBox(height: 20),
               _PlateForm(
+                key: _plateFormKey,
                 frontController: _frontController,
                 numberController: _numberController,
                 backController: _backController,
@@ -296,6 +398,7 @@ class _KendaraanViewState extends State<KendaraanView> {
               Align(
                 alignment: Alignment.centerLeft,
                 child: OutlinedButton.icon(
+                  key: _scanPlateButtonKey,
                   onPressed: _scanningPlate ? null : _scanAndFillPlate,
                   icon: _scanningPlate
                       ? const SizedBox(
@@ -345,6 +448,7 @@ class _KendaraanViewState extends State<KendaraanView> {
               ),
               const SizedBox(height: 8),
               Wrap(
+                key: _colorChipsKey,
                 spacing: 8,
                 children: [
                   _colorChip('1', 'Hitam / Putih'),
@@ -384,6 +488,7 @@ class _KendaraanViewState extends State<KendaraanView> {
               ],
               const SizedBox(height: 16),
               FilledButton.icon(
+                key: _submitButtonKey,
                 onPressed: _loading ? null : _submit,
                 icon: _loading
                     ? const SizedBox(
@@ -396,6 +501,7 @@ class _KendaraanViewState extends State<KendaraanView> {
               ),
               const SizedBox(height: 10),
               TextButton.icon(
+                key: _officialLinkKey,
                 onPressed: _openOfficialPage,
                 icon: const Icon(Icons.open_in_new, size: 18),
                 label: const Text('Buka layanan resmi Jabar'),
@@ -430,6 +536,7 @@ class _PlateForm extends StatelessWidget {
   final VoidCallback? onChanged;
 
   const _PlateForm({
+    super.key,
     required this.frontController,
     required this.numberController,
     required this.backController,

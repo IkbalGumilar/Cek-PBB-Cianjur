@@ -9,6 +9,7 @@ import 'blok_data_store.dart';
 import 'check_form_view.dart';
 import 'check_mode.dart';
 import 'desil/desil_view.dart';
+import 'feature_tour/feature_tour.dart';
 import 'import_view.dart';
 import 'incoming_file_service.dart';
 import 'kendaraan/kendaraan_view.dart';
@@ -45,6 +46,12 @@ class _MainShellState extends State<MainShell> {
   final _checkScrollController = ScrollController();
   final _kendaraanScrollController = ScrollController();
   final _desilKey = GlobalKey<DesilViewState>();
+  final _kendaraanKey = GlobalKey<KendaraanViewState>();
+  final _headerMenuKey = GlobalKey(debugLabel: 'tour_header_menu');
+  final _headerSettingsKey = GlobalKey(debugLabel: 'tour_header_settings');
+  final _dhkpFabKey = GlobalKey(debugLabel: 'tour_dhkp_fab');
+  VoidCallback? _showCheckTour;
+  VoidCallback? _showImportTour;
 
   @override
   void initState() {
@@ -58,6 +65,19 @@ class _MainShellState extends State<MainShell> {
     _checkScrollController.dispose();
     _kendaraanScrollController.dispose();
     super.dispose();
+  }
+
+  void _triggerActiveTour() {
+    switch (_view) {
+      case _ActiveView.check:
+        _showCheckTour?.call();
+      case _ActiveView.import:
+        _showImportTour?.call();
+      case _ActiveView.desil:
+        _desilKey.currentState?.showTour();
+      case _ActiveView.kendaraan:
+        _kendaraanKey.currentState?.showTour();
+    }
   }
 
   Future<void> _runStartupChecks() async {
@@ -133,6 +153,7 @@ class _MainShellState extends State<MainShell> {
   }
 
   void _changeMode(CheckMode mode) {
+    FeatureTourController.dismissActiveTour();
     setState(() {
       _mode = mode;
       _view = _ActiveView.check;
@@ -144,6 +165,7 @@ class _MainShellState extends State<MainShell> {
   }
 
   void _openStatusBayar(String blok, String wilayah, String tahun) {
+    FeatureTourController.dismissActiveTour();
     setState(() {
       _mode = CheckMode.statusBayar;
       _view = _ActiveView.check;
@@ -156,6 +178,7 @@ class _MainShellState extends State<MainShell> {
   }
 
   void _openImport() {
+    FeatureTourController.dismissActiveTour();
     setState(() => _view = _ActiveView.import);
   }
 
@@ -166,6 +189,7 @@ class _MainShellState extends State<MainShell> {
   // dulu apakah sesi lama masih aktif — kalau iya langsung ke
   // MonitoringHubScreen tanpa login ulang.
   Future<void> _openMonitoring() async {
+    FeatureTourController.dismissActiveTour();
     final client = StaffPortalClient();
     showDialog<void>(
       context: context,
@@ -195,6 +219,7 @@ class _MainShellState extends State<MainShell> {
   }
 
   void _backToCheck() {
+    FeatureTourController.dismissActiveTour();
     setState(() {
       _view = _ActiveView.check;
       _quoteNonce++;
@@ -202,6 +227,7 @@ class _MainShellState extends State<MainShell> {
   }
 
   Future<void> _openBukuCatatan() async {
+    FeatureTourController.dismissActiveTour();
     final request = await Navigator.push<BlokNavigationRequest>(
       context,
       MaterialPageRoute(builder: (_) => const BlokCatatanScreen()),
@@ -288,9 +314,17 @@ class _MainShellState extends State<MainShell> {
           themeController: widget.themeController,
           isOperator: _isOperator,
           onMonitoringPressed: _openMonitoring,
-          onDesilPressed: () => setState(() => _view = _ActiveView.desil),
-          onKendaraanPressed: () =>
-              setState(() => _view = _ActiveView.kendaraan),
+          onDesilPressed: () {
+            FeatureTourController.dismissActiveTour();
+            setState(() => _view = _ActiveView.desil);
+          },
+          onKendaraanPressed: () {
+            FeatureTourController.dismissActiveTour();
+            setState(() => _view = _ActiveView.kendaraan);
+          },
+          onHelpPressed: _triggerActiveTour,
+          modeMenuKey: _headerMenuKey,
+          settingsButtonKey: _headerSettingsKey,
           desilSelected: _view == _ActiveView.desil,
           kendaraanSelected: _view == _ActiveView.kendaraan,
         ),
@@ -313,17 +347,37 @@ class _MainShellState extends State<MainShell> {
                     initialBlok: _prefillBlok,
                     initialWilayah: _prefillWilayah,
                     initialTahun: _prefillTahun,
+                    headerMenuKey: _headerMenuKey,
+                    headerSettingsKey: _headerSettingsKey,
+                    dhkpFabKey: _dhkpFabKey,
+                    isActive: _view == _ActiveView.check,
+                    onRegisterShowTour: (fn) => _showCheckTour = fn,
                   ),
-                  _ImportWithBack(mode: _mode, onBack: _backToCheck),
-                  DesilView(key: _desilKey),
-                  KendaraanView(scrollController: _kendaraanScrollController),
+                  _ImportWithBack(
+                    mode: _mode,
+                    onBack: _backToCheck,
+                    isActive: _view == _ActiveView.import,
+                    onRegisterShowTour: (fn) => _showImportTour = fn,
+                  ),
+                  DesilView(
+                    key: _desilKey,
+                    isActive: _view == _ActiveView.desil,
+                  ),
+                  KendaraanView(
+                    key: _kendaraanKey,
+                    scrollController: _kendaraanScrollController,
+                    isActive: _view == _ActiveView.kendaraan,
+                  ),
                 ],
               ),
             ),
           ],
         ),
         floatingActionButton: _view == _ActiveView.check
-            ? _BukuCatatanButton(onPressed: _openBukuCatatan)
+            ? _BukuCatatanButton(
+                key: _dhkpFabKey,
+                onPressed: _openBukuCatatan,
+              )
             : null,
       ),
     );
@@ -333,7 +387,7 @@ class _MainShellState extends State<MainShell> {
 class _BukuCatatanButton extends StatelessWidget {
   final VoidCallback onPressed;
 
-  const _BukuCatatanButton({required this.onPressed});
+  const _BukuCatatanButton({super.key, required this.onPressed});
 
   @override
   Widget build(BuildContext context) {
@@ -347,7 +401,7 @@ class _BukuCatatanButton extends StatelessWidget {
           isLabelVisible: count > 0,
           child: FloatingActionButton.extended(
             onPressed: onPressed,
-            tooltip: 'Data DHKP',
+            tooltip: 'Buku Catatan DHKP',
             icon: const Icon(Icons.table_chart_outlined),
             label: const Text('DHKP'),
           ),
@@ -360,8 +414,15 @@ class _BukuCatatanButton extends StatelessWidget {
 class _ImportWithBack extends StatelessWidget {
   final CheckMode mode;
   final VoidCallback onBack;
+  final bool isActive;
+  final ValueChanged<VoidCallback>? onRegisterShowTour;
 
-  const _ImportWithBack({required this.mode, required this.onBack});
+  const _ImportWithBack({
+    required this.mode,
+    required this.onBack,
+    required this.isActive,
+    this.onRegisterShowTour,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -373,14 +434,19 @@ class _ImportWithBack extends StatelessWidget {
             children: [
               IconButton(onPressed: onBack, icon: const Icon(Icons.arrow_back)),
               Text(
-                'Import File - ${mode.label}',
+                'Periksa Banyak Data - ${mode.label}',
                 style: Theme.of(context).textTheme.titleMedium,
               ),
             ],
           ),
         ),
         Expanded(
-          child: ImportView(key: ValueKey(mode), mode: mode),
+          child: ImportView(
+            key: ValueKey(mode),
+            mode: mode,
+            isActive: isActive,
+            onRegisterShowTour: onRegisterShowTour,
+          ),
         ),
       ],
     );

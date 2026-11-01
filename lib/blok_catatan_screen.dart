@@ -22,6 +22,7 @@ import 'document_preview_screen.dart';
 import 'download_helper.dart';
 import 'dusun_data.dart';
 import 'file_importer.dart';
+import 'feature_tour/feature_tour.dart';
 import 'google_drive_picker_dialog.dart';
 import 'image_crop_helper.dart';
 import 'kolase_foto_screen.dart';
@@ -72,6 +73,17 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
   final _verticalScrollController = ScrollController();
   final _horizontalScrollController = ScrollController();
 
+  final _toggleGrafikButtonKey = GlobalKey(debugLabel: 'tour_dhkp_grafik_btn');
+  final _uploadButtonKey = GlobalKey(debugLabel: 'tour_dhkp_upload_btn');
+  final _buatLaporanButtonKey = GlobalKey(debugLabel: 'tour_dhkp_laporan_btn');
+  final _syncButtonKey = GlobalKey(debugLabel: 'tour_dhkp_sync_btn');
+  final _moreMenuButtonKey = GlobalKey(debugLabel: 'tour_dhkp_more_btn');
+  final _filterBlokTahunKey = GlobalKey(debugLabel: 'tour_dhkp_filter_bar');
+  final _searchFilterSortKey = GlobalKey(debugLabel: 'tour_dhkp_search_bar');
+  final _tableAreaKey = GlobalKey(debugLabel: 'tour_dhkp_table_area');
+  final _summaryFooterKey = GlobalKey(debugLabel: 'tour_dhkp_summary_footer');
+  VoidCallback? _showGrafikTour;
+
   @override
   void initState() {
     super.initState();
@@ -80,11 +92,115 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
 
   @override
   void dispose() {
+    FeatureTourController.dismissActiveTour();
     AppSecurityService.instance.setScreenSecure(false);
     _searchController.dispose();
     _verticalScrollController.dispose();
     _horizontalScrollController.dispose();
     super.dispose();
+  }
+
+  void _onHelpPressed() {
+    if (_tampilkanGrafik) {
+      _showGrafikTour?.call();
+    } else {
+      showTableTour();
+    }
+  }
+
+  void showTableTour() {
+    if (!mounted || _loading) return;
+    FeatureTourController.showTour(
+      context: context,
+      tourId: 'dhkp_table_view',
+      steps: _buildTableTourSteps(),
+    );
+  }
+
+  List<FeatureTourStep> _buildTableTourSteps() {
+    return [
+      FeatureTourStep(
+        targetKey: _toggleGrafikButtonKey,
+        title: 'Tombol Beralih ke Tampilan Grafik',
+        description:
+            'Tekan ikon diagram ini untuk melihat laporan DHKP dalam bentuk grafik batang, diagram lingkaran, dan kurva tren bulanan yang mudah dipahami.',
+        actionHint:
+            'Tekan kembali tombol yang sama saat berada di layar grafik untuk kembali ke tabel catatan ini.',
+        icon: Icons.bar_chart_rounded,
+      ),
+      FeatureTourStep(
+        targetKey: _uploadButtonKey,
+        title: 'Tombol Unggah & Muat Berkas DHKP',
+        description:
+            'Gunakan tombol ini untuk memasukkan berkas daftar pajak (Excel, CSV, atau paket laporan .dat) dari penyimpanan perangkat maupun langsung dari Google Drive.',
+        actionHint:
+            'Data yang diunggah akan otomatis digabungkan dengan catatan dan foto bukti yang sudah ada.',
+        icon: Icons.upload_file_rounded,
+      ),
+      FeatureTourStep(
+        targetKey: _buatLaporanButtonKey,
+        title: 'Tombol Buat Paket Laporan (.dat)',
+        description:
+            'Mengemas seluruh data DHKP, status pembayaran terbaru, catatan petugas, serta seluruh foto lembaran STTS ke dalam satu berkas laporan lengkap (.dat) yang siap dikirimkan ke operator desa.',
+        icon: Icons.download_rounded,
+      ),
+      FeatureTourStep(
+        targetKey: _syncButtonKey,
+        title: 'Tombol Sinkronisasi Google Drive Bersama',
+        description:
+            'Tekan tombol ini untuk menyamakan pembaruan status bayar, catatan, dan foto dokumentasi antar perangkat petugas melalui folder Google Drive bersama.',
+        actionHint:
+            'Aplikasi juga melakukan sinkronisasi otomatis di latar belakang setiap kali Anda membuka halaman ini.',
+        icon: Icons.sync_rounded,
+      ),
+      FeatureTourStep(
+        targetKey: _moreMenuButtonKey,
+        title: 'Menu Cetak, Unduh Laporan, Kolase Foto, & Cek Massal',
+        description:
+            'Tekan ikon tiga titik ini untuk membuka fitur lanjutan:\n'
+            '• Cetak & Bagikan Laporan: Mencetak atau mengirim rekap PDF/Excel/CSV.\n'
+            '• Kolase Gambar Dokumentasi: Menyusun foto-foto STTS menjadi lembaran kolase ukuran kertas F4.\n'
+            '• Cek Status Bayar Massal: Memeriksa ulang status lunas seluruh warga per blok secara otomatis.',
+        icon: Icons.more_vert_rounded,
+      ),
+      FeatureTourStep(
+        targetKey: _filterBlokTahunKey,
+        title: 'Pilihan Wilayah Dusun, Blok, & Tahun Pajak',
+        description:
+            'Pilih dusun (khusus operator), nomor Blok tertentu atau "Semua Blok", serta Tahun Pajak untuk menampilkan daftar wajib pajak yang ingin Anda periksa.',
+        icon: Icons.filter_alt_outlined,
+      ),
+      FeatureTourStep(
+        targetKey: _searchFilterSortKey,
+        title: 'Pencarian Cepat, Saring Kategori, & Urutan Baris',
+        description:
+            '• Kotak Cari: Ketik nama warga, nomor objek pajak, atau alamat untuk menemukan baris dengan cepat.\n'
+            '• Tombol Saring (Ikon Corong): Tampilkan hanya warga yang Sudah Bayar, Belum Bayar, khusus Target Pemda, atau yang sudah memiliki foto/catatan.\n'
+            '• Tombol Urutkan: Urutkan daftar berdasarkan nomor wilayah, abjad nama, nominal pajak tertinggi/terendah, atau status bayar.',
+        icon: Icons.manage_search_rounded,
+      ),
+      FeatureTourStep(
+        targetKey: _tableAreaKey,
+        title: 'Tabel Daftar Wajib Pajak & Tombol Aksi Baris',
+        description:
+            'Di setiap baris warga, Anda dapat:\n'
+            '• Kolom Gambar: Memotret atau mengunggah foto lembar STTS/bukti bayar.\n'
+            '• Kolom Aksi: Melihat rincian lengkap objek pajak, mencetak bukti lunas PDF, atau langsung memeriksa status bayar.\n'
+            '• Kolom Catatan: Menambahkan catatan keterangan petugas untuk wajib pajak tersebut.',
+        actionHint:
+            'Geser tabel ke kiri/kanan atau atas/bawah untuk melihat seluruh kolom dan baris.',
+        icon: Icons.table_rows_outlined,
+      ),
+      FeatureTourStep(
+        targetKey: _summaryFooterKey,
+        title: 'Kartu Ringkasan Capaian & Target Pemda',
+        description:
+            'Menampilkan rekap otomatis untuk daftar yang sedang dibuka: jumlah & rupiah Sudah Bayar, Kurang Bayar, persentase pelunasan, serta informasi Target Pemda yang dipisahkan secara khusus.',
+        actionHint:
+            'Ketuk kepala kartu ringkasan ini untuk melipat atau membukanya agar ruang tabel lebih lega.',
+        icon: Icons.summarize_outlined,
+      ),
+    ];
   }
 
   /// Menyesuaikan proteksi tangkapan layar (FLAG_SECURE) secara dinamis.
@@ -143,6 +259,14 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
     setState(() {
       _loading = false;
     });
+
+    if (!_tampilkanGrafik) {
+      FeatureTourController.startTourIfNeeded(
+        context: context,
+        tourId: 'dhkp_table_view',
+        steps: _buildTableTourSteps(),
+      );
+    }
 
     // Sinkronisasi otomatis saat membuka DHKP
     unawaited(_triggerAutoSync(silent: true));
@@ -1274,11 +1398,20 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
         title: const Text('Data DHKP'),
         actions: [
           IconButton(
+            key: _toggleGrafikButtonKey,
             onPressed: () {
+              FeatureTourController.dismissActiveTour();
               setState(() {
                 _tampilkanGrafik = !_tampilkanGrafik;
                 _updateScreenSecurity();
               });
+              if (!_tampilkanGrafik) {
+                FeatureTourController.startTourIfNeeded(
+                  context: context,
+                  tourId: 'dhkp_table_view',
+                  steps: _buildTableTourSteps(),
+                );
+              }
             },
             icon: Icon(
               _tampilkanGrafik
@@ -1290,22 +1423,27 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
                 : 'Beralih ke Visual Grafik',
           ),
           IconButton(
+            key: _uploadButtonKey,
             onPressed: _uploadDataDialog,
             icon: const Icon(Icons.upload_file),
-            tooltip: 'Upload Data DHKP / Laporan (.dat)',
+            tooltip: 'Unggah Berkas DHKP / Laporan (.dat)',
           ),
           IconButton(
+            key: _buatLaporanButtonKey,
             onPressed: _buatLaporanDatDialog,
             icon: const Icon(Icons.download_rounded),
-            tooltip: 'Buat Laporan (.dat)',
+            tooltip: 'Buat Paket Laporan (.dat)',
           ),
           IconButton(
+            key: _syncButtonKey,
             onPressed: _busy ? null : () => _triggerAutoSync(silent: false),
             icon: const Icon(Icons.sync_rounded),
             tooltip: 'Sinkronkan Perubahan (Drive Bersama)',
           ),
+          FeatureTourHelpButton(onPressed: _onHelpPressed),
           if (_bloks.isNotEmpty && !_tampilkanGrafik)
             PopupMenuButton<String>(
+              key: _moreMenuButtonKey,
               icon: const Icon(Icons.more_vert_rounded),
               tooltip: 'Menu & Aksi Lainnya',
               onSelected: (val) {
@@ -1396,8 +1534,8 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
                   child: Padding(
                     padding: EdgeInsets.all(24),
                     child: Text(
-                      'Belum ada data DHKP. Tekan tombol Upload Data di kanan atas '
-                      'untuk mengunggah berkas.',
+                      'Belum ada data DHKP. Tekan tombol Unggah Data di kanan atas '
+                      'untuk memuat berkas daftar pajak.',
                       textAlign: TextAlign.center,
                     ),
                   ),
@@ -1477,6 +1615,7 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
                           const SizedBox(height: 8),
                         ],
                         Row(
+                          key: _filterBlokTahunKey,
                           children: [
                             Expanded(
                               flex: 2,
@@ -1542,6 +1681,7 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
                         ),
                         const SizedBox(height: 8),
                         Row(
+                          key: _searchFilterSortKey,
                           children: [
                             Expanded(
                               child: TextField(
@@ -1769,6 +1909,8 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
                                     : _records,
                                 selectedBlok: _selectedBlok,
                                 selectedWilayah: _selectedWilayah,
+                                onRegisterShowTour: (fn) =>
+                                    _showGrafikTour = fn,
                               )
                             : _records.isEmpty
                             ? const Center(
@@ -1801,6 +1943,7 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
                                     : _records.sublist(startIndex, endIndex);
 
                                 return Column(
+                                  key: _tableAreaKey,
                                   children: [
                                     Expanded(
                                       child: Scrollbar(
@@ -2133,7 +2276,10 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
                               }(),
                       ),
                       if (!_tampilkanGrafik)
-                        DhkpSummaryFooterCard(metrics: _summaryMetrics),
+                        DhkpSummaryFooterCard(
+                          key: _summaryFooterKey,
+                          metrics: _summaryMetrics,
+                        ),
                     ],
                   ),
                 ),

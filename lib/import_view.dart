@@ -9,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 import 'app_storage.dart';
 import 'batch_check_screen.dart';
 import 'check_mode.dart';
+import 'feature_tour/feature_tour.dart';
 import 'file_importer.dart';
 import 'nop_helper.dart';
 import 'nop_scanner.dart';
@@ -18,24 +19,37 @@ import 'unity_lerp_widgets.dart';
 const _draftFileName = 'draft_nop.txt';
 
 const _placeholderExample = '''
-Contoh isi (satu NOP per baris, atau dipisah koma):
+Contoh isi (satu nomor pajak per baris, atau dipisah koma):
 17154
 300584
 320520000403000330''';
 
 class ImportView extends StatefulWidget {
   final CheckMode mode;
+  final bool isActive;
+  final ValueChanged<VoidCallback>? onRegisterShowTour;
 
-  const ImportView({super.key, required this.mode});
+  const ImportView({
+    super.key,
+    required this.mode,
+    this.isActive = false,
+    this.onRegisterShowTour,
+  });
 
   @override
-  State<ImportView> createState() => _ImportViewState();
+  State<ImportView> createState() => ImportViewState();
 }
 
-class _ImportViewState extends State<ImportView> {
+class ImportViewState extends State<ImportView> {
   final _tahunController = TextEditingController(text: '2026');
   final _textController = TextEditingController();
   final _nopScanner = NopScanner();
+
+  final _pickFileButtonKey = GlobalKey(debugLabel: 'tour_import_pick_file');
+  final _textNotesKey = GlobalKey(debugLabel: 'tour_import_text_notes');
+  final _noteActionsKey = GlobalKey(debugLabel: 'tour_import_note_actions');
+  final _tahunKey = GlobalKey(debugLabel: 'tour_import_tahun');
+  final _startBatchButtonKey = GlobalKey(debugLabel: 'tour_import_start_batch');
 
   String? _fileName;
   List<TaxRecord> _records = [];
@@ -47,10 +61,97 @@ class _ImportViewState extends State<ImportView> {
   @override
   void initState() {
     super.initState();
+    widget.onRegisterShowTour?.call(showTour);
     _loadDraft();
     if (Platform.isAndroid) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _recoverLostScan());
     }
+    if (widget.isActive) {
+      _maybeStartTour();
+    }
+  }
+
+  @override
+  void didUpdateWidget(ImportView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.onRegisterShowTour != widget.onRegisterShowTour) {
+      widget.onRegisterShowTour?.call(showTour);
+    }
+    if (!oldWidget.isActive && widget.isActive) {
+      _maybeStartTour();
+    }
+  }
+
+  void _maybeStartTour() {
+    if (!mounted || !widget.isActive) return;
+    FeatureTourController.startTourIfNeeded(
+      context: context,
+      tourId: 'import_batch_view',
+      steps: _buildTourSteps(),
+    );
+  }
+
+  void showTour() {
+    if (!mounted) return;
+    FeatureTourController.showTour(
+      context: context,
+      tourId: 'import_batch_view',
+      steps: _buildTourSteps(),
+    );
+  }
+
+  List<FeatureTourStep> _buildTourSteps() {
+    return [
+      FeatureTourStep(
+        targetKey: _pickFileButtonKey,
+        title: 'Tombol Pilih Berkas Daftar Pajak',
+        description:
+            'Tekan tombol ini untuk mengambil berkas daftar wajib pajak dari penyimpanan perangkat Anda (mendukung berkas Excel .xlsx/.xls, .csv, atau catatan teks .txt).',
+        actionHint:
+            'Aplikasi akan otomatis membaca seluruh nomor objek pajak yang ada di dalam berkas tersebut.',
+        icon: Icons.folder_open_rounded,
+      ),
+      FeatureTourStep(
+        targetKey: _textNotesKey,
+        title: 'Kolom Catatan Nomor Pajak Manual',
+        description:
+            'Selain dari berkas, Anda juga bisa mengetik atau menempelkan daftar nomor objek pajak langsung di kotak ini (satu nomor per baris atau dipisahkan koma). '
+            'Bisa ditulis lengkap 18 angka maupun cukup angka Blok + Nomor Wilayah saja.',
+        actionHint:
+            'Contoh penulisan singkat: ketik 17154 untuk Blok 017 Nomor 0154.',
+        icon: Icons.edit_note_rounded,
+      ),
+      FeatureTourStep(
+        targetKey: _noteActionsKey,
+        title: 'Tombol Simpan, Pindai Foto, & Hapus Catatan',
+        description:
+            '• Simpan: Menyimpan daftar nomor di kotak catatan agar tidak hilang saat aplikasi ditutup.\n'
+            '• Pindai Foto: Memotret lembaran daftar pajak dengan kamera agar nomor-nomornya otomatis masuk ke daftar.\n'
+            '• Hapus Semua: Mengosongkan kembali kotak catatan.',
+        actionHint:
+            'Gunakan tombol Simpan jika Anda sedang mengumpulkan daftar nomor warga secara bertahap.',
+        icon: Icons.save_outlined,
+      ),
+      FeatureTourStep(
+        targetKey: _tahunKey,
+        title: 'Kolom Tahun Pajak Pemeriksaan',
+        description:
+            'Tentukan tahun pajak yang akan diperiksa untuk seluruh daftar nomor di atas sekaligus.',
+        actionHint:
+            'Secara bawaan terisi tahun berjalan (misalnya 2026).',
+        icon: Icons.calendar_month_outlined,
+      ),
+      FeatureTourStep(
+        targetKey: _startBatchButtonKey,
+        title: 'Tombol Mulai Pemeriksaan Otomatis',
+        description:
+            'Tekan tombol ini untuk memulai pemeriksaan seluruh daftar nomor pajak secara berurutan. '
+            'Hasil pemeriksaan yang sudah lunas akan otomatis memperbarui Buku Catatan DHKP Anda.',
+        actionHint:
+            'Pastikan sudah ada daftar nomor dari berkas atau kotak catatan sebelum menekan tombol ini.',
+        icon: Icons.play_circle_outline_rounded,
+      ),
+    ];
   }
 
   @override
@@ -371,6 +472,7 @@ class _ImportViewState extends State<ImportView> {
                   ),
                   const SizedBox(height: 14),
                   OutlinedButton.icon(
+                    key: _pickFileButtonKey,
                     onPressed: _loading ? null : _pickFile,
                     icon: const Icon(Icons.folder_open),
                     label: Text(_fileName ?? 'Pilih File'),
@@ -428,6 +530,7 @@ class _ImportViewState extends State<ImportView> {
                   ),
                   const SizedBox(height: 10),
                   TextField(
+                    key: _textNotesKey,
                     controller: _textController,
                     maxLines: 7,
                     decoration: const InputDecoration(
@@ -438,6 +541,7 @@ class _ImportViewState extends State<ImportView> {
                   ),
                   const SizedBox(height: 10),
                   Wrap(
+                    key: _noteActionsKey,
                     crossAxisAlignment: WrapCrossAlignment.center,
                     spacing: 8,
                     runSpacing: 8,
@@ -470,6 +574,7 @@ class _ImportViewState extends State<ImportView> {
                   const SizedBox(height: 18),
                   if (widget.mode == CheckMode.statusBayar) ...[
                     TextField(
+                      key: _tahunKey,
                       controller: _tahunController,
                       decoration: const InputDecoration(
                         labelText: 'Tahun Pajak (dipakai untuk semua NOP)',
@@ -494,6 +599,7 @@ class _ImportViewState extends State<ImportView> {
                     ),
                   ],
                   FilledButton.icon(
+                    key: _startBatchButtonKey,
                     onPressed: _startBatch,
                     icon: const Icon(Icons.play_arrow_outlined),
                     label: const Text('Mulai Cek'),

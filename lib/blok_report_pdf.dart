@@ -6,6 +6,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
 import 'blok_record.dart';
+import 'dhkp/blok_catatan_models.dart';
 import 'tagihan_result.dart' show formatRupiah;
 
 String _cleanPdfText(String text) {
@@ -32,6 +33,14 @@ class _PdfIsolateParam {
   final String judul;
   final int totalPbb;
   final int pacingDelayMs;
+  final int sudahBayarCount;
+  final int sudahBayarNominal;
+  final int belumBayarCount;
+  final int belumBayarNominal;
+  final int targetPemdaCount;
+  final int targetPemdaNominal;
+  final int totalCount;
+  final int totalNominal;
 
   const _PdfIsolateParam({
     required this.sendPort,
@@ -39,6 +48,14 @@ class _PdfIsolateParam {
     required this.judul,
     required this.totalPbb,
     required this.pacingDelayMs,
+    required this.sudahBayarCount,
+    required this.sudahBayarNominal,
+    required this.belumBayarCount,
+    required this.belumBayarNominal,
+    required this.targetPemdaCount,
+    required this.targetPemdaNominal,
+    required this.totalCount,
+    required this.totalNominal,
   });
 }
 
@@ -139,14 +156,142 @@ void _pdfWorkerEntry(_PdfIsolateParam param) async {
               ),
               if (isLastPage) ...[
                 pw.SizedBox(height: 10),
-                pw.Align(
-                  alignment: pw.Alignment.centerRight,
-                  child: pw.Text(
-                    'Total Keseluruhan: ${formatRupiah(param.totalPbb)} (${param.rows.length} data)',
-                    style: pw.TextStyle(
-                      fontSize: 10,
-                      fontWeight: pw.FontWeight.bold,
+                pw.Container(
+                  padding: const pw.EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 8,
+                  ),
+                  decoration: pw.BoxDecoration(
+                    border: pw.Border.all(
+                      color: PdfColors.grey400,
+                      width: 0.5,
                     ),
+                    borderRadius: const pw.BorderRadius.all(
+                      pw.Radius.circular(4),
+                    ),
+                    color: PdfColors.grey100,
+                  ),
+                  child: pw.Row(
+                    mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                    children: [
+                      // 1. Sudah Bayar
+                      pw.Column(
+                        crossAxisAlignment: pw.CrossAxisAlignment.start,
+                        children: [
+                          pw.Text(
+                            'Sudah Bayar',
+                            style: pw.TextStyle(
+                              fontSize: 8,
+                              fontWeight: pw.FontWeight.bold,
+                              color: PdfColors.green800,
+                            ),
+                          ),
+                          pw.SizedBox(height: 2),
+                          pw.Text(
+                            formatRupiah(param.sudahBayarNominal),
+                            style: pw.TextStyle(
+                              fontSize: 9,
+                              fontWeight: pw.FontWeight.bold,
+                            ),
+                          ),
+                          pw.Text(
+                            '${param.sudahBayarCount} NOP (${(param.totalNominal > 0 ? param.sudahBayarNominal / param.totalNominal * 100 : 0).toStringAsFixed(1)}%)',
+                            style: const pw.TextStyle(
+                              fontSize: 7,
+                              color: PdfColors.grey700,
+                            ),
+                          ),
+                        ],
+                      ),
+                      // 2. Kurang Bayar
+                      pw.Column(
+                        crossAxisAlignment: pw.CrossAxisAlignment.start,
+                        children: [
+                          pw.Text(
+                            'Kurang Bayar',
+                            style: pw.TextStyle(
+                              fontSize: 8,
+                              fontWeight: pw.FontWeight.bold,
+                              color: PdfColors.orange800,
+                            ),
+                          ),
+                          pw.SizedBox(height: 2),
+                          pw.Text(
+                            formatRupiah(param.belumBayarNominal),
+                            style: pw.TextStyle(
+                              fontSize: 9,
+                              fontWeight: pw.FontWeight.bold,
+                            ),
+                          ),
+                          pw.Text(
+                            '${param.belumBayarCount} NOP (${(param.totalNominal > 0 ? param.belumBayarNominal / param.totalNominal * 100 : 0).toStringAsFixed(1)}%)',
+                            style: const pw.TextStyle(
+                              fontSize: 7,
+                              color: PdfColors.grey700,
+                            ),
+                          ),
+                        ],
+                      ),
+                      // 3. Target Pemda (Hanya Tampil)
+                      pw.Column(
+                        crossAxisAlignment: pw.CrossAxisAlignment.start,
+                        children: [
+                          pw.Text(
+                            'Target Pemda (Hanya Tampil)',
+                            style: pw.TextStyle(
+                              fontSize: 8,
+                              fontWeight: pw.FontWeight.bold,
+                              color: PdfColors.red800,
+                            ),
+                          ),
+                          pw.SizedBox(height: 2),
+                          pw.Text(
+                            formatRupiah(param.targetPemdaNominal),
+                            style: pw.TextStyle(
+                              fontSize: 9,
+                              fontWeight: pw.FontWeight.bold,
+                              color: PdfColors.red800,
+                            ),
+                          ),
+                          pw.Text(
+                            '${param.targetPemdaCount} NOP (Dipisah)',
+                            style: const pw.TextStyle(
+                              fontSize: 7,
+                              color: PdfColors.grey700,
+                            ),
+                          ),
+                        ],
+                      ),
+                      // 4. Total Keseluruhan (Bayar + Tidak Bayar)
+                      pw.Column(
+                        crossAxisAlignment: pw.CrossAxisAlignment.start,
+                        children: [
+                          pw.Text(
+                            'Total Keseluruhan (Bayar + Kurang)',
+                            style: pw.TextStyle(
+                              fontSize: 8,
+                              fontWeight: pw.FontWeight.bold,
+                              color: PdfColors.blue800,
+                            ),
+                          ),
+                          pw.SizedBox(height: 2),
+                          pw.Text(
+                            formatRupiah(param.totalNominal),
+                            style: pw.TextStyle(
+                              fontSize: 9,
+                              fontWeight: pw.FontWeight.bold,
+                            ),
+                          ),
+                          pw.Text(
+                            '${param.totalCount} NOP (Kewenangan Desa)',
+                            style: const pw.TextStyle(
+                              fontSize: 7,
+                              color: PdfColors.grey700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -271,12 +416,21 @@ class BlokReportPdf {
       }
     });
 
+    final m = DhkpSummaryMetrics.compute(records);
     final param = _PdfIsolateParam(
       sendPort: receivePort.sendPort,
       rows: allRows,
       judul: judul,
       totalPbb: effectiveTotalPbb,
       pacingDelayMs: pacingDelayMs,
+      sudahBayarCount: m.sudahBayarCount,
+      sudahBayarNominal: m.sudahBayarNominal,
+      belumBayarCount: m.belumBayarCount,
+      belumBayarNominal: m.belumBayarNominal,
+      targetPemdaCount: m.targetPemdaCount,
+      targetPemdaNominal: m.targetPemdaNominal,
+      totalCount: m.totalCount,
+      totalNominal: m.totalNominal,
     );
 
     await Isolate.spawn(_pdfWorkerEntry, param);

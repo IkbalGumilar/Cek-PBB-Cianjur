@@ -8,6 +8,7 @@ import 'blok_data_store.dart';
 import 'dkhp_package_helper.dart';
 import 'document_preview_screen.dart';
 import 'download_helper.dart';
+import 'feature_tour/feature_tour.dart';
 import 'image_crop_helper.dart';
 import 'kolase_foto_exporter.dart';
 import 'unity_lerp_widgets.dart';
@@ -44,6 +45,11 @@ class _KolaseFotoScreenState extends State<KolaseFotoScreen> {
   final PageController _pageController = PageController();
   int _currentPreviewPage = 0;
 
+  final _filterBlokKey = GlobalKey(debugLabel: 'tour_kolase_filter_blok');
+  final _previewCanvasKey = GlobalKey(debugLabel: 'tour_kolase_preview_canvas');
+  final _templateGridBarKey = GlobalKey(debugLabel: 'tour_kolase_template_bar');
+  final _bottomActionRowKey = GlobalKey(debugLabel: 'tour_kolase_bottom_actions');
+
   @override
   void initState() {
     super.initState();
@@ -59,8 +65,59 @@ class _KolaseFotoScreenState extends State<KolaseFotoScreen> {
 
   @override
   void dispose() {
+    FeatureTourController.dismissActiveTour();
     _pageController.dispose();
     super.dispose();
+  }
+
+  void showTour() {
+    if (!mounted || _loading) return;
+    FeatureTourController.showTour(
+      context: context,
+      tourId: 'kolase_foto_screen',
+      steps: _buildTourSteps(),
+    );
+  }
+
+  List<FeatureTourStep> _buildTourSteps() {
+    return [
+      FeatureTourStep(
+        targetKey: _filterBlokKey,
+        title: 'Pilihan Blok Foto Dokumentasi',
+        description:
+            'Pilih apakah Anda ingin menggabungkan foto STTS dari seluruh blok sekaligus (1 Wilayah Penuh) atau hanya dari satu Blok tertentu saja.',
+        icon: Icons.filter_list_rounded,
+      ),
+      FeatureTourStep(
+        targetKey: _previewCanvasKey,
+        title: 'Pratinjau Lembar Kertas F4 (Folio)',
+        description:
+            'Menampilkan susunan foto dokumentasi yang sudah dipotong rapi berbentuk persegi di atas lembaran kertas ukuran F4. '
+            'Geser ke kiri atau kanan jika jumlah foto menghasilkan lebih dari satu halaman.',
+        actionHint:
+            'Judul laporan hanya ditampilkan pada bagian paling atas halaman pertama.',
+        icon: Icons.auto_awesome_mosaic_outlined,
+      ),
+      FeatureTourStep(
+        targetKey: _templateGridBarKey,
+        title: 'Pilihan Tata Letak Kotak Foto',
+        description:
+            'Pilih jumlah susunan foto per halaman kertas sesuai kebutuhan Anda, mulai dari 2 foto per halaman (1x2) hingga 9 foto per halaman (3x3).',
+        actionHint:
+            'Susunan 3x3 memuat paling banyak foto dalam satu lembar kertas F4.',
+        icon: Icons.grid_view_rounded,
+      ),
+      FeatureTourStep(
+        targetKey: _bottomActionRowKey,
+        title: 'Tombol Simpan, Cetak, Bagikan, & Selesai',
+        description:
+            '• Simpan Media: Menyimpan dokumen PDF kolase ke penyimpanan perangkat.\n'
+            '• Cetak: Mencetak lembaran kolase langsung ke mesin pencetak (printer).\n'
+            '• Ikon Bagikan: Mengirimkan berkas PDF kolase ke WhatsApp atau aplikasi lain.\n'
+            '• Tombol Centang Hijau: Membuka tampilan pratinjau PDF layar penuh.',
+        icon: Icons.print_rounded,
+      ),
+    ];
   }
 
   /// Memuat foto-foto dokumentasi dari BlokDataStore lokal sesuai blok yang dipilih
@@ -110,6 +167,11 @@ class _KolaseFotoScreenState extends State<KolaseFotoScreen> {
         _loading = false;
         _currentPreviewPage = 0;
       });
+      FeatureTourController.startTourIfNeeded(
+        context: context,
+        tourId: 'kolase_foto_screen',
+        steps: _buildTourSteps(),
+      );
     }
   }
 
@@ -293,6 +355,7 @@ class _KolaseFotoScreenState extends State<KolaseFotoScreen> {
         actions: [
           // Filter Wilayah / Blok
           PopupMenuButton<String>(
+            key: _filterBlokKey,
             tooltip: 'Pilih Cakupan Blok / Wilayah',
             icon: const Icon(Icons.filter_list_rounded),
             initialValue: _selectedBlok,
@@ -317,6 +380,7 @@ class _KolaseFotoScreenState extends State<KolaseFotoScreen> {
             tooltip: 'Muat Ulang Foto Dokumentasi',
             onPressed: _busyExport ? null : _loadPhotos,
           ),
+          FeatureTourHelpButton(onPressed: showTour, color: Colors.white),
         ],
       ),
       body: Column(
@@ -371,6 +435,7 @@ class _KolaseFotoScreenState extends State<KolaseFotoScreen> {
 
           // Area Canvas Preview (Kertas F4 di background gelap)
           Expanded(
+            key: _previewCanvasKey,
             child: AnimatedSwitcher(
               duration: const Duration(milliseconds: 350),
               switchInCurve: Curves.easeOutCubic,
@@ -648,6 +713,7 @@ class _KolaseFotoScreenState extends State<KolaseFotoScreen> {
           children: [
             // Baris Template Grid Cards (1x2, 2x1, 2x2, 2x3, 3x2, 3x3)
             Container(
+              key: _templateGridBarKey,
               height: 84,
               padding: const EdgeInsets.symmetric(vertical: 8),
               child: ListView(
@@ -666,6 +732,7 @@ class _KolaseFotoScreenState extends State<KolaseFotoScreen> {
 
             // Baris Tombol Aksi: Simpan ke Media, Cetak, Bagikan, & Centang Hijau
             Padding(
+              key: _bottomActionRowKey,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               child: Row(
                 children: [

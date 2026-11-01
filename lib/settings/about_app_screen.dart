@@ -251,7 +251,7 @@ class _AboutAppSectionState extends State<AboutAppSection> {
                         : Icon(Platform.isAndroid ? Icons.share : Icons.link),
                     label: Text(
                       Platform.isAndroid
-                          ? 'Bagikan Aplikasi (APK)'
+                          ? 'Bagikan File Aplikasi'
                           : 'Salin Link Unduhan Aplikasi',
                     ),
                     style: FilledButton.styleFrom(
@@ -438,8 +438,8 @@ class _AboutAppSectionState extends State<AboutAppSection> {
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: const Icon(Icons.description_outlined),
-                  title: const Text('Lisensi Open Source'),
-                  subtitle: const Text('Daftar komponen perangkat lunak'),
+                  title: const Text('Daftar Komponen Aplikasi'),
+                  subtitle: const Text('Informasi pustaka pendukung aplikasi'),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => Navigator.push(
                     context,

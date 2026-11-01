@@ -81,6 +81,20 @@ class NativeFileHelper {
     }
   }
 
+  /// Buka lokasi berkas di file manager desktop (Windows Explorer, Linux Nautilus/xdg-open, macOS Finder).
+  static Future<void> showInFileManager(String filePath) async {
+    try {
+      if (Platform.isWindows) {
+        await Process.run('explorer.exe', ['/select,', filePath]);
+      } else if (Platform.isLinux) {
+        final parentDir = File(filePath).parent.path;
+        await Process.run('xdg-open', [parentDir]);
+      } else if (Platform.isMacOS) {
+        await Process.run('open', ['-R', filePath]);
+      }
+    } catch (_) {}
+  }
+
   /// Bagikan [bytes] langsung lewat share sheet Android.
   static Future<void> shareBytes({
     required Uint8List bytes,
@@ -88,7 +102,7 @@ class NativeFileHelper {
     required String mimeType,
   }) async {
     if (!Platform.isAndroid) {
-      throw UnsupportedError('Fitur bagikan hanya tersedia di Android.');
+      return;
     }
     try {
       await _channel.invokeMethod<void>('shareBytes', {

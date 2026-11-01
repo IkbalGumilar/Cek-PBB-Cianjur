@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'document_preview_screen.dart';
+import 'feature_tour/feature_tour.dart';
 import 'kelola_anggota_screen.dart';
 import 'monitoring/monitoring_form_fields.dart';
 import 'settings_screen.dart';
@@ -39,6 +40,21 @@ class PembayaranKolektifScreen extends StatefulWidget {
 }
 
 class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
+  static const String _tourId = 'pembayaran_kolektif_screen';
+
+  final GlobalKey _tambahGroupButtonKey = GlobalKey(
+    debugLabel: 'kolektif_tambah_group_btn',
+  );
+  final GlobalKey _filterAreaKey = GlobalKey(
+    debugLabel: 'kolektif_filter_area',
+  );
+  final GlobalKey _tampilkanButtonKey = GlobalKey(
+    debugLabel: 'kolektif_tampilkan_btn',
+  );
+  final GlobalKey _resultAreaKey = GlobalKey(
+    debugLabel: 'kolektif_result_area',
+  );
+
   String _bulan = '0';
   String _status = '';
   final _tahun = TextEditingController();
@@ -70,14 +86,14 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
     ('0', 'Draft'),
     ('1', 'Siap Dibayar'),
     ('2', 'Sudah Di Bayar'),
-    ('99', 'Expired'),
+    ('99', 'Kedaluwarsa'),
   ];
 
   static String _labelStatus(String code) => switch (code) {
     '0' => 'Draft',
     '1' => 'Siap Dibayar',
     '2' => 'Sudah Di Bayar',
-    '99' => 'Expired',
+    '99' => 'Kedaluwarsa',
     _ => code.isEmpty ? '-' : code,
   };
 
@@ -86,6 +102,58 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
     super.initState();
     _muat();
     _muatOpsiForm();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      FeatureTourController.showTourIfNeeded(
+        context: context,
+        tourId: _tourId,
+        steps: _buildTourSteps(),
+      );
+    });
+  }
+
+  void showTour() {
+    if (!mounted) return;
+    FeatureTourController.showTour(
+      context: context,
+      tourId: _tourId,
+      steps: _buildTourSteps(),
+    );
+  }
+
+  List<FeatureTourStep> _buildTourSteps() {
+    return [
+      FeatureTourStep(
+        targetKey: _tambahGroupButtonKey,
+        title: 'Tombol Buat Rombongan Baru (Tambah Grup)',
+        description:
+            'Ketuk tombol ini untuk membuat grup rombongan bayar baru. Anda cukup mengisi nama grup, keterangan, nama petugas kolektor, dan nomor HP.',
+        icon: Icons.group_add_outlined,
+        actionHint: 'Grup baru akan berstatus Draft sehingga masih bisa ditambah/dikurangi anggotanya',
+      ),
+      FeatureTourStep(
+        targetKey: _filterAreaKey,
+        title: 'Penyaring Daftar Grup',
+        description:
+            'Saring daftar rombongan bayar berdasarkan Bulan, Status (Draft, Siap Dibayar, Sudah Dibayar), Tahun, atau rentang tanggal pembuatan.',
+        icon: Icons.filter_alt_outlined,
+      ),
+      FeatureTourStep(
+        targetKey: _tampilkanButtonKey,
+        title: 'Tombol Tampilkan & Muat Ulang',
+        description:
+            'Ketuk tombol ini untuk memperbarui daftar grup rombongan bayar sesuai penyaring yang Anda pilih di atas.',
+        icon: Icons.refresh_rounded,
+      ),
+      FeatureTourStep(
+        targetKey: _resultAreaKey,
+        title: 'Daftar Grup & Menu Aksi Rombongan',
+        description:
+            'Ketuk salah satu baris grup di tabel ini untuk membuka menu aksi: Kelola Anggota (tambah/hapus NOP warga), Ubah Info Grup, Cetak Surat Pengantar, atau Hapus Grup.',
+        icon: Icons.touch_app_outlined,
+        actionHint: 'Ketuk baris grup mana saja untuk mengelola anggotanya',
+      ),
+    ];
   }
 
   @override
@@ -166,7 +234,7 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
     final lanjut = await _konfirmasi(
       judul: 'Buat grup ini sekarang?',
       peringatan:
-          'Grup akan dibuat di server pemda dan tercatat permanen di sana.',
+          'Grup akan dibuat di sistem resmi Bapenda dan tercatat permanen di sana.',
       rincian: {
         'Nama Group': isian.namaGroup,
         'Keterangan': isian.keterangan,
@@ -201,7 +269,7 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
       hasil = KolektifActionResult(
         success: false,
         message:
-            'Koneksi terputus saat menunggu jawaban server, jadi hasilnya belum pasti. '
+            'Koneksi terputus saat menunggu jawaban sistem, jadi hasilnya belum pasti. '
             'Periksa dulu daftar grup di bawah sebelum mencoba lagi.\n\n$e',
       );
     } finally {
@@ -214,7 +282,7 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
     } else {
       _tampilkanPesan(
         'Grup tidak jadi dibuat',
-        hasil.message ?? 'Server menolak tanpa keterangan.',
+        hasil.message ?? 'Permintaan ditolak tanpa keterangan.',
       );
     }
     await _muat();
@@ -229,7 +297,7 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
     if (group.id.isEmpty) {
       _tampilkanPesan(
         'Grup ini tidak bisa dibuka',
-        'ID grup tidak terbaca dari daftar, jadi tidak ada aksi yang bisa dijalankan untuk baris ini.',
+        'Nomor grup tidak terbaca dari daftar, jadi tidak ada aksi yang bisa dijalankan untuk baris ini.',
       );
       return;
     }
@@ -254,7 +322,7 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
               title: const Text('Kelola Anggota'),
               subtitle: Text(
                 group.statusCode == '0'
-                    ? 'Tambah atau keluarkan NOP dari grup ini'
+                    ? 'Tambah atau keluarkan NOP warga dari grup ini'
                     : 'Hanya bisa dilihat — grup tidak berstatus Draft',
               ),
               onTap: () {
@@ -273,9 +341,9 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
             if (group.canEdit)
               ListTile(
                 leading: const Icon(Icons.edit_outlined),
-                title: const Text('Ubah Group'),
+                title: const Text('Ubah Info Grup'),
                 subtitle: const Text(
-                  'Ubah nama, keterangan, kolektor, atau no HP',
+                  'Ubah nama grup, keterangan, nama kolektor, atau nomor HP',
                 ),
                 onTap: () {
                   Navigator.pop(sheetContext);
@@ -286,7 +354,9 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
               ListTile(
                 leading: const Icon(Icons.menu_book_outlined),
                 title: const Text('Cetak Surat Pengantar'),
-                subtitle: const Text('Buka dokumen resmi grup ini dari server'),
+                subtitle: const Text(
+                  'Buka dokumen surat pengantar resmi untuk grup ini',
+                ),
                 onTap: () {
                   Navigator.pop(sheetContext);
                   _cetakSuratPengantar(group);
@@ -299,11 +369,11 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
                   color: Theme.of(context).colorScheme.error,
                 ),
                 title: Text(
-                  'Hapus Group',
+                  'Hapus Grup',
                   style: TextStyle(color: Theme.of(context).colorScheme.error),
                 ),
                 subtitle: const Text(
-                  'Tercatat permanen di Log History Penghapusan',
+                  'Hapus grup rombongan ini beserta catatan alasannya',
                 ),
                 onTap: () {
                   Navigator.pop(sheetContext);
@@ -314,11 +384,11 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
               const ListTile(
                 leading: Icon(Icons.delete_outline, color: Colors.grey),
                 title: Text(
-                  'Hapus Group',
+                  'Hapus Grup',
                   style: TextStyle(color: Colors.grey),
                 ),
                 subtitle: Text(
-                  'Tidak tersedia — grup sudah difinalkan, dibayar, atau tidak boleh dihapus',
+                  'Tidak tersedia — grup sudah dikunci, dibayar, atau tidak boleh dihapus',
                 ),
               ),
           ],
@@ -335,8 +405,8 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
       _tampilkanPesan(
         'Belum bisa mengubah grup',
         options?.errorMessage ??
-            'Halaman Pembayaran Kolektif di server tidak terbaca seperti biasanya, jadi aksi ini '
-                'dimatikan supaya tidak ada perintah yang salah terkirim. Coba buka ulang menu ini.',
+            'Halaman Pembayaran Kolektif sedang tidak terbaca seperti biasanya, jadi aksi ini '
+                'dimatikan sementara. Coba buka ulang menu ini.',
       );
       return;
     }
@@ -350,7 +420,7 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
     final lanjut = await _konfirmasi(
       judul: 'Simpan perubahan grup?',
       peringatan:
-          'Data grup di server pemda akan diganti dengan isian di bawah.',
+          'Data grup di sistem Bapenda akan diganti dengan isian di bawah.',
       rincian: {
         'Nama Group': isian.namaGroup,
         'Keterangan': isian.keterangan,
@@ -378,7 +448,7 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
       hasil = KolektifActionResult(
         success: false,
         message:
-            'Koneksi terputus saat menunggu jawaban server, jadi hasilnya belum pasti. '
+            'Koneksi terputus saat menunggu jawaban sistem, jadi hasilnya belum pasti. '
             'Periksa dulu daftar grup di bawah sebelum mencoba lagi.\n\n$e',
       );
     } finally {
@@ -391,7 +461,7 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
     } else {
       _tampilkanPesan(
         'Perubahan tidak tersimpan',
-        hasil.message ?? 'Server menolak tanpa keterangan.',
+        hasil.message ?? 'Permintaan ditolak tanpa keterangan.',
       );
     }
     await _muat();
@@ -418,7 +488,7 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
       if (!mounted) return;
       _tampilkanPesan(
         'Surat pengantar tidak bisa dibuka',
-        'Gagal mengambil dokumen dari server:\n\n$e',
+        'Gagal mengambil dokumen surat pengantar:\n\n$e',
       );
     } finally {
       if (mounted) setState(() => _aksiBerjalan = false);
@@ -429,8 +499,8 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
     if (_formOptions?.bisaHapus != true) {
       _tampilkanPesan(
         'Belum bisa menghapus grup',
-        'Halaman Pembayaran Kolektif di server tidak terbaca seperti biasanya, jadi aksi hapus '
-            'dimatikan supaya tidak ada perintah yang salah terkirim. Coba buka ulang menu ini.',
+        'Halaman Pembayaran Kolektif sedang tidak terbaca seperti biasanya, jadi aksi hapus '
+            'dimatikan sementara. Coba buka ulang menu ini.',
       );
       return;
     }
@@ -444,8 +514,8 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
     final lanjut = await _konfirmasi(
       judul: 'Hapus grup ini sekarang?',
       peringatan:
-          'Penghapusan tidak bisa dibatalkan. Grup, alasan di bawah, dan nama akun Anda '
-          'akan tercatat permanen di Log History Penghapusan milik pemda.',
+          'Penghapusan tidak bisa dibatalkan. Nama grup, alasan penghapusan, dan nama akun Anda '
+          'akan tercatat di riwayat penghapusan sistem Bapenda.',
       rincian: {
         'Nama Group': group.namaGroup,
         'Kolektor': group.namaKolektor,
@@ -453,7 +523,7 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
         'Status': _labelStatus(group.statusCode),
         'Alasan': alasan,
       },
-      labelAksi: 'Hapus Group',
+      labelAksi: 'Hapus Grup',
       warnaAksi: Theme.of(context).colorScheme.error,
     );
     if (lanjut != true || !mounted) return;
@@ -469,7 +539,7 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
       hasil = KolektifActionResult(
         success: false,
         message:
-            'Koneksi terputus saat menunggu jawaban server, jadi hasilnya belum pasti. '
+            'Koneksi terputus saat menunggu jawaban sistem, jadi hasilnya belum pasti. '
             'Periksa dulu daftar grup di bawah sebelum mencoba lagi.\n\n$e',
       );
     } finally {
@@ -482,7 +552,7 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
     } else {
       _tampilkanPesan(
         'Grup tidak jadi dihapus',
-        hasil.message ?? 'Server menolak tanpa keterangan.',
+        hasil.message ?? 'Permintaan ditolak tanpa keterangan.',
       );
     }
     await _muat();
@@ -580,7 +650,7 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
     final sibuk = _loading || _aksiBerjalan;
     final peringatanToken =
         (opsi != null && opsi.errorMessage == null && !opsi.bisaTambah)
-        ? 'Aksi tambah/hapus dimatikan: struktur halaman Pembayaran Kolektif di server tidak '
+        ? 'Aksi tambah/hapus dimatikan sementara: tampilan halaman sedang tidak '
               'terbaca seperti biasanya. Daftar grup di bawah tetap bisa dilihat.'
         : null;
 
@@ -594,6 +664,11 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
         foregroundColor: onPrimary,
         title: const Text('Pembayaran Kolektif'),
         actions: [
+          FeatureTourHelpButton(
+            onPressed: showTour,
+            color: onPrimary,
+            tooltip: 'Panduan Pembayaran Kolektif',
+          ),
           IconButton(
             onPressed: () => Navigator.push(
               context,
@@ -614,18 +689,19 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const Text(
-                'Daftar grup pembayaran kolektif. Bisa tambah grup, kelola anggota (tambah/keluarkan '
-                'NOP) pada grup Draft, hapus grup, serta Finalkan dari layar Kelola Anggota. '
-                'Generate VA belum tersedia karena menerbitkan kode bayar sungguhan.',
+                'Kelola daftar grup pembayaran rombongan (kolektif). Anda dapat membuat grup baru, '
+                'mengatur daftar anggota (tambah/keluarkan NOP warga) selama grup berstatus Draft, '
+                'mencetak surat pengantar, atau mengunci daftar grup dari menu Kelola Anggota.',
                 style: TextStyle(fontStyle: FontStyle.italic),
               ),
               const SizedBox(height: 16),
               const WilayahBadge(),
               const SizedBox(height: 12),
               OutlinedButton.icon(
+                key: _tambahGroupButtonKey,
                 onPressed: sibuk || !opsiSiap ? null : _tambahGroup,
                 icon: const Icon(Icons.group_add_outlined),
-                label: const Text('Tambah Group'),
+                label: const Text('Buat Grup Rombongan Baru'),
               ),
               if (opsi?.errorMessage != null)
                 Padding(
@@ -644,72 +720,79 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
                   ),
                 ),
               const SizedBox(height: 16),
-              Row(
+              Column(
+                key: _filterAreaKey,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Expanded(
-                    child: DropdownButtonFormField<String>(
-                      isExpanded: true,
-                      initialValue: _bulan,
-                      decoration: const InputDecoration(
-                        labelText: 'Bulan',
-                        border: OutlineInputBorder(),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          isExpanded: true,
+                          initialValue: _bulan,
+                          decoration: const InputDecoration(
+                            labelText: 'Bulan',
+                            border: OutlineInputBorder(),
+                          ),
+                          items: [
+                            for (final o in _bulanOptions)
+                              DropdownMenuItem(value: o.$1, child: Text(o.$2)),
+                          ],
+                          onChanged: (v) => setState(() => _bulan = v ?? '0'),
+                        ),
                       ),
-                      items: [
-                        for (final o in _bulanOptions)
-                          DropdownMenuItem(value: o.$1, child: Text(o.$2)),
-                      ],
-                      onChanged: (v) => setState(() => _bulan = v ?? '0'),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: DropdownButtonFormField<String>(
-                      isExpanded: true,
-                      initialValue: _status,
-                      decoration: const InputDecoration(
-                        labelText: 'Status',
-                        border: OutlineInputBorder(),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          isExpanded: true,
+                          initialValue: _status,
+                          decoration: const InputDecoration(
+                            labelText: 'Status',
+                            border: OutlineInputBorder(),
+                          ),
+                          items: [
+                            for (final o in _statusOptions)
+                              DropdownMenuItem(value: o.$1, child: Text(o.$2)),
+                          ],
+                          onChanged: (v) => setState(() => _status = v ?? ''),
+                        ),
                       ),
-                      items: [
-                        for (final o in _statusOptions)
-                          DropdownMenuItem(value: o.$1, child: Text(o.$2)),
-                      ],
-                      onChanged: (v) => setState(() => _status = v ?? ''),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _tahun,
+                    keyboardType: TextInputType.number,
+                    maxLength: 4,
+                    decoration: const InputDecoration(
+                      labelText: 'Tahun (opsional)',
+                      border: OutlineInputBorder(),
+                      counterText: '',
                     ),
                   ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _tahun,
-                keyboardType: TextInputType.number,
-                maxLength: 4,
-                decoration: const InputDecoration(
-                  labelText: 'Tahun (opsional)',
-                  border: OutlineInputBorder(),
-                  counterText: '',
-                ),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: MonitoringDateField(
-                      label: 'Tanggal Awal',
-                      controller: _tglAwal,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: MonitoringDateField(
-                      label: 'Tanggal Akhir',
-                      controller: _tglAkhir,
-                    ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: MonitoringDateField(
+                          label: 'Tanggal Awal',
+                          controller: _tglAwal,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: MonitoringDateField(
+                          label: 'Tanggal Akhir',
+                          controller: _tglAkhir,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
               const SizedBox(height: 16),
               FilledButton(
+                key: _tampilkanButtonKey,
                 onPressed: sibuk ? null : _muat,
                 child: _loading
                     ? SizedBox(
@@ -723,16 +806,20 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
                     : const Text('Tampilkan'),
               ),
               const SizedBox(height: 16),
-              if (_loading)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 24),
-                  child: Center(child: CircularProgressIndicator()),
-                )
-              else if (_result != null)
-                KolektifResultView(
-                  result: _result!,
-                  onAksi: _aksiBerjalan ? null : _aksiGrup,
-                ),
+              Container(
+                key: _resultAreaKey,
+                child: _loading
+                    ? const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 24),
+                        child: Center(child: CircularProgressIndicator()),
+                      )
+                    : (_result != null
+                          ? KolektifResultView(
+                              result: _result!,
+                              onAksi: _aksiBerjalan ? null : _aksiGrup,
+                            )
+                          : const SizedBox.shrink()),
+              ),
               if (_aksiBerjalan)
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 24),

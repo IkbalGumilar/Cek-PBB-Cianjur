@@ -5,6 +5,8 @@ import 'blok_record.dart';
 import 'blok_report_pdf.dart';
 import 'tagihan_result.dart' show formatRupiah;
 
+import 'dhkp/blok_catatan_models.dart';
+
 export 'base_table_exporter.dart' show AppExportFormat;
 
 typedef BlokExportFormat = AppExportFormat;
@@ -62,6 +64,14 @@ class BlokReportExporter extends BaseTableExporter {
     List<BlokRecord> records,
     int totalPbb,
   ) {
+    final m = DhkpSummaryMetrics.compute(records);
+    final pctSudah = m.totalNominal > 0
+        ? (m.sudahBayarNominal / m.totalNominal * 100)
+        : 0.0;
+    final pctKurang = m.totalNominal > 0
+        ? (m.belumBayarNominal / m.totalNominal * 100)
+        : 0.0;
+
     return [
       for (final r in records)
         [
@@ -82,10 +92,46 @@ class BlokReportExporter extends BaseTableExporter {
         '',
         '',
         '',
-        'Total Keseluruhan',
-        formatRupiah(totalPbb),
+        'Sudah Bayar',
+        formatRupiah(m.sudahBayarNominal),
+        '${m.sudahBayarCount} NOP (${pctSudah.toStringAsFixed(1)}%)',
         '',
         '',
+      ],
+      [
+        '',
+        '',
+        '',
+        '',
+        '',
+        'Kurang Bayar',
+        formatRupiah(m.belumBayarNominal),
+        '${m.belumBayarCount} NOP (${pctKurang.toStringAsFixed(1)}%)',
+        '',
+        '',
+      ],
+      [
+        '',
+        '',
+        '',
+        '',
+        '',
+        'Target Pemda (Hanya Tampil)',
+        formatRupiah(m.targetPemdaNominal),
+        '${m.targetPemdaCount} NOP (Dipisah)',
+        'Hanya Tampil - Tidak Dihitung ke Target Desa',
+        '',
+      ],
+      [
+        '',
+        '',
+        '',
+        '',
+        '',
+        'Total Keseluruhan (Bayar + Kurang Bayar)',
+        formatRupiah(m.totalNominal),
+        '${m.totalCount} NOP (100.0%)',
+        'Kewenangan Desa',
         '',
       ],
     ];

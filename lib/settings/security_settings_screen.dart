@@ -505,7 +505,7 @@ class _SecuritySettingsSectionState extends State<SecuritySettingsSection> {
                     _enabled ? Icons.lock_outlined : Icons.lock_open_outlined,
                     color: _enabled ? Colors.green : null,
                   ),
-                  title: const Text('Kunci Aplikasi (App Lock)'),
+                  title: const Text('Kunci Pengaman Aplikasi'),
                   subtitle: Text(
                     _enabled
                         ? 'Aktif • Menggunakan ${methodLabel(_method)}'

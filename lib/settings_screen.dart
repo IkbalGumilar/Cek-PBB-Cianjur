@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 
 import 'app_security_service.dart';
 import 'blok_backup_scheduler.dart';
+import 'feature_tour/feature_tour.dart';
 import 'legal_document_screen.dart';
 import 'settings/about_app_screen.dart';
 import 'settings/backup_settings_screen.dart';
 import 'settings/security_settings_screen.dart';
 import 'settings/theme_settings_screen.dart';
+import 'settings/user_guide_screen.dart';
 import 'theme_controller.dart';
 
 export 'settings/about_app_screen.dart';
@@ -29,6 +31,20 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  static const String _tourId = 'settings_screen';
+
+  final GlobalKey _themeCardKey = GlobalKey(debugLabel: 'settings_theme_card');
+  final GlobalKey _securityCardKey = GlobalKey(
+    debugLabel: 'settings_security_card',
+  );
+  final GlobalKey _backupCardKey = GlobalKey(
+    debugLabel: 'settings_backup_card',
+  );
+  final GlobalKey _tourGuideCardKey = GlobalKey(
+    debugLabel: 'settings_tour_guide_card',
+  );
+  final GlobalKey _aboutCardKey = GlobalKey(debugLabel: 'settings_about_card');
+
   bool _lockEnabled = false;
   AppLockType _lockMethod = AppLockType.device;
   String _googleAccount = '';
@@ -39,6 +55,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
     super.initState();
     widget.themeController.addListener(_onThemeChanged);
     _loadSummaries();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      FeatureTourController.showTourIfNeeded(
+        context: context,
+        tourId: _tourId,
+        steps: _buildTourSteps(),
+      );
+    });
   }
 
   @override
@@ -49,6 +73,57 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   void _onThemeChanged() {
     if (mounted) setState(() {});
+  }
+
+  void showTour() {
+    if (!mounted) return;
+    FeatureTourController.showTour(
+      context: context,
+      tourId: _tourId,
+      steps: _buildTourSteps(),
+    );
+  }
+
+  List<FeatureTourStep> _buildTourSteps() {
+    return [
+      FeatureTourStep(
+        targetKey: _themeCardKey,
+        title: 'Tema & Tampilan Aplikasi',
+        description:
+            'Ubah suasana tampilan aplikasi menjadi Terang, Gelap, atau mengikuti pengaturan perangkat Anda, serta pilih warna favorit Anda.',
+        icon: Icons.palette_outlined,
+        actionHint: 'Gunakan mode Terang saat bertugas di bawah sinar matahari',
+      ),
+      FeatureTourStep(
+        targetKey: _securityCardKey,
+        title: 'Keamanan & Kunci Pengaman Aplikasi',
+        description:
+            'Pasang pengaman Sidik Jari, PIN 6 Angka, atau Kata Sandi agar catatan pajak warga di perangkat Anda tidak bisa dibuka sembarang orang.',
+        icon: Icons.lock_outline_rounded,
+      ),
+      FeatureTourStep(
+        targetKey: _backupCardKey,
+        title: 'Pencadangan Data (Simpan Cadangan)',
+        description:
+            'Simpan salinan buku catatan DHKP Anda ke memori perangkat atau sambungkan ke Google Drive agar data tetap aman meski ganti HP.',
+        icon: Icons.cloud_sync_outlined,
+        actionHint: 'Aktifkan cadangan otomatis agar tidak perlu repot menyimpan manual',
+      ),
+      FeatureTourStep(
+        targetKey: _tourGuideCardKey,
+        title: 'Buku Panduan & Pusat Bantuan',
+        description:
+            'Buka buku panduan visual interaktif lengkap dengan tangkapan layar bertitik nomor, pencarian fitur, dan tanya jawab (FAQ).',
+        icon: Icons.menu_book_rounded,
+      ),
+      FeatureTourStep(
+        targetKey: _aboutCardKey,
+        title: 'Tentang & Bagikan Aplikasi',
+        description:
+            'Bagikan file aplikasi ke sesama perangkat desa/kolektor lewat WhatsApp, periksa versi aplikasi terbaru, dan lihat informasi pembuat aplikasi.',
+        icon: Icons.info_outline_rounded,
+      ),
+    ];
   }
 
   Future<void> _loadSummaries() async {
@@ -86,12 +161,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
         : 'Simpan cadangan data DHKP ke HP atau Google Drive';
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Pengaturan')),
+      appBar: AppBar(
+        title: const Text('Pengaturan'),
+        actions: [
+          FeatureTourHelpButton(
+            onPressed: showTour,
+            tooltip: 'Panduan Halaman Pengaturan',
+          ),
+        ],
+      ),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
             _SettingsMenuCard(
+              key: _themeCardKey,
               icon: Icons.palette_outlined,
               iconColor: scheme.primary,
               title: 'Tema & Tampilan',
@@ -105,6 +189,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             const SizedBox(height: 12),
             _SettingsMenuCard(
+              key: _securityCardKey,
               icon: _lockEnabled
                   ? Icons.lock_outlined
                   : Icons.lock_open_outlined,
@@ -115,6 +200,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             const SizedBox(height: 12),
             _SettingsMenuCard(
+              key: _backupCardKey,
               icon: Icons.cloud_sync_outlined,
               iconColor: Colors.teal.shade700,
               title: 'Pencadangan Data',
@@ -123,10 +209,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             const SizedBox(height: 12),
             _SettingsMenuCard(
+              key: _tourGuideCardKey,
+              icon: Icons.menu_book_rounded,
+              iconColor: Colors.amber.shade800,
+              title: 'Panduan Penggunaan Aplikasi',
+              subtitle:
+                  'Buku panduan visual interaktif, fungsi tombol & tanya jawab',
+              onTap: () => _openSubScreen(const UserGuideScreen()),
+            ),
+            const SizedBox(height: 12),
+            _SettingsMenuCard(
+              key: _aboutCardKey,
               icon: Icons.info_outline,
               iconColor: Colors.indigo.shade600,
               title: 'Tentang & Bagikan Aplikasi',
-              subtitle: 'Bagikan APK, periksa pembaruan & info pembuat',
+              subtitle:
+                  'Bagikan aplikasi ke teman, periksa pembaruan & info pembuat',
               onTap: () => _openSubScreen(const AboutAppScreen()),
             ),
             const SizedBox(height: 20),
@@ -192,6 +290,7 @@ class _SettingsMenuCard extends StatelessWidget {
   final VoidCallback onTap;
 
   const _SettingsMenuCard({
+    super.key,
     required this.icon,
     required this.iconColor,
     required this.title,

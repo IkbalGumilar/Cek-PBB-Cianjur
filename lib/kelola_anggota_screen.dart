@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'currency_format.dart';
 import 'document_preview_screen.dart';
 import 'download_helper.dart';
+import 'feature_tour/feature_tour.dart';
 import 'kolektif_import_screen.dart';
 import 'kolektif_nop_berkas.dart';
 import 'monitoring/monitoring_result_exporter.dart';
@@ -50,6 +51,20 @@ class KelolaAnggotaScreen extends StatefulWidget {
 
 class _KelolaAnggotaScreenState extends State<KelolaAnggotaScreen> {
   static const _pageSize = 10;
+  static const String _tourId = 'kelola_anggota_screen';
+
+  final GlobalKey _groupHeaderKey = GlobalKey(
+    debugLabel: 'kelola_anggota_header',
+  );
+  final GlobalKey _addNopFormKey = GlobalKey(
+    debugLabel: 'kelola_anggota_add_form',
+  );
+  final GlobalKey _memberToolbarKey = GlobalKey(
+    debugLabel: 'kelola_anggota_toolbar',
+  );
+  final GlobalKey _memberListAreaKey = GlobalKey(
+    debugLabel: 'kelola_anggota_list',
+  );
 
   final _nop = TextEditingController();
   final _tahunPajak = TextEditingController(text: '${DateTime.now().year}');
@@ -81,6 +96,59 @@ class _KelolaAnggotaScreenState extends State<KelolaAnggotaScreen> {
   void initState() {
     super.initState();
     _muat();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      FeatureTourController.showTourIfNeeded(
+        context: context,
+        tourId: _tourId,
+        steps: _buildTourSteps(),
+      );
+    });
+  }
+
+  void showTour() {
+    if (!mounted) return;
+    FeatureTourController.showTour(
+      context: context,
+      tourId: _tourId,
+      steps: _buildTourSteps(),
+    );
+  }
+
+  List<FeatureTourStep> _buildTourSteps() {
+    return [
+      FeatureTourStep(
+        targetKey: _groupHeaderKey,
+        title: 'Informasi Grup Rombongan Bayar',
+        description:
+            'Menampilkan nama grup, desa/kelurahan, dan status grup saat ini. Selama masih berstatus Draft, Anda bebas menambah atau mengeluarkan NOP warga.',
+        icon: Icons.groups_outlined,
+      ),
+      if (_bisaDiubah)
+        FeatureTourStep(
+          targetKey: _addNopFormKey,
+          title: 'Tambah NOP Warga ke Rombongan',
+          description:
+              'Ketik NOP lengkap (18 angka) atau cukup singkatan Blok+Nomor (contoh: 17154 untuk Blok 017 No 0154). Anda juga bisa mengunggah daftar NOP sekaligus dari file Excel/CSV.',
+          icon: Icons.playlist_add_rounded,
+          actionHint: 'Pisahkan dengan tanda koma (,) jika ingin memasukkan beberapa NOP sekaligus',
+        ),
+      FeatureTourStep(
+        targetKey: _memberToolbarKey,
+        title: 'Unduh, Bagikan, Cetak & Muat Ulang',
+        description:
+            'Gunakan deretan ikon ini untuk mengunduh daftar anggota grup ke PDF/Excel, membagikan ke WhatsApp, mencetak daftar anggota, atau memuat ulang data terbaru.',
+        icon: Icons.print_outlined,
+      ),
+      FeatureTourStep(
+        targetKey: _memberListAreaKey,
+        title: 'Daftar Anggota & Tombol Finalkan',
+        description:
+            'Menampilkan rincian setiap warga beserta tagihan pokok, denda, dan total keseluruhan di bagian paling bawah. Jika daftar anggota sudah lengkap dan siap dibayar, ketuk tombol Finalkan di kartu Total bawah.',
+        icon: Icons.fact_check_outlined,
+        actionHint: 'Centang kotak di samping NOP jika ingin mengeluarkan warga dari grup',
+      ),
+    ];
   }
 
   @override
@@ -600,6 +668,13 @@ class _KelolaAnggotaScreenState extends State<KelolaAnggotaScreen> {
         backgroundColor: theme.colorScheme.primary,
         foregroundColor: theme.colorScheme.onPrimary,
         title: const Text('Kelola Anggota'),
+        actions: [
+          FeatureTourHelpButton(
+            onPressed: showTour,
+            color: theme.colorScheme.onPrimary,
+            tooltip: 'Panduan Kelola Anggota',
+          ),
+        ],
       ),
       floatingActionButton: members.length > _pageSize
           ? FloatingActionButton.extended(
@@ -619,14 +694,20 @@ class _KelolaAnggotaScreenState extends State<KelolaAnggotaScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(
-                widget.group.namaGroup,
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const SizedBox(height: 4),
-              Text(
-                '${rapikanNamaWilayah(widget.group.kelurahan)} · ${widget.group.status}',
-                style: const TextStyle(color: Colors.grey),
+              Column(
+                key: _groupHeaderKey,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    widget.group.namaGroup,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${rapikanNamaWilayah(widget.group.kelurahan)} · ${widget.group.status}',
+                    style: const TextStyle(color: Colors.grey),
+                  ),
+                ],
               ),
               const SizedBox(height: 16),
               if (!_bisaDiubah)
@@ -634,87 +715,92 @@ class _KelolaAnggotaScreenState extends State<KelolaAnggotaScreen> {
                   child: Padding(
                     padding: EdgeInsets.all(12),
                     child: Text(
-                      'Grup ini sudah tidak berstatus Draft, jadi anggotanya hanya bisa dilihat — '
-                      'sama seperti di sistem aslinya.',
+                      'Grup ini sudah dikunci (bukan Draft lagi), sehingga daftar anggotanya hanya bisa dilihat.',
                     ),
                   ),
                 )
-              else ...[
-                TextField(
-                  controller: _nop,
-                  keyboardType: TextInputType.number,
-                  maxLines: 2,
-                  inputFormatters: [
-                    FilteringTextInputFormatter.allow(RegExp(r'[0-9,]')),
-                  ],
-                  decoration: const InputDecoration(
-                    labelText: 'NOP',
-                    helperText:
-                        'NOP lengkap 18 angka, atau singkatan blok+nomor wilayah 5–7 angka '
-                        '(contoh 17154 → blok 017 nomor 0154). Pisahkan dengan koma kalau lebih dari satu.',
-                    helperMaxLines: 3,
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Row(
+              else
+                Column(
+                  key: _addNopFormKey,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _tahunPajak,
-                        keyboardType: TextInputType.number,
-                        maxLength: 4,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.digitsOnly,
-                        ],
-                        decoration: const InputDecoration(
-                          labelText: 'Tahun Pajak',
-                          border: OutlineInputBorder(),
-                          counterText: '',
-                        ),
+                    TextField(
+                      controller: _nop,
+                      keyboardType: TextInputType.number,
+                      maxLines: 2,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.allow(RegExp(r'[0-9,]')),
+                      ],
+                      decoration: const InputDecoration(
+                        labelText: 'NOP Warga',
+                        helperText:
+                            'Ketik NOP lengkap 18 angka, atau singkatan Blok+Nomor 5–7 angka '
+                            '(contoh 17154 → Blok 017 Nomor 0154). Pisahkan dengan koma kalau lebih dari satu.',
+                        helperMaxLines: 3,
+                        border: OutlineInputBorder(),
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: DropdownButtonFormField<String>(
-                        isExpanded: true,
-                        initialValue: _buku,
-                        decoration: const InputDecoration(
-                          labelText: 'Buku',
-                          border: OutlineInputBorder(),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _tahunPajak,
+                            keyboardType: TextInputType.number,
+                            maxLength: 4,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                            ],
+                            decoration: const InputDecoration(
+                              labelText: 'Tahun Pajak',
+                              border: OutlineInputBorder(),
+                              counterText: '',
+                            ),
+                          ),
                         ),
-                        items: [
-                          for (final b in _bukuOptions)
-                            DropdownMenuItem(value: b.$1, child: Text(b.$2)),
-                        ],
-                        onChanged: (v) => setState(() => _buku = v ?? '1'),
-                      ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
+                            isExpanded: true,
+                            initialValue: _buku,
+                            decoration: const InputDecoration(
+                              labelText: 'Buku',
+                              border: OutlineInputBorder(),
+                            ),
+                            items: [
+                              for (final b in _bukuOptions)
+                                DropdownMenuItem(value: b.$1, child: Text(b.$2)),
+                            ],
+                            onChanged: (v) => setState(() => _buku = v ?? '1'),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    FilledButton.icon(
+                      onPressed: sibuk ? null : _tambahNop,
+                      icon: const Icon(Icons.playlist_add),
+                      label: const Text('Cari & Tambah ke Grup'),
+                    ),
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      onPressed: sibuk ? null : _unggahBerkas,
+                      icon: const Icon(Icons.upload_file),
+                      label: const Text('Masukkan dari File (Excel/CSV)'),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Isi file akan diperiksa dan ditampilkan sebagai NOP 18 angka terlebih dahulu sebelum ditambahkan. '
+                      'Tahun pajak & buku di atas berlaku untuk seluruh NOP di dalam file.',
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: Colors.grey),
                     ),
                   ],
                 ),
-                const SizedBox(height: 12),
-                FilledButton.icon(
-                  onPressed: sibuk ? null : _tambahNop,
-                  icon: const Icon(Icons.playlist_add),
-                  label: const Text('Cari & Tambah ke Draft'),
-                ),
-                const SizedBox(height: 8),
-                OutlinedButton.icon(
-                  onPressed: sibuk ? null : _unggahBerkas,
-                  icon: const Icon(Icons.upload_file),
-                  label: const Text('Unggah Berkas (CSV/Excel)'),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Berkas dibaca dulu dan ditampilkan sebagai NOP 18 angka sebelum ada yang dikirim. '
-                  'Tahun pajak & buku di atas dipakai untuk seluruh isi berkas.',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodySmall?.copyWith(color: Colors.grey),
-                ),
-              ],
               const SizedBox(height: 20),
               Row(
+                key: _memberToolbarKey,
                 children: [
                   Expanded(
                     child: Text(
@@ -780,111 +866,117 @@ class _KelolaAnggotaScreenState extends State<KelolaAnggotaScreen> {
                         style: TextButton.styleFrom(
                           foregroundColor: Theme.of(context).colorScheme.error,
                         ),
-                        label: Text('Hapus (${_terpilih.length})'),
+                        label: Text('Keluarkan (${_terpilih.length})'),
                       ),
                     ],
                   ),
                 ),
-              if (_loading)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 24),
-                  child: Center(child: CircularProgressIndicator()),
-                )
-              else if (_result?.errorMessage != null)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  child: Text(
-                    _result!.errorMessage!,
-                    style: const TextStyle(color: Colors.grey),
-                  ),
-                )
-              else ...[
-                for (final m in tampil)
-                  Card(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    child: ListTile(
-                      leading: _bisaDiubah
-                          ? Checkbox(
-                              value: _terpilih.contains(m.kunci),
-                              onChanged: sibuk
-                                  ? null
-                                  : (v) => setState(() {
-                                      if (v == true) {
-                                        _terpilih.add(m.kunci);
-                                      } else {
-                                        _terpilih.remove(m.kunci);
-                                      }
-                                    }),
-                            )
-                          : null,
-                      title: Text(
-                        m.nop,
-                        style: const TextStyle(fontFamily: 'monospace'),
+              Column(
+                key: _memberListAreaKey,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (_loading)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 24),
+                      child: Center(child: CircularProgressIndicator()),
+                    )
+                  else if (_result?.errorMessage != null)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      child: Text(
+                        _result!.errorMessage!,
+                        style: const TextStyle(color: Colors.grey),
                       ),
-                      subtitle: Text(
-                        '${m.namaWp}\nTahun ${m.tahunPajak} · Jatuh tempo ${m.jatuhTempo}\n'
-                        'Pokok ${m.pokok} · Denda ${m.denda} · Total ${m.total}',
+                    )
+                  else ...[
+                    for (final m in tampil)
+                      Card(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        child: ListTile(
+                          leading: _bisaDiubah
+                              ? Checkbox(
+                                  value: _terpilih.contains(m.kunci),
+                                  onChanged: sibuk
+                                      ? null
+                                      : (v) => setState(() {
+                                          if (v == true) {
+                                            _terpilih.add(m.kunci);
+                                          } else {
+                                            _terpilih.remove(m.kunci);
+                                          }
+                                        }),
+                                )
+                              : null,
+                          title: Text(
+                            m.nop,
+                            style: const TextStyle(fontFamily: 'monospace'),
+                          ),
+                          subtitle: Text(
+                            '${m.namaWp}\nTahun ${m.tahunPajak} · Jatuh tempo ${m.jatuhTempo}\n'
+                            'Pokok ${m.pokok} · Denda ${m.denda} · Total ${m.total}',
+                          ),
+                          isThreeLine: true,
+                        ),
                       ),
-                      isThreeLine: true,
-                    ),
-                  ),
-                if (_tampil < members.length) ...[
-                  OutlinedButton(
-                    onPressed: () => setState(() => _tampil += _pageSize),
-                    child: Text(
-                      'Muat $_pageSize Data Lagi (${members.length - _tampil} tersisa)',
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  TextButton.icon(
-                    onPressed: () => _bukaSemuaLaluKeBawah(members.length),
-                    icon: const Icon(Icons.vertical_align_bottom),
-                    label: Text('Buka Semua (${members.length}) & Lihat Total'),
-                  ),
-                ],
-                // Total keseluruhan selalu ditampilkan dari SEMUA anggota,
-                // bukan cuma yang sedang terlihat — jumlah yang berubah-ubah
-                // mengikuti banyaknya baris yang terbuka justru menyesatkan.
-                if (members.isNotEmpty)
-                  Card(
-                    margin: const EdgeInsets.only(top: 8, bottom: 72),
-                    color: Theme.of(context).colorScheme.secondaryContainer,
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Total Keseluruhan (${members.length} NOP)',
-                            style: Theme.of(context).textTheme.titleSmall,
-                          ),
-                          const SizedBox(height: 8),
-                          _barisTotal('Pokok', _result!.totalPokok),
-                          _barisTotal('Denda', _result!.totalDenda),
-                          const Divider(),
-                          _barisTotal(
-                            'Total Bayar',
-                            _result!.totalBayar,
-                            tebal: true,
-                          ),
-                          if (_bisaDiubah) ...[
-                            const SizedBox(height: 12),
-                            SizedBox(
-                              width: double.infinity,
-                              child: FilledButton.icon(
-                                onPressed: sibuk || _finalkanPerluVerifikasi
-                                    ? null
-                                    : _finalkan,
-                                icon: const Icon(Icons.lock_outline),
-                                label: const Text('Finalkan'),
+                    if (_tampil < members.length) ...[
+                      OutlinedButton(
+                        onPressed: () => setState(() => _tampil += _pageSize),
+                        child: Text(
+                          'Muat $_pageSize Data Lagi (${members.length - _tampil} tersisa)',
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextButton.icon(
+                        onPressed: () => _bukaSemuaLaluKeBawah(members.length),
+                        icon: const Icon(Icons.vertical_align_bottom),
+                        label: Text(
+                          'Buka Semua (${members.length}) & Lihat Total',
+                        ),
+                      ),
+                    ],
+                    if (members.isNotEmpty)
+                      Card(
+                        margin: const EdgeInsets.only(top: 8, bottom: 72),
+                        color: Theme.of(context).colorScheme.secondaryContainer,
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Total Keseluruhan (${members.length} NOP)',
+                                style: Theme.of(context).textTheme.titleSmall,
                               ),
-                            ),
-                          ],
-                        ],
+                              const SizedBox(height: 8),
+                              _barisTotal('Pokok', _result!.totalPokok),
+                              _barisTotal('Denda', _result!.totalDenda),
+                              const Divider(),
+                              _barisTotal(
+                                'Total Bayar',
+                                _result!.totalBayar,
+                                tebal: true,
+                              ),
+                              if (_bisaDiubah) ...[
+                                const SizedBox(height: 12),
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: FilledButton.icon(
+                                    onPressed:
+                                        sibuk || _finalkanPerluVerifikasi
+                                        ? null
+                                        : _finalkan,
+                                    icon: const Icon(Icons.lock_outline),
+                                    label: const Text('Finalkan & Kunci Grup'),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
-              ],
+                  ],
+                ],
+              ),
               if (_aksiBerjalan)
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 24),

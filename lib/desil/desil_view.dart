@@ -2,13 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../feature_tour/feature_tour.dart';
 import 'bansos_client.dart';
 import 'nik_scanner.dart';
 
 class DesilView extends StatefulWidget {
   final BansosClient? client;
+  final bool isActive;
 
-  const DesilView({super.key, this.client});
+  const DesilView({super.key, this.client, this.isActive = false});
 
   @override
   State<DesilView> createState() => DesilViewState();
@@ -21,6 +23,12 @@ class DesilViewState extends State<DesilView> {
   final _captchaController = TextEditingController();
   final _captchaFocus = FocusNode();
   final _scrollController = ScrollController();
+
+  final _nikInputKey = GlobalKey(debugLabel: 'tour_desil_nik');
+  final _scanNikButtonKey = GlobalKey(debugLabel: 'tour_desil_scan');
+  final _captchaAreaKey = GlobalKey(debugLabel: 'tour_desil_captcha_area');
+  final _captchaInputKey = GlobalKey(debugLabel: 'tour_desil_captcha_input');
+  final _submitButtonKey = GlobalKey(debugLabel: 'tour_desil_submit');
 
   Uint8List? _captchaImage;
   BansosResult? _result;
@@ -35,6 +43,91 @@ class DesilViewState extends State<DesilView> {
   void initState() {
     super.initState();
     _loadCaptcha();
+    if (widget.isActive) {
+      _maybeStartTour();
+    }
+  }
+
+  @override
+  void didUpdateWidget(DesilView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!oldWidget.isActive && widget.isActive) {
+      _maybeStartTour();
+    }
+  }
+
+  void _maybeStartTour() {
+    if (!mounted || !widget.isActive || _result != null) return;
+    FeatureTourController.startTourIfNeeded(
+      context: context,
+      tourId: 'desil_view',
+      steps: _buildTourSteps(),
+    );
+  }
+
+  void showTour() {
+    if (!mounted) return;
+    if (_result != null) {
+      _reset();
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      FeatureTourController.showTour(
+        context: context,
+        tourId: 'desil_view',
+        steps: _buildTourSteps(),
+      );
+    });
+  }
+
+  List<FeatureTourStep> _buildTourSteps() {
+    return [
+      FeatureTourStep(
+        targetKey: _nikInputKey,
+        title: 'Kolom Nomor Induk Kependudukan (NIK)',
+        description:
+            'Ketik 16 angka NIK warga sesuai yang tertera pada KTP atau Kartu Keluarga (KK) untuk memeriksa tingkat kesejahteraan (Desil) dan kepesertaan bantuan sosial.',
+        actionHint:
+            'Begitu 16 angka selesai diketik, kursor akan otomatis berpindah ke kolom huruf kode di bawah.',
+        icon: Icons.badge_outlined,
+      ),
+      FeatureTourStep(
+        targetKey: _scanNikButtonKey,
+        title: 'Tombol Pindai Foto KTP atau KK',
+        description:
+            'Tidak perlu mengetik 16 angka satu per satu! Tekan tombol ini untuk memotret KTP atau Kartu Keluarga warga, dan aplikasi akan otomatis mengenali serta mengisi angka NIK-nya.',
+        actionHint:
+            'Pastikan foto diambil di tempat terang dan tulisan NIK terlihat jelas.',
+        icon: Icons.document_scanner_outlined,
+      ),
+      FeatureTourStep(
+        targetKey: _captchaAreaKey,
+        title: 'Gambar Huruf Kode & Tombol Ganti Kode',
+        description:
+            'Perhatikan huruf/angka pada kotak gambar ini. Jika gambarnya kurang terbaca, tekan tombol "Ganti Kode Gambar" untuk memuat gambar baru.',
+        actionHint:
+            'Gambar kode diambil langsung dari layanan resmi Kementerian Sosial.',
+        icon: Icons.refresh_rounded,
+      ),
+      FeatureTourStep(
+        targetKey: _captchaInputKey,
+        title: 'Kolom Pengisian Huruf Kode',
+        description:
+            'Ketikkan huruf atau angka sesuai gambar kode di atas ke dalam kotak ini.',
+        actionHint:
+            'Perhatikan kemiripan huruf dan angka sebelum menekan tombol Cari Data.',
+        icon: Icons.keyboard_alt_outlined,
+      ),
+      FeatureTourStep(
+        targetKey: _submitButtonKey,
+        title: 'Tombol Cari Data Desil & Bantuan Sosial',
+        description:
+            'Tekan tombol ini untuk menampilkan nama penerima manfaat, peringkat Desil kesejahteraan, serta status bantuan Sembako, PKH, dan PBI-JK (BPJS Kesehatan Gratis).',
+        actionHint:
+            'Tekan tombol Kembali jika Anda ingin memeriksa NIK warga lainnya.',
+        icon: Icons.search_rounded,
+      ),
+    ];
   }
 
   @override
@@ -62,7 +155,7 @@ class DesilViewState extends State<DesilView> {
       if (mounted) {
         setState(
           () => _errorText =
-              'Gagal memuat captcha. Periksa koneksi lalu coba lagi.',
+              'Gagal memuat gambar kode. Periksa koneksi internet lalu coba lagi.',
         );
       }
     } finally {
@@ -339,6 +432,7 @@ class DesilViewState extends State<DesilView> {
             children: [
               Expanded(
                 child: TextField(
+                  key: _nikInputKey,
                   controller: _nikController,
                   keyboardType: TextInputType.number,
                   inputFormatters: [FilteringTextInputFormatter.digitsOnly],
@@ -374,9 +468,10 @@ class DesilViewState extends State<DesilView> {
                       ),
                     )
                   : IconButton.filledTonal(
+                      key: _scanNikButtonKey,
                       onPressed: _scanAndFillNik,
                       icon: const Icon(Icons.document_scanner_outlined),
-                      tooltip: 'Scan NIK dari KTP atau KK',
+                      tooltip: 'Pindai NIK dari Foto KTP atau KK',
                     ),
             ],
           ),
@@ -414,31 +509,39 @@ class DesilViewState extends State<DesilView> {
           const SizedBox(height: 20),
           Text('HURUF KODE', style: Theme.of(context).textTheme.labelLarge),
           const SizedBox(height: 8),
-          Center(
-            child: _loadingCaptcha
-                ? const SizedBox(
-                    height: 84,
-                    width: 84,
-                    child: CircularProgressIndicator(),
-                  )
-                : _captchaImage == null
-                ? const Text('Captcha belum dimuat')
-                : Container(
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Theme.of(context).dividerColor),
-                    ),
-                    child: Image.memory(_captchaImage!, height: 84),
-                  ),
-          ),
-          Align(
-            alignment: Alignment.center,
-            child: TextButton.icon(
-              onPressed: _loadingCaptcha ? null : _loadCaptcha,
-              icon: const Icon(Icons.refresh),
-              label: const Text('Ganti Captcha'),
-            ),
+          Column(
+            key: _captchaAreaKey,
+            children: [
+              Center(
+                child: _loadingCaptcha
+                    ? const SizedBox(
+                        height: 84,
+                        width: 84,
+                        child: CircularProgressIndicator(),
+                      )
+                    : _captchaImage == null
+                    ? const Text('Gambar kode belum muncul')
+                    : Container(
+                        decoration: BoxDecoration(
+                          border: Border.all(
+                            color: Theme.of(context).dividerColor,
+                          ),
+                        ),
+                        child: Image.memory(_captchaImage!, height: 84),
+                      ),
+              ),
+              Align(
+                alignment: Alignment.center,
+                child: TextButton.icon(
+                  onPressed: _loadingCaptcha ? null : _loadCaptcha,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Ganti Kode Gambar'),
+                ),
+              ),
+            ],
           ),
           TextField(
+            key: _captchaInputKey,
             controller: _captchaController,
             focusNode: _captchaFocus,
             autocorrect: false,
@@ -453,7 +556,7 @@ class DesilViewState extends State<DesilView> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Setelah mengetik captcha, tekan tombol Cari Data.',
+            'Setelah mengetik huruf kode, tekan tombol Cari Data.',
             style: Theme.of(context).textTheme.bodySmall,
           ),
           if (_errorText != null) ...[
@@ -462,6 +565,7 @@ class DesilViewState extends State<DesilView> {
           ],
           const SizedBox(height: 20),
           FilledButton.icon(
+            key: _submitButtonKey,
             onPressed: _submitting || _loadingCaptcha ? null : _submit,
             icon: _submitting
                 ? SizedBox(
