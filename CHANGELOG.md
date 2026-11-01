@@ -4,6 +4,47 @@ Dokumentasi perubahan, peningkatan, dan perbaikan pada setiap rilis aplikasi. Fo
 
 ---
 
+## [v0.1.2-beta] - 2026-11-01
+
+### 🚀 Fitur Baru
+- **Tur Fitur Interaktif (*Feature Tour & Dynamic Spotlight*)**: Sistem onboarding overlay interaktif dengan spotlight dinamis 60 FPS yang melacak bounding box widget secara real-time bahkan saat layar bergeser. Dilengkapi navigasi langkah titik berpusat (*centered step dots*), animasi sorotan mulus, dan kartu petunjuk yang adaptif terhadap tinggi layar ponsel.
+- **Panduan Visual Interaktif (*Visual User Guide*)**: Modul panduan grafis terintegrasi di Pengaturan (`user_guide_screen.dart`) dengan 19 bab tutorial dan 84 titik pinpoint interaktif pada tangkapan layar asli aplikasi. Mendukung pencarian kata kunci instan, filter kategori, dan penampil gambar *pan & zoom* interaktif.
+- **Pratinjau Spreadsheet & Parsing Multi-Format**: Penampil spreadsheet bawaan (`SpreadsheetViewerScreen`) yang mendukung pembacaan dan paginasi berkas Excel (`.xlsx`, `.xls`), CSV (`.csv`), serta paket data DHKP terenkripsi (`.dkhp`, `.dhkp`, `.dat`) lengkap dengan pencarian dan filter per kolom.
+- **Widget Layar Utama Android (*AppWidget DHKP*)**: Penyedia widget interaktif (`DhkpGrafikWidgetProvider`) untuk homescreen Android yang menampilkan metrik capaian realisasi DHKP dan progres target secara langsung tanpa harus membuka aplikasi.
+- **Layanan Pengecekan Massal di Latar Belakang (*Foreground Service*)**: Integrasi `BatchCheckForegroundService` dan notifikasi progres persisten (`batch_notification_service.dart`) sehingga pengecekan ratusan NOP dapat terus berjalan stabil saat ponsel terkunci atau pengguna berpindah aplikasi tanpa terhenti oleh sistem Android.
+- **Paket Instalasi Mandiri Windows (*Inno Setup & Portable ZIP*)**: Konfigurasi installer resmi Windows (`installer.iss`) dengan Inno Setup 6 (branding Cianjur, shortcut desktop, opsi uninstaller bersih) serta skrip otomatisasi `tool/build_windows.bat` untuk merilis paket portabel `.zip` dan file setup `.exe`.
+
+### 🔄 Perubahan & Peningkatan
+- **Adaptivitas Diagram DHKP Desktop & Geser Mouse (*Mouse Drag*)**:
+  - Komponen `DhkpScrollableBars` kini mendukung drag mouse desktop (`PointerDeviceKind.mouse`), scroll horizontal via roda mouse (`PointerScrollEvent`), serta scrollbar interaktif.
+  - Mode responsif baru **Pas Layar (*Fit Screen*)** yang otomatis memuat seluruh 41 blok berdampingan tanpa terpotong pada layar desktop (lebar $\ge 800$px).
+  - Tombol toggle persisten ("Pas Layar" $\leftrightarrow$ "Bisa Digeser") di toolbar dan header kartu diagram dengan penyimpanan preferensi lokal.
+  - Penyesuaian tipografi dinamis untuk label persentase (7.5pt – 9.5pt) dan label nomor blok miring ($-45^\circ$) agar tetap terbaca rapi.
+- **Penyempurnaan Galeri Dokumentasi (*README Overhaul*)**:
+  - Penambahan badge rilis `v0.1.2-beta`, galeri tangkapan layar resolusi tinggi (19 tangkapan layar fitur), serta instruksi kompilasi lintas platform lengkap.
+- **Sinkronisasi Multi-Agent**:
+  - Penambahan sistem koordinasi multi-agen di `Docs/sync_agent/` (`BOARD.md` dan `INBOX_WINDOWS.md`) untuk menyinkronkan alur rilis antar mesin Linux dan Windows.
+
+### 🏗️ Restrukturisasi & Kualitas Kode (Refactor)
+- **Modularisasi Berkas Monolitik (*SOLID & Feature-First*)**:
+  - Dekopel `lib/dhkp/dhkp_crypto.dart` (DKH2 AES-256-GCM 600k PBKDF2 iterasi, legacy decryptor, dan validasi header).
+  - Dekopel `lib/dhkp/blok_csv_codec.dart` (codec standar CSV 18-kolom dan fallback 4-kolom).
+  - Pemisahan layar Buku Catatan Blok (~2.000+ baris) ke dalam modul terisolasi: `blok_catatan_models.dart`, `blok_catatan_dialogs.dart`, dan `blok_catatan_widgets.dart`.
+  - Pemisahan modul grafik DHKP ke dalam `dhkp_grafik_analytics.dart`, `dhkp_chart_widgets.dart`, dan `dhkp_grafik_exporter.dart`.
+  - Pemisahan klien Portal Staf ke dalam `staff_portal_models.dart` dan `staff_portal_parser.dart`.
+  - Optimalisasi `BlokDataStore.upsertAll` dengan algoritma indeks map $O(N + M)$ yang jauh lebih cepat.
+- **Rangkaian Pengujian Regresi (*Unit & Widget Test Suite*)**:
+  - Penambahan 39 pengujian otomatis mencakup kriptografi DHKP, parsing HTML/JSON portal staf, kalkulasi metrik analitik, tur fitur, dan panduan visual.
+- **Modernisasi Komponen UI**:
+  - Migrasi komponen usang `RadioListTile` ke `RadioGroup` pada pengaturan keamanan, formulir pencarian, dan dialog pencadangan.
+
+### 🛡️ Perbaikan Bug & Kompatibilitas
+- **Peringatan Deprecations MSVC STL1011 (Windows)**: Penambahan flag `_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS` pada `windows/CMakeLists.txt` untuk memastikan kompilasi lancar dengan Visual Studio 2022/MSVC terbaru.
+- **Penanganan Tata Letak Tur Fitur**: Memperbaiki pemotongan dialog kartu tur pada layar horizontal (*landscape*) atau layar kecil dengan kalkulasi batas viewport dinamis.
+- **Penyelarasan Indikator Dot Tur**: Memperbaiki posisi titik indikator navigasi langkah tur agar selalu berada di posisi tengah kartu.
+
+---
+
 ## [v0.1.1-beta] - 2026-10-27
 
 ### 🚀 Fitur Baru
@@ -66,4 +107,4 @@ Dokumentasi perubahan, peningkatan, dan perbaikan pada setiap rilis aplikasi. Fo
 
 ---
 
-**Full Changelog**: https://github.com/IkbalGumilar/Cek-PBB-Cianjur/compare/v0.1.0-alpha.5...v0.1.0-beta
+**Full Changelog**: https://github.com/IkbalGumilar/Cek-PBB-Cianjur/compare/v0.1.1-beta...v0.1.2-beta
