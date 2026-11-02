@@ -176,6 +176,24 @@ class _MonitoringResultViewState extends State<MonitoringResultView> {
     final visibleRows = result.rows.take(_visibleCount).toList();
     final hasMore = _visibleCount < result.rows.length;
 
+    // Normalisasi defensif: pastikan setiap baris punya tepat jumlah sel yang sama dengan header
+    // agar DataTable tidak pernah melempar AssertionError pada layout tabel server yang tidak teratur.
+    var colCount = result.headers.length;
+    if (colCount == 0 && visibleRows.isNotEmpty) {
+      colCount = visibleRows.first.length;
+    }
+    final safeHeaders = result.headers.isNotEmpty
+        ? result.headers
+        : List.generate(colCount, (i) => i == 0 ? 'No' : 'Kolom ${i + 1}');
+
+    final safeRows = visibleRows.map((row) {
+      if (row.length == safeHeaders.length) return row;
+      if (row.length < safeHeaders.length) {
+        return [...row, ...List.filled(safeHeaders.length - row.length, '')];
+      }
+      return row.take(safeHeaders.length).toList();
+    }).toList();
+
     return Padding(
       padding: const EdgeInsets.only(top: 16),
       child: Column(
@@ -210,10 +228,11 @@ class _MonitoringResultViewState extends State<MonitoringResultView> {
             scrollDirection: Axis.horizontal,
             child: DataTable(
               columns: [
-                for (final h in result.headers) DataColumn(label: Text(h)),
+                for (final h in safeHeaders)
+                  DataColumn(label: Text(h.isEmpty ? '-' : h)),
               ],
               rows: [
-                for (final row in visibleRows)
+                for (final row in safeRows)
                   DataRow(
                     cells: [for (final cell in row) DataCell(Text(cell))],
                   ),

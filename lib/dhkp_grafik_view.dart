@@ -60,6 +60,9 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
   /// Drill-down khusus ketika pengguna mengeklik salah satu Dusun dari grafik
   int? _drillDownDusun;
 
+  /// Filter tahun aktif khusus di dalam tampilan grafik (default ke data terbaru)
+  late String _selectedTahun;
+
   /// Item wilayah/bulan yang sedang diklik/disorot untuk melihat detail lengkap
   String? _selectedItemLabel;
 
@@ -81,6 +84,15 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
   @override
   void initState() {
     super.initState();
+    final availableYears = widget.records
+        .map((r) => r.tahunBayar)
+        .where((y) => y.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort((a, b) => b.compareTo(a));
+    _selectedTahun = availableYears.isNotEmpty
+        ? availableYears.first
+        : '${DateTime.now().year}';
     _animController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 600),
@@ -547,15 +559,21 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
     }
     final hasMultiDusun = uniqueDusuns.length > 1;
 
+    final availableYears = allMurni
+        .map((r) => r.tahunBayar)
+        .where((t) => t.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort((a, b) => b.compareTo(a));
+
     // 2. Terapkan drill-down dusun jika sedang aktif
-    final List<BlokRecord> murniRecords;
+    var murniRecords = allMurni;
     if (hasMultiDusun && _drillDownDusun != null) {
       final dObj = dusunByNumber(_drillDownDusun!);
       final dBloks = dObj?.bloks.toSet() ?? <String>{};
-      murniRecords = allMurni.where((r) => dBloks.contains(r.blok)).toList();
-    } else {
-      murniRecords = allMurni;
+      murniRecords = murniRecords.where((r) => dBloks.contains(r.blok)).toList();
     }
+    murniRecords = murniRecords.where((r) => r.tahunBayar == _selectedTahun).toList();
 
     final totalNop = murniRecords.length;
     final sudahBayarList = murniRecords.where((r) => r.isPaid).toList();
@@ -602,6 +620,16 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
                 isDark,
                 colorScheme,
               ),
+            ),
+            const SizedBox(height: 10),
+          ],
+
+          // 2b. FILTER CEPAT TAHUN (JIKA DATA MENCAKUP LEBIH DARI 1 TAHUN)
+          if (availableYears.length > 1) ...[
+            _buildYearQuickBar(
+              availableYears,
+              isDark,
+              colorScheme,
             ),
             const SizedBox(height: 10),
           ],
@@ -941,6 +969,68 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
                 ? (isDark ? accent.shade200 : accent.shade800)
                 : (isDark ? Colors.grey.shade400 : Colors.grey.shade700),
           ),
+        ),
+      ),
+    );
+  }
+
+  // =========================================================================
+  // 3. QUICK YEAR BAR (PILIH TAHUN PAJAK SECARA CEPAT)
+  // =========================================================================
+  Widget _buildYearQuickBar(
+    List<String> years,
+    bool isDark,
+    ColorScheme colorScheme,
+  ) {
+    final accent = _activeTab.accentColor;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: isDark ? colorScheme.surfaceContainerLow : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isDark ? Colors.white10 : Colors.grey.shade200,
+        ),
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            Icon(
+              Icons.calendar_month_rounded,
+              size: 15,
+              color: accent.shade700,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              'Tahun:',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                color: isDark ? Colors.grey.shade300 : Colors.grey.shade700,
+              ),
+            ),
+            const SizedBox(width: 8),
+            for (final y in years) ...[
+              _buildScopeChip(
+                label: y,
+                isSelected: _selectedTahun == y,
+                accent: accent,
+                isDark: isDark,
+                onTap: () {
+                  if (_selectedTahun != y) {
+                    setState(() {
+                      _selectedTahun = y;
+                      _selectedItemLabel = null;
+                    });
+                    _animController.reset();
+                    _animController.forward();
+                  }
+                },
+              ),
+              const SizedBox(width: 4),
+            ],
+          ],
         ),
       ),
     );

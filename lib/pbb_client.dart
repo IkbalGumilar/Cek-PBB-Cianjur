@@ -126,6 +126,7 @@ class PbbClient extends BaseHttpClient {
   /// - Alert danger HTML ("aktif sampai dengan tahun") -> Blacklist / SPPT tidak aktif.
   Future<PbbResult> checkStatusViaDocument(String nop, {String? tahun}) async {
     final cleanNop = nop.replaceAll(RegExp(r'[^0-9]'), '');
+    final targetYear = tahun ?? DateTime.now().year.toString();
     final response = await _dio.get<List<int>>(
       'https://cektagihan.cianjurkab.v-tax.id/print-pdf.php',
       queryParameters: {'nop': cleanNop},
@@ -147,6 +148,47 @@ class PbbClient extends BaseHttpClient {
         contentType.contains('application/pdf');
 
     if (isPdf) {
+      // Periksa apakah tahun target sebenarnya sudah lunas via STTS
+      // (misalnya jika PDF hanya berisi tunggakan tahun lampau seperti 2021/2023,
+      // atau jika ketetapan pokok bernilai Rp 0 / nihil).
+      try {
+        final stts = await extractSttsInMemory(
+          nop: cleanNop,
+          tahun: targetYear,
+        );
+        if (stts != null && stts.tanggalBayar.trim().isNotEmpty) {
+          return PbbResult(
+            'Sudah Bayar',
+            'PBB tahun $targetYear LUNAS (terdapat riwayat tunggakan tahun lain)',
+            namaWajibPajak: stts.namaWajibPajak,
+            tanggalBayar: stts.tanggalBayar,
+            jumlahPbb: stts.jumlahPbb,
+            nomorStan: stts.nomorStan,
+          );
+        }
+
+        // Cek apakah tagihan bernilai Rp 0 di dalam PDF
+        final doc = PdfDocument(inputBytes: bytes);
+        final pdfText = PdfTextExtractor(doc).extractText();
+        doc.dispose();
+
+        final isRp0 = RegExp(
+          r'JUMLAH\s+YANG\s+HARUS\s+DIBAYAR[\s:]+Rp\s*0\b',
+          caseSensitive: false,
+        ).hasMatch(pdfText);
+
+        if (isRp0) {
+          return PbbResult(
+            'Sudah Bayar',
+            'Ketetapan PBB Rp 0 (Lunas / Bebas Pajak)',
+            tanggalBayar: targetYear,
+            jumlahPbb: 'Rp 0',
+          );
+        }
+      } catch (_) {
+        // Fallback jika verifikasi lanjutan mengalami kendala
+      }
+
       return PbbResult('Belum Bayar', 'Terdapat tagihan tunggakan PBB aktif');
     }
 
@@ -161,7 +203,6 @@ class PbbClient extends BaseHttpClient {
       String? namaWp;
       String? jml;
 
-      final targetYear = tahun ?? DateTime.now().year.toString();
       final stts = await extractSttsInMemory(nop: cleanNop, tahun: targetYear);
       if (stts != null) {
         tanggalBayar = stts.tanggalBayar;

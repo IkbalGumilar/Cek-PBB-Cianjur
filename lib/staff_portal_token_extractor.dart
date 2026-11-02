@@ -155,4 +155,24 @@ class StaffPortalTokenExtractor {
     final value = match?.group(1);
     return (value == null || value.isEmpty) ? null : value;
   }
+
+  /// Cari `uid: 'u468'` di dalam skrip JavaScript modul Monitoring Wilayah.
+  static String? extractMonitoringUid(String html) {
+    final match = RegExp(r"uid\s*:\s*'([^']+)'").firstMatch(html);
+    return match?.group(1);
+  }
+
+  /// Kode kecamatan dari variabel JS `var IDKEC = 'XXXX';` di halaman Monitoring Wilayah.
+  static String? extractMonitoringIdKec(String html) {
+    final match = RegExp(r"var\s+IDKEC\s*=\s*'([^']*)'").firstMatch(html);
+    final value = match?.group(1);
+    return (value == null || value.isEmpty) ? null : value;
+  }
+
+  /// Kode desa/kelurahan dari variabel JS `var IDKEL = 'XXXX';` di halaman Monitoring Wilayah.
+  static String? extractMonitoringIdKel(String html) {
+    final match = RegExp(r"var\s+IDKEL\s*=\s*'([^']*)'").firstMatch(html);
+    final value = match?.group(1);
+    return (value == null || value.isEmpty) ? null : value;
+  }
 }

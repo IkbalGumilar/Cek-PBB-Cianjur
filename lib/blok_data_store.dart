@@ -136,11 +136,16 @@ class BlokDataStore {
           ? result.namaWajibPajak!.trim()
           : existing.namaWajibPajak;
 
+      final updatedCatatan = isPaid
+          ? formatCatatanSudahBayar(updatedTanggal, existing.tahunBayar)
+          : existing.catatan;
+
       final updatedRecord = existing.copyWith(
         statusBayar: updatedStatus,
         tanggalBayar: updatedTanggal,
         jumlahPbb: updatedJumlah,
         namaWajibPajak: updatedNama,
+        catatan: updatedCatatan,
       );
 
       records[index] = updatedRecord;
@@ -154,17 +159,19 @@ class BlokDataStore {
       );
     } else if (isPaid) {
       // Record belum ada di database, buat baru
+      final tglBayar =
+          (result.tanggalBayar != null &&
+              result.tanggalBayar!.trim().isNotEmpty)
+          ? result.tanggalBayar!.trim()
+          : DateTime.now().toIso8601String().substring(0, 10);
       final newRecord = BlokRecord(
         nop: nop,
         namaWajibPajak: result.namaWajibPajak ?? '',
         tahunBayar: tahun,
-        tanggalBayar:
-            (result.tanggalBayar != null &&
-                result.tanggalBayar!.trim().isNotEmpty)
-            ? result.tanggalBayar!.trim()
-            : DateTime.now().toIso8601String().substring(0, 10),
+        tanggalBayar: tglBayar,
         jumlahPbb: result.jumlahPbb ?? '',
         statusBayar: 'Sudah Bayar',
+        catatan: formatCatatanSudahBayar(tglBayar, tahun),
       );
       records.add(newRecord);
       await _persist(records);

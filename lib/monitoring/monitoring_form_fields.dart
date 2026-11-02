@@ -191,12 +191,104 @@ class _BankDropdownState extends State<BankDropdown> {
   }
 }
 
-/// Baris info wilayah statis — akun staf terkunci ke satu kelurahan (role
-/// rmKelurahan di halaman asli, cuma satu opsi di dropdown Desa/Kelurahan
-/// nya), jadi di sini ditampilkan sebagai info tetap, bukan dropdown yang
-/// isinya cuma satu pilihan.
+/// Dropdown pilihan Desa/Kelurahan untuk membatasi query Monitoring Wilayah
+/// agar tidak memuat seluruh Kabupaten Cianjur.
+class DesaKelurahanDropdown extends StatefulWidget {
+  final StaffPortalClient client;
+  final String value;
+  final ValueChanged<String> onChanged;
+  final ValueChanged<String>? onNameChanged;
+
+  const DesaKelurahanDropdown({
+    super.key,
+    required this.client,
+    required this.value,
+    required this.onChanged,
+    this.onNameChanged,
+  });
+
+  @override
+  State<DesaKelurahanDropdown> createState() => _DesaKelurahanDropdownState();
+}
+
+class _DesaKelurahanDropdownState extends State<DesaKelurahanDropdown> {
+  late final Future<
+      ({
+        String kecamatanCode,
+        String kelurahanCode,
+        List<KolektifKelurahan> kelurahan,
+      })> _future = widget.client.fetchMonitoringWilayahOptions();
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<
+        ({
+          String kecamatanCode,
+          String kelurahanCode,
+          List<KolektifKelurahan> kelurahan,
+        })>(
+      future: _future,
+      builder: (context, snapshot) {
+        final options = snapshot.data?.kelurahan ??
+            const <KolektifKelurahan>[
+              KolektifKelurahan(code: '3205200004', name: 'BOBOJONG'),
+            ];
+        final selectedValue = options.any((o) => o.code == widget.value)
+            ? widget.value
+            : (snapshot.data?.kelurahanCode ?? '3205200004');
+
+        return DropdownButtonFormField<String>(
+          initialValue: selectedValue,
+          isExpanded: true,
+          decoration: InputDecoration(
+            labelText: 'Desa / Kelurahan *',
+            prefixIcon: const Icon(Icons.holiday_village_outlined, size: 20),
+            border: const OutlineInputBorder(),
+            helperText:
+                'Penting: Membatasi data wilayah agar tidak memuat seluruh Kab. Cianjur',
+            helperMaxLines: 2,
+            suffixIcon: snapshot.connectionState == ConnectionState.waiting
+                ? const Padding(
+                    padding: EdgeInsets.all(12),
+                    child: SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  )
+                : null,
+          ),
+          items: [
+            for (final o in options)
+              DropdownMenuItem(
+                value: o.code,
+                child: Text(
+                  '${o.name} (${o.code})',
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+          ],
+          onChanged: (v) {
+            if (v == null) return;
+            widget.onChanged(v);
+            if (widget.onNameChanged != null) {
+              final found = options.firstWhere(
+                (o) => o.code == v,
+                orElse: () => options.first,
+              );
+              widget.onNameChanged!(found.name);
+            }
+          },
+        );
+      },
+    );
+  }
+}
+
+/// Baris info wilayah terpilih
 class WilayahBadge extends StatelessWidget {
-  const WilayahBadge({super.key});
+  final String label;
+  const WilayahBadge({super.key, this.label = 'Desa Bobojong (3205200004)'});
 
   @override
   Widget build(BuildContext context) {
@@ -207,10 +299,15 @@ class WilayahBadge extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
-        children: const [
-          Icon(Icons.location_on_outlined, size: 18),
-          SizedBox(width: 8),
-          Text('Wilayah mengikuti akun staf yang login'),
+        children: [
+          const Icon(Icons.location_on_outlined, size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Wilayah terpilih: $label',
+              style: const TextStyle(fontWeight: FontWeight.w500),
+            ),
+          ),
         ],
       ),
     );

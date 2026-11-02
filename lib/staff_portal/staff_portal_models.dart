@@ -12,6 +12,33 @@ class StaffMfaResult {
   const StaffMfaResult({required this.success, this.errorMessage});
 }
 
+/// Ringkasan angka (KPI/Totals) yang dikembalikan oleh tab Monitoring Wilayah
+/// (Jumlah OP, Pokok Ketetapan, Pokok Pembayaran, Denda, Total Penerimaan / Realisasi).
+class MonitoringSummaryTotals {
+  final int jumlahOp;
+  final int pokokKetetapan;
+  final int pokokPembayaran;
+  final int denda;
+  final int totalPenerimaan;
+
+  const MonitoringSummaryTotals({
+    this.jumlahOp = 0,
+    this.pokokKetetapan = 0,
+    this.pokokPembayaran = 0,
+    this.denda = 0,
+    this.totalPenerimaan = 0,
+  });
+
+  bool get isEmpty =>
+      jumlahOp == 0 &&
+      pokokKetetapan == 0 &&
+      pokokPembayaran == 0 &&
+      denda == 0 &&
+      totalPenerimaan == 0;
+
+  bool get isNotEmpty => !isEmpty;
+}
+
 /// Hasil tabel generik dari salah satu tab Monitoring Wilayah — kolomnya
 /// tidak di-hardcode karena belum ada contoh isi asli untuk dicocokkan;
 /// [headers] & [rows] mengikuti apa pun yang benar-benar dikembalikan server.
@@ -19,10 +46,45 @@ class MonitoringTableResult {
   final List<String> headers;
   final List<List<String>> rows;
   final String? errorMessage;
+  final MonitoringSummaryTotals? summary;
 
   const MonitoringTableResult({
     this.headers = const [],
     this.rows = const [],
+    this.errorMessage,
+    this.summary,
+  });
+}
+
+/// Satu baris dalam daftar antrean ekspor Excel di server V-Tax.
+class MonitoringExcelQueueItem {
+  final String no;
+  final String tanggal;
+  final String filterSummary;
+  final bool isProcessing;
+  final String? downloadUrl;
+  final String? fileName;
+  final String? hapusId;
+
+  const MonitoringExcelQueueItem({
+    required this.no,
+    required this.tanggal,
+    required this.filterSummary,
+    required this.isProcessing,
+    this.downloadUrl,
+    this.fileName,
+    this.hapusId,
+  });
+}
+
+class MonitoringExcelQueueResult {
+  final List<MonitoringExcelQueueItem> items;
+  final String? paginationText;
+  final String? errorMessage;
+
+  const MonitoringExcelQueueResult({
+    this.items = const [],
+    this.paginationText,
     this.errorMessage,
   });
 }
@@ -128,9 +190,12 @@ String rapikanNamaWilayah(String nama) {
 /// begitu saja, "590,540.00" akan terbaca 59054000, yaitu seratus kali lipat.
 /// Jadi koma dibuang lebih dulu, lalu bagian di belakang titik dipotong.
 int parseAngkaServer(String raw) {
-  var bersih = raw.replaceAll(RegExp(r'[^0-9.,]'), '').replaceAll(',', '');
-  final titik = bersih.indexOf('.');
-  if (titik >= 0) bersih = bersih.substring(0, titik);
+  var s = raw.trim();
+  // Jika di ujung ada 2 digit desimal (mis. .00 atau ,00 atau .50), buang bagian desimalnya.
+  if (RegExp(r'[,.][0-9]{2}$').hasMatch(s)) {
+    s = s.substring(0, s.length - 3);
+  }
+  final bersih = s.replaceAll(RegExp(r'[^0-9]'), '');
   return int.tryParse(bersih) ?? 0;
 }
 

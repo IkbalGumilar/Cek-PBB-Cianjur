@@ -6,9 +6,16 @@ echo =====================================================================
 echo.
 
 set "PROJECT_DIR=%~dp0.."
-set "APP_VERSION=v0.1.2-beta"
+set "APP_VERSION=v0.1.3-beta"
 cd /d "%PROJECT_DIR%"
 
+echo [0/3] Menyinkronkan dependensi plugin Windows di ephemeral...
+call dart run tool\sync_windows_plugins.dart
+if errorlevel 1 (
+    echo [WARNING] Sinkronisasi plugin via Dart mengalami kendala, melanjutkan build...
+)
+
+echo.
 echo [1/3] Kompilasi rilis Flutter Windows langsung di direktori kerja Z:...
 call flutter build windows --release
 if errorlevel 1 (
@@ -19,6 +26,8 @@ if errorlevel 1 (
 echo.
 echo [2/3] Mengarsipkan paket Portable ZIP...
 if not exist "build" mkdir "build"
+REM Bersihkan kernel_blob.bin (sisa debug) agar ukuran paket rilis ramping
+if exist "build\windows\x64\runner\Release\data\flutter_assets\kernel_blob.bin" del /f /q "build\windows\x64\runner\Release\data\flutter_assets\kernel_blob.bin"
 powershell -NoProfile -ExecutionPolicy Bypass -Command "Compress-Archive -Path 'build\windows\x64\runner\Release\*' -DestinationPath 'build\Cek-PBB-Cianjur-Windows-x64-%APP_VERSION%.zip' -Force"
 if errorlevel 1 (
     echo [WARNING] Gagal membuat berkas zip portable.

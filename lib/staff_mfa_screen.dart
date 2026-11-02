@@ -114,7 +114,7 @@ class _StaffMfaScreenState extends State<StaffMfaScreen> {
           ),
         );
         if (!mounted) return;
-        Navigator.pushReplacement(
+        Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(
             builder: (_) => MonitoringHubScreen(
@@ -122,6 +122,7 @@ class _StaffMfaScreenState extends State<StaffMfaScreen> {
               themeController: widget.themeController,
             ),
           ),
+          (route) => route.isFirst,
         );
       } else {
         setState(() {

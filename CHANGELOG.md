@@ -4,6 +4,29 @@ Dokumentasi perubahan, peningkatan, dan perbaikan pada setiap rilis aplikasi. Fo
 
 ---
 
+## [v0.1.3-beta] - 2026-11-02
+
+### 🚀 Fitur Baru & Peningkatan Aplikasi
+- **Dukungan Paket DHKP Multi-Tahun (2015–2026)**: Optimalisasi pembacaan dan parsing paket data DHKP terenkripsi untuk seluruh kedusunan dan desa secara konsisten dari 2015 hingga 2026.
+- **Stempel Waktu Riwayat Pembayaran Lengkap**: Pencatatan riwayat pelunasan kini menyertakan tanggal, bulan, tahun, dan waktu lengkap (jam, menit, detik WIB).
+- **Pembatasan Filter Tahun (Anti-OOM)**: Pengecekan analitik dan grafik DHKP kini dibatasi per tahun spesifik (default ke tahun terbaru) guna mencegah kelebihan alokasi memori pada ponsel.
+- **Lokalisasi Installer Windows**: Penambahan berkas penerjemahan resmi Bahasa Indonesia (`Indonesian.isl`) pada wizard pemasangan Inno Setup Windows.
+
+### 🛡️ Perbaikan Bug & Keandalan
+- **Persistensi Sesi & Kuki Portal Staf**:
+  - Memperbaiki kegagalan `hasActiveSession()` akibat ketidakcocokan tanda petik tunggal (`id='user-menu'`) dari server V-Tax.
+  - Mengintegrasikan singleton `_sharedCookieJar` agar sesi login staf bertahan lintas navigasi dan restart aplikasi.
+  - Menambahkan proteksi `_checkExistingSession()` di layar login untuk mencegah penimpaan kuki aktif oleh pengambilan captcha tamu.
+  - Memperbaiki alur navigasi pasca-MFA (`pushAndRemoveUntil`) agar tombol kembali di Menu Petugas langsung kembali ke menu utama tanpa memicu layar login berulang.
+- **Tabel Rangking Realisasi Desa & Kecamatan**:
+  - Mengatasi crash `AssertionError` panjang sel vs header pada tabel capaian realisasi di `MonitoringResultView`.
+  - Inferensi header otomatis 5 kolom dan pemfilteran baris toolbar 1-sel pada `StaffPortalParser.parseGenericTable`.
+  - Penambahan parameter `namaKecamatan` (`n`) pada request `fetchRangkingRealisasi`.
+- **Desain UI Login Portal Staf**:
+  - Mengembalikan tata letak login ke desain asli yang bersih dengan logo resmi Kabupaten Cianjur di bagian atas header.
+
+---
+
 ## [v0.1.2-beta] - 2026-11-01
 
 ### 🚀 Fitur Baru
@@ -107,4 +130,4 @@ Dokumentasi perubahan, peningkatan, dan perbaikan pada setiap rilis aplikasi. Fo
 
 ---
 
-**Full Changelog**: https://github.com/IkbalGumilar/Cek-PBB-Cianjur/compare/v0.1.1-beta...v0.1.2-beta
+**Full Changelog**: https://github.com/IkbalGumilar/Cek-PBB-Cianjur/compare/v0.1.2-beta...v0.1.3-beta

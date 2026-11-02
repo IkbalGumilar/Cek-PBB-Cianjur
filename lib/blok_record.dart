@@ -148,3 +148,47 @@ List<BlokRecord> sortBlokRecords(List<BlokRecord> records, BlokSortBy sortBy) {
   }
   return sorted;
 }
+
+const Map<String, String> _bulanIndo = {
+  '01': 'Januari',
+  '02': 'Februari',
+  '03': 'Maret',
+  '04': 'April',
+  '05': 'Mei',
+  '06': 'Juni',
+  '07': 'Juli',
+  '08': 'Agustus',
+  '09': 'September',
+  '10': 'Oktober',
+  '11': 'November',
+  '12': 'Desember',
+};
+
+/// Format standar catatan resmi pelunasan:
+/// "Sudah bayar tanggal [hari] bulan [bulan] [tahun] jam [jam]"
+String formatCatatanSudahBayar(String tglBayar, [String? tahunBayar]) {
+  final t = tglBayar.trim();
+  if (t.isEmpty || t == '0') {
+    return tahunBayar != null && tahunBayar.isNotEmpty
+        ? 'Sudah bayar tahun $tahunBayar'
+        : 'Sudah bayar';
+  }
+  final parts = t.split(' ');
+  final dateParts = parts[0].split('-');
+  if (dateParts.length == 3) {
+    final y = dateParts[0];
+    final m = dateParts[1];
+    final d = int.tryParse(dateParts[2])?.toString() ?? dateParts[2];
+    final namaBulan = _bulanIndo[m] ?? m;
+    final timePart = parts.length > 1 ? parts[1].trim() : '';
+    if (timePart.isNotEmpty && timePart != '00:00:00') {
+      return 'Sudah bayar tanggal $d bulan $namaBulan $y jam $timePart';
+    } else if (timePart == '00:00:00') {
+      return 'Sudah bayar tanggal $d bulan $namaBulan $y jam 00:00';
+    } else {
+      return 'Sudah bayar tanggal $d bulan $namaBulan $y';
+    }
+  }
+  return 'Sudah bayar $t';
+}
+

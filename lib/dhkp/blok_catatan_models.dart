@@ -53,11 +53,11 @@ enum DhkpKategoriFilter {
   const DhkpKategoriFilter(this.label);
 }
 
-/// Tahun 2022 s.d. tahun berjalan (menyesuaikan tanggal saat ini secara
-/// dinamis — kalau sekarang sudah 2027, 2027 ikut tersedia).
+/// Tahun 2015 s.d. tahun berjalan (menyesuaikan tanggal saat ini secara
+/// dinamis — mendukung data historis mulai dari 2015 hingga 2026+).
 List<int> availableDhkpYears() {
   final currentYear = DateTime.now().year;
-  return [for (var y = 2022; y <= currentYear; y++) y];
+  return [for (var y = 2015; y <= currentYear; y++) y];
 }
 
 /// Ringkasan statistik data DHKP (Sudah Bayar, Belum Bayar, Target Pemda, Total Desa).

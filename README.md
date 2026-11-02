@@ -1,6 +1,6 @@
 # Cek PBB Cianjur
 
-[![Version](https://img.shields.io/badge/Version-v0.1.2--beta-orange.svg)](https://github.com/IkbalGumilar/Cek-PBB-Cianjur/releases/latest)
+[![Version](https://img.shields.io/badge/Version-v0.1.3--beta-orange.svg)](https://github.com/IkbalGumilar/Cek-PBB-Cianjur/releases/latest)
 [![Flutter](https://img.shields.io/badge/Flutter-3.x-02569B?logo=flutter)](https://flutter.dev)
 [![Dart](https://img.shields.io/badge/Dart-3.x-0175C2?logo=dart)](https://dart.dev)
 [![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20Windows%20%7C%20Linux-green.svg)]()
@@ -356,8 +356,8 @@ Aplikasi dilengkapi mekanisme pemantauan rilis yang terhubung langsung ke REST A
      "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" windows\installer.iss
      ```
      Hasil biner rilis:
-     - `build\Cek-PBB-Cianjur-Setup-v0.1.2-beta.exe` (Installer Mandiri)
-     - `build\Cek-PBB-Cianjur-Windows-x64-v0.1.2-beta.zip` (Portable ZIP)
+     - `build\Cek-PBB-Cianjur-Setup-v0.1.3-beta.exe` (Installer Mandiri)
+     - `build\Cek-PBB-Cianjur-Windows-x64-v0.1.3-beta.zip` (Portable ZIP)
    - **Linux Desktop**:
      ```bash
      flutter build linux --release

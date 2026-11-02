@@ -24,6 +24,10 @@ class _TabRealisasiState extends State<TabRealisasi> {
   final _tglPelimpahanAkhir = TextEditingController();
   String _buku = 'semua';
   String _bank = '';
+  String _kelurahan = '3205200004';
+  String _namaKelurahan = 'BOBOJONG';
+  final _kecamatan = '3205200';
+  final _namaKecamatan = 'MANDE';
 
   @override
   void dispose() {
@@ -64,15 +68,58 @@ class _TabRealisasiState extends State<TabRealisasi> {
       bank: _bank,
       tglPelimpahanAwal: _tglPelimpahanAwal.text,
       tglPelimpahanAkhir: _tglPelimpahanAkhir.text,
+      kelurahan: _kelurahan,
+      kecamatan: _kecamatan,
+      namaKelurahan: _namaKelurahan,
+      namaKecamatan: _namaKecamatan,
     );
+  }
+
+  Map<String, String> _getExportParams() {
+    final (bukuMin, bukuMax) = BukuDropdown.rangeFor(_buku);
+    return {
+      'bk_min': bukuMin,
+      'bk_max': bukuMax,
+      'th': _tahunAwal.text.trim(),
+      'th2': _tahunAkhir.text.trim(),
+      'st': '1',
+      'kc': _kecamatan,
+      'n': _namaKecamatan,
+      'kl': _kelurahan,
+      'nl': _namaKelurahan,
+      'eperiode': _tglAwal.text,
+      'eperiode2': _tglAkhir.text,
+      'tgl_pelimpahan': _tglPelimpahanAwal.text,
+      'tgl_pelimpahan_2': _tglPelimpahanAkhir.text,
+      'tgl_cutoff': _tglCutoff.text,
+      'bank': _bank,
+      'merchant': '',
+      'mitrabank': '',
+      'target_ketetapan': 'semua',
+      'exp': '',
+      'LBL_KEL': 'Desa/Kelurahan',
+    };
   }
 
   @override
   Widget build(BuildContext context) {
     return MonitoringTabScaffold(
       reportTitle: 'Realisasi',
+      client: widget.client,
+      excelQueueFunctionName: 'loadDataDownloadExcelRealisasi',
+      toExcelFunctionName: 'toExcelRealisasi1',
+      queryName: 'Realisasi',
+      st: 1,
+      getExportParams: _getExportParams,
       onFetch: _fetch,
       formBuilder: (context, loading) => [
+        const MonitoringSectionTitle('Wilayah Desa / Kelurahan'),
+        DesaKelurahanDropdown(
+          client: widget.client,
+          value: _kelurahan,
+          onChanged: (v) => setState(() => _kelurahan = v),
+          onNameChanged: (name) => setState(() => _namaKelurahan = name),
+        ),
         const MonitoringSectionTitle('Tanggal Pembayaran'),
         Row(
           children: [

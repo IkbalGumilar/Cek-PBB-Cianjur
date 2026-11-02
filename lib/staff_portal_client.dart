@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:cookie_jar/cookie_jar.dart';
@@ -31,6 +32,7 @@ class StaffPortalClient extends BaseHttpClient {
 
   String? _monitoringHtml;
   String? _kolektifHtml;
+  static PersistCookieJar? _sharedCookieJar;
   String? _pageQ23;
   List<BankOption>? _bankOptionsCache;
   bool _cookieManagerAttached = false;
@@ -52,14 +54,17 @@ class StaffPortalClient extends BaseHttpClient {
   /// — supaya sesi login yang sudah terbentuk bertahan lewat restart
   /// aplikasi, tidak perlu login + MFA ulang tiap kali.
   Future<void> _ensureCookieManager() async {
-    if (_cookieManagerAttached) return;
-    final dir = await AppStorage.getCookiesDirectory();
-    final jar = PersistCookieJar(
-      ignoreExpires: true,
-      storage: FileStorage(dir.path),
-    );
-    _dio.interceptors.add(CookieManager(jar));
-    _cookieManagerAttached = true;
+    if (_sharedCookieJar == null) {
+      final dir = await AppStorage.getCookiesDirectory();
+      _sharedCookieJar = PersistCookieJar(
+        ignoreExpires: true,
+        storage: FileStorage(dir.path),
+      );
+    }
+    if (!_cookieManagerAttached) {
+      _dio.interceptors.add(CookieManager(_sharedCookieJar!));
+      _cookieManagerAttached = true;
+    }
   }
 
   /// Cek apakah sesi yang tersimpan (dari login sebelumnya) masih aktif di
@@ -67,12 +72,27 @@ class StaffPortalClient extends BaseHttpClient {
   Future<bool> hasActiveSession() async {
     await _ensureCookieManager();
     try {
+      if (_sharedCookieJar != null) {
+        final cookies = await _sharedCookieJar!.loadForRequest(
+          Uri.parse('$_baseUrl/main.php'),
+        );
+        final hasSessionCookie = cookies.any(
+          (c) => c.name == 'centraldata' || c.name == 'PHPSESSID',
+        );
+        if (!hasSessionCookie) {
+          return false;
+        }
+      }
+
       final response = await _dio.get<String>(
         '/main.php',
         options: Options(responseType: ResponseType.plain),
       );
-      final html = response.data ?? '';
-      return html.contains('id="user-menu"') && html.contains('logout');
+      String html = response.data ?? '';
+      if (html.isEmpty && response.statusCode == 302) {
+        html = await _followAndRead(response);
+      }
+      return html.contains('user-menu') && html.contains('logout');
     } catch (_) {
       return false;
     }
@@ -91,10 +111,12 @@ class StaffPortalClient extends BaseHttpClient {
     } catch (_) {
       // Best-effort — tetap lanjut bersihkan sesi lokal walau request gagal.
     }
+    if (_sharedCookieJar != null) {
+      await _sharedCookieJar!.deleteAll();
+    }
     for (final interceptor in _dio.interceptors) {
       if (interceptor is CookieManager) {
         await interceptor.cookieJar.deleteAll();
-        break;
       }
     }
     _monitoringHtml = null;
@@ -271,6 +293,8 @@ class StaffPortalClient extends BaseHttpClient {
     String operator = '',
     String tglPelimpahanAwal = '',
     String tglPelimpahanAkhir = '',
+    String kelurahan = '3205200004',
+    String kecamatan = '3205200',
   }) {
     return _fetchTab(
       jsFunctionName: 'onSubmitSudahBayar',
@@ -286,8 +310,8 @@ class StaffPortalClient extends BaseHttpClient {
         'st': '1',
         'tgl_pembayaran_1': tglBayarAwal,
         'tgl_pembayaran_2': tglBayarAkhir,
-        'kec': '',
-        'kel': '',
+        'kec': kecamatan,
+        'kel': kelurahan,
         'buku_1': bukuMin,
         'buku_2': bukuMax,
         'tgl_pelimpahan_1': tglPelimpahanAwal,
@@ -314,6 +338,8 @@ class StaffPortalClient extends BaseHttpClient {
     String kodeBayarIndividu = '',
     String bukuMin = '',
     String bukuMax = '',
+    String kelurahan = '3205200004',
+    String kecamatan = '3205200',
   }) {
     return _fetchTab(
       jsFunctionName: 'onSubmitBelumBayar',
@@ -328,8 +354,8 @@ class StaffPortalClient extends BaseHttpClient {
         'st': '2',
         'tgl_pembayaran_1': '',
         'tgl_pembayaran_2': '',
-        'kec': '',
-        'kel': '',
+        'kec': kecamatan,
+        'kel': kelurahan,
         'buku_1': bukuMin,
         'buku_2': bukuMax,
         'tgl_pelimpahan_1': '',
@@ -358,6 +384,10 @@ class StaffPortalClient extends BaseHttpClient {
     String bank = '',
     String tglPelimpahanAwal = '',
     String tglPelimpahanAkhir = '',
+    String kelurahan = '3205200004',
+    String kecamatan = '3205200',
+    String namaKelurahan = 'BOBOJONG',
+    String namaKecamatan = 'MANDE',
   }) {
     return _fetchTab(
       jsFunctionName: 'showModelRealisasi1',
@@ -368,10 +398,10 @@ class StaffPortalClient extends BaseHttpClient {
         'th': tahunAwal,
         'th2': tahunAkhir,
         'st': '1',
-        'kc': '',
-        'n': '',
-        'kl': '',
-        'nl': '',
+        'kc': kecamatan,
+        'n': namaKecamatan,
+        'kl': kelurahan,
+        'nl': namaKelurahan,
         'eperiode': tglBayarAwal,
         'eperiode2': tglBayarAkhir,
         'tgl_pelimpahan': tglPelimpahanAwal,
@@ -399,6 +429,10 @@ class StaffPortalClient extends BaseHttpClient {
     String tglPelimpahanAwal = '',
     String tglPelimpahanAkhir = '',
     String orderBy = 'tahun',
+    String kelurahan = '3205200004',
+    String kecamatan = '3205200',
+    String namaKelurahan = 'BOBOJONG',
+    String namaKecamatan = 'MANDE',
   }) {
     return _fetchTab(
       jsFunctionName: 'showModelPiutang',
@@ -407,10 +441,10 @@ class StaffPortalClient extends BaseHttpClient {
         'tahunawal': tahunAwal,
         'tahunakhir': tahunAkhir,
         'st': '1',
-        'kecamatan': '',
-        'namakec': '',
-        'kelurahan': '',
-        'namakel': '',
+        'kecamatan': kecamatan,
+        'namakec': namaKecamatan,
+        'kelurahan': kelurahan,
+        'namakel': namaKelurahan,
         'tglawal': tglBayarAwal,
         'tglakhir': tglBayarAkhir,
         'tglpelimpahanawal': tglPelimpahanAwal,
@@ -432,6 +466,8 @@ class StaffPortalClient extends BaseHttpClient {
     String kodeBayarKolektif = '',
     String namaGrup = '',
     String namaKolektor = '',
+    String kelurahan = '3205200004',
+    String kecamatan = '3205200',
   }) {
     return _fetchTab(
       jsFunctionName: 'onSubmitSudahBayarKolektif',
@@ -441,8 +477,8 @@ class StaffPortalClient extends BaseHttpClient {
         'tgl_pembayaran_2': tglBayarAkhir,
         'nama_grup': namaGrup,
         'nama_kolektor': namaKolektor,
-        'kc': '',
-        'kl': '',
+        'kc': kecamatan,
+        'kl': kelurahan,
         'kode_bayar_kolektif': kodeBayarKolektif,
         'tgl_cutoff_belum_bayar': '',
         'tgl_cutoff_kadaluarsa': '',
@@ -461,6 +497,8 @@ class StaffPortalClient extends BaseHttpClient {
     String kodeBayarKolektif = '',
     String namaGrup = '',
     String namaKolektor = '',
+    String kelurahan = '3205200004',
+    String kecamatan = '3205200',
   }) {
     return _fetchTab(
       jsFunctionName: 'onSubmitBelumBayarKolektif',
@@ -474,8 +512,8 @@ class StaffPortalClient extends BaseHttpClient {
         'tgl_cutoff_belum_bayar': tglCutoffBelumBayar,
         'tgl_cutoff_kadaluarsa': tglCutoffKadaluarsa,
         'st': '2',
-        'kc': '',
-        'kl': '',
+        'kc': kecamatan,
+        'kl': kelurahan,
         'exp': '',
         'LBL_KEL': 'Desa/Kelurahan',
       },
@@ -485,19 +523,65 @@ class StaffPortalClient extends BaseHttpClient {
   /// Tab "Rangking Realisasi" — replika `showRangkingRealisasi()`.
   Future<MonitoringTableResult> fetchRangkingRealisasi({
     String bukuFilter = '123',
+    String tahun = '',
+    String kelurahan = '3205200004',
+    String kecamatan = '3205200',
+    String namaKecamatan = 'MANDE',
   }) {
     return _fetchTab(
       jsFunctionName: 'showRangkingRealisasi',
       query: 'Ranking_Realisasi',
       params: {
-        'th': '',
+        'th': tahun,
         'st': '1',
-        'kc': '',
-        'kl': '',
-        'n': '',
+        'kc': kecamatan,
+        'kl': kelurahan,
+        'n': namaKecamatan,
         'bukuFilter': bukuFilter,
         'eperiode': '',
       },
+    );
+  }
+
+  /// Ambil info wilayah (Kecamatan & Kelurahan) untuk modul Monitoring Wilayah.
+  Future<({String kecamatanCode, String kelurahanCode, List<KolektifKelurahan> kelurahan})>
+      fetchMonitoringWilayahOptions() async {
+    final html = await _ensureMonitoringPage();
+    final idKec =
+        StaffPortalTokenExtractor.extractMonitoringIdKec(html) ?? '3205200';
+    final idKel =
+        StaffPortalTokenExtractor.extractMonitoringIdKel(html) ?? '3205200004';
+    var options = StaffPortalParser.parseMonitoringKelurahanOptions(html);
+
+    const defaultList = [
+      KolektifKelurahan(code: '3205200004', name: 'BOBOJONG'),
+      KolektifKelurahan(code: '3205200001', name: 'JAMALI'),
+      KolektifKelurahan(code: '3205200002', name: 'MANDE'),
+      KolektifKelurahan(code: '3205200003', name: 'KADEMANGAN'),
+      KolektifKelurahan(code: '3205200005', name: 'CIANDUR'),
+      KolektifKelurahan(code: '3205200006', name: 'CIKIDANGBAYABANG'),
+      KolektifKelurahan(code: '3205200007', name: 'KUTAWARINGIN'),
+      KolektifKelurahan(code: '3205200008', name: 'LEUWIKOJA'),
+      KolektifKelurahan(code: '3205200009', name: 'MEKARJAYA'),
+      KolektifKelurahan(code: '3205200010', name: 'MULYASARI'),
+      KolektifKelurahan(code: '3205200011', name: 'MURNISARI'),
+      KolektifKelurahan(code: '3205200012', name: 'SUKAMANAH'),
+    ];
+
+    if (options.isEmpty) {
+      options = List.of(defaultList);
+    } else {
+      for (final item in defaultList) {
+        if (!options.any((o) => o.code == item.code)) {
+          options.add(item);
+        }
+      }
+    }
+
+    return (
+      kecamatanCode: idKec,
+      kelurahanCode: idKel,
+      kelurahan: options,
     );
   }
 
@@ -522,6 +606,171 @@ class StaffPortalClient extends BaseHttpClient {
     final options = StaffPortalParser.parseBankJson(response.data ?? '');
     _bankOptionsCache = options;
     return options;
+  }
+
+  /// Ambil daftar antrean unduhan berkas Excel dari server V-Tax untuk tab tertentu.
+  /// [jsFunctionName] misalnya 'loadDataDownloadExcelSudahBayar', 'loadDataDownloadExcelBelumBayar', dll.
+  Future<MonitoringExcelQueueResult> fetchExcelQueue({
+    required String jsFunctionName,
+    required int st,
+  }) async {
+    final html = await _ensureMonitoringPage();
+    final q = StaffPortalTokenExtractor.extractLoadQ(html, jsFunctionName) ??
+        await _ensurePageQ23();
+    final funcMode = StaffPortalTokenExtractor.extractFuncMode(
+      html,
+      jsFunctionName,
+    );
+    if (q == null || funcMode == null) {
+      return const MonitoringExcelQueueResult(
+        errorMessage:
+            'Gagal membaca token antrean Excel dari halaman Monitoring.',
+      );
+    }
+    final response = await _dio.post<String>(
+      '/main.php',
+      queryParameters: {'q': q},
+      data: {'st': '$st', 'funcMode': funcMode},
+      options: Options(
+        contentType: Headers.formUrlEncodedContentType,
+        responseType: ResponseType.plain,
+      ),
+    );
+    return StaffPortalParser.parseExcelQueueTable(response.data ?? '');
+  }
+
+  /// Meminta server V-Tax untuk memproses ekspor Excel di latar belakang (background queue).
+  /// [jsFunctionName] misalnya 'toExcelSudahBayar', 'toExcelBelumBayar', dll.
+  Future<({bool success, String message})> requestExportExcel({
+    required String jsFunctionName,
+    required String query,
+    required Map<String, String> params,
+  }) async {
+    final html = await _ensureMonitoringPage();
+    final q = StaffPortalTokenExtractor.extractLoadQ(html, 'onSubmitSudahBayar') ??
+        await _ensurePageQ23();
+    final funcMode = StaffPortalTokenExtractor.extractFuncMode(
+      html,
+      jsFunctionName,
+    );
+    if (q == null || funcMode == null) {
+      return (
+        success: false,
+        message: 'Gagal membaca token ekspor Excel dari halaman Monitoring.',
+      );
+    }
+    final response = await _dio.post<String>(
+      '/main.php',
+      queryParameters: {'q': q},
+      data: {
+        'query': query,
+        ...params,
+        'funcMode': funcMode,
+      },
+      options: Options(
+        contentType: Headers.formUrlEncodedContentType,
+        responseType: ResponseType.plain,
+      ),
+    );
+    final body = response.data?.trim() ?? '';
+    return (
+      success: true,
+      message: body.isNotEmpty ? body : 'Permintaan ekspor Excel berhasil dikirim ke server.',
+    );
+  }
+
+  /// Hapus/batalkan tugas antrean ekspor Excel dari server V-Tax (`svc-monitoring-hapus.php`).
+  Future<({bool success, String message})> deleteExportQueueItem({
+    required String cpmId,
+    bool isKolektif = false,
+  }) async {
+    await _ensureCookieManager();
+    final html = await _ensureMonitoringPage();
+    final uid = StaffPortalTokenExtractor.extractMonitoringUid(html) ?? 'u468';
+    final qPayload = {
+      'a': 'aPBB',
+      'm': 'mMonitoringWilayahV3',
+      's': '23',
+      'uid': uid,
+    };
+    final qBase64 = base64Encode(utf8.encode(jsonEncode(qPayload)));
+
+    final endpoint = isKolektif
+        ? '/view/PBB/monitoring_wilayah_v3/svc-monitoring-hapus-kolektif.php'
+        : '/view/PBB/monitoring_wilayah_v3/svc-monitoring-hapus.php';
+
+    final response = await _dio.post<String>(
+      endpoint,
+      data: {
+        'id': cpmId,
+        'q': qBase64,
+      },
+      options: Options(
+        contentType: Headers.formUrlEncodedContentType,
+        responseType: ResponseType.plain,
+      ),
+    );
+
+    try {
+      final decoded = jsonDecode(response.data ?? '');
+      if (decoded is Map) {
+        final msg = decoded['msg']?.toString() ?? 'Berkas berhasil dihapus.';
+        return (success: true, message: msg);
+      }
+    } catch (_) {}
+
+    return (
+      success: response.statusCode == 200,
+      message: response.data ?? 'Selesai memproses penghapusan.',
+    );
+  }
+
+  /// Unduh berkas .xlsx hasil ekspor dari server V-Tax.
+  Future<Uint8List> downloadMonitoringExcelFile(String fileName) async {
+    await _ensureCookieManager();
+    final response = await _dio.get<List<int>>(
+      '/view/PBB/monitoring_wilayah_v3/download-link-monitoring.php',
+      queryParameters: {'file': fileName},
+      options: Options(responseType: ResponseType.bytes),
+    );
+    return Uint8List.fromList(response.data!);
+  }
+
+  /// Ekspor langsung untuk Rangking Realisasi (tab ke-7) yang tidak memakai antrean.
+  Future<Uint8List> downloadRangkingRealisasiExcel({
+    String bukuFilter = '123',
+    String tahun = '',
+    String namakec = '',
+    String namakel = '',
+    String kecamatan = '',
+    String kelurahan = '',
+  }) async {
+    final html = await _ensureMonitoringPage();
+    final q = StaffPortalTokenExtractor.extractLoadQ(html, 'showRangkingRealisasi') ??
+        await _ensurePageQ23();
+    final funcMode = StaffPortalTokenExtractor.extractFuncMode(
+      html,
+      'excelRangkingRealisasi',
+    );
+    final response = await _dio.get<List<int>>(
+      '/main.php',
+      queryParameters: {
+        'q': q,
+        'query': 'Ranking_Realisasi',
+        'n': namakec,
+        'nKel': namakel,
+        'kc': kecamatan,
+        'kl': kelurahan,
+        'st': '1',
+        'th': tahun,
+        'eperiode': '',
+        'bukuFilter': bukuFilter,
+        'target_rangking-realisasi': 'semua',
+        'funcMode': ?funcMode,
+      },
+      options: Options(responseType: ResponseType.bytes),
+    );
+    return Uint8List.fromList(response.data!);
   }
 
   /// Muat halaman Pembayaran Kolektif sekali per sesi login.

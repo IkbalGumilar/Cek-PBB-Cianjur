@@ -51,7 +51,7 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
   List<String> _bloks = [];
   Set<String> _whitelist = {};
   String? _selectedBlok;
-  String? _selectedTahun;
+  String _selectedTahun = '${DateTime.now().year}';
   int? _selectedWilayah;
   DhkpKategoriFilter _kategoriFilter = DhkpKategoriFilter.semua;
   BlokSortBy _sortBy = BlokSortBy.blokWilayah;
@@ -442,16 +442,14 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
     );
   }
 
-  void _pilihTahun(String? tahun) {
+  void _pilihTahun(String tahun) {
     setState(() {
       _selectedTahun = tahun;
       _currentPage = 0;
     });
     _loadRecords(
       setBusy: true,
-      busyMessage: tahun == null
-          ? 'Memuat data semua tahun pajak...'
-          : 'Memuat data tahun pajak $tahun...',
+      busyMessage: 'Memuat data tahun pajak $tahun...',
       busyIcon: Icons.calendar_month_outlined,
     );
   }
@@ -647,13 +645,11 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
     }
 
     final rawRecords = await BlokDataStore.instance.loadAll();
-    final allRecords = _selectedTahun != null
-        ? rawRecords
-              .where(
-                (r) => r.tahunBayar.isEmpty || r.tahunBayar == _selectedTahun,
-              )
-              .toList()
-        : rawRecords;
+    final allRecords = rawRecords
+        .where(
+          (r) => r.tahunBayar.isEmpty || r.tahunBayar == _selectedTahun,
+        )
+        .toList();
     final Map<String, List<BlokRecord>> recordsByBlok = {};
     for (final r in allRecords) {
       final b = nopBlok(r.nop);
@@ -676,11 +672,7 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
     final taxRecords = selectedRecords
         .map((r) => TaxRecord(nop: r.nop, namaWajibPajak: r.namaWajibPajak))
         .toList();
-    final tahun =
-        _selectedTahun ??
-        (selectedRecords.first.tahunBayar.isNotEmpty
-            ? selectedRecords.first.tahunBayar
-            : '2026');
+    final tahun = _selectedTahun;
 
     await Navigator.push(
       context,
@@ -1359,7 +1351,7 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
         },
       );
       if (!mounted) return;
-      final tahunLabel = _selectedTahun ?? 'semua-tahun';
+      final tahunLabel = _selectedTahun;
       final fileName = opsi.blok == semuaBlokValue
           ? 'Laporan Data Blok ($tahunLabel).pdf'
           : 'Laporan Blok ${opsi.blok} ($tahunLabel).pdf';
@@ -1546,139 +1538,137 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      if (!_tampilkanGrafik) ...[
-                        if (DusunData.instance.isDusunLocked) ...[
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 8,
-                            ),
-                            decoration: BoxDecoration(
+                      if (DusunData.instance.isDusunLocked) ...[
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isDark
+                                ? Colors.blueGrey.shade900
+                                : Colors.blue.shade50,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
                               color: isDark
-                                  ? Colors.blueGrey.shade900
-                                  : Colors.blue.shade50,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
+                                  ? Colors.blueGrey.shade700
+                                  : Colors.blue.shade200,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.lock_outline_rounded,
+                                size: 18,
                                 color: isDark
-                                    ? Colors.blueGrey.shade700
-                                    : Colors.blue.shade200,
+                                    ? Colors.blue.shade200
+                                    : Colors.blue.shade700,
                               ),
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  Icons.lock_outline_rounded,
-                                  size: 18,
-                                  color: isDark
-                                      ? Colors.blue.shade200
-                                      : Colors.blue.shade700,
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    'Pembatas Wilayah: Dusun $_selectedWilayah (${_bloks.length} blok)',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 13,
-                                      color: isDark
-                                          ? Colors.blue.shade200
-                                          : Colors.blue.shade800,
-                                    ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Pembatas Wilayah: Dusun $_selectedWilayah (${_bloks.length} blok)',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 13,
+                                    color: isDark
+                                        ? Colors.blue.shade200
+                                        : Colors.blue.shade800,
                                   ),
                                 ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                        ] else if (_isOperator || dusunList.length > 1) ...[
-                          DropdownButtonFormField<int?>(
-                            initialValue: _selectedWilayah,
-                            decoration: const InputDecoration(
-                              labelText: 'Wilayah (Dusun)',
-                              border: OutlineInputBorder(),
-                            ),
-                            items: [
-                              const DropdownMenuItem<int?>(
-                                value: null,
-                                child: Text('Semua Wilayah (Desa)'),
                               ),
-                              for (final dusun in dusunList)
-                                DropdownMenuItem<int?>(
-                                  value: dusun.number,
-                                  child: Text(
-                                    '${dusun.label} (${dusun.bloks.length} blok)',
-                                  ),
-                                ),
                             ],
-                            onChanged: _pilihWilayah,
                           ),
-                          const SizedBox(height: 8),
-                        ],
-                        Row(
-                          key: _filterBlokTahunKey,
-                          children: [
-                            Expanded(
-                              flex: 2,
-                              child: DropdownButtonFormField<String>(
-                                key: ValueKey(
-                                  'blok-dropdown-$_selectedWilayah',
+                        ),
+                        const SizedBox(height: 8),
+                      ] else if (_isOperator || dusunList.length > 1) ...[
+                        DropdownButtonFormField<int?>(
+                          initialValue: _selectedWilayah,
+                          decoration: const InputDecoration(
+                            labelText: 'Wilayah (Dusun)',
+                            border: OutlineInputBorder(),
+                          ),
+                          items: [
+                            const DropdownMenuItem<int?>(
+                              value: null,
+                              child: Text('Semua Wilayah (Desa)'),
+                            ),
+                            for (final dusun in dusunList)
+                              DropdownMenuItem<int?>(
+                                value: dusun.number,
+                                child: Text(
+                                  '${dusun.label} (${dusun.bloks.length} blok)',
                                 ),
-                                initialValue: _selectedBlok,
-                                isExpanded: true,
-                                decoration: const InputDecoration(
-                                  labelText: 'Blok',
-                                  border: OutlineInputBorder(),
+                              ),
+                          ],
+                          onChanged: _pilihWilayah,
+                        ),
+                        const SizedBox(height: 8),
+                      ],
+                      Row(
+                        key: _filterBlokTahunKey,
+                        children: [
+                          Expanded(
+                            flex: 2,
+                            child: DropdownButtonFormField<String>(
+                              key: ValueKey(
+                                'blok-dropdown-$_selectedWilayah',
+                              ),
+                              initialValue: _selectedBlok,
+                              isExpanded: true,
+                              decoration: const InputDecoration(
+                                labelText: 'Blok',
+                                border: OutlineInputBorder(),
+                              ),
+                              items: [
+                                const DropdownMenuItem(
+                                  value: semuaBlokValue,
+                                  child: Text(
+                                    'Semua Blok',
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
                                 ),
-                                items: [
-                                  const DropdownMenuItem(
-                                    value: semuaBlokValue,
+                                for (final b in _bloks)
+                                  DropdownMenuItem(
+                                    value: b,
                                     child: Text(
-                                      'Semua Blok',
+                                      'Blok ${int.parse(b)}',
                                       overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
-                                  for (final b in _bloks)
-                                    DropdownMenuItem(
-                                      value: b,
-                                      child: Text(
-                                        'Blok ${int.parse(b)}',
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                ],
-                                onChanged: _pilihBlok,
-                              ),
+                              ],
+                              onChanged: _pilihBlok,
                             ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: DropdownButtonFormField<String?>(
-                                initialValue: _selectedTahun,
-                                isExpanded: true,
-                                decoration: const InputDecoration(
-                                  labelText: 'Tahun',
-                                  border: OutlineInputBorder(),
-                                  isDense: true,
-                                  contentPadding: EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 10,
-                                  ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: DropdownButtonFormField<String>(
+                              initialValue: _selectedTahun,
+                              isExpanded: true,
+                              decoration: const InputDecoration(
+                                labelText: 'Tahun',
+                                border: OutlineInputBorder(),
+                                isDense: true,
+                                contentPadding: EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 10,
                                 ),
-                                items: [
-                                  const DropdownMenuItem(
-                                    value: null,
-                                    child: Text('Semua'),
-                                  ),
-                                  for (final y in availableDhkpYears())
-                                    DropdownMenuItem(
-                                      value: '$y',
-                                      child: Text('$y'),
-                                    ),
-                                ],
-                                onChanged: _pilihTahun,
                               ),
+                              items: [
+                                for (final y in availableDhkpYears())
+                                  DropdownMenuItem(
+                                    value: '$y',
+                                    child: Text('$y'),
+                                  ),
+                              ],
+                              onChanged: (v) {
+                                if (v != null) _pilihTahun(v);
+                              },
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
+                      ),
+                      if (!_tampilkanGrafik) ...[
                         const SizedBox(height: 8),
                         Row(
                           key: _searchFilterSortKey,

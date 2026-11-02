@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
+import 'monitoring_hub_screen.dart';
 import 'staff_credentials_store.dart';
 import 'staff_mfa_screen.dart';
 import 'staff_portal_client.dart';
@@ -41,8 +42,27 @@ class _StaffLoginScreenState extends State<StaffLoginScreen> {
   @override
   void initState() {
     super.initState();
-    _loadCaptcha();
+    _checkExistingSession();
     _prefillSavedCredentials();
+  }
+
+  Future<void> _checkExistingSession() async {
+    final active = await widget.client.hasActiveSession();
+    if (active && mounted) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => MonitoringHubScreen(
+            client: widget.client,
+            themeController: widget.themeController,
+          ),
+        ),
+      );
+      return;
+    }
+    if (mounted) {
+      _loadCaptcha();
+    }
   }
 
   // Login pertama harus diketik manual — belum ada yang tersimpan. Begitu
@@ -143,6 +163,28 @@ class _StaffLoginScreenState extends State<StaffLoginScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 8, bottom: 20),
+                  child: Column(
+                    children: [
+                      Image.asset(
+                        'logo/kabupaten-cianjur.png',
+                        height: 90,
+                        fit: BoxFit.contain,
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'PBB-P2 KABUPATEN CIANJUR',
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 0.5,
+                            ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
               TextField(
                 controller: _usernameController,
                 decoration: const InputDecoration(

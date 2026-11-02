@@ -28,6 +28,8 @@ class _TabSudahBayarState extends State<TabSudahBayar> {
   final _operator = TextEditingController();
   String _buku = 'semua';
   String _bank = '';
+  String _kelurahan = '3205200004';
+  final _kecamatan = '3205200';
 
   @override
   void dispose() {
@@ -71,15 +73,58 @@ class _TabSudahBayarState extends State<TabSudahBayar> {
       va: _va.text.trim(),
       qris: _qris.text.trim(),
       operator: _operator.text.trim(),
+      kelurahan: _kelurahan,
+      kecamatan: _kecamatan,
     );
+  }
+
+  Map<String, String> _getExportParams() {
+    final (bukuMin, bukuMax) = BukuDropdown.rangeFor(_buku);
+    return {
+      'tahun_1': _tahunAwal.text.trim(),
+      'tahun_2': _tahunAkhir.text.trim(),
+      'nop': _nop.text.trim(),
+      'nama_wp': _namaWp.text.trim(),
+      'bank': _bank,
+      'merchant': '',
+      'mitrabank': '',
+      'st': '1',
+      'tgl_pembayaran_1': _tglAwal.text,
+      'tgl_pembayaran_2': _tglAkhir.text,
+      'kec': _kecamatan,
+      'kel': _kelurahan,
+      'buku_1': bukuMin,
+      'buku_2': bukuMax,
+      'tgl_pelimpahan_1': '',
+      'tgl_pelimpahan_2': '',
+      'kode_bayar_individu': _kodeBayarIndividu.text.trim(),
+      'kode_bayar_kolektif': _kodeBayarKolektif.text.trim(),
+      'va': _va.text.trim(),
+      'qris': _qris.text.trim(),
+      'tgl_cutoff': '',
+      'operator': _operator.text.trim(),
+      'LBL_KEL': 'Desa/Kelurahan',
+    };
   }
 
   @override
   Widget build(BuildContext context) {
     return MonitoringTabScaffold(
       reportTitle: 'Sudah Bayar',
+      client: widget.client,
+      excelQueueFunctionName: 'loadDataDownloadExcelSudahBayar',
+      toExcelFunctionName: 'toExcelSudahBayar',
+      queryName: 'Sudah_Bayar',
+      st: 1,
+      getExportParams: _getExportParams,
       onFetch: _fetch,
       formBuilder: (context, loading) => [
+        const MonitoringSectionTitle('Wilayah Desa / Kelurahan'),
+        DesaKelurahanDropdown(
+          client: widget.client,
+          value: _kelurahan,
+          onChanged: (v) => setState(() => _kelurahan = v),
+        ),
         const MonitoringSectionTitle('Tanggal Pembayaran'),
         Row(
           children: [

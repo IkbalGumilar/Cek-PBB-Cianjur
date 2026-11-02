@@ -1,7 +1,9 @@
 import 'dart:convert';
 
+import 'package:cek_pbb_app/dhkp/blok_catatan_models.dart';
 import 'package:cek_pbb_app/staff_portal/staff_portal_models.dart';
 import 'package:cek_pbb_app/staff_portal/staff_portal_parser.dart';
+import 'package:cek_pbb_app/staff_portal_token_extractor.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -67,6 +69,68 @@ void main() {
         expect(result.headers, ['No', 'NOP', 'Nama WP']);
         expect(result.rows, hasLength(2));
         expect(result.rows.first, ['1', '320520000401701540', 'BUDI']);
+      },
+    );
+
+    test(
+      'parseGenericTable handles toolbar/export button row above <th> headers',
+      () {
+        const html = '''
+        <table border="1">
+          <tr><td align="right"><input type="button" value="Ekspor ke Excel"></td></tr>
+          <tr><th>No</th><th>Kelurahan</th><th>Baku</th><th>Realisasi</th><th>%</th></tr>
+          <tr><td>1</td><td>BOBOJONG</td><td>232.798.953</td><td>109.341.563</td><td>46,97</td></tr>
+          <tr><td></td><td>TOTAL</td><td>232.798.953</td><td>109.341.563</td><td>46,97</td></tr>
+        </table>
+      ''';
+        final result = StaffPortalParser.parseGenericTable(html);
+        expect(result.errorMessage, isNull);
+        expect(result.headers, ['No', 'Kelurahan', 'Baku', 'Realisasi', '%']);
+        expect(result.rows, hasLength(2));
+        expect(result.rows[0], ['1', 'BOBOJONG', '232.798.953', '109.341.563', '46,97']);
+        expect(result.rows[1], ['', 'TOTAL', '232.798.953', '109.341.563', '46,97']);
+      },
+    );
+
+    test(
+      'parseGenericTable infers 5-column ranking headers when only td data rows exist',
+      () {
+        const html = '''
+        <table>
+          <tr><td>&nbsp;</td></tr>
+          <tr><td>1</td><td>BOBOJONG</td><td>232.798.953</td><td>109.341.563</td><td>46,97</td></tr>
+          <tr><td></td><td>TOTAL</td><td>232.798.953</td><td>109.341.563</td><td>46,97</td></tr>
+        </table>
+      ''';
+        final result = StaffPortalParser.parseGenericTable(html);
+        expect(result.errorMessage, isNull);
+        expect(result.headers, [
+          'No',
+          'Desa / Kelurahan',
+          'Pagu / Ketetapan',
+          'Realisasi',
+          '% Realisasi',
+        ]);
+        expect(result.rows, hasLength(2));
+        expect(result.rows[0].length, 5);
+        expect(result.rows[1].length, 5);
+      },
+    );
+
+    test(
+      'parseGenericTable normalizes row lengths to match header length',
+      () {
+        const html = '''
+        <table>
+          <tr><th>A</th><th>B</th><th>C</th><th>D</th></tr>
+          <tr><td>1</td><td>2</td></tr>
+          <tr><td>1</td><td>2</td><td>3</td><td>4</td><td>5</td></tr>
+        </table>
+      ''';
+        final result = StaffPortalParser.parseGenericTable(html);
+        expect(result.headers, ['A', 'B', 'C', 'D', 'Kolom 5']);
+        expect(result.rows[0], ['1', '2', '', '', '']);
+        expect(result.rows[1], ['1', '2', '3', '4', '5']);
       },
     );
 
@@ -152,5 +216,151 @@ void main() {
       expect(nonJson.success, isFalse);
       expect(nonJson.responsDikenali, isFalse);
     });
+
+    test('parseSummaryTotals parses metrics from HTML IDs correctly', () {
+      const htmlSudahBayar = '''
+        <div>
+          <b>Jumlah OP :</b> <span id="tot_jumlah_op">1.973</span>
+          <b>Pokok Ketetapan :</b> <span id="tot_pokok">244.684.372</span>
+          <b>Pokok Pembayaran :</b> <span id="tot_pokok_pembayaran">244.684.372</span>
+          <b>Denda :</b> <span id="tot_denda">599.695</span>
+          <b>Total Penerimaan :</b> <span id="tot_penerimaan">245.284.067</span>
+        </div>
+      ''';
+      final s = StaffPortalParser.parseSummaryTotals(htmlSudahBayar);
+      expect(s, isNotNull);
+      expect(s!.jumlahOp, 1973);
+      expect(s.pokokKetetapan, 244684372);
+      expect(s.pokokPembayaran, 244684372);
+      expect(s.denda, 599695);
+      expect(s.totalPenerimaan, 245284067);
+
+      const htmlBelumBayar = '''
+        <div>
+          <b>Jumlah OP :</b> <span id="bb_tot_jumlah_op">4.200</span>
+          <b>Pokok Ketetapan :</b> <span id="bb_tot_pokok">500.000.000</span>
+          <b>Estimasi Denda :</b> <span id="bb_tot_denda">15.000.000</span>
+          <b>Estimasi Total :</b> <span id="bb_tot_penerimaan">515.000.000</span>
+        </div>
+      ''';
+      final bb = StaffPortalParser.parseSummaryTotals(htmlBelumBayar);
+      expect(bb, isNotNull);
+      expect(bb!.jumlahOp, 4200);
+      expect(bb.pokokKetetapan, 500000000);
+      expect(bb.denda, 15000000);
+      expect(bb.totalPenerimaan, 515000000);
+    });
+
+    test('parseExcelQueueTable parses queue items, download links, and hapus IDs', () {
+      const htmlQueue = '''
+        <div id="frame-tbl-monitoring" class="tbl-monitoring">
+          <table width="100%" cellspacing="2" cellpadding="7" border="0">
+            <tbody>
+              <tr>
+                <th>NO</th><th>Tanggal</th><th>Filter</th><th>Status</th><th>Download</th><th>Hapus</th>
+              </tr>
+              <tr>
+                <td align="center">1</td>
+                <td align="center">27-10-2025 11:05:18</td>
+                <td><ul><li>Tanggal: 01-01-25</li><li>Kel: BOBOJONG</li></ul></td>
+                <td align="center"><img src="accept.png"></td>
+                <td align="center"><a href="https://cianjurkab.v-tax.id/download?file=sudah_bayar_01.xlsx">Download</a></td>
+                <td align="center"><a href="javascript:void(0)" onclick="javascript:hapus('abc123cpm')">Hapus</a></td>
+              </tr>
+              <tr>
+                <td align="center">2</td>
+                <td align="center">27-10-2025 10:00:00</td>
+                <td><ul><li>Filter 2</li></ul></td>
+                <td align="center">Processing...</td>
+                <td align="center"></td>
+                <td align="center"><a href="javascript:void(0)" onclick="javascript:hapus('def456cpm')">Hapus</a></td>
+              </tr>
+              <tr>
+                <td colspan="6" align="center"><div>1 - 2 dari 2</div></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      ''';
+
+      final queue = StaffPortalParser.parseExcelQueueTable(htmlQueue);
+      expect(queue.errorMessage, isNull);
+      expect(queue.items, hasLength(2));
+      expect(queue.paginationText, '1 - 2 dari 2');
+
+      final item1 = queue.items[0];
+      expect(item1.no, '1');
+      expect(item1.tanggal, '27-10-2025 11:05:18');
+      expect(item1.filterSummary, 'Tanggal: 01-01-25 • Kel: BOBOJONG');
+      expect(item1.isProcessing, isFalse);
+      expect(item1.fileName, 'sudah_bayar_01.xlsx');
+      expect(item1.hapusId, 'abc123cpm');
+
+      final item2 = queue.items[1];
+      expect(item2.no, '2');
+      expect(item2.isProcessing, isTrue);
+      expect(item2.fileName, isNull);
+      expect(item2.hapusId, 'def456cpm');
+    });
+
+    test('parseMonitoringKelurahanOptions extracts kelurahan options from select', () {
+      const html = '''
+        <table>
+          <tr>
+            <td>Desa/Kelurahan</td>
+            <td><select id="kelurahan-1">
+              <option value="3205200004">BOBOJONG</option>
+              <option value="3205200001">JAMALI</option>
+            </select></td>
+          </tr>
+        </table>
+      ''';
+      final options = StaffPortalParser.parseMonitoringKelurahanOptions(html);
+      expect(options, hasLength(2));
+      expect(options[0].code, '3205200004');
+      expect(options[0].name, 'BOBOJONG');
+      expect(options[1].code, '3205200001');
+      expect(options[1].name, 'JAMALI');
+    });
+
+    test('StaffPortalTokenExtractor extracts IDKEC and IDKEL from Monitoring HTML', () {
+      const html = '''
+        var IDKEC = '3205200';
+        var IDKEL = '3205200004';
+        var ROLE  = 'rmKelurahan';
+      ''';
+      expect(StaffPortalTokenExtractor.extractMonitoringIdKec(html), '3205200');
+      expect(StaffPortalTokenExtractor.extractMonitoringIdKel(html), '3205200004');
+    });
+
+    test('availableDhkpYears contains 2015 s.d. current year', () {
+      final years = availableDhkpYears();
+      expect(years.first, 2015);
+      expect(years.contains(2015), isTrue);
+      expect(years.contains(2016), isTrue);
+      expect(years.contains(2022), isTrue);
+      expect(years.contains(2026), isTrue);
+      expect(years.last, greaterThanOrEqualTo(2026));
+    });
+
+    test('StaffPortalClient session detection recognizes both single and double quoted user-menu', () {
+      const singleQuoteHtml = '''
+        <div id='user-menu'> Jam Server : <span>...</span> User: MANDE_BOBOJONG (<a href='main.php?param=bG9nb3V0PTE='>logout</a>)</div>
+      ''';
+      const doubleQuoteHtml = '''
+        <div id="user-menu"> Jam Server : <span>...</span> User: MANDE_BOBOJONG (<a href="main.php?param=bG9nb3V0PTE=">logout</a>)</div>
+      ''';
+      const unauthenticatedHtml = '''
+        <body class='login-page'><div id='header'>PBB-P2 KABUPATEN CIANJUR</div></body>
+      ''';
+
+      bool isSessionActive(String html) =>
+          html.contains('user-menu') && html.contains('logout');
+
+      expect(isSessionActive(singleQuoteHtml), isTrue);
+      expect(isSessionActive(doubleQuoteHtml), isTrue);
+      expect(isSessionActive(unauthenticatedHtml), isFalse);
+    });
   });
 }
+

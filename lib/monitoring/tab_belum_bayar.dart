@@ -22,6 +22,8 @@ class _TabBelumBayarState extends State<TabBelumBayar> {
   final _namaWp = TextEditingController();
   final _kodeBayarIndividu = TextEditingController();
   String _buku = 'semua';
+  String _kelurahan = '3205200004';
+  final _kecamatan = '3205200';
 
   @override
   void dispose() {
@@ -54,15 +56,57 @@ class _TabBelumBayarState extends State<TabBelumBayar> {
       kodeBayarIndividu: _kodeBayarIndividu.text.trim(),
       bukuMin: bukuMin,
       bukuMax: bukuMax,
+      kelurahan: _kelurahan,
+      kecamatan: _kecamatan,
     );
+  }
+
+  Map<String, String> _getExportParams() {
+    final (bukuMin, bukuMax) = BukuDropdown.rangeFor(_buku);
+    return {
+      'tahun_1': _tahunAwal.text.trim(),
+      'tahun_2': _tahunAkhir.text.trim(),
+      'nop': _nop.text.trim(),
+      'nama_wp': _namaWp.text.trim(),
+      'bank': '',
+      'merchant': '',
+      'st': '2',
+      'tgl_pembayaran_1': '',
+      'tgl_pembayaran_2': '',
+      'kec': _kecamatan,
+      'kel': _kelurahan,
+      'buku_1': bukuMin,
+      'buku_2': bukuMax,
+      'tgl_pelimpahan_1': '',
+      'tgl_pelimpahan_2': '',
+      'kode_bayar_individu': _kodeBayarIndividu.text.trim(),
+      'kode_bayar_kolektif': '',
+      'va': '',
+      'qris': '',
+      'tgl_cutoff': _tglCutoff.text,
+      'operator': '',
+      'LBL_KEL': 'Desa/Kelurahan',
+    };
   }
 
   @override
   Widget build(BuildContext context) {
     return MonitoringTabScaffold(
       reportTitle: 'Belum Bayar',
+      client: widget.client,
+      excelQueueFunctionName: 'loadDataDownloadExcelBelumBayar',
+      toExcelFunctionName: 'toExcelBelumBayar',
+      queryName: 'Belum_Bayar',
+      st: 2,
+      getExportParams: _getExportParams,
       onFetch: _fetch,
       formBuilder: (context, loading) => [
+        const MonitoringSectionTitle('Wilayah Desa / Kelurahan'),
+        DesaKelurahanDropdown(
+          client: widget.client,
+          value: _kelurahan,
+          onChanged: (v) => setState(() => _kelurahan = v),
+        ),
         const MonitoringSectionTitle('Tanggal Cutoff Belum Bayar'),
         MonitoringDateField(
           label: 'Tanggal Cutoff',

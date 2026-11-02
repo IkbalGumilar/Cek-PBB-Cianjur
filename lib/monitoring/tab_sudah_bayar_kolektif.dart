@@ -20,6 +20,8 @@ class _TabSudahBayarKolektifState extends State<TabSudahBayarKolektif> {
   final _kodeBayarKolektif = TextEditingController();
   final _namaGrup = TextEditingController();
   final _namaKolektor = TextEditingController();
+  String _kelurahan = '3205200004';
+  final _kecamatan = '3205200';
 
   @override
   void dispose() {
@@ -47,15 +49,48 @@ class _TabSudahBayarKolektifState extends State<TabSudahBayarKolektif> {
       kodeBayarKolektif: _kodeBayarKolektif.text.trim(),
       namaGrup: _namaGrup.text.trim(),
       namaKolektor: _namaKolektor.text.trim(),
+      kelurahan: _kelurahan,
+      kecamatan: _kecamatan,
     );
+  }
+
+  Map<String, String> _getExportParams() {
+    return {
+      'tgl_pembayaran_1': _tglAwal.text,
+      'tgl_pembayaran_2': _tglAkhir.text,
+      'nama_grup': _namaGrup.text.trim(),
+      'nama_kolektor': _namaKolektor.text.trim(),
+      'kc': _kecamatan,
+      'kl': _kelurahan,
+      'kode_bayar_kolektif': _kodeBayarKolektif.text.trim(),
+      'tgl_cutoff_belum_bayar': '',
+      'tgl_cutoff_kadaluarsa': '',
+      'st': '1',
+      'exp': '',
+      'LBL_KEL': 'Desa/Kelurahan',
+      'ADMIN_SW_DBNAME': 'SW_PBB',
+    };
   }
 
   @override
   Widget build(BuildContext context) {
     return MonitoringTabScaffold(
       reportTitle: 'Sudah Bayar Kolektif',
+      client: widget.client,
+      excelQueueFunctionName: 'loadDataDownloadExcelSudahBayarKolektif',
+      toExcelFunctionName: 'toExcelSudahBayarKolektif',
+      queryName: 'Sudah_Bayar_Kolektif',
+      st: 1,
+      isKolektif: true,
+      getExportParams: _getExportParams,
       onFetch: _fetch,
       formBuilder: (context, loading) => [
+        const MonitoringSectionTitle('Wilayah Desa / Kelurahan'),
+        DesaKelurahanDropdown(
+          client: widget.client,
+          value: _kelurahan,
+          onChanged: (v) => setState(() => _kelurahan = v),
+        ),
         const MonitoringSectionTitle('Tanggal Pembayaran'),
         Row(
           children: [
