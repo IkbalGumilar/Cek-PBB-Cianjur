@@ -4,6 +4,28 @@ Dokumentasi perubahan, peningkatan, dan perbaikan pada setiap rilis aplikasi. Fo
 
 ---
 
+## [v0.1.4-beta] - 2026-11-03
+
+### 🚀 Fitur Baru & Peningkatan Aplikasi
+- **Sinkronisasi DHKP Langsung dari Portal Staf**:
+  - Pilihan mode sinkronisasi: **Keseluruhan DHKP (Belum Bayar & Sudah Bayar)** dan **Hanya Pelunasan (Sudah Bayar Saja)**.
+  - Pengambilan data berkecepatan tinggi: request paralel (`Future.wait`) tanpa jeda per halaman dengan pemrosesan *batch upsert* dan deduplikasi di memori.
+  - Deteksi NOP/SPPT baru hanya diambil dari daftar *Sudah Bayar* guna mencegah data tidak valid dari NOP nonaktif di daftar tunggakan.
+  - Laporan popup hasil sinkronisasi interaktif yang merinci daftar NOP baru lunas serta SPPT baru.
+  - Integrasi notifikasi Android: mengetuk notifikasi selesai sinkronisasi kini langsung membuka aplikasi dan menampilkan popup laporan hasil.
+
+### 📦 Pencadangan & Paket Laporan (.dat)
+- **Fokus Data Perubahan & Bukti Foto**: Pencadangan dan paket laporan `.dat` kini dikhususkan untuk mencadangkan data perubahan dan foto bukti lapangan (opsi *Hanya DHKP* dihapus).
+- **Subfolder Cadangan Google Drive**: Berkas cadangan `.dat` ke Google Drive kini tersimpan rapi di dalam subfolder `backup` pada folder utama.
+- **Penyederhanaan Arsitektur**: Menghapus metode sinkronisasi langsung via Google Drive & Folder Bersama, digantikan sepenuhnya oleh sinkronisasi langsung ke Portal Staf.
+- **Dukungan Tautan & Akun Google**: Tetap mempertahankan pengambilan paket laporan via tautan Google Drive dan login akun Google di Android.
+
+### 🛡️ Perbaikan Bug & Keandalan
+- **Proteksi Integritas NOP**: Menghapus aksi penghapusan NOP dari aplikasi agar data objek pajak lokal selalu konsisten dengan basis data server Bapenda.
+- **Visualisasi Grafik DHKP**: Memperbaiki bug kalkulasi dan rendering pada grafik analitik DHKP.
+
+---
+
 ## [v0.1.3-beta] - 2026-11-02
 
 ### 🚀 Fitur Baru & Peningkatan Aplikasi
@@ -130,4 +152,4 @@ Dokumentasi perubahan, peningkatan, dan perbaikan pada setiap rilis aplikasi. Fo
 
 ---
 
-**Full Changelog**: https://github.com/IkbalGumilar/Cek-PBB-Cianjur/compare/v0.1.2-beta...v0.1.3-beta
+**Full Changelog**: https://github.com/IkbalGumilar/Cek-PBB-Cianjur/compare/v0.1.3-beta...v0.1.4-beta

@@ -6,7 +6,7 @@ echo =====================================================================
 echo.
 
 set "PROJECT_DIR=%~dp0.."
-set "APP_VERSION=v0.1.3-beta"
+set "APP_VERSION=v0.1.4-beta"
 cd /d "%PROJECT_DIR%"
 
 echo [0/3] Menyinkronkan dependensi plugin Windows di ephemeral...
