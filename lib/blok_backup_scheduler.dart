@@ -299,7 +299,8 @@ class BlokBackupScheduler extends BasePreferencesStore {
     for (final entity in dir.listSync(followLinks: false)) {
       if (entity is File) {
         final lower = entity.path.toLowerCase();
-        if (lower.endsWith('.dkhp') ||
+        if (lower.endsWith('.dat') ||
+            lower.endsWith('.dkhp') ||
             lower.endsWith('.dhkp') ||
             lower.endsWith('.bak')) {
           list.add(entity);
@@ -338,7 +339,8 @@ class BlokBackupScheduler extends BasePreferencesStore {
     for (final entity in dir.listSync(followLinks: false)) {
       if (entity is File) {
         final lower = entity.path.toLowerCase();
-        if (lower.endsWith('.dkhp') ||
+        if (lower.endsWith('.dat') ||
+            lower.endsWith('.dkhp') ||
             lower.endsWith('.dhkp') ||
             lower.endsWith('.bak')) {
           files.add(entity);
@@ -386,14 +388,11 @@ class BlokBackupScheduler extends BasePreferencesStore {
     Future<String> Function(String fileName)? customExporter,
     bool enforcePreviousDhkpMatch = false,
   }) async {
-    final onlyData = onlyDkhpData ?? await getOnlyDkhpData();
     final now = DateTime.now();
     String pad2(int n) => n.toString().padLeft(2, '0');
     final dateStr =
         '${now.year}${pad2(now.month)}${pad2(now.day)}_${pad2(now.hour)}${pad2(now.minute)}${pad2(now.second)}';
-    final prefix =
-        customPrefix ??
-        (onlyData ? 'cadangan_dkhp_data' : 'cadangan_dkhp_lengkap');
+    final prefix = customPrefix ?? 'cadangan_perubahan';
     final fileName = '${prefix}_$dateStr';
 
     String filePath;
@@ -430,7 +429,7 @@ class BlokBackupScheduler extends BasePreferencesStore {
 
       filePath = await BlokDataStore.instance.exportDkhp(
         fileName: fileName,
-        includePhotos: !onlyData,
+        includePhotos: true,
         deltaOnly: true,
       );
     }

@@ -4,6 +4,7 @@ import '../feature_tour/feature_tour.dart';
 import '../settings_screen.dart';
 import '../staff_portal_client.dart';
 import '../theme_controller.dart';
+import 'staff_dhkp_sync_dialog.dart';
 import 'tab_belum_bayar.dart';
 import 'tab_belum_bayar_kolektif.dart';
 import 'tab_piutang.dart';
@@ -109,6 +110,14 @@ class _MonitoringWilayahScreenState extends State<MonitoringWilayahScreen> {
           foregroundColor: onPrimary,
           title: const Text('Pantauan Wilayah Desa'),
           actions: [
+            IconButton(
+              icon: const Icon(Icons.cloud_sync_rounded),
+              tooltip: 'Sinkronkan Status ke DHKP',
+              onPressed: () => showStaffDhkpSyncDialog(
+                context,
+                client: widget.client,
+              ),
+            ),
             FeatureTourHelpButton(
               onPressed: showTour,
               color: onPrimary,

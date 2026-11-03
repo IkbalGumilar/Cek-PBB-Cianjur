@@ -12,7 +12,7 @@ import 'dkhp_package_helper.dart';
 import 'download_helper.dart';
 import 'pbb_client.dart';
 
-const _backupExtension = '.dkhp';
+const _backupExtension = '.dat';
 
 /// Penyimpanan lokal "Buku Catatan Blok" — daftar NOP yang sudah terkonfirmasi
 /// "Sudah Bayar", dikelompokkan per blok. Data disimpan sebagai CSV di
@@ -265,15 +265,15 @@ class BlokDataStore {
   }) async {
     final records = await loadAll();
     final base =
-        fileName ?? 'backup_dkhp_${DateTime.now().millisecondsSinceEpoch}';
+        fileName ?? 'cadangan_perubahan_${DateTime.now().millisecondsSinceEpoch}';
     final backupsDir = await AppStorage.getBackupsDirectory();
     final outputPath = '${backupsDir.path}/$base$_backupExtension';
     final file = await DhkpPackageHelper.packDkhp(
       outputPath: outputPath,
       records: records,
       baseRecords: records,
-      includePhotos: includePhotos,
-      deltaOnly: deltaOnly,
+      includePhotos: true,
+      deltaOnly: true,
     );
     return file.path;
   }

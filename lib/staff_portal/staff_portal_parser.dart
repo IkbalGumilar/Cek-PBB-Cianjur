@@ -195,10 +195,33 @@ class StaffPortalParser {
       }
     }
 
+    final pagingMatch = RegExp(r'(\d+)\s*-\s*(\d+)\s+dari\s+(\d+)').firstMatch(html);
+    final pageStart = int.tryParse(pagingMatch?.group(1) ?? '') ?? 0;
+    final pageEnd = int.tryParse(pagingMatch?.group(2) ?? '') ?? 0;
+    final totalRecords = int.tryParse(pagingMatch?.group(3) ?? '') ?? normalizedRows.length;
+    final hasNextPage = (html.contains('id="next-page"') || html.contains('name="next-page"')) &&
+        pageEnd > 0 &&
+        pageEnd < totalRecords;
+
     if (normalizedRows.isEmpty) {
-      return MonitoringTableResult(errorMessage: 'Tidak ada data.', summary: summary);
+      return MonitoringTableResult(
+        errorMessage: 'Tidak ada data.',
+        summary: summary,
+        totalRecords: totalRecords,
+        pageStart: pageStart,
+        pageEnd: pageEnd,
+        hasNextPage: false,
+      );
     }
-    return MonitoringTableResult(headers: headers, rows: normalizedRows, summary: summary);
+    return MonitoringTableResult(
+      headers: headers,
+      rows: normalizedRows,
+      summary: summary,
+      totalRecords: totalRecords,
+      pageStart: pageStart,
+      pageEnd: pageEnd,
+      hasNextPage: hasNextPage,
+    );
   }
 
   /// Parsing tabel antrean unduhan berkas Excel dari server V-Tax.

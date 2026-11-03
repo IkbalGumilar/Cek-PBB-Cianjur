@@ -47,12 +47,20 @@ class MonitoringTableResult {
   final List<List<String>> rows;
   final String? errorMessage;
   final MonitoringSummaryTotals? summary;
+  final int totalRecords;
+  final int pageStart;
+  final int pageEnd;
+  final bool hasNextPage;
 
   const MonitoringTableResult({
     this.headers = const [],
     this.rows = const [],
     this.errorMessage,
     this.summary,
+    this.totalRecords = 0,
+    this.pageStart = 0,
+    this.pageEnd = 0,
+    this.hasNextPage = false,
   });
 }
 

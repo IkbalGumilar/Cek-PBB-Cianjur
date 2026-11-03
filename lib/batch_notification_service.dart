@@ -1,9 +1,12 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
+import 'monitoring/staff_dhkp_sync_dialog.dart';
+import 'monitoring/staff_dhkp_sync_service.dart';
 import 'result_screen.dart';
 import 'tax_record.dart';
 
@@ -18,6 +21,12 @@ class BatchNotificationService {
   static const MethodChannel _fgChannel = MethodChannel(
     'id.cianjur.cekpbb.cek_pbb_app/batch_foreground_service',
   );
+
+  static final StreamController<String> _actionController =
+      StreamController<String>.broadcast();
+
+  /// Aliran aksi dari tombol notifikasi interaktif (pause, resume, hide, cancel)
+  static Stream<String> get actionStream => _actionController.stream;
 
   final FlutterLocalNotificationsPlugin _notifications =
       FlutterLocalNotificationsPlugin();
@@ -34,6 +43,15 @@ class BatchNotificationService {
   /// Inisialisasi awal notifikasi lokal
   Future<void> init() async {
     if (_isInitialized) return;
+
+    _fgChannel.setMethodCallHandler((call) async {
+      if (call.method == 'onAction') {
+        final action = call.arguments as String?;
+        if (action != null) {
+          _actionController.add(action);
+        }
+      }
+    });
 
     const androidSettings = AndroidInitializationSettings(
       '@mipmap/launcher_icon',
@@ -110,6 +128,7 @@ class BatchNotificationService {
     required String content,
     required int progress,
     required int max,
+    bool isPaused = false,
   }) async {
     if (!Platform.isAndroid) return;
     try {
@@ -118,6 +137,7 @@ class BatchNotificationService {
         'content': content,
         'progress': progress,
         'max': max,
+        'isPaused': isPaused,
       });
     } catch (e) {
       debugPrint('Gagal startForegroundService: $e');
@@ -130,6 +150,7 @@ class BatchNotificationService {
     required String content,
     required int progress,
     required int max,
+    bool? isPaused,
   }) async {
     if (!Platform.isAndroid) return;
     try {
@@ -138,6 +159,7 @@ class BatchNotificationService {
         'content': content,
         'progress': progress,
         'max': max,
+        'isPaused': ?isPaused,
       });
     } catch (e) {
       debugPrint('Gagal updateForegroundService: $e');
@@ -154,19 +176,64 @@ class BatchNotificationService {
     }
   }
 
+  /// Notifikasi awal saat proses pengecekan massal atau sinkronisasi dimulai.
+  /// Di Desktop (Linux & Windows), ini adalah SATU-SATUNYA notifikasi selama proses berlangsung
+  /// hingga proses selesai, mencegah spam popup notifikasi setiap kali NOP dicek.
+  Future<void> showStarted({
+    required String title,
+    required String content,
+    required int total,
+  }) async {
+    if (Platform.isAndroid) {
+      await startForegroundService(
+        title: title,
+        content: content,
+        progress: 0,
+        max: total,
+      );
+      return;
+    }
+
+    // Khusus Desktop (Linux & Windows): Munculkan 1 notifikasi bahwa proses dimulai
+    if (!_isInitialized) return;
+    try {
+      final details = NotificationDetails(
+        linux: const LinuxNotificationDetails(
+          urgency: LinuxNotificationUrgency.low,
+        ),
+      );
+      await _notifications.show(
+        id: _notificationId,
+        title: title,
+        body: content,
+        notificationDetails: details,
+        payload: 'batch_in_progress',
+      );
+    } catch (e) {
+      debugPrint('Error showStarted notification: $e');
+    }
+  }
+
   /// Menampilkan / memperbarui progress notifikasi berjalan (ongoing)
+  /// Format sesuai permintaan:
+  /// Baris 1: Mengecek berapa dari berapa. NOP yg di cek
+  /// Baris 2: persentase
+  /// Bar progres
+  /// Tombol: Jeda / Lanjutkan, Sembunyikan, Batalkan
   Future<void> showProgress({
     required int current,
     required int total,
     required String currentNop,
     required int lunasCount,
     required int belumCount,
+    bool isPaused = false,
   }) async {
     final percent = total > 0
         ? ((current / total) * 100).toStringAsFixed(0)
         : '0';
-    final title = 'Memeriksa PBB: $current/$total NOP ($percent%)';
-    final content = 'NOP: $currentNop • Lunas: $lunasCount, Belum: $belumCount';
+
+    final title = 'Mengecek $current dari $total. NOP: $currentNop';
+    final content = '$percent% • Lunas: $lunasCount, Belum: $belumCount';
 
     if (Platform.isAndroid) {
       await updateForegroundService(
@@ -174,7 +241,14 @@ class BatchNotificationService {
         content: content,
         progress: current,
         max: total > 0 ? total : 100,
+        isPaused: isPaused,
       );
+      return;
+    }
+
+    // Di Desktop (Linux & Windows): jangan tampilkan notifikasi berkala per NOP
+    // agar tidak menimbulkan popup mengganggu secara berulang di layar.
+    if (Platform.isLinux || Platform.isWindows) {
       return;
     }
 
@@ -192,7 +266,7 @@ class BatchNotificationService {
         ongoing: true,
         autoCancel: false,
         onlyAlertOnce: true,
-        subText: '$current/$total NOP',
+        subText: '$percent%',
         color: const Color(0xFF1565C0), // Biru Pemda
       );
 
@@ -219,6 +293,7 @@ class BatchNotificationService {
     required int gagalCount,
   }) async {
     await stopForegroundService();
+    if (!_isInitialized) return;
     try {
       final androidDetails = AndroidNotificationDetails(
         _completeChannelId,
@@ -233,7 +308,12 @@ class BatchNotificationService {
         subText: 'Selesai',
       );
 
-      final details = NotificationDetails(android: androidDetails);
+      final details = NotificationDetails(
+        android: androidDetails,
+        linux: const LinuxNotificationDetails(
+          urgency: LinuxNotificationUrgency.normal,
+        ),
+      );
       final ringkasan =
           'Lunas: $lunasCount, Belum: $belumCount${blacklistCount > 0 ? ", Blacklist: $blacklistCount" : ""}${gagalCount > 0 ? ", Gagal: $gagalCount" : ""}';
 
@@ -260,6 +340,7 @@ class BatchNotificationService {
     int gagalCount = 0,
   }) async {
     await stopForegroundService();
+    if (!_isInitialized) return;
     try {
       final androidDetails = AndroidNotificationDetails(
         _completeChannelId,
@@ -274,7 +355,12 @@ class BatchNotificationService {
         subText: 'Dibatalkan',
       );
 
-      final details = NotificationDetails(android: androidDetails);
+      final details = NotificationDetails(
+        android: androidDetails,
+        linux: const LinuxNotificationDetails(
+          urgency: LinuxNotificationUrgency.normal,
+        ),
+      );
       final ringkasan =
           'Lunas: $lunasCount, Belum: $belumCount${blacklistCount > 0 ? ", Blacklist: $blacklistCount" : ""}${gagalCount > 0 ? ", Gagal: $gagalCount" : ""}';
 
@@ -290,9 +376,163 @@ class BatchNotificationService {
     }
   }
 
+  /// Notifikasi progres sinkronisasi DHKP dari Portal Staf di latar belakang
+  Future<void> showStaffSyncProgress({
+    required int currentBlok,
+    required int totalBloks,
+    required String currentBlokName,
+    required int updatedPaid,
+    required int newSppt,
+    bool isPaused = false,
+  }) async {
+    final percent = totalBloks > 0
+        ? ((currentBlok / totalBloks) * 100).toStringAsFixed(0)
+        : '0';
+
+    final title = 'Mengecek Blok $currentBlok dari $totalBloks. $currentBlokName';
+    final content = '$percent% • $updatedPaid Lunas Baru, $newSppt SPPT Baru';
+
+    if (Platform.isAndroid) {
+      await updateForegroundService(
+        title: title,
+        content: content,
+        progress: currentBlok,
+        max: totalBloks > 0 ? totalBloks : 100,
+        isPaused: isPaused,
+      );
+      return;
+    }
+
+    // Di Desktop: abaikan progress berkala per-blok untuk mencegah popup berulang
+    if (Platform.isLinux || Platform.isWindows) {
+      return;
+    }
+
+    if (!_isInitialized) return;
+    try {
+      final androidDetails = AndroidNotificationDetails(
+        _progressChannelId,
+        _progressChannelName,
+        channelDescription:
+            'Menampilkan progress sinkronisasi DHKP yang sedang berlangsung',
+        importance: Importance.low,
+        priority: Priority.low,
+        showProgress: true,
+        maxProgress: totalBloks > 0 ? totalBloks : 100,
+        progress: currentBlok,
+        ongoing: true,
+        autoCancel: false,
+        onlyAlertOnce: true,
+        subText: '$percent%',
+        color: const Color(0xFF00796B),
+      );
+
+      final details = NotificationDetails(android: androidDetails);
+      await _notifications.show(
+        id: _notificationId,
+        title: title,
+        body: content,
+        notificationDetails: details,
+        payload: 'staff_sync_in_progress',
+      );
+    } catch (e) {
+      debugPrint('Error showStaffSyncProgress notification: $e');
+    }
+  }
+
+  /// Notifikasi penyelesaian sinkronisasi DHKP dari Portal Staf
+  Future<void> showStaffSyncCompleted({
+    required int updatedPaidCount,
+    required int newSpptCount,
+    required int totalChecked,
+    String? blokLabel,
+  }) async {
+    await stopForegroundService();
+    if (!_isInitialized) return;
+    try {
+      final androidDetails = AndroidNotificationDetails(
+        _completeChannelId,
+        _completeChannelName,
+        channelDescription:
+            'Notifikasi penyelesaian sinkronisasi portal staf PBB di latar belakang',
+        importance: Importance.high,
+        priority: Priority.high,
+        ongoing: false,
+        autoCancel: true,
+        color: const Color(0xFF2E7D32),
+        subText: 'Sinkronisasi Selesai',
+      );
+
+      final details = NotificationDetails(
+        android: androidDetails,
+        linux: const LinuxNotificationDetails(
+          urgency: LinuxNotificationUrgency.normal,
+        ),
+      );
+      final body =
+          '$updatedPaidCount NOP diperbarui Lunas, $newSpptCount SPPT Baru terdeteksi ($totalChecked baris diperiksa).';
+
+      await _notifications.show(
+        id: _notificationId,
+        title: '✅ Sinkronisasi Portal Staf Selesai (${blokLabel ?? "DHKP"})',
+        body: body,
+        notificationDetails: details,
+        payload: 'staff_sync_completed',
+      );
+    } catch (e) {
+      debugPrint('Error showStaffSyncCompleted notification: $e');
+    }
+  }
+
+  /// Notifikasi pembatalan sinkronisasi DHKP dari Portal Staf
+  Future<void> showStaffSyncCancelled({
+    required int currentBlok,
+    required int totalBloks,
+    required int updatedPaidCount,
+    required int newSpptCount,
+    String? blokLabel,
+  }) async {
+    await stopForegroundService();
+    if (!_isInitialized) return;
+    try {
+      final androidDetails = AndroidNotificationDetails(
+        _completeChannelId,
+        _completeChannelName,
+        channelDescription:
+            'Notifikasi pembatalan sinkronisasi portal staf PBB',
+        importance: Importance.high,
+        priority: Priority.high,
+        ongoing: false,
+        autoCancel: true,
+        color: const Color(0xFFE65100),
+        subText: 'Dibatalkan',
+      );
+
+      final details = NotificationDetails(
+        android: androidDetails,
+        linux: const LinuxNotificationDetails(
+          urgency: LinuxNotificationUrgency.normal,
+        ),
+      );
+      final body =
+          'Dihentikan pada blok $currentBlok/$totalBloks. $updatedPaidCount Lunas diperbarui, $newSpptCount SPPT Baru.';
+
+      await _notifications.show(
+        id: _notificationId,
+        title: '⚠️ Sinkronisasi DHKP Dibatalkan (${blokLabel ?? "DHKP"})',
+        body: body,
+        notificationDetails: details,
+        payload: 'staff_sync_cancelled',
+      );
+    } catch (e) {
+      debugPrint('Error showStaffSyncCancelled notification: $e');
+    }
+  }
+
   /// Hapus notifikasi pengecekan jika diperlukan
   Future<void> cancel() async {
     await stopForegroundService();
+    if (!_isInitialized) return;
     try {
       await _notifications.cancel(id: _notificationId);
     } catch (e) {
@@ -301,9 +541,20 @@ class BatchNotificationService {
   }
 
   /// Handler ketika pengguna mengetuk notifikasi dari notification bar
+  @visibleForTesting
+  void onNotificationTapped(NotificationResponse response) =>
+      _onNotificationTapped(response);
+
   void _onNotificationTapped(NotificationResponse response) {
     if (response.payload == 'show_batch_result') {
       _navigateToResult();
+    } else if (response.payload == 'staff_sync_completed') {
+      if (Platform.isAndroid) {
+        _navigateToStaffSyncReport();
+      }
+      // Di platform Desktop (Linux / Windows / macOS):
+      // Mengklik notifikasi sistem hanya membawa jendela program ke foreground;
+      // pengguna yang membuka laporannya secara manual.
     }
   }
 
@@ -316,5 +567,16 @@ class BatchNotificationService {
     nav.push(
       MaterialPageRoute(builder: (_) => ResultScreen(records: _activeRecords!)),
     );
+  }
+
+  void _navigateToStaffSyncReport() {
+    final nav = rootNavigatorKey.currentState;
+    final context = nav?.overlay?.context ?? rootNavigatorKey.currentContext;
+    final outcome = StaffDhkpSyncService.lastOutcome;
+    if (context == null || outcome == null) {
+      return;
+    }
+
+    showStaffDhkpSyncReportDialog(context, outcome);
   }
 }

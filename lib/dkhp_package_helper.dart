@@ -689,7 +689,7 @@ class DhkpPackageHelper {
     final effectiveBase = baseRecords ?? records;
     final dhkpFingerprint = computeDhkpFingerprint(effectiveBase);
     final changedList = extractChangedRecords(records);
-    final targetRecords = (deltaOnly && changedList.isNotEmpty && !isDatReport)
+    final targetRecords = (deltaOnly && changedList.isNotEmpty)
         ? changedList
         : records;
 
@@ -699,7 +699,7 @@ class DhkpPackageHelper {
       final effectiveScope = scope ?? DusunData.instance.scope;
       final manifestMap = <String, dynamic>{
         'format': isDatReport ? 'laporan_dat_v1' : 'dhkp_delta_v1',
-        'isDeltaOnly': isDatReport ? false : deltaOnly,
+        'isDeltaOnly': deltaOnly,
         'dhkpFingerprint': dhkpFingerprint,
         'baseTotalNop': effectiveBase.length,
         'changedCount': changedList.length,

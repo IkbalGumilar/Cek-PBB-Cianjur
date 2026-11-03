@@ -76,7 +76,6 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
   final _toggleGrafikButtonKey = GlobalKey(debugLabel: 'tour_dhkp_grafik_btn');
   final _uploadButtonKey = GlobalKey(debugLabel: 'tour_dhkp_upload_btn');
   final _buatLaporanButtonKey = GlobalKey(debugLabel: 'tour_dhkp_laporan_btn');
-  final _syncButtonKey = GlobalKey(debugLabel: 'tour_dhkp_sync_btn');
   final _moreMenuButtonKey = GlobalKey(debugLabel: 'tour_dhkp_more_btn');
   final _filterBlokTahunKey = GlobalKey(debugLabel: 'tour_dhkp_filter_bar');
   final _searchFilterSortKey = GlobalKey(debugLabel: 'tour_dhkp_search_bar');
@@ -143,15 +142,6 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
         description:
             'Mengemas seluruh data DHKP, status pembayaran terbaru, catatan petugas, serta seluruh foto lembaran STTS ke dalam satu berkas laporan lengkap (.dat) yang siap dikirimkan ke operator desa.',
         icon: Icons.download_rounded,
-      ),
-      FeatureTourStep(
-        targetKey: _syncButtonKey,
-        title: 'Tombol Sinkronisasi Google Drive Bersama',
-        description:
-            'Tekan tombol ini untuk menyamakan pembaruan status bayar, catatan, dan foto dokumentasi antar perangkat petugas melalui folder Google Drive bersama.',
-        actionHint:
-            'Aplikasi juga melakukan sinkronisasi otomatis di latar belakang setiap kali Anda membuka halaman ini.',
-        icon: Icons.sync_rounded,
       ),
       FeatureTourStep(
         targetKey: _moreMenuButtonKey,
@@ -266,55 +256,6 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
         tourId: 'dhkp_table_view',
         steps: _buildTableTourSteps(),
       );
-    }
-
-    // Sinkronisasi otomatis saat membuka DHKP
-    unawaited(_triggerAutoSync(silent: true));
-  }
-
-  Future<void> _triggerAutoSync({bool silent = false}) async {
-    if (!silent && mounted) {
-      setState(() {
-        _busy = true;
-        _busyMessage = 'Menyinkronkan perubahan data DHKP...';
-        _busyIcon = Icons.cloud_sync_outlined;
-      });
-    }
-    try {
-      final newChanges = await BlokSyncService.instance.syncCurrentScope(
-        blok: _selectedBlok,
-      );
-      if (newChanges > 0) {
-        await _loadRecords();
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                '$newChanges perubahan data baru & gambar dokumentasi berhasil disinkronkan.',
-              ),
-              backgroundColor: Colors.teal[800],
-            ),
-          );
-        }
-      } else if (!silent && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Semua data perubahan DHKP sudah sinkron dengan Drive.',
-            ),
-          ),
-        );
-      }
-    } catch (e) {
-      if (!silent && mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Gagal sinkronisasi data: $e')));
-      }
-    } finally {
-      if (!silent && mounted) {
-        setState(() => _busy = false);
-      }
     }
   }
 
@@ -480,41 +421,7 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
     );
   }
 
-  /// Hapus satu baris — mis. untuk mengoreksi baris yang salah tercatat
-  /// (data uji coba, salah impor, dsb).
-  Future<void> _hapusBaris(BlokRecord record) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Hapus Baris Ini?'),
-        content: Text(
-          '${record.namaWajibPajak} — NOP ${record.nop} (${record.tahunBayar}) akan dihapus '
-          'permanen dari data DHKP.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Batal'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Hapus'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
 
-    if (mounted) {
-      setState(() {
-        _busy = true;
-        _busyMessage = 'Menghapus baris data DHKP...';
-        _busyIcon = Icons.delete_sweep_outlined;
-      });
-    }
-    await BlokDataStore.instance.deleteByKey(record.uniqueKey);
-    await _loadRecords();
-  }
 
   Future<void> _editCatatanDialog(BlokRecord record) async {
     final newCatatan = await showEditCatatanDialog(context, record);
@@ -1426,12 +1333,6 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
             icon: const Icon(Icons.download_rounded),
             tooltip: 'Buat Paket Laporan (.dat)',
           ),
-          IconButton(
-            key: _syncButtonKey,
-            onPressed: _busy ? null : () => _triggerAutoSync(silent: false),
-            icon: const Icon(Icons.sync_rounded),
-            tooltip: 'Sinkronkan Perubahan (Drive Bersama)',
-          ),
           FeatureTourHelpButton(onPressed: _onHelpPressed),
           if (_bloks.isNotEmpty && !_tampilkanGrafik)
             PopupMenuButton<String>(
@@ -1894,11 +1795,16 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
                       Expanded(
                         child: _tampilkanGrafik
                             ? DhkpGrafikView(
+                                key: ValueKey(
+                                  'dhkp_grafik_${_selectedBlok}_${_selectedWilayah}_$_selectedTahun',
+                                ),
                                 records: _allScopeRecords.isNotEmpty
                                     ? _allScopeRecords
                                     : _records,
                                 selectedBlok: _selectedBlok,
                                 selectedWilayah: _selectedWilayah,
+                                selectedTahun: _selectedTahun,
+                                onTahunChanged: _pilihTahun,
                                 onRegisterShowTour: (fn) =>
                                     _showGrafikTour = fn,
                               )
@@ -2185,20 +2091,6 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
                                                                     tooltip:
                                                                         'Cek Status Bayar (Update jika Lunas)',
                                                                   ),
-                                                                IconButton(
-                                                                  onPressed: () =>
-                                                                      _hapusBaris(
-                                                                        r,
-                                                                      ),
-                                                                  icon: const Icon(
-                                                                    Icons
-                                                                        .delete_outline,
-                                                                    color: Colors
-                                                                        .red,
-                                                                  ),
-                                                                  tooltip:
-                                                                      'Hapus Baris',
-                                                                ),
                                                               ],
                                                             ),
                                                           ),

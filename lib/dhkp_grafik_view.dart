@@ -25,6 +25,8 @@ class DhkpGrafikView extends StatefulWidget {
   final List<BlokRecord> records;
   final String? selectedBlok;
   final int? selectedWilayah;
+  final String? selectedTahun;
+  final ValueChanged<String>? onTahunChanged;
   final ValueChanged<VoidCallback>? onRegisterShowTour;
 
   const DhkpGrafikView({
@@ -32,6 +34,8 @@ class DhkpGrafikView extends StatefulWidget {
     required this.records,
     this.selectedBlok,
     this.selectedWilayah,
+    this.selectedTahun,
+    this.onTahunChanged,
     this.onRegisterShowTour,
   });
 
@@ -90,9 +94,10 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
         .toSet()
         .toList()
       ..sort((a, b) => b.compareTo(a));
-    _selectedTahun = availableYears.isNotEmpty
-        ? availableYears.first
-        : '${DateTime.now().year}';
+    _selectedTahun = widget.selectedTahun ??
+        (availableYears.isNotEmpty
+            ? availableYears.first
+            : '${DateTime.now().year}');
     _animController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 600),
@@ -258,6 +263,26 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
   @override
   void didUpdateWidget(DhkpGrafikView oldWidget) {
     super.didUpdateWidget(oldWidget);
+    var shouldAnimate = false;
+
+    if (oldWidget.selectedTahun != widget.selectedTahun &&
+        widget.selectedTahun != null) {
+      _selectedTahun = widget.selectedTahun!;
+      _selectedItemLabel = null;
+      shouldAnimate = true;
+    } else {
+      final availableYears = widget.records
+          .map((r) => r.tahunBayar)
+          .where((y) => y.isNotEmpty)
+          .toSet();
+      if (availableYears.isNotEmpty && !availableYears.contains(_selectedTahun)) {
+        _selectedTahun =
+            (availableYears.toList()..sort((a, b) => b.compareTo(a))).first;
+        _selectedItemLabel = null;
+        shouldAnimate = true;
+      }
+    }
+
     if (oldWidget.records != widget.records ||
         oldWidget.selectedBlok != widget.selectedBlok ||
         oldWidget.selectedWilayah != widget.selectedWilayah) {
@@ -270,12 +295,16 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
         _selectedItemLabel = widget.selectedBlok != null
             ? 'Blok ${int.tryParse(widget.selectedBlok!) ?? widget.selectedBlok}'
             : null;
-      } else {
+      } else if (oldWidget.records != widget.records) {
         _selectedItemLabel = null;
       }
+      shouldAnimate = true;
+      DhkpWidgetSyncService.syncFromRecords(widget.records);
+    }
+
+    if (shouldAnimate) {
       _animController.reset();
       _animController.forward();
-      DhkpWidgetSyncService.syncFromRecords(widget.records);
     }
   }
 
@@ -566,6 +595,13 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
         .toList()
       ..sort((a, b) => b.compareTo(a));
 
+    if (availableYears.isNotEmpty && !availableYears.contains(_selectedTahun)) {
+      _selectedTahun = (widget.selectedTahun != null &&
+              availableYears.contains(widget.selectedTahun))
+          ? widget.selectedTahun!
+          : availableYears.first;
+    }
+
     // 2. Terapkan drill-down dusun jika sedang aktif
     var murniRecords = allMurni;
     if (hasMultiDusun && _drillDownDusun != null) {
@@ -573,7 +609,9 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
       final dBloks = dObj?.bloks.toSet() ?? <String>{};
       murniRecords = murniRecords.where((r) => dBloks.contains(r.blok)).toList();
     }
-    murniRecords = murniRecords.where((r) => r.tahunBayar == _selectedTahun).toList();
+    if (availableYears.isNotEmpty) {
+      murniRecords = murniRecords.where((r) => r.tahunBayar == _selectedTahun).toList();
+    }
 
     final totalNop = murniRecords.length;
     final sudahBayarList = murniRecords.where((r) => r.isPaid).toList();
@@ -1025,6 +1063,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
                     });
                     _animController.reset();
                     _animController.forward();
+                    widget.onTahunChanged?.call(y);
                   }
                 },
               ),

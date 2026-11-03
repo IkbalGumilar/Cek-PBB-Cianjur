@@ -213,6 +213,28 @@ class GoogleDriveService {
     return null;
   }
 
+  /// Memastikan subfolder "backup" ada di dalam folder utama Google Drive.
+  /// Berkas cadangan delta .dat akan disimpan di dalam folder ini.
+  Future<String?> ensureBackupSubfolder({String? parentFolderId}) async {
+    try {
+      final parentId = (parentFolderId != null && parentFolderId.isNotEmpty)
+          ? parentFolderId
+          : await ensureDedicatedFolder();
+      if (parentId == null || parentId.isEmpty) return null;
+
+      final existingBackupId =
+          await findFolder('backup', parentFolderId: parentId);
+      if (existingBackupId != null && existingBackupId.isNotEmpty) {
+        return existingBackupId;
+      }
+
+      return await createFolder('backup', parentFolderId: parentId);
+    } catch (e) {
+      debugPrint('ensureBackupSubfolder error: $e');
+    }
+    return null;
+  }
+
   /// Mengunggah berkas ke Google Drive (ke dalam folder khusus atau folder bersama).
   /// Otomatis memastikan folder target ada (membuat jika belum ada).
   Future<String?> uploadFile({

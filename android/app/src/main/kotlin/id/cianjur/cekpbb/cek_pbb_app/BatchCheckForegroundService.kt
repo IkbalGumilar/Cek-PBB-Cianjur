@@ -25,17 +25,31 @@ class BatchCheckForegroundService : Service() {
         const val ACTION_START = "ACTION_START"
         const val ACTION_UPDATE = "ACTION_UPDATE"
         const val ACTION_STOP = "ACTION_STOP"
+        const val ACTION_PAUSE = "ACTION_PAUSE"
+        const val ACTION_RESUME = "ACTION_RESUME"
+        const val ACTION_HIDE = "ACTION_HIDE"
+        const val ACTION_CANCEL = "ACTION_CANCEL"
 
         const val EXTRA_TITLE = "EXTRA_TITLE"
         const val EXTRA_CONTENT = "EXTRA_CONTENT"
         const val EXTRA_PROGRESS = "EXTRA_PROGRESS"
         const val EXTRA_MAX = "EXTRA_MAX"
+        const val EXTRA_IS_PAUSED = "EXTRA_IS_PAUSED"
 
         var isRunning = false
             private set
+
+        var isPaused = false
+            private set
+
+        var onActionReceived: ((String) -> Unit)? = null
     }
 
     private var wakeLock: PowerManager.WakeLock? = null
+    private var lastTitle: String = "Pengecekan Massal PBB Berjalan"
+    private var lastContent: String = "Memeriksa status pembayaran..."
+    private var lastProgress: Int = 0
+    private var lastMax: Int = 100
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -51,20 +65,57 @@ class BatchCheckForegroundService : Service() {
                 val content = intent.getStringExtra(EXTRA_CONTENT) ?: "Memeriksa status pembayaran..."
                 val progress = intent.getIntExtra(EXTRA_PROGRESS, 0)
                 val max = intent.getIntExtra(EXTRA_MAX, 100)
+                isPaused = intent.getBooleanExtra(EXTRA_IS_PAUSED, false)
+                lastTitle = title
+                lastContent = content
+                lastProgress = progress
+                lastMax = max
                 startForegroundService(title, content, progress, max)
             }
             ACTION_UPDATE -> {
-                val title = intent.getStringExtra(EXTRA_TITLE) ?: "Pengecekan Massal PBB Berjalan"
-                val content = intent.getStringExtra(EXTRA_CONTENT) ?: "Memeriksa status pembayaran..."
-                val progress = intent.getIntExtra(EXTRA_PROGRESS, 0)
-                val max = intent.getIntExtra(EXTRA_MAX, 100)
+                val title = intent.getStringExtra(EXTRA_TITLE) ?: lastTitle
+                val content = intent.getStringExtra(EXTRA_CONTENT) ?: lastContent
+                val progress = intent.getIntExtra(EXTRA_PROGRESS, lastProgress)
+                val max = intent.getIntExtra(EXTRA_MAX, lastMax)
+                if (intent.hasExtra(EXTRA_IS_PAUSED)) {
+                    isPaused = intent.getBooleanExtra(EXTRA_IS_PAUSED, false)
+                }
+                lastTitle = title
+                lastContent = content
+                lastProgress = progress
+                lastMax = max
                 updateNotification(title, content, progress, max)
             }
             ACTION_STOP -> {
                 stopForegroundService()
             }
+            ACTION_PAUSE -> {
+                isPaused = true
+                updateNotification(lastTitle, lastContent, lastProgress, lastMax)
+                onActionReceived?.invoke("pause")
+            }
+            ACTION_RESUME -> {
+                isPaused = false
+                updateNotification(lastTitle, lastContent, lastProgress, lastMax)
+                onActionReceived?.invoke("resume")
+            }
+            ACTION_HIDE -> {
+                closeNotificationDrawer()
+                onActionReceived?.invoke("hide")
+            }
+            ACTION_CANCEL -> {
+                onActionReceived?.invoke("cancel")
+            }
         }
         return START_NOT_STICKY
+    }
+
+    private fun closeNotificationDrawer() {
+        try {
+            @Suppress("DEPRECATION")
+            val it = Intent(Intent.ACTION_CLOSE_SYSTEM_DIALOGS)
+            sendBroadcast(it)
+        } catch (_: Exception) {}
     }
 
     private fun createNotificationChannel() {
@@ -93,15 +144,68 @@ class BatchCheckForegroundService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        // Tombol 1: Jeda atau Lanjutkan
+        val pauseTitle = if (isPaused) "Lanjutkan" else "Jeda"
+        val pauseAction = if (isPaused) ACTION_RESUME else ACTION_PAUSE
+        val pauseIntent = Intent(this, BatchCheckForegroundService::class.java).apply {
+            action = pauseAction
+        }
+        val pausePendingIntent = PendingIntent.getService(
+            this,
+            1,
+            pauseIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        // Tombol 2: Sembunyikan
+        val hideIntent = Intent(this, BatchCheckForegroundService::class.java).apply {
+            action = ACTION_HIDE
+        }
+        val hidePendingIntent = PendingIntent.getService(
+            this,
+            2,
+            hideIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        // Tombol 3: Batalkan
+        val cancelIntent = Intent(this, BatchCheckForegroundService::class.java).apply {
+            action = ACTION_CANCEL
+        }
+        val cancelPendingIntent = PendingIntent.getService(
+            this,
+            3,
+            cancelIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val percent = if (max > 0) ((progress.toFloat() / max.toFloat()) * 100).toInt() else 0
+
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.mipmap.launcher_icon)
             .setContentTitle(title)
             .setContentText(content)
+            .setSubText("$percent%")
             .setContentIntent(pendingIntent)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setColor(0xFF1565C0.toInt())
+            .addAction(
+                if (isPaused) android.R.drawable.ic_media_play else android.R.drawable.ic_media_pause,
+                pauseTitle,
+                pausePendingIntent
+            )
+            .addAction(
+                android.R.drawable.ic_menu_close_clear_cancel,
+                "Sembunyikan",
+                hidePendingIntent
+            )
+            .addAction(
+                android.R.drawable.ic_menu_delete,
+                "Batalkan",
+                cancelPendingIntent
+            )
 
         if (max > 0) {
             builder.setProgress(max, progress, false)
@@ -136,6 +240,7 @@ class BatchCheckForegroundService : Service() {
 
     private fun stopForegroundService() {
         isRunning = false
+        isPaused = false
         releaseWakeLock()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             stopForeground(STOP_FOREGROUND_REMOVE)

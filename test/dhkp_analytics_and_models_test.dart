@@ -2,9 +2,10 @@ import 'dart:ui';
 import 'package:cek_pbb_app/blok_record.dart';
 import 'package:cek_pbb_app/dhkp/blok_catatan_models.dart';
 import 'package:cek_pbb_app/dhkp/dhkp_chart_widgets.dart';
-import 'package:cek_pbb_app/dhkp/dhkp_grafik_analytics.dart';
+import 'package:cek_pbb_app/dhkp_grafik_view.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   const sampleRecords = [
@@ -316,6 +317,83 @@ void main() {
       await tester.drag(find.byType(DhkpScrollableBars), const Offset(-200, 0));
       await tester.pumpAndSettle();
       expect(find.byType(Tooltip), findsWidgets);
+    });
+
+    testWidgets('DhkpGrafikView updates data immediately when year changes without switching views', (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      tester.view.physicalSize = const Size(1200, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      const records2026 = [
+        BlokRecord(
+          nop: '320520000400100010',
+          namaWajibPajak: 'WARGA 2026',
+          tahunBayar: '2026',
+          tanggalBayar: '2026-01-01',
+          jumlahPbb: '100000',
+          statusBayar: 'Sudah Bayar',
+          alamatObjek: 'KP. SUKAMAJU',
+        ),
+      ];
+
+      const records2025 = [
+        BlokRecord(
+          nop: '320520000400100020',
+          namaWajibPajak: 'WARGA 2025 A',
+          tahunBayar: '2025',
+          tanggalBayar: '2025-01-01',
+          jumlahPbb: '200000',
+          statusBayar: 'Sudah Bayar',
+          alamatObjek: 'KP. SUKAMAJU',
+        ),
+        BlokRecord(
+          nop: '320520000400100030',
+          namaWajibPajak: 'WARGA 2025 B',
+          tahunBayar: '2025',
+          tanggalBayar: '',
+          jumlahPbb: '200000',
+          statusBayar: 'Belum Bayar',
+          alamatObjek: 'KP. SUKAMAJU',
+        ),
+      ];
+
+      var changedYear = '';
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: DhkpGrafikView(
+              records: records2026,
+              selectedTahun: '2026',
+              onTahunChanged: (y) => changedYear = y,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Total 1 NOP (100% lunas) for 2026
+      expect(find.text('1 dari 1 objek'), findsWidgets);
+      expect(find.text('100.0%'), findsWidgets);
+
+      // Rebuild with 2025 records and selectedTahun: '2025'
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: DhkpGrafikView(
+              records: records2025,
+              selectedTahun: '2025',
+              onTahunChanged: (y) => changedYear = y,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Data 2025 must immediately display 2 NOP (50% lunas) without requiring view toggle
+      expect(find.text('1 dari 2 objek'), findsWidgets);
+      expect(find.text('50.0%'), findsWidgets);
+      expect(changedYear, isEmpty);
     });
   });
 }

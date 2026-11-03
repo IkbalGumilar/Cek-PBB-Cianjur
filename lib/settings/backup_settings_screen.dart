@@ -57,7 +57,6 @@ class _BackupSettingsSectionState extends State<BackupSettingsSection> {
   String _googlePhotoUrl = '';
   String _googleFolderLink = '';
   bool _overCellular = true;
-  bool _onlyDkhpData = true;
   String _dhkpFingerprint = '';
   int _totalNop = 0;
   int _changedNopCount = 0;
@@ -96,7 +95,6 @@ class _BackupSettingsSectionState extends State<BackupSettingsSection> {
     final photo = await scheduler.getGooglePhotoUrl();
     final folderLink = await scheduler.getGoogleDriveFolderLink();
     final cell = await scheduler.getOverCellular();
-    final onlyDkhp = await scheduler.getOnlyDkhpData();
     final records = await BlokDataStore.instance.loadAll();
     final fingerprint = DhkpPackageHelper.computeDhkpFingerprint(records);
     final changedCount = DhkpPackageHelper.extractChangedRecords(
@@ -113,7 +111,6 @@ class _BackupSettingsSectionState extends State<BackupSettingsSection> {
       _googlePhotoUrl = photo;
       _googleFolderLink = folderLink;
       _overCellular = cell;
-      _onlyDkhpData = onlyDkhp;
       _dhkpFingerprint = fingerprint;
       _totalNop = records.length;
       _changedNopCount = changedCount;
@@ -151,7 +148,6 @@ class _BackupSettingsSectionState extends State<BackupSettingsSection> {
     });
     try {
       final file = await BlokBackupScheduler.instance.performBackup(
-        onlyDkhpData: _onlyDkhpData,
         enforcePreviousDhkpMatch: true,
       );
       await _loadBackupSettings();
@@ -167,15 +163,17 @@ class _BackupSettingsSectionState extends State<BackupSettingsSection> {
             });
           }
           try {
-            final sharedFolderId = _googleFolderLink.isNotEmpty
+            final mainFolderId = _googleFolderLink.isNotEmpty
                 ? GoogleDriveBackupPolicy.extractFolderId(_googleFolderLink)
-                : null;
+                : await GoogleDriveService.instance.ensureDedicatedFolder();
+            final backupFolderId = await GoogleDriveService.instance
+                .ensureBackupSubfolder(parentFolderId: mainFolderId);
             final uploaded = await GoogleDriveService.instance.uploadFile(
               file: file,
-              folderId: sharedFolderId,
+              folderId: backupFolderId,
             );
             if (uploaded != null) {
-              cloudInfo = '\nDisinkronkan ke Google Drive ($_googleAccount)';
+              cloudInfo = '\nDisinkronkan ke Google Drive ($_googleAccount/backup)';
             } else {
               cloudInfo = '\n(Tersimpan di HP, gagal unggah ke Google Drive)';
             }
@@ -688,20 +686,6 @@ class _BackupSettingsSectionState extends State<BackupSettingsSection> {
                   onTap: _showFrequencyDialog,
                 ),
                 const Divider(height: 1),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  secondary: const Icon(Icons.table_chart_outlined),
-                  title: const Text('Hanya Data DHKP Saja'),
-                  subtitle: const Text(
-                    'Tanpa gambar dokumentasi agar ukuran berkas lebih hemat',
-                  ),
-                  value: _onlyDkhpData,
-                  onChanged: (val) async {
-                    await BlokBackupScheduler.instance.setOnlyDkhpData(val);
-                    if (mounted) setState(() => _onlyDkhpData = val);
-                  },
-                ),
-                const Divider(height: 1),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: const Icon(Icons.wifi_outlined),
@@ -745,12 +729,14 @@ class _BackupSettingsSectionState extends State<BackupSettingsSection> {
                         : 'Akun Google (Google Drive)',
                   ),
                   subtitle: Text(
-                    _googleAccount.isEmpty
-                        ? 'Belum terhubung • Folder "${GoogleDriveBackupPolicy.dedicatedFolderName}"'
-                        : '$_googleAccount • ${_googleFolderLink.isNotEmpty ? 'Folder bersama aktif' : 'Folder "${GoogleDriveBackupPolicy.dedicatedFolderName}"'}',
+                    !Platform.isAndroid
+                        ? 'Masuk akun Google hanya didukung di Android'
+                        : (_googleAccount.isEmpty
+                            ? 'Belum terhubung • Folder "${GoogleDriveBackupPolicy.dedicatedFolderName}/backup"'
+                            : '$_googleAccount • Folder backup aktif'),
                   ),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: _showGoogleAccountDialog,
+                  trailing: Platform.isAndroid ? const Icon(Icons.chevron_right) : null,
+                  onTap: Platform.isAndroid ? _showGoogleAccountDialog : null,
                 ),
                 const Divider(height: 1),
                 ListTile(

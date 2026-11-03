@@ -249,6 +249,7 @@ class StaffPortalClient extends BaseHttpClient {
     required String jsFunctionName,
     required String query,
     required Map<String, String> params,
+    int page = 1,
   }) async {
     final html = await _ensureMonitoringPage();
     final q = StaffPortalTokenExtractor.extractLoadQ(html, jsFunctionName);
@@ -265,8 +266,16 @@ class StaffPortalClient extends BaseHttpClient {
     }
     final response = await _dio.post<String>(
       '/main.php',
-      queryParameters: {'q': q},
-      data: {'query': query, ...params, 'funcMode': funcMode},
+      queryParameters: {
+        'q': q,
+        if (page > 1) 'p': '$page',
+      },
+      data: {
+        'query': query,
+        ...params,
+        'funcMode': funcMode,
+        if (page > 1) 'p': '$page',
+      },
       options: Options(
         contentType: Headers.formUrlEncodedContentType,
         responseType: ResponseType.plain,
@@ -295,10 +304,12 @@ class StaffPortalClient extends BaseHttpClient {
     String tglPelimpahanAkhir = '',
     String kelurahan = '3205200004',
     String kecamatan = '3205200',
+    int page = 1,
   }) {
     return _fetchTab(
       jsFunctionName: 'onSubmitSudahBayar',
       query: 'Sudah_Bayar',
+      page: page,
       params: {
         'tahun_1': tahunAwal,
         'tahun_2': tahunAkhir,
@@ -340,10 +351,12 @@ class StaffPortalClient extends BaseHttpClient {
     String bukuMax = '',
     String kelurahan = '3205200004',
     String kecamatan = '3205200',
+    int page = 1,
   }) {
     return _fetchTab(
       jsFunctionName: 'onSubmitBelumBayar',
       query: 'Belum_Bayar',
+      page: page,
       params: {
         'tahun_1': tahunAwal,
         'tahun_2': tahunAkhir,

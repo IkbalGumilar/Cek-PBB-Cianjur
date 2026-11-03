@@ -293,53 +293,69 @@ class MainActivity : FlutterFragmentActivity() {
                 else -> result.notImplemented()
             }
         }
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, batchForegroundChannelName).setMethodCallHandler { call, result ->
-            when (call.method) {
-                "startService" -> {
-                    val title = call.argument<String>("title") ?: "Pengecekan Massal PBB Berjalan"
-                    val content = call.argument<String>("content") ?: "Memeriksa status pembayaran..."
-                    val progress = call.argument<Int>("progress") ?: 0
-                    val max = call.argument<Int>("max") ?: 100
-                    val intent = Intent(this, BatchCheckForegroundService::class.java).apply {
-                        action = BatchCheckForegroundService.ACTION_START
-                        putExtra(BatchCheckForegroundService.EXTRA_TITLE, title)
-                        putExtra(BatchCheckForegroundService.EXTRA_CONTENT, content)
-                        putExtra(BatchCheckForegroundService.EXTRA_PROGRESS, progress)
-                        putExtra(BatchCheckForegroundService.EXTRA_MAX, max)
+        val batchChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, batchForegroundChannelName).apply {
+            setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "startService" -> {
+                        val title = call.argument<String>("title") ?: "Pengecekan Massal PBB Berjalan"
+                        val content = call.argument<String>("content") ?: "Memeriksa status pembayaran..."
+                        val progress = call.argument<Int>("progress") ?: 0
+                        val max = call.argument<Int>("max") ?: 100
+                        val isPaused = call.argument<Boolean>("isPaused") ?: false
+                        val intent = Intent(this@MainActivity, BatchCheckForegroundService::class.java).apply {
+                            action = BatchCheckForegroundService.ACTION_START
+                            putExtra(BatchCheckForegroundService.EXTRA_TITLE, title)
+                            putExtra(BatchCheckForegroundService.EXTRA_CONTENT, content)
+                            putExtra(BatchCheckForegroundService.EXTRA_PROGRESS, progress)
+                            putExtra(BatchCheckForegroundService.EXTRA_MAX, max)
+                            putExtra(BatchCheckForegroundService.EXTRA_IS_PAUSED, isPaused)
+                        }
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                            startForegroundService(intent)
+                        } else {
+                            startService(intent)
+                        }
+                        result.success(true)
                     }
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        startForegroundService(intent)
-                    } else {
+                    "updateService" -> {
+                        val title = call.argument<String>("title")
+                        val content = call.argument<String>("content")
+                        val progress = call.argument<Int>("progress")
+                        val max = call.argument<Int>("max")
+                        val isPaused = call.argument<Boolean>("isPaused")
+                        val intent = Intent(this@MainActivity, BatchCheckForegroundService::class.java).apply {
+                            action = BatchCheckForegroundService.ACTION_UPDATE
+                            if (title != null) putExtra(BatchCheckForegroundService.EXTRA_TITLE, title)
+                            if (content != null) putExtra(BatchCheckForegroundService.EXTRA_CONTENT, content)
+                            if (progress != null) putExtra(BatchCheckForegroundService.EXTRA_PROGRESS, progress)
+                            if (max != null) putExtra(BatchCheckForegroundService.EXTRA_MAX, max)
+                            if (isPaused != null) putExtra(BatchCheckForegroundService.EXTRA_IS_PAUSED, isPaused)
+                        }
                         startService(intent)
+                        result.success(true)
                     }
-                    result.success(true)
-                }
-                "updateService" -> {
-                    val title = call.argument<String>("title") ?: "Pengecekan Massal PBB Berjalan"
-                    val content = call.argument<String>("content") ?: "Memeriksa status pembayaran..."
-                    val progress = call.argument<Int>("progress") ?: 0
-                    val max = call.argument<Int>("max") ?: 100
-                    val intent = Intent(this, BatchCheckForegroundService::class.java).apply {
-                        action = BatchCheckForegroundService.ACTION_UPDATE
-                        putExtra(BatchCheckForegroundService.EXTRA_TITLE, title)
-                        putExtra(BatchCheckForegroundService.EXTRA_CONTENT, content)
-                        putExtra(BatchCheckForegroundService.EXTRA_PROGRESS, progress)
-                        putExtra(BatchCheckForegroundService.EXTRA_MAX, max)
+                    "stopService" -> {
+                        val intent = Intent(this@MainActivity, BatchCheckForegroundService::class.java).apply {
+                            action = BatchCheckForegroundService.ACTION_STOP
+                        }
+                        startService(intent)
+                        result.success(true)
                     }
-                    startService(intent)
-                    result.success(true)
-                }
-                "stopService" -> {
-                    val intent = Intent(this, BatchCheckForegroundService::class.java).apply {
-                        action = BatchCheckForegroundService.ACTION_STOP
+                    "isRunning" -> {
+                        result.success(BatchCheckForegroundService.isRunning)
                     }
-                    startService(intent)
-                    result.success(true)
+                    else -> result.notImplemented()
                 }
-                "isRunning" -> {
-                    result.success(BatchCheckForegroundService.isRunning)
+            }
+        }
+        BatchCheckForegroundService.onActionReceived = { action ->
+            runOnUiThread {
+                batchChannel.invokeMethod("onAction", action)
+                if (action == "hide") {
+                    try {
+                        moveTaskToBack(true)
+                    } catch (_: Exception) {}
                 }
-                else -> result.notImplemented()
             }
         }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, widgetChannelName).setMethodCallHandler { call, result ->
@@ -700,5 +716,10 @@ class MainActivity : FlutterFragmentActivity() {
         } catch (e: Exception) {
             result.error("OPEN_WITH_FAILED", e.message, null)
         }
+    }
+
+    override fun onDestroy() {
+        BatchCheckForegroundService.onActionReceived = null
+        super.onDestroy()
     }
 }

@@ -47,6 +47,7 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
   bool _isCompleted = false;
   bool _cancelledNotified = false;
   String _statusMessage = 'Menyiapkan pengecekan...';
+  StreamSubscription<String>? _actionSubscription;
 
   TaxRecord? get _current => _currentIndex < widget.records.length
       ? widget.records[_currentIndex]
@@ -56,6 +57,28 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
   void initState() {
     super.initState();
     _client = widget.client ?? PbbClient();
+    _actionSubscription = BatchNotificationService.actionStream.listen((action) {
+      if (!mounted) return;
+      switch (action) {
+        case 'pause':
+          if (_isRunning && !_isPaused) {
+            _pause();
+          }
+          break;
+        case 'resume':
+          if (_isPaused) {
+            _resume();
+          }
+          break;
+        case 'cancel':
+          _cancelFromNotification();
+          break;
+        case 'hide':
+          // Dibiarkan tetap tenang berjalan di latar belakang
+          break;
+      }
+    });
+
     if (widget.autoStart && widget.records.isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _runBatch();
@@ -65,6 +88,7 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
 
   @override
   void dispose() {
+    _actionSubscription?.cancel();
     _isRunning = false;
     _scrollController.dispose();
     unawaited(BatchNotificationService.instance.stopForegroundService());
@@ -134,11 +158,10 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
 
     BatchNotificationService.instance.setActiveRecords(widget.records);
     await BatchNotificationService.instance.requestPermission();
-    await BatchNotificationService.instance.startForegroundService(
-      title: 'Memeriksa PBB (${widget.records.length} NOP)',
-      content: 'Memulai pengecekan...',
-      progress: _currentIndex,
-      max: widget.records.length,
+    await BatchNotificationService.instance.showStarted(
+      title: 'Pengecekan Massal PBB Dimulai',
+      content: 'Sedang memeriksa ${widget.records.length} NOP...',
+      total: widget.records.length,
     );
 
     while (_currentIndex < widget.records.length && _isRunning) {
@@ -324,7 +347,43 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
       _isCooldown = false;
       _statusMessage = 'Pengecekan dijeda.';
     });
+    final total = widget.records.length;
+    final currentNop =
+        _currentIndex < total ? widget.records[_currentIndex].nop : '-';
+    final sudahCount = widget.records.where((r) => r.isPaid).length;
+    final belumCount = widget.records
+        .where(
+          (r) =>
+              r.isChecked &&
+              !r.isPaid &&
+              !r.status.contains('Blacklist') &&
+              r.status != 'Dilewati' &&
+              !r.status.contains('Gagal'),
+        )
+        .length;
+    unawaited(
+      BatchNotificationService.instance.showProgress(
+        current: _currentIndex,
+        total: total,
+        currentNop: currentNop,
+        lunasCount: sudahCount,
+        belumCount: belumCount,
+        isPaused: true,
+      ),
+    );
+  }
+
+  void _cancelFromNotification() {
+    if (!_isRunning && !_isPaused) return;
+    _isRunning = false;
+    _isPaused = false;
     unawaited(BatchNotificationService.instance.stopForegroundService());
+    _notifyCancelledIfPartial();
+    if (mounted) {
+      setState(() {
+        _statusMessage = 'Pengecekan dibatalkan dari notifikasi.';
+      });
+    }
   }
 
   void _resume() {
