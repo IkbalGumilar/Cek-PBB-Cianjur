@@ -247,12 +247,14 @@ class DhkpGrafikAnalytics {
           (sum, r) => sum + r.jumlahPbbValue,
         );
 
-        final lunasPct = totalNominal > 0
-            ? (lunasNominal / totalNominal * 100)
-            : 0.0;
         final lunasNopPct = dRecs.isNotEmpty
             ? (lunasRecs.length / dRecs.length * 100)
             : 0.0;
+        final lunasPct = (totalNominal > 0 && belumNominal > 0)
+            ? (lunasNominal / totalNominal * 100)
+            : (belumRecs.isEmpty
+                ? (dRecs.isNotEmpty ? 100.0 : 0.0)
+                : lunasNopPct);
 
         list.add(
           DhkpGroupInfo(
@@ -296,12 +298,14 @@ class DhkpGrafikAnalytics {
           (sum, r) => sum + r.jumlahPbbValue,
         );
 
-        final lunasPct = totalNominal > 0
-            ? (lunasNominal / totalNominal * 100)
-            : 0.0;
         final lunasNopPct = bRecs.isNotEmpty
             ? (lunasRecs.length / bRecs.length * 100)
             : 0.0;
+        final lunasPct = (totalNominal > 0 && belumNominal > 0)
+            ? (lunasNominal / totalNominal * 100)
+            : (belumRecs.isEmpty
+                ? (bRecs.isNotEmpty ? 100.0 : 0.0)
+                : lunasNopPct);
 
         list.add(
           DhkpGroupInfo(

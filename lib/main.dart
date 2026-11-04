@@ -14,6 +14,7 @@ import 'dhkp_widget_sync_service.dart';
 import 'document_preview_screen.dart';
 import 'dusun_data.dart';
 import 'main_shell.dart';
+import 'monitoring/staff_sync_bubble_overlay.dart';
 import 'network_status_overlay.dart';
 import 'batch_notification_service.dart';
 import 'blok_batch_check_tracker.dart';
@@ -321,16 +322,19 @@ class _CekPbbAppState extends State<CekPbbApp> with WidgetsBindingObserver {
                   ? _buildExternalViewer(widget.initialExternalFilePath!)
                   : MainShell(themeController: _themeController),
               builder: (context, child) {
+                final content = Stack(
+                  children: [
+                    ?child,
+                    const NetworkStatusOverlay(),
+                    const StaffSyncBubbleOverlay(),
+                  ],
+                );
                 if (widget.initialExternalFilePath != null &&
                     widget.initialExternalFilePath!.isNotEmpty) {
-                  return Stack(
-                    children: [?child, const NetworkStatusOverlay()],
-                  );
+                  return content;
                 }
                 return AppLockGate(
-                  child: Stack(
-                    children: [?child, const NetworkStatusOverlay()],
-                  ),
+                  child: content,
                 );
               },
             );

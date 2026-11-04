@@ -36,31 +36,13 @@ void main() {
 
   final symlinksDir = Directory(r'Z:\windows\flutter\ephemeral\.plugin_symlinks');
   
-  // Robust directory reset for SMB shares
-  bool isClean = false;
-  try {
-    final testDir = Directory('${symlinksDir.path}\\.test_access');
-    testDir.createSync(recursive: true);
-    testDir.deleteSync();
-    isClean = true;
-  } catch (_) {
-    isClean = false;
-  }
-
-  if (!isClean) {
-    try {
-      final renamed = 'Z:\\windows\\flutter\\ephemeral\\plugin_symlinks_${DateTime.now().millisecondsSinceEpoch}';
-      symlinksDir.renameSync(renamed);
-    } catch (_) {
-      final ts = DateTime.now().millisecondsSinceEpoch;
-      Process.runSync('powershell', [
-        '-NoProfile',
-        '-Command',
-        'Rename-Item -Path "Z:\\windows\\flutter\\ephemeral\\.plugin_symlinks" -NewName "plugin_symlinks_$ts" -ErrorAction SilentlyContinue',
-      ]);
-    }
-    symlinksDir.createSync(recursive: true);
-  }
+  // Always reset .plugin_symlinks to avoid SMB symlink lock / collision
+  final ts = DateTime.now().millisecondsSinceEpoch;
+  Process.runSync('powershell', [
+    '-NoProfile',
+    '-Command',
+    'Rename-Item -Path "Z:\\windows\\flutter\\ephemeral\\.plugin_symlinks" -NewName "plugin_symlinks_$ts" -ErrorAction SilentlyContinue; New-Item -ItemType Directory -Path "Z:\\windows\\flutter\\ephemeral\\.plugin_symlinks" -Force',
+  ]);
 
   final cacheDir = Directory(pubCache);
   if (!cacheDir.existsSync()) {

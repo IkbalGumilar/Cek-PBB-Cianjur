@@ -9,6 +9,7 @@ import '../blok_record.dart';
 import '../dhkp/blok_catatan_models.dart';
 import '../nop_helper.dart';
 import '../staff_portal_client.dart';
+import 'staff_dhkp_sync_manager.dart';
 import 'staff_dhkp_sync_service.dart';
 
 /// Menampilkan dialog pemilih Blok & Tahun untuk memulai sinkronisasi langsung dari Portal Staf
@@ -118,25 +119,19 @@ class _StaffDhkpSyncConfigDialogState
         ? (_bloks.isNotEmpty ? _bloks : ['001'])
         : [_selectedBlok];
 
-    showModalBottomSheet<void>(
+    final blokLabel = _selectedBlok == _semuaBlokKey
+        ? 'Semua Blok (${targetBloks.length} blok)'
+        : 'Blok ${int.tryParse(_selectedBlok) ?? _selectedBlok}';
+
+    StaffDhkpSyncManager.instance.startSync(
       context: context,
-      isScrollControlled: true,
-      isDismissible: false,
-      enableDrag: false,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => _StaffDhkpSyncRunningSheet(
-        client: widget.client,
-        tahun: _selectedTahun,
-        bloks: targetBloks,
-        kelurahan: widget.kelurahan,
-        kecamatan: widget.kecamatan,
-        mode: _selectedMode,
-        blokLabel: _selectedBlok == _semuaBlokKey
-            ? 'Semua Blok (${targetBloks.length} blok)'
-            : 'Blok ${int.tryParse(_selectedBlok) ?? _selectedBlok}',
-      ),
+      client: widget.client,
+      tahun: _selectedTahun,
+      bloks: targetBloks,
+      kelurahan: widget.kelurahan,
+      kecamatan: widget.kecamatan,
+      blokLabel: blokLabel,
+      mode: _selectedMode,
     );
   }
 
@@ -401,410 +396,356 @@ class _StaffDhkpSyncConfigDialogState
   }
 }
 
-/// Modal Lembaran Progres Sinkronisasi Berjalan
-class _StaffDhkpSyncRunningSheet extends StatefulWidget {
-  final StaffPortalClient client;
-  final String tahun;
-  final List<String> bloks;
-  final String kelurahan;
-  final String kecamatan;
-  final String blokLabel;
-  final StaffSyncMode mode;
-
-  const _StaffDhkpSyncRunningSheet({
-    required this.client,
-    required this.tahun,
-    required this.bloks,
-    required this.kelurahan,
-    required this.kecamatan,
-    required this.blokLabel,
-    this.mode = StaffSyncMode.full,
-  });
-
-  @override
-  State<_StaffDhkpSyncRunningSheet> createState() =>
-      _StaffDhkpSyncRunningSheetState();
+/// Menampilkan modal lembaran progres sinkronisasi DHKP berjalan
+Future<void> showStaffDhkpSyncRunningSheetModal(BuildContext context) async {
+  await showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    isDismissible: false,
+    enableDrag: false,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    ),
+    builder: (ctx) => const _StaffDhkpSyncRunningSheet(),
+  );
 }
 
-class _StaffDhkpSyncRunningSheetState
-    extends State<_StaffDhkpSyncRunningSheet> {
-  bool _isPaused = false;
-  bool _isCancelled = false;
-  bool _isCompleted = false;
-
-  StaffDhkpSyncProgress? _progress;
-  StaffDhkpSyncOutcome? _outcome;
-  StreamSubscription<String>? _actionSub;
-
-  @override
-  void initState() {
-    super.initState();
-    _actionSub = BatchNotificationService.actionStream.listen((action) {
-      if (!mounted) return;
-      switch (action) {
-        case 'pause':
-          if (!_isPaused && !_isCompleted) {
-            setState(() => _isPaused = true);
-          }
-          break;
-        case 'resume':
-          if (_isPaused && !_isCompleted) {
-            setState(() => _isPaused = false);
-          }
-          break;
-        case 'cancel':
-          if (!_isCompleted) {
-            setState(() => _isCancelled = true);
-          }
-          break;
-        case 'hide':
-          if (mounted && Navigator.of(context).canPop()) {
-            Navigator.of(context).pop();
-          }
-          break;
-      }
-    });
-    WidgetsBinding.instance.addPostFrameCallback((_) => _executeSync());
-  }
-
-  @override
-  void dispose() {
-    _actionSub?.cancel();
-    super.dispose();
-  }
-
-  Future<void> _executeSync() async {
-    final outcome = await StaffDhkpSyncService.instance.syncBloks(
-      client: widget.client,
-      tahun: widget.tahun,
-      bloks: widget.bloks,
-      kelurahanCode: widget.kelurahan,
-      kecamatanCode: widget.kecamatan,
-      mode: widget.mode,
-      onProgress: (p) {
-        if (!mounted) return;
-        setState(() => _progress = p);
-      },
-      shouldCancel: () => _isCancelled,
-      isPaused: () => _isPaused,
-    );
-
-    if (!mounted) return;
-    setState(() {
-      _outcome = outcome;
-      _isCompleted = true;
-    });
-  }
-
-  void _togglePause() {
-    setState(() {
-      _isPaused = !_isPaused;
-    });
-  }
-
-  void _cancelSync() {
-    setState(() {
-      _isCancelled = true;
-    });
-  }
+/// Modal Lembaran Progres Sinkronisasi Berjalan
+class _StaffDhkpSyncRunningSheet extends StatelessWidget {
+  const _StaffDhkpSyncRunningSheet();
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+    return AnimatedBuilder(
+      animation: StaffDhkpSyncManager.instance,
+      builder: (context, _) {
+        final mgr = StaffDhkpSyncManager.instance;
+        final theme = Theme.of(context);
+        final isDark = theme.brightness == Brightness.dark;
 
-    final progressRatio = _progress?.ratio ?? 0.0;
-    final currentBlok = _progress?.currentBlok ?? 'Memulai...';
-    final updatedPaid = _outcome?.updatedPaidCount ?? _progress?.updatedPaidCount ?? 0;
-    final newSppt = _outcome?.newSpptCount ?? _progress?.newSpptCount ?? 0;
-    final checked = _outcome?.totalCheckedRows ?? _progress?.totalCheckedRows ?? 0;
+        final isCompleted = mgr.isCompleted;
+        final isPaused = mgr.isPaused;
+        final progress = mgr.progress;
+        final outcome = mgr.outcome;
 
-    return PopScope(
-      canPop: _isCompleted,
-      child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: isDark ? Colors.white24 : Colors.grey.shade300,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Row(
+        final progressRatio = progress?.ratio ?? 0.0;
+        final currentBlok = progress?.currentBlok ?? 'Memulai...';
+        final updatedPaid =
+            outcome?.updatedPaidCount ?? progress?.updatedPaidCount ?? 0;
+        final newSppt =
+            outcome?.newSpptCount ?? progress?.newSpptCount ?? 0;
+        final checked =
+            outcome?.totalCheckedRows ?? progress?.totalCheckedRows ?? 0;
+
+        return PopScope(
+          canPop: false,
+          onPopInvokedWithResult: (didPop, _) {
+            if (didPop) return;
+            if (mgr.isCompleted) {
+              mgr.hideSheet(context);
+              mgr.dismiss();
+            } else {
+              mgr.hideSheet(context);
+            }
+          },
+          child: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: _isCompleted
-                          ? Colors.green.shade50
-                          : Colors.teal.shade50,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Icon(
-                      _isCompleted
-                          ? Icons.check_circle_outline_rounded
-                          : Icons.sync_rounded,
-                      color: _isCompleted
-                          ? Colors.green.shade700
-                          : Colors.teal.shade700,
-                      size: 24,
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: isDark ? Colors.white24 : Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: isCompleted
+                              ? Colors.green.shade50
+                              : Colors.teal.shade50,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Icon(
+                          isCompleted
+                              ? Icons.check_circle_outline_rounded
+                              : Icons.sync_rounded,
+                          color: isCompleted
+                              ? Colors.green.shade700
+                              : Colors.teal.shade700,
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              isCompleted
+                                  ? 'Sinkronisasi Selesai!'
+                                  : 'Menyinkronkan ke DHKP...',
+                              style: const TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            Text(
+                              '${mgr.blokLabel ?? "DHKP"} • Tahun ${mgr.tahun ?? ""}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: isDark
+                                    ? Colors.grey.shade400
+                                    : Colors.grey.shade600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  if (!isCompleted) ...[
+                    // Progress Bar & Keterangan Blok Aktif
+                    LinearProgressIndicator(
+                      value: progressRatio.clamp(0.0, 1.0),
+                      backgroundColor:
+                          isDark ? Colors.white12 : Colors.grey.shade200,
+                      valueColor:
+                          AlwaysStoppedAnimation<Color>(Colors.teal.shade600),
+                      borderRadius: BorderRadius.circular(8),
+                      minHeight: 8,
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          _isCompleted
-                              ? 'Sinkronisasi Selesai!'
-                              : 'Menyinkronkan ke DHKP...',
-                          style: const TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.bold,
+                        Expanded(
+                          child: Text(
+                            currentBlok,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
+                        const SizedBox(width: 8),
                         Text(
-                          '${widget.blokLabel} • Tahun ${widget.tahun}',
+                          '${(progressRatio * 100).toInt()}%',
                           style: TextStyle(
                             fontSize: 12,
-                            color: isDark
-                                ? Colors.grey.shade400
-                                : Colors.grey.shade600,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.teal.shade700,
                           ),
                         ),
                       ],
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-
-              if (!_isCompleted) ...[
-                // Progress Bar & Keterangan Blok Aktif
-                LinearProgressIndicator(
-                  value: progressRatio > 0 ? progressRatio : null,
-                  backgroundColor:
-                      isDark ? Colors.white12 : Colors.grey.shade200,
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.teal.shade600),
-                  borderRadius: BorderRadius.circular(8),
-                  minHeight: 8,
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      currentBlok,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
+                  ] else ...[
+                    // Banner Selesai
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.green.shade50,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.green.shade200),
                       ),
-                    ),
-                    Text(
-                      '${(progressRatio * 100).toInt()}%',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.teal.shade700,
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.verified_rounded,
+                            color: Colors.green.shade700,
+                            size: 22,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'Total $updatedPaid NOP diperbarui menjadi Lunas dan $newSppt NOP baru terdeteksi. Seluruh grafik DHKP langsung otomatis ter-update.',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.green.shade900,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
-                ),
-              ] else ...[
-                // Banner Selesai
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.green.shade50,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.green.shade200),
-                  ),
-                  child: Row(
+
+                  const SizedBox(height: 16),
+
+                  // Kotak Kartu Hasil Real-Time
+                  Row(
                     children: [
-                      Icon(
-                        Icons.verified_rounded,
-                        color: Colors.green.shade700,
-                        size: 22,
-                      ),
-                      const SizedBox(width: 10),
                       Expanded(
-                        child: Text(
-                          'Total $updatedPaid NOP diperbarui menjadi Lunas dan $newSppt NOP baru terdeteksi. Seluruh grafik DHKP langsung otomatis ter-update.',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.green.shade900,
-                            fontWeight: FontWeight.w500,
-                          ),
+                        child: _buildResultStatCard(
+                          label: 'Lunas Baru',
+                          value: '$updatedPaid NOP',
+                          color: Colors.green,
+                          icon: Icons.check_circle_rounded,
+                          isDark: isDark,
                         ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-
-              const SizedBox(height: 16),
-
-              // Kotak Kartu Hasil Real-Time
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildResultStatCard(
-                      label: 'Lunas Baru',
-                      value: '$updatedPaid NOP',
-                      color: Colors.green,
-                      icon: Icons.check_circle_rounded,
-                      isDark: isDark,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: _buildResultStatCard(
-                      label: 'SPPT Baru Terbit',
-                      value: '$newSppt NOP',
-                      color: Colors.blue,
-                      icon: Icons.fiber_new_rounded,
-                      isDark: isDark,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: _buildResultStatCard(
-                      label: 'Diperiksa',
-                      value: '$checked Baris',
-                      color: Colors.purple,
-                      icon: Icons.list_alt_rounded,
-                      isDark: isDark,
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 16),
-
-              if (!_isCompleted) ...[
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: isDark ? Colors.white10 : Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.notifications_active_outlined,
-                        size: 16,
-                        color: Colors.teal.shade700,
                       ),
                       const SizedBox(width: 8),
                       Expanded(
-                        child: Text(
-                          'Proses ini berjalan di latar belakang. Anda dapat meminimalkan aplikasi dengan aman.',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: isDark ? Colors.grey.shade300 : Colors.grey.shade700,
-                          ),
+                        child: _buildResultStatCard(
+                          label: 'SPPT Baru Terbit',
+                          value: '$newSppt NOP',
+                          color: Colors.blue,
+                          icon: Icons.fiber_new_rounded,
+                          isDark: isDark,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _buildResultStatCard(
+                          label: 'Diperiksa',
+                          value: '$checked Baris',
+                          color: Colors.purple,
+                          icon: Icons.list_alt_rounded,
+                          isDark: isDark,
                         ),
                       ),
                     ],
                   ),
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      child: FilledButton.tonalIcon(
-                        onPressed: _togglePause,
-                        style: FilledButton.styleFrom(
-                          backgroundColor:
-                              _isPaused ? Colors.teal.shade100 : null,
-                        ),
-                        icon: Icon(
-                          _isPaused
-                              ? Icons.play_arrow_rounded
-                              : Icons.pause_rounded,
-                          size: 18,
-                        ),
-                        label: Text(_isPaused ? 'Lanjutkan' : 'Jeda'),
+
+                  const SizedBox(height: 16),
+
+                  if (!isCompleted) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: isDark ? Colors.white10 : Colors.grey.shade100,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.notifications_active_outlined,
+                            size: 16,
+                            color: Colors.teal.shade700,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Proses ini berjalan di latar belakang. Anda dapat meminimalkan aplikasi atau menyembunyikan sheet ini.',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: isDark
+                                    ? Colors.grey.shade300
+                                    : Colors.grey.shade700,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () {
-                          if (mounted && Navigator.of(context).canPop()) {
-                            Navigator.of(context).pop();
-                          }
-                        },
-                        icon: const Icon(
-                          Icons.visibility_off_outlined,
-                          size: 18,
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: FilledButton.tonalIcon(
+                            onPressed: () => mgr.togglePause(),
+                            style: FilledButton.styleFrom(
+                              backgroundColor:
+                                  isPaused ? Colors.teal.shade100 : null,
+                            ),
+                            icon: Icon(
+                              isPaused
+                                  ? Icons.play_arrow_rounded
+                                  : Icons.pause_rounded,
+                              size: 18,
+                            ),
+                            label: Text(isPaused ? 'Lanjutkan' : 'Jeda'),
+                          ),
                         ),
-                        label: const Text('Sembunyikan'),
-                      ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () => mgr.hideSheet(context),
+                            icon: const Icon(
+                              Icons.visibility_off_outlined,
+                              size: 18,
+                            ),
+                            label: const Text('Sembunyikan'),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () => mgr.cancelSync(),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.red.shade700,
+                            ),
+                            icon: const Icon(Icons.stop_rounded, size: 18),
+                            label: const Text('Batalkan'),
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: _cancelSync,
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.red.shade700,
+                  ] else ...[
+                    Row(
+                      children: [
+                        Expanded(
+                          flex: 3,
+                          child: FilledButton.icon(
+                            onPressed: () {
+                              final out = mgr.outcome;
+                              final parentContext =
+                                  rootNavigatorKey.currentContext ?? context;
+                              mgr.hideSheet(context);
+                              mgr.dismiss();
+                              if (out != null) {
+                                showStaffDhkpSyncReportDialog(
+                                    parentContext, out);
+                              }
+                            },
+                            style: FilledButton.styleFrom(
+                              backgroundColor: Colors.teal.shade700,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                            icon:
+                                const Icon(Icons.assignment_outlined, size: 18),
+                            label: const Text('Lihat Laporan Rinci'),
+                          ),
                         ),
-                        icon: const Icon(Icons.stop_rounded, size: 18),
-                        label: const Text('Batalkan'),
-                      ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          flex: 2,
+                          child: OutlinedButton(
+                            onPressed: () {
+                              mgr.hideSheet(context);
+                              mgr.dismiss();
+                            },
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                            child: const Text('Tutup'),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
-                ),
-              ] else ...[
-                Row(
-                  children: [
-                    Expanded(
-                      flex: 3,
-                      child: FilledButton.icon(
-                        onPressed: () {
-                          final outcome = _outcome;
-                          Navigator.of(context).pop();
-                          if (outcome != null) {
-                            showStaffDhkpSyncReportDialog(context, outcome);
-                          }
-                        },
-                        style: FilledButton.styleFrom(
-                          backgroundColor: Colors.teal.shade700,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                        ),
-                        icon: const Icon(Icons.assignment_outlined, size: 18),
-                        label: const Text('Lihat Laporan Rinci'),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      flex: 2,
-                      child: OutlinedButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                        ),
-                        child: const Text('Tutup'),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ],
+                ],
+              ),
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 

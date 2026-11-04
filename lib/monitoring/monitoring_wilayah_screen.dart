@@ -5,6 +5,7 @@ import '../settings_screen.dart';
 import '../staff_portal_client.dart';
 import '../theme_controller.dart';
 import 'staff_dhkp_sync_dialog.dart';
+import 'staff_dhkp_sync_service.dart';
 import 'tab_belum_bayar.dart';
 import 'tab_belum_bayar_kolektif.dart';
 import 'tab_piutang.dart';
@@ -21,12 +22,17 @@ import 'tab_sudah_bayar_kolektif.dart';
 /// enak dipakai di layar sempit — bukan tabel 3 kolom seperti versi web.
 class MonitoringWilayahScreen extends StatefulWidget {
   final StaffPortalClient client;
-  final ThemeController themeController;
+  final ThemeController? themeController;
+  final StaffDhkpSyncOutcome? initialReportOutcome;
+
+  /// Menandakan apakah halaman MonitoringWilayahScreen sedang terbuka aktif di layar
+  static bool isCurrentlyOpen = false;
 
   const MonitoringWilayahScreen({
     super.key,
     required this.client,
-    required this.themeController,
+    this.themeController,
+    this.initialReportOutcome,
   });
 
   @override
@@ -57,6 +63,15 @@ class _MonitoringWilayahScreenState extends State<MonitoringWilayahScreen> {
   @override
   void initState() {
     super.initState();
+    MonitoringWilayahScreen.isCurrentlyOpen = true;
+
+    if (widget.initialReportOutcome != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        showStaffDhkpSyncReportDialog(context, widget.initialReportOutcome!);
+      });
+    }
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       FeatureTourController.showTourIfNeeded(
@@ -65,6 +80,12 @@ class _MonitoringWilayahScreenState extends State<MonitoringWilayahScreen> {
         steps: _buildTourSteps(),
       );
     });
+  }
+
+  @override
+  void dispose() {
+    MonitoringWilayahScreen.isCurrentlyOpen = false;
+    super.dispose();
   }
 
   void showTour() {
@@ -124,13 +145,17 @@ class _MonitoringWilayahScreenState extends State<MonitoringWilayahScreen> {
               tooltip: 'Panduan Pantauan Wilayah',
             ),
             IconButton(
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) =>
-                      SettingsScreen(themeController: widget.themeController),
-                ),
-              ),
+              onPressed: () {
+                final tc = widget.themeController ?? ThemeController.current;
+                if (tc != null) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => SettingsScreen(themeController: tc),
+                    ),
+                  );
+                }
+              },
               icon: const Icon(Icons.settings),
               tooltip: 'Pengaturan',
             ),

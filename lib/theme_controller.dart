@@ -41,16 +41,19 @@ class ThemeController extends ValueNotifier<AppThemeState> {
   static const _prefsKeyMaterialYou = 'theme_material_you';
 
   static const Color defaultAccentColor = Color(0xFF2E7D32);
+  static ThemeController? current;
 
   bool _disposed = false;
 
   ThemeController() : super(const AppThemeState()) {
+    current = this;
     _load();
   }
 
   @override
   void dispose() {
     _disposed = true;
+    if (current == this) current = null;
     super.dispose();
   }
 

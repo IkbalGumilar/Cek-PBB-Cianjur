@@ -106,6 +106,34 @@ void main() {
       expect(parsed!.nop, '320520000402400990');
     });
 
+    test('prioritizes Pokok Pembayaran / Estimasi when Pokok Ketetapan is 0 (Belum Bayar tables)', () {
+      final headers = [
+        'NOP',
+        'NAMA WP',
+        'TAHUN PAJAK',
+        'POKOK KETETAPAN',
+        'POKOK PEMBAYARAN/ESTIMASI_POKOK_PEMBAYARAN',
+        'TOTAL',
+        'STATUS',
+      ];
+      final cells = [
+        '320520000400100040',
+        'HASAN',
+        '2026',
+        '0',
+        '47.952',
+        '959',
+        'Belum Lunas',
+      ];
+
+      final parsed = StaffDhkpSyncService.parseRow(cells, headers, defaultTahun: '2026');
+      expect(parsed, isNotNull);
+      expect(parsed!.nop, '320520000400100040');
+      expect(parsed.namaWp, 'HASAN');
+      expect(parsed.jumlahPbb, '47952'); // must NOT be '0'
+      expect(parsed.status, 'Belum Lunas');
+    });
+
     test('returns null when no 18-digit NOP is found in cells', () {
       final headers = ['No', 'Nama'];
       final cells = ['1', 'Budi'];

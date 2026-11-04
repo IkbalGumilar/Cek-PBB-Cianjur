@@ -395,5 +395,50 @@ void main() {
       expect(find.text('50.0%'), findsWidgets);
       expect(changedYear, isEmpty);
     });
+
+    test('groupData falls back to lunasNopPct when belumNominal is 0 but unpaid records exist', () {
+      final mixedRecords = [
+        const BlokRecord(
+          nop: '320520000400100010',
+          namaWajibPajak: 'LUNAS',
+          tahunBayar: '2026',
+          tanggalBayar: '2026-03-01',
+          jumlahPbb: '50000',
+          statusBayar: 'Sudah Bayar',
+        ),
+        const BlokRecord(
+          nop: '320520000400100020',
+          namaWajibPajak: 'BELUM 1',
+          tahunBayar: '2026',
+          tanggalBayar: '',
+          jumlahPbb: '0',
+          statusBayar: 'Belum Bayar',
+        ),
+        const BlokRecord(
+          nop: '320520000400100030',
+          namaWajibPajak: 'BELUM 2',
+          tahunBayar: '2026',
+          tanggalBayar: '',
+          jumlahPbb: '0',
+          statusBayar: 'Belum Bayar',
+        ),
+      ];
+
+      final groups = DhkpGrafikAnalytics.groupData(
+        mixedRecords,
+        hasMultiDusun: false,
+        groupByDusun: false,
+      );
+
+      expect(groups, hasLength(1));
+      final g = groups.first;
+      expect(g.totalNop, 3);
+      expect(g.lunasNop, 1);
+      expect(g.belumBayarNop, 2);
+      expect(g.lunasNominal, 50000);
+      expect(g.belumBayarNominal, 0);
+      expect(g.lunasPct, closeTo(33.33, 0.1));
+      expect(g.lunasNopPct, closeTo(33.33, 0.1));
+    });
   });
 }

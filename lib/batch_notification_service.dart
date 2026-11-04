@@ -5,10 +5,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
+import 'monitoring/monitoring_wilayah_screen.dart';
 import 'monitoring/staff_dhkp_sync_dialog.dart';
+import 'monitoring/staff_dhkp_sync_manager.dart';
 import 'monitoring/staff_dhkp_sync_service.dart';
 import 'result_screen.dart';
+import 'staff_portal_client.dart';
 import 'tax_record.dart';
+import 'theme_controller.dart';
 
 /// Global navigator key agar notifikasi dapat membuka halaman hasil (ResultScreen)
 /// langsung saat diketuk oleh pengguna dari notification drawer sistem.
@@ -83,6 +87,17 @@ class BatchNotificationService {
         settings: initSettings,
         onDidReceiveNotificationResponse: _onNotificationTapped,
       );
+
+      final launchDetails =
+          await _notifications.getNotificationAppLaunchDetails();
+      if (launchDetails != null && launchDetails.didNotificationLaunchApp) {
+        final resp = launchDetails.notificationResponse;
+        if (resp != null) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _onNotificationTapped(resp);
+          });
+        }
+      }
     } catch (e) {
       debugPrint('Gagal inisialisasi flutter_local_notifications: $e');
     }
@@ -173,6 +188,17 @@ class BatchNotificationService {
       await _fgChannel.invokeMethod('stopService');
     } catch (e) {
       debugPrint('Gagal stopForegroundService: $e');
+    }
+  }
+
+  /// Memeriksa apakah Foreground Service Android saat ini sedang aktif
+  Future<bool> isForegroundServiceRunning() async {
+    if (!Platform.isAndroid) return false;
+    try {
+      final running = await _fgChannel.invokeMethod<bool>('isRunning');
+      return running ?? false;
+    } catch (_) {
+      return false;
     }
   }
 
@@ -295,6 +321,7 @@ class BatchNotificationService {
     await stopForegroundService();
     if (!_isInitialized) return;
     try {
+      await _notifications.cancel(id: _notificationId);
       final androidDetails = AndroidNotificationDetails(
         _completeChannelId,
         _completeChannelName,
@@ -342,6 +369,7 @@ class BatchNotificationService {
     await stopForegroundService();
     if (!_isInitialized) return;
     try {
+      await _notifications.cancel(id: _notificationId);
       final androidDetails = AndroidNotificationDetails(
         _completeChannelId,
         _completeChannelName,
@@ -393,14 +421,17 @@ class BatchNotificationService {
     final content = '$percent% • $updatedPaid Lunas Baru, $newSppt SPPT Baru';
 
     if (Platform.isAndroid) {
-      await updateForegroundService(
-        title: title,
-        content: content,
-        progress: currentBlok,
-        max: totalBloks > 0 ? totalBloks : 100,
-        isPaused: isPaused,
-      );
-      return;
+      final fgRunning = await isForegroundServiceRunning();
+      if (fgRunning) {
+        await updateForegroundService(
+          title: title,
+          content: content,
+          progress: currentBlok,
+          max: totalBloks > 0 ? totalBloks : 100,
+          isPaused: isPaused,
+        );
+        return;
+      }
     }
 
     // Di Desktop: abaikan progress berkala per-blok untuk mencegah popup berulang
@@ -450,6 +481,7 @@ class BatchNotificationService {
     await stopForegroundService();
     if (!_isInitialized) return;
     try {
+      await _notifications.cancel(id: _notificationId);
       final androidDetails = AndroidNotificationDetails(
         _completeChannelId,
         _completeChannelName,
@@ -495,6 +527,7 @@ class BatchNotificationService {
     await stopForegroundService();
     if (!_isInitialized) return;
     try {
+      await _notifications.cancel(id: _notificationId);
       final androidDetails = AndroidNotificationDetails(
         _completeChannelId,
         _completeChannelName,
@@ -549,12 +582,11 @@ class BatchNotificationService {
     if (response.payload == 'show_batch_result') {
       _navigateToResult();
     } else if (response.payload == 'staff_sync_completed') {
-      if (Platform.isAndroid) {
-        _navigateToStaffSyncReport();
-      }
-      // Di platform Desktop (Linux / Windows / macOS):
-      // Mengklik notifikasi sistem hanya membawa jendela program ke foreground;
-      // pengguna yang membuka laporannya secara manual.
+      _navigateToStaffPortalAndReport(showReport: true);
+    } else if (response.payload == 'staff_sync_in_progress') {
+      _navigateToStaffPortalAndReport(showReport: false);
+    } else if (response.payload == 'staff_sync_cancelled') {
+      _navigateToStaffPortalAndReport(showReport: true);
     }
   }
 
@@ -569,14 +601,40 @@ class BatchNotificationService {
     );
   }
 
-  void _navigateToStaffSyncReport() {
+  void _navigateToStaffPortalAndReport({bool showReport = true}) {
+    if (showReport) {
+      StaffDhkpSyncManager.instance.dismiss();
+    }
+
     final nav = rootNavigatorKey.currentState;
-    final context = nav?.overlay?.context ?? rootNavigatorKey.currentContext;
-    final outcome = StaffDhkpSyncService.lastOutcome;
-    if (context == null || outcome == null) {
+    if (nav == null) {
       return;
     }
 
-    showStaffDhkpSyncReportDialog(context, outcome);
+    final client = StaffDhkpSyncManager.instance.client ?? StaffPortalClient();
+    final themeController = ThemeController.current;
+    final outcome = StaffDhkpSyncService.lastOutcome ?? StaffDhkpSyncManager.instance.outcome;
+
+    if (!MonitoringWilayahScreen.isCurrentlyOpen) {
+      nav.push(
+        MaterialPageRoute(
+          settings: const RouteSettings(name: 'MonitoringWilayahScreen'),
+          builder: (_) => MonitoringWilayahScreen(
+            client: client,
+            themeController: themeController,
+            initialReportOutcome: showReport ? outcome : null,
+          ),
+        ),
+      );
+    } else {
+      final context = nav.overlay?.context ?? rootNavigatorKey.currentContext;
+      if (context != null) {
+        if (showReport && outcome != null) {
+          showStaffDhkpSyncReportDialog(context, outcome);
+        } else if (!showReport) {
+          StaffDhkpSyncManager.instance.openSheet(context);
+        }
+      }
+    }
   }
 }

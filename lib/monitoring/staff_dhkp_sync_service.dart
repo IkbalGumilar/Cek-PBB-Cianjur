@@ -136,7 +136,10 @@ class StaffDhkpSyncService {
     int njopBumiIdx = -1;
     int luasBgnIdx = -1;
     int njopBgnIdx = -1;
-    int pokokIdx = -1;
+    int pokokBayarIdx = -1;
+    int pokokKetetapanIdx = -1;
+    int totalIdx = -1;
+    int fallbackPokokIdx = -1;
     int statusIdx = -1;
     int tglIdx = -1;
 
@@ -164,14 +167,21 @@ class StaffDhkpSyncService {
         luasBgnIdx = i;
       } else if (h.contains('NJOP BANGUNAN')) {
         njopBgnIdx = i;
-      } else if (h.contains('POKOK KETETAPAN') ||
-          (pokokIdx == -1 &&
-              (h.contains('POKOK') ||
-                  h.contains('KETETAPAN') ||
-                  h.contains('TAGIHAN') ||
-                  h.contains('NOMINAL') ||
-                  h.contains('JUMLAH')))) {
-        pokokIdx = i;
+      } else if (h.contains('POKOK PEMBAYARAN') ||
+          h.contains('ESTIMASI_POKOK') ||
+          h.contains('ESTIMASI POKOK')) {
+        pokokBayarIdx = i;
+      } else if (h.contains('POKOK KETETAPAN')) {
+        pokokKetetapanIdx = i;
+      } else if (h == 'TOTAL' || (totalIdx == -1 && h.contains('TOTAL'))) {
+        totalIdx = i;
+      } else if (fallbackPokokIdx == -1 &&
+          (h.contains('POKOK') ||
+              h.contains('KETETAPAN') ||
+              h.contains('TAGIHAN') ||
+              h.contains('NOMINAL') ||
+              h.contains('JUMLAH'))) {
+        fallbackPokokIdx = i;
       } else if (h.contains('TANGGAL PEMBAYARAN') ||
           (tglIdx == -1 &&
               (h.contains('TGL') ||
@@ -234,10 +244,39 @@ class StaffDhkpSyncService {
         ? normalizePaymentDate(tglRaw, defaultTahun: defaultTahun)
         : '';
 
-    final pokok = (pokokIdx != -1 && pokokIdx < cells.length)
-        ? cells[pokokIdx].trim()
-        : '';
-    final pokokDigits = pokok.replaceAll(RegExp(r'[^0-9]'), '');
+    String extractDigits(int idx) {
+      if (idx != -1 && idx < cells.length) {
+        return cells[idx].replaceAll(RegExp(r'[^0-9]'), '');
+      }
+      return '';
+    }
+
+    final bayarDigits = extractDigits(pokokBayarIdx);
+    final ketetapanDigits = extractDigits(pokokKetetapanIdx);
+    final fallbackDigits = extractDigits(fallbackPokokIdx);
+    final totalDigits = extractDigits(totalIdx);
+
+    // Prioritas pemilihan nilai PBB:
+    // 1. Jika ada pokokBayar/estimasi dan bernilai > 0, gunakan ini (karena pada tabel Belum Bayar di sistem V-Tax Cianjur, pokok ketetapan diisi 0 sementara nominal aktual ada di kolom estimasi/pokok pembayaran)
+    // 2. Jika pokokKetetapan > 0, gunakan pokokKetetapan
+    // 3. Fallback ke kolom lain yang memuat angka > 0
+    // 4. Jika semua 0 tetapi total > 0, gunakan total
+    String selectedPokok = '';
+    if (bayarDigits.isNotEmpty && (int.tryParse(bayarDigits) ?? 0) > 0) {
+      selectedPokok = bayarDigits;
+    } else if (ketetapanDigits.isNotEmpty &&
+        (int.tryParse(ketetapanDigits) ?? 0) > 0) {
+      selectedPokok = ketetapanDigits;
+    } else if (fallbackDigits.isNotEmpty &&
+        (int.tryParse(fallbackDigits) ?? 0) > 0) {
+      selectedPokok = fallbackDigits;
+    } else if (totalDigits.isNotEmpty && (int.tryParse(totalDigits) ?? 0) > 0) {
+      selectedPokok = totalDigits;
+    } else {
+      selectedPokok = bayarDigits.isNotEmpty
+          ? bayarDigits
+          : (ketetapanDigits.isNotEmpty ? ketetapanDigits : fallbackDigits);
+    }
 
     return ParsedStaffRow(
       nop: clean,
@@ -251,7 +290,7 @@ class StaffDhkpSyncService {
       luasBangunan: luasBangunan,
       njopBangunan: njopBangunan,
       tanggalBayar: tgl,
-      jumlahPbb: pokokDigits.isNotEmpty ? pokokDigits : pokok,
+      jumlahPbb: selectedPokok,
       status: status,
     );
   }
@@ -346,8 +385,12 @@ class StaffDhkpSyncService {
       // 2. Baca data DHKP lokal sekali di awal untuk pencocokan cepat
       final existingAll = await BlokDataStore.instance.loadAll();
       final keyToExisting = <String, BlokRecord>{};
+      final nopToPriorPbb = <String, String>{};
       for (final r in existingAll) {
         keyToExisting[r.uniqueKey] = r;
+        if (r.jumlahPbbValue > 0) {
+          nopToPriorPbb[r.nop] = r.jumlahPbb;
+        }
       }
 
       final targetBlokSet = bloks
@@ -587,16 +630,45 @@ class StaffDhkpSyncService {
 
         if (existing != null) {
           if (!existing.isPaid) {
+            final parsedPbbDigits =
+                parsed.jumlahPbb.replaceAll(RegExp(r'[^0-9]'), '');
+            final parsedPbbVal = int.tryParse(parsedPbbDigits) ?? 0;
+            final existingPbbVal = existing.jumlahPbbValue;
+            final priorPbb = nopToPriorPbb[parsed.nop] ?? '';
+
+            String resolvedPbb = existing.jumlahPbb;
+            if (parsedPbbVal > 0) {
+              resolvedPbb = parsed.jumlahPbb;
+            } else if (existingPbbVal > 0) {
+              resolvedPbb = existing.jumlahPbb;
+            } else if (priorPbb.isNotEmpty) {
+              resolvedPbb = priorPbb;
+            }
+
             final updated = existing.copyWith(
-              namaWajibPajak: parsed.namaWp.isNotEmpty ? parsed.namaWp : existing.namaWajibPajak,
-              alamatObjek: parsed.alamatOp.isNotEmpty ? parsed.alamatOp : existing.alamatObjek,
-              alamatWp: parsed.alamatWp.isNotEmpty ? parsed.alamatWp : existing.alamatWp,
+              namaWajibPajak: parsed.namaWp.isNotEmpty
+                  ? parsed.namaWp
+                  : existing.namaWajibPajak,
+              alamatObjek: parsed.alamatOp.isNotEmpty
+                  ? parsed.alamatOp
+                  : existing.alamatObjek,
+              alamatWp: parsed.alamatWp.isNotEmpty
+                  ? parsed.alamatWp
+                  : existing.alamatWp,
               rtObjek: parsed.rtOp.isNotEmpty ? parsed.rtOp : existing.rtObjek,
-              luasBumi: parsed.luasBumi.isNotEmpty ? parsed.luasBumi : existing.luasBumi,
-              njopBumi: parsed.njopBumi.isNotEmpty ? parsed.njopBumi : existing.njopBumi,
-              luasBangunan: parsed.luasBangunan.isNotEmpty ? parsed.luasBangunan : existing.luasBangunan,
-              njopBangunan: parsed.njopBangunan.isNotEmpty ? parsed.njopBangunan : existing.njopBangunan,
-              jumlahPbb: parsed.jumlahPbb.isNotEmpty ? parsed.jumlahPbb : existing.jumlahPbb,
+              luasBumi: parsed.luasBumi.isNotEmpty
+                  ? parsed.luasBumi
+                  : existing.luasBumi,
+              njopBumi: parsed.njopBumi.isNotEmpty
+                  ? parsed.njopBumi
+                  : existing.njopBumi,
+              luasBangunan: parsed.luasBangunan.isNotEmpty
+                  ? parsed.luasBangunan
+                  : existing.luasBangunan,
+              njopBangunan: parsed.njopBangunan.isNotEmpty
+                  ? parsed.njopBangunan
+                  : existing.njopBangunan,
+              jumlahPbb: resolvedPbb,
             );
             keyToExisting[key] = updated;
             recordsToUpsertMap[key] = updated;
@@ -609,23 +681,38 @@ class StaffDhkpSyncService {
       // mencatat NOP baru yang terbit dan telah lunas.
       for (final parsed in sbRows) {
         final b = nopBlok(parsed.nop);
-        if (!isAllBloks && targetBlokSet.isNotEmpty && !targetBlokSet.contains(b)) {
+        if (!isAllBloks &&
+            targetBlokSet.isNotEmpty &&
+            !targetBlokSet.contains(b)) {
           continue;
         }
 
         final key = '${parsed.nop}|$tahun';
         final existing = keyToExisting[key];
 
+        final parsedPbbDigits =
+            parsed.jumlahPbb.replaceAll(RegExp(r'[^0-9]'), '');
+        final parsedPbbVal = int.tryParse(parsedPbbDigits) ?? 0;
+        final priorPbb = nopToPriorPbb[parsed.nop] ?? '';
+
         if (existing != null) {
           if (!existing.isPaid) {
+            final existingPbbVal = existing.jumlahPbbValue;
+            String resolvedPbb = existing.jumlahPbb;
+            if (parsedPbbVal > 0) {
+              resolvedPbb = parsed.jumlahPbb;
+            } else if (existingPbbVal > 0) {
+              resolvedPbb = existing.jumlahPbb;
+            } else if (priorPbb.isNotEmpty) {
+              resolvedPbb = priorPbb;
+            }
+
             final updated = existing.copyWith(
               statusBayar: 'Sudah Bayar',
               tanggalBayar: parsed.tanggalBayar.isNotEmpty
                   ? parsed.tanggalBayar
                   : existing.tanggalBayar,
-              jumlahPbb: parsed.jumlahPbb.isNotEmpty
-                  ? parsed.jumlahPbb
-                  : existing.jumlahPbb,
+              jumlahPbb: resolvedPbb,
               namaWajibPajak: parsed.namaWp.isNotEmpty
                   ? parsed.namaWp
                   : existing.namaWajibPajak,
@@ -639,6 +726,10 @@ class StaffDhkpSyncService {
             alreadyPaidCount++;
           }
         } else {
+          final finalPbb = parsedPbbVal > 0
+              ? parsed.jumlahPbb
+              : (priorPbb.isNotEmpty ? priorPbb : parsed.jumlahPbb);
+
           final newRecord = BlokRecord(
             nop: parsed.nop,
             namaWajibPajak: parsed.namaWp.isNotEmpty
@@ -646,7 +737,7 @@ class StaffDhkpSyncService {
                 : 'WP Baru (Bapenda)',
             tahunBayar: tahun,
             tanggalBayar: parsed.tanggalBayar,
-            jumlahPbb: parsed.jumlahPbb,
+            jumlahPbb: finalPbb,
             statusBayar: 'Sudah Bayar',
             alamatObjek: parsed.alamatOp.isNotEmpty
                 ? parsed.alamatOp

@@ -633,9 +633,11 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
     final lunasNopPct = totalNop > 0
         ? (sudahBayarList.length / totalNop * 100)
         : 0.0;
-    final lunasNominalPct = totalNominalTarget > 0
+    final lunasNominalPct = (totalNominalTarget > 0 && belumBayarNominal > 0)
         ? (sudahBayarNominal / totalNominalTarget * 100)
-        : 0.0;
+        : (belumBayarList.isEmpty
+            ? (totalNop > 0 ? 100.0 : 0.0)
+            : lunasNopPct);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.only(bottom: 36),

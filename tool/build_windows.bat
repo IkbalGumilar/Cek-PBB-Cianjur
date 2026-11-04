@@ -17,6 +17,7 @@ if errorlevel 1 (
 
 echo.
 echo [1/3] Kompilasi rilis Flutter Windows langsung di direktori kerja Z:...
+if not exist "build\native_assets\windows" mkdir "build\native_assets\windows"
 call flutter build windows --release
 if errorlevel 1 (
     echo [ERROR] Gagal mengompilasi aplikasi Windows!
