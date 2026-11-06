@@ -630,9 +630,7 @@ class StaffDhkpSyncService {
 
         if (existing != null) {
           if (!existing.isPaid) {
-            final parsedPbbDigits =
-                parsed.jumlahPbb.replaceAll(RegExp(r'[^0-9]'), '');
-            final parsedPbbVal = int.tryParse(parsedPbbDigits) ?? 0;
+            final parsedPbbVal = parseNominalRupiah(parsed.jumlahPbb);
             final existingPbbVal = existing.jumlahPbbValue;
             final priorPbb = nopToPriorPbb[parsed.nop] ?? '';
 
@@ -690,9 +688,7 @@ class StaffDhkpSyncService {
         final key = '${parsed.nop}|$tahun';
         final existing = keyToExisting[key];
 
-        final parsedPbbDigits =
-            parsed.jumlahPbb.replaceAll(RegExp(r'[^0-9]'), '');
-        final parsedPbbVal = int.tryParse(parsedPbbDigits) ?? 0;
+        final parsedPbbVal = parseNominalRupiah(parsed.jumlahPbb);
         final priorPbb = nopToPriorPbb[parsed.nop] ?? '';
 
         if (existing != null) {

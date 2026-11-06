@@ -567,12 +567,16 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
 
     if (!mounted) return;
 
+    final downloadSttsOption = ValueNotifier<bool>(false);
     final selectedRecords = await showPilihBlokCekMassalDialog(
       context,
       availableBloks: availableBloks,
       recordsByBlok: recordsByBlok,
       selectedWilayah: _selectedWilayah,
+      downloadSttsOption: downloadSttsOption,
     );
+    final downloadStts = downloadSttsOption.value;
+    downloadSttsOption.dispose();
 
     if (selectedRecords == null || selectedRecords.isEmpty || !mounted) return;
 
@@ -584,7 +588,11 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
     await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => BatchCheckScreen(records: taxRecords, tahun: tahun),
+        builder: (_) => BatchCheckScreen(
+          records: taxRecords,
+          tahun: tahun,
+          downloadStts: downloadStts,
+        ),
       ),
     );
 
@@ -825,7 +833,7 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
                     ? t.tanggalBayar!.trim()
                     : DateTime.now().toIso8601String().substring(0, 10))
               : '',
-          jumlahPbb: t.jumlahPbb ?? '',
+          jumlahPbb: cleanNominalRupiah(t.jumlahPbb ?? ''),
           statusBayar: t.isPaid ? 'Sudah Bayar' : 'Belum Bayar',
         ),
       );
@@ -980,6 +988,7 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
       final fileName = '$cleanNop.jpg';
       final targetFile = File('${photosDir.path}/$fileName');
       await targetFile.writeAsBytes(squareBytes);
+      await FileImage(targetFile).evict();
 
       final updatedRecord = record.copyWith(namaFoto: fileName);
       await BlokDataStore.instance.upsert(updatedRecord);
@@ -994,7 +1003,10 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Foto berhasil disimpan.')),
+          const SnackBar(
+            content: Text('Foto berhasil disimpan.'),
+            behavior: SnackBarBehavior.floating,
+          ),
         );
       }
       return targetFile;
@@ -1019,6 +1031,7 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
         customFileName: record.namaFoto,
       );
       if (photo != null && await photo.exists()) {
+        await FileImage(photo).evict();
         try {
           await photo.delete();
         } catch (_) {}
@@ -1030,9 +1043,12 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
       );
       await _loadRecords();
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Foto telah dihapus.')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Foto telah dihapus.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
       }
     } finally {
       if (mounted) {

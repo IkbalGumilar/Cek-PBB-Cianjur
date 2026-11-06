@@ -113,7 +113,9 @@ class BlokCsvCodec {
           nop: nop,
           tahunBayar: row[2].toString().trim(),
           tanggalBayar: tanggalBayar,
-          jumlahPbb: row.length > 4 ? row[4].toString().trim() : '',
+          jumlahPbb: row.length > 4
+              ? cleanNominalRupiah(row[4].toString().trim())
+              : '',
           statusBayar: status,
           namaFoto: namaFoto,
           isTargetPemda: isTargetPemda,
@@ -165,8 +167,7 @@ class BlokCsvCodec {
       final rawTargetPemda = row.length > 7
           ? row[7].toString().trim().toLowerCase()
           : '';
-      final pokokDigits = pokok.replaceAll(RegExp(r'[^0-9]'), '');
-      final pokokVal = int.tryParse(pokokDigits) ?? 0;
+      final pokokVal = parseNominalRupiah(pokok);
       final isTargetPemda =
           _isTruthyTargetPemda(rawTargetPemda) ||
           (rawTargetPemda.isEmpty && pokokVal >= 1500000);
@@ -179,7 +180,7 @@ class BlokCsvCodec {
           nop: nopDigits,
           tahunBayar: tahun,
           tanggalBayar: tanggal,
-          jumlahPbb: pokok,
+          jumlahPbb: cleanNominalRupiah(pokok),
           statusBayar: status,
           namaFoto: namaFoto,
           isTargetPemda: isTargetPemda,

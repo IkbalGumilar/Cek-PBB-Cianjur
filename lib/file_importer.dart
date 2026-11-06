@@ -175,8 +175,7 @@ class FileImporter {
           ? row[tpCol].toString().trim().toLowerCase()
           : '';
 
-      final pokokDigits = pokok.replaceAll(RegExp(r'[^0-9]'), '');
-      final pokokVal = int.tryParse(pokokDigits) ?? 0;
+      final pokokVal = parseNominalRupiah(pokok);
 
       // Aturan Target Pemda: Pokok PBB >= Rp 1.500.000 atau bendera eksplisit Target Pemda
       final isTargetPemda =
@@ -244,7 +243,7 @@ class FileImporter {
           nop: nopDigits,
           tahunBayar: tahun,
           tanggalBayar: tanggal,
-          jumlahPbb: pokok,
+          jumlahPbb: cleanNominalRupiah(pokok),
           statusBayar: status,
           namaFoto: namaFoto,
           isTargetPemda: isTargetPemda,

@@ -11,6 +11,7 @@ import 'blok_record.dart';
 import 'dhkp/dhkp_chart_widgets.dart';
 import 'dhkp/dhkp_grafik_analytics.dart';
 import 'dhkp/dhkp_grafik_exporter.dart';
+import 'dhkp/dhkp_rincian_bulanan_dialog.dart';
 import 'dhkp_widget_sync_service.dart';
 import 'document_preview_screen.dart';
 import 'download_helper.dart';
@@ -1355,7 +1356,10 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
     bool isDark,
   ) {
     final groups = _activeTab == DhkpGrafikTab.trenBulanan
-        ? DhkpGrafikAnalytics.buildMonthGroups(records)
+        ? DhkpGrafikAnalytics.buildMonthGroups(
+            records,
+            tahun: _selectedTahun,
+          )
         : _groupData(records, hasMultiDusun: hasMultiDusun, applySort: false);
 
     final match = groups
@@ -1452,6 +1456,45 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
                     ),
                   ),
                 ),
+              if (_activeTab == DhkpGrafikTab.trenBulanan) ...[
+                () {
+                  final mIdx =
+                      DhkpGrafikAnalytics.monthNames.indexOf(match.label) + 1;
+                  if (mIdx <= 0) return const SizedBox.shrink();
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 6),
+                    child: FilledButton.tonalIcon(
+                      style: FilledButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                      ),
+                      onPressed: () {
+                        showDhkpRincianBulananDialog(
+                          context,
+                          allRecords: records,
+                          monthIndex: mIdx,
+                          tahun: _selectedTahun,
+                          isDark: isDark,
+                        );
+                      },
+                      icon: const Icon(
+                        Icons.receipt_long_rounded,
+                        size: 15,
+                      ),
+                      label: const Text(
+                        'Rincian',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  );
+                }(),
+              ],
               IconButton(
                 visualDensity: VisualDensity.compact,
                 padding: EdgeInsets.zero,
@@ -2323,7 +2366,10 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
   // TAB: TREN PEMBAYARAN TIAP BULAN (JAN - DES)
   // =========================================================================
   Widget _buildTrenBulananSection(List<BlokRecord> records, bool isDark) {
-    final monthGroups = DhkpGrafikAnalytics.buildMonthGroups(records);
+    final monthGroups = DhkpGrafikAnalytics.buildMonthGroups(
+      records,
+      tahun: _selectedTahun,
+    );
     final monthlyNominal = monthGroups.map((g) => g.lunasNominal).toList();
     final totalDatedNominal = monthlyNominal.fold<int>(0, (sum, v) => sum + v);
     final maxMonthVal = monthlyNominal.fold<int>(0, math.max);

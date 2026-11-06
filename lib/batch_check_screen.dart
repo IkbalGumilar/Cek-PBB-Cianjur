@@ -6,6 +6,8 @@ import 'package:flutter/services.dart';
 import 'batch_notification_service.dart';
 import 'blok_batch_check_tracker.dart';
 import 'blok_data_store.dart';
+import 'currency_format.dart';
+import 'download_helper.dart';
 import 'nop_helper.dart';
 import 'pbb_client.dart';
 import 'result_screen.dart';
@@ -21,6 +23,10 @@ class BatchCheckScreen extends StatefulWidget {
   final Duration cooldownDuration;
   final bool autoStart;
 
+  /// Jika true, NOP yang terdeteksi sudah bayar juga diunduh berkas STTS-nya
+  /// (disimpan ke folder dokumen aplikasi). Jika false, tidak ada yang diunduh.
+  final bool downloadStts;
+
   const BatchCheckScreen({
     super.key,
     required this.records,
@@ -30,6 +36,7 @@ class BatchCheckScreen extends StatefulWidget {
     this.cooldownBatchSize = 50,
     this.cooldownDuration = const Duration(seconds: 3),
     this.autoStart = true,
+    this.downloadStts = false,
   });
 
   @override
@@ -136,6 +143,48 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
     }
   }
 
+  /// Unduh STTS NOP yang sudah bayar dan simpan ke folder "STTS". Hasilnya
+  /// dicatat di [TaxRecord.buktiBayarDownloaded]: true bila tersimpan, false
+  /// bila STTS belum terbit di server atau gagal diunduh. Kegagalan di sini
+  /// tidak menghentikan pengecekan massal.
+  Future<void> _downloadSttsFor(TaxRecord record) async {
+    Uint8List? bytes;
+    for (int attempt = 0; attempt < 3; attempt++) {
+      try {
+        bytes = await _client.fetchSttsPdfIfIssued(
+          nop: record.nop,
+          tahun: widget.tahun,
+        );
+        break;
+      } catch (_) {
+        if (attempt < 2) {
+          await Future<void>.delayed(const Duration(milliseconds: 1000));
+        }
+      }
+    }
+
+    if (bytes == null) {
+      record.buktiBayarDownloaded = false;
+      return;
+    }
+
+    try {
+      final cleanNop = record.nop.replaceAll(RegExp(r'[^0-9]'), '');
+      final nama = (record.namaWajibPajak ?? '').trim();
+      final label = nama.isNotEmpty ? nama : cleanNop;
+      final fileName = _safeFileName(
+        'STTS ($label) No. (${nopBlok(cleanNop)}) (${nopWilayah(cleanNop)}) (${widget.tahun}).pdf',
+      );
+      await DownloadHelper.saveBytes(bytes, fileName, subfolder: 'STTS');
+      record.buktiBayarDownloaded = true;
+    } catch (_) {
+      record.buktiBayarDownloaded = false;
+    }
+  }
+
+  String _safeFileName(String name) =>
+      name.replaceAll(RegExp(r'[\\/:*?"<>|]'), '-');
+
   void _scrollToCurrent() {
     if (!_scrollController.hasClients) return;
     const itemExtent = 64.0;
@@ -219,7 +268,7 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
           record.nomorStan = result.nomorStan;
         }
         if (result.jumlahPbb != null && result.jumlahPbb!.trim().isNotEmpty) {
-          record.jumlahPbb = result.jumlahPbb;
+          record.jumlahPbb = cleanNominalRupiah(result.jumlahPbb);
         }
 
         if (record.isPaid) {
@@ -228,6 +277,9 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
             tahun: widget.tahun,
             result: result,
           );
+          if (widget.downloadStts && mounted) {
+            await _downloadSttsFor(record);
+          }
         }
         await BlokBatchCheckTracker.instance.recordChecked(record.nop);
       } else {
@@ -868,7 +920,8 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
                                 (item.namaWajibPajak != null &&
                                         item.namaWajibPajak!.isNotEmpty) ||
                                     (item.tanggalBayar != null &&
-                                        item.tanggalBayar!.isNotEmpty)
+                                        item.tanggalBayar!.isNotEmpty) ||
+                                    item.buktiBayarDownloaded != null
                                 ? Column(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
@@ -891,6 +944,21 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
                                           style: TextStyle(
                                             fontSize: 10,
                                             color: Colors.green.shade700,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      if (item.buktiBayarDownloaded != null)
+                                        Text(
+                                          item.buktiBayarDownloaded!
+                                              ? 'STTS tersimpan'
+                                              : 'STTS belum terbit / gagal diunduh',
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            color: item.buktiBayarDownloaded!
+                                                ? Colors.teal.shade700
+                                                : Colors.orange.shade800,
                                             fontWeight: FontWeight.w600,
                                           ),
                                           maxLines: 1,

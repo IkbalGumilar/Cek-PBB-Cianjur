@@ -1,6 +1,8 @@
+import 'currency_format.dart';
 import 'nop_helper.dart';
 
-export 'currency_format.dart' show formatRibuan;
+export 'currency_format.dart'
+    show formatRibuan, parseNominalRupiah, cleanNominalRupiah;
 
 /// Satu baris data pembayaran yang tersimpan lokal di "Buku Catatan Blok",
 /// diisi otomatis tiap kali Cek Status Bayar (satuan atau massal) menemukan
@@ -65,10 +67,9 @@ class BlokRecord {
   String get wilayah => nopWilayah(nop);
   String get formattedNop => formatNop(nop);
 
-  /// Nilai numerik dari [jumlahPbb] (mis. "Rp. 51.425" -> 51425), dipakai
-  /// untuk mengurutkan berdasarkan jumlah bayar PBB.
-  int get jumlahPbbValue =>
-      int.tryParse(jumlahPbb.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+  /// Nilai numerik dari [jumlahPbb] (mis. "Rp. 51.425" -> 51425, "51.245,00" -> 51245),
+  /// dipakai untuk kalkulasi total dan pengurutan nominal PBB.
+  int get jumlahPbbValue => parseNominalRupiah(jumlahPbb);
 
   /// NOP+tahun mengidentifikasi satu baris pembayaran secara unik (satu NOP
   /// bisa punya beberapa baris untuk tahun yang berbeda-beda).

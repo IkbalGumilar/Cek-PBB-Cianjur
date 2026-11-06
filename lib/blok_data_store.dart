@@ -128,8 +128,8 @@ class BlokDataStore {
                 : existing.tanggalBayar);
       final updatedJumlah =
           (result.jumlahPbb != null && result.jumlahPbb!.trim().isNotEmpty)
-          ? result.jumlahPbb!.trim()
-          : existing.jumlahPbb;
+          ? cleanNominalRupiah(result.jumlahPbb!.trim())
+          : cleanNominalRupiah(existing.jumlahPbb);
       final updatedNama =
           (result.namaWajibPajak != null &&
               result.namaWajibPajak!.trim().isNotEmpty)
@@ -169,7 +169,9 @@ class BlokDataStore {
         namaWajibPajak: result.namaWajibPajak ?? '',
         tahunBayar: tahun,
         tanggalBayar: tglBayar,
-        jumlahPbb: result.jumlahPbb ?? '',
+        jumlahPbb: result.jumlahPbb != null
+            ? cleanNominalRupiah(result.jumlahPbb!)
+            : '',
         statusBayar: 'Sudah Bayar',
         catatan: formatCatatanSudahBayar(tglBayar, tahun),
       );

@@ -78,24 +78,8 @@ String formatShortRupiah(int value) {
   return '$value';
 }
 
-DateTime? parsePaymentDate(String? raw) {
-  if (raw == null) return null;
-  final s = raw.trim();
-  if (s.isEmpty || s == '2026') return null;
-  try {
-    return DateTime.parse(s);
-  } catch (_) {}
-  final dmy = RegExp(r'^(\d{1,2})-(\d{1,2})-(\d{4})').firstMatch(s);
-  if (dmy != null) {
-    final d = int.tryParse(dmy.group(1)!);
-    final m = int.tryParse(dmy.group(2)!);
-    final y = int.tryParse(dmy.group(3)!);
-    if (d != null && m != null && y != null) {
-      return DateTime(y, m, d);
-    }
-  }
-  return null;
-}
+DateTime? parsePaymentDate(String? raw) =>
+    DhkpGrafikAnalytics.parsePaymentDate(raw);
 
 class DhkpGroupInfo {
   final String label;
@@ -154,6 +138,30 @@ class DhkpStatItem {
 class DhkpGrafikAnalytics {
   const DhkpGrafikAnalytics._();
 
+  static DateTime? parsePaymentDate(String? raw) {
+    if (raw == null) return null;
+    final s = raw.trim();
+    if (s.isEmpty || s == '2026') return null;
+    try {
+      return DateTime.parse(s);
+    } catch (_) {}
+    final dmy = RegExp(
+      r'^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})(?:\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?',
+    ).firstMatch(s);
+    if (dmy != null) {
+      final d = int.tryParse(dmy.group(1)!);
+      final m = int.tryParse(dmy.group(2)!);
+      final y = int.tryParse(dmy.group(3)!);
+      final hour = int.tryParse(dmy.group(4) ?? '') ?? 0;
+      final minute = int.tryParse(dmy.group(5) ?? '') ?? 0;
+      final second = int.tryParse(dmy.group(6) ?? '') ?? 0;
+      if (d != null && m != null && y != null) {
+        return DateTime(y, m, d, hour, minute, second);
+      }
+    }
+    return null;
+  }
+
   static const monthNames = <String>[
     'Jan',
     'Feb',
@@ -169,7 +177,87 @@ class DhkpGrafikAnalytics {
     'Des',
   ];
 
-  static List<DhkpGroupInfo> buildMonthGroups(List<BlokRecord> records) {
+  static const fullMonthNames = <String>[
+    'Januari',
+    'Februari',
+    'Maret',
+    'April',
+    'Mei',
+    'Juni',
+    'Juli',
+    'Agustus',
+    'September',
+    'Oktober',
+    'November',
+    'Desember',
+  ];
+
+  /// Format tanggal bayar beserta jam bayar untuk rincian bulanan.
+  /// Contoh: "15 Juli 2026, 14:23:05 WIB" atau "15 Juli 2026" jika tanpa jam.
+  static String formatTanggalJamBayar(String? raw) {
+    if (raw == null || raw.trim().isEmpty) return '-';
+    final dt = parsePaymentDate(raw);
+    if (dt == null) return raw;
+    final d = dt.day.toString().padLeft(2, '0');
+    final monthName = (dt.month >= 1 && dt.month <= 12)
+        ? fullMonthNames[dt.month - 1]
+        : '${dt.month}';
+    final y = dt.year;
+    final hasTime = raw.contains(':');
+    if (hasTime) {
+      final h = dt.hour.toString().padLeft(2, '0');
+      final m = dt.minute.toString().padLeft(2, '0');
+      final s = dt.second.toString().padLeft(2, '0');
+      return '$d $monthName $y, $h:$m:$s WIB';
+    }
+    return '$d $monthName $y';
+  }
+
+  /// Ambil daftar objek pajak yang sudah lunas pada bulan tertentu [monthIndex] (1..12),
+  /// diurutkan default dari waktu pembayaran terlama ke terbaru (awal ke akhir bulan).
+  /// Parameter opsional [tahun] memastikan hanya transaksi pembayaran di tahun tersebut yang diambil.
+  static List<BlokRecord> getPaidRecordsForMonth(
+    List<BlokRecord> records,
+    int monthIndex, {
+    String? tahun,
+  }) {
+    final filtered = <BlokRecord>[];
+    for (final r in records) {
+      if (r.isPaid && r.tanggalBayar.isNotEmpty) {
+        final dt = parsePaymentDate(r.tanggalBayar);
+        if (dt != null && dt.month == monthIndex) {
+          if (tahun != null &&
+              tahun.isNotEmpty &&
+              dt.year.toString() != tahun) {
+            continue;
+          }
+          if (r.tahunBayar.isNotEmpty && dt.year.toString() != r.tahunBayar) {
+            continue;
+          }
+          filtered.add(r);
+        }
+      }
+    }
+    filtered.sort((a, b) {
+      final dtA = parsePaymentDate(a.tanggalBayar);
+      final dtB = parsePaymentDate(b.tanggalBayar);
+      if (dtA != null && dtB != null) {
+        final cmp = dtA.compareTo(dtB);
+        if (cmp != 0) return cmp;
+      } else if (dtA != null) {
+        return -1;
+      } else if (dtB != null) {
+        return 1;
+      }
+      return a.nop.compareTo(b.nop);
+    });
+    return filtered;
+  }
+
+  static List<DhkpGroupInfo> buildMonthGroups(
+    List<BlokRecord> records, {
+    String? tahun,
+  }) {
     final monthlyNominal = List<int>.filled(12, 0);
     final monthlyCount = List<int>.filled(12, 0);
 
@@ -177,6 +265,14 @@ class DhkpGrafikAnalytics {
       if (r.isPaid && r.tanggalBayar.isNotEmpty) {
         final dt = parsePaymentDate(r.tanggalBayar);
         if (dt != null && dt.month >= 1 && dt.month <= 12) {
+          if (tahun != null &&
+              tahun.isNotEmpty &&
+              dt.year.toString() != tahun) {
+            continue;
+          }
+          if (r.tahunBayar.isNotEmpty && dt.year.toString() != r.tahunBayar) {
+            continue;
+          }
           monthlyNominal[dt.month - 1] += r.jumlahPbbValue;
           monthlyCount[dt.month - 1]++;
         }
@@ -498,6 +594,10 @@ class DhkpGrafikAnalytics {
           if (r.isPaid && r.tanggalBayar.isNotEmpty) {
             final dt = parsePaymentDate(r.tanggalBayar);
             if (dt != null && dt.month >= 1 && dt.month <= 12) {
+              if (r.tahunBayar.isNotEmpty &&
+                  dt.year.toString() != r.tahunBayar) {
+                continue;
+              }
               monthlyData[dt.month - 1] += r.jumlahPbbValue;
               datedCount++;
             }

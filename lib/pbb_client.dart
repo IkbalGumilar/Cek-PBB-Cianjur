@@ -9,7 +9,7 @@ import 'package:syncfusion_flutter_pdf/pdf.dart';
 
 import 'base_http_client.dart';
 
-import 'blok_record.dart' show formatRibuan;
+import 'currency_format.dart';
 import 'check_mode.dart';
 import 'qris_result.dart';
 import 'tagihan_result.dart';
@@ -296,15 +296,71 @@ class PbbClient extends BaseHttpClient {
       final tanggal = matchTanggal?.group(1)?.trim();
       if (tanggal == null || tanggal.isEmpty) return null;
 
+      final rawJumlah = matchJumlah?.group(1)?.trim();
+      final cleanJumlah = rawJumlah != null && rawJumlah.isNotEmpty
+          ? cleanNominalRupiah(rawJumlah)
+          : null;
+
       return SttsExtractResult(
         tanggalBayar: tanggal,
         nomorStan: matchStan?.group(1)?.trim(),
         namaWajibPajak: matchNama?.group(1)?.trim(),
-        jumlahPbb: matchJumlah?.group(1)?.trim(),
+        jumlahPbb: cleanJumlah,
       );
     } catch (_) {
       return null;
     }
+  }
+
+  /// Ambil berkas PDF STTS asli untuk satu NOP+tahun, khusus untuk diunduh
+  /// pada Cek Massal. Server tetap mengirim PDF berformat STTS walau NOP belum
+  /// dibayar (kolom "Tanggal Transaksi" kosong), jadi berkas hanya dikembalikan
+  /// bila bukti bayarnya benar-benar sudah terbit. Selain itu mengembalikan
+  /// null. Error jaringan dilempar ke pemanggil agar bisa dicoba ulang.
+  Future<Uint8List?> fetchSttsPdfIfIssued({
+    required String nop,
+    required String tahun,
+  }) async {
+    final cleanNop = nop.replaceAll(RegExp(r'[^0-9]'), '');
+    final response = await _dio.get<List<int>>(
+      'https://cektagihan.cianjurkab.v-tax.id/stts-pdf-pbb.php',
+      queryParameters: {
+        'nop': cleanNop,
+        'thn': tahun,
+        'act': '(Cetak STTS)',
+        'fungsi': 'cek-stts-pbb',
+      },
+      options: Options(
+        responseType: ResponseType.bytes,
+        validateStatus: (status) => status != null && status < 500,
+      ),
+    );
+
+    final data = response.data;
+    if (data == null || data.isEmpty) return null;
+    final bytes = Uint8List.fromList(data);
+
+    final contentType =
+        response.headers.value('content-type')?.toLowerCase() ?? '';
+    final isPdf =
+        (bytes.length >= 4 &&
+            bytes[0] == 0x25 &&
+            bytes[1] == 0x50 &&
+            bytes[2] == 0x44 &&
+            bytes[3] == 0x46) ||
+        contentType.contains('application/pdf');
+    if (!isPdf) return null;
+
+    final document = PdfDocument(inputBytes: bytes);
+    final text = PdfTextExtractor(document).extractText();
+    document.dispose();
+
+    final tanggal = RegExp(
+      r'Tanggal\s+Transaksi\s*:\s*([0-9\-\:\s]+)',
+      caseSensitive: false,
+    ).firstMatch(text)?.group(1)?.trim();
+    if (tanggal == null || tanggal.isEmpty) return null;
+    return bytes;
   }
 
   Future<TagihanResult> checkTagihan({
@@ -363,7 +419,10 @@ class PbbClient extends BaseHttpClient {
       document,
       (h) => h.contains('nama wajib pajak'),
     );
-    final jumlahPbb = _extractColumn(document, (h) => h == 'pbb');
+    final rawJumlahPbb = _extractColumn(document, (h) => h == 'pbb');
+    final jumlahPbb = rawJumlahPbb != null && rawJumlahPbb.isNotEmpty
+        ? cleanNominalRupiah(rawJumlahPbb)
+        : null;
 
     final match = RegExp(
       r'lunas\s+([\d\-:\s]+)',

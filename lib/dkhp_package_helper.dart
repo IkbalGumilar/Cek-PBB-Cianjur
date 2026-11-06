@@ -358,28 +358,37 @@ class DhkpPackageHelper {
         final decoded = jsonDecode(manifestContent);
         if (decoded is Map<String, dynamic>) {
           manifest = decoded;
-          if (manifest['dusuns'] is List) {
-            final rawList = manifest['dusuns'] as List;
-            final parsedDusuns = <Dusun>[];
-            for (final item in rawList) {
-              if (item is Map) {
-                parsedDusuns.add(
-                  Dusun.fromJson(Map<String, dynamic>.from(item)),
-                );
-              }
-            }
-            if (parsedDusuns.isNotEmpty) {
-              await DusunData.instance.setDusuns(parsedDusuns);
-            }
-          }
-          if (manifest['scope'] is Map) {
-            final scopeMap = Map<String, dynamic>.from(
-              manifest['scope'] as Map,
-            );
-            await DusunData.instance.setScope(DusunScope.fromJson(scopeMap));
-          }
         }
       } catch (_) {}
+    }
+
+    final isDatReport =
+        filePath.toLowerCase().endsWith('.dat') ||
+        (manifest != null && manifest['format'] == 'laporan_dat_v1');
+
+    // Pengaturan dusun & scope hanya diterapkan untuk paket DHKP dasar (.dkhp).
+    // Berkas laporan .dat TIDAK boleh menimpa scope/dusun pengguna aplikasi.
+    if (!isDatReport && manifest != null) {
+      if (manifest['dusuns'] is List) {
+        final rawList = manifest['dusuns'] as List;
+        final parsedDusuns = <Dusun>[];
+        for (final item in rawList) {
+          if (item is Map) {
+            parsedDusuns.add(
+              Dusun.fromJson(Map<String, dynamic>.from(item)),
+            );
+          }
+        }
+        if (parsedDusuns.isNotEmpty) {
+          await DusunData.instance.setDusuns(parsedDusuns);
+        }
+      }
+      if (manifest['scope'] is Map) {
+        final scopeMap = Map<String, dynamic>.from(
+          manifest['scope'] as Map,
+        );
+        await DusunData.instance.setScope(DusunScope.fromJson(scopeMap));
+      }
     }
 
     final records = <BlokRecord>[];
@@ -396,9 +405,6 @@ class DhkpPackageHelper {
     final existingRecords = await BlokDataStore.instance.loadAll();
     final isDeltaArchive =
         manifest != null && (manifest['isDeltaOnly'] == true);
-    final isDatReport =
-        filePath.toLowerCase().endsWith('.dat') ||
-        (manifest != null && manifest['format'] == 'laporan_dat_v1');
 
     _validateArchiveCompatibility(
       isDatReport: isDatReport,
@@ -409,7 +415,14 @@ class DhkpPackageHelper {
       manifest: manifest,
     );
 
-    final existingByNop = <String, BlokRecord>{
+    // Indeks data lokal yang sudah ada:
+    // 1. Berdasarkan NOP + tahunBayar (kunci unik pasti)
+    // 2. Berdasarkan NOP saja (untuk rincian objek jika NOP baru pada tahun berjalan)
+    final existingByKey = <String, BlokRecord>{
+      for (final r in existingRecords)
+        '${r.nop.replaceAll(RegExp(r'[^0-9]'), '')}|${r.tahunBayar}': r,
+    };
+    final existingByNopLatest = <String, BlokRecord>{
       for (final r in existingRecords)
         r.nop.replaceAll(RegExp(r'[^0-9]'), ''): r,
     };
@@ -425,7 +438,7 @@ class DhkpPackageHelper {
         _recordsFromManifestChanges(
           changesList: manifest['changes'] as List,
           existingRecords: existingRecords,
-          existingByNop: existingByNop,
+          existingByNop: existingByNopLatest,
           existingByBlokNomor: existingByBlokNomor,
           currentYear: currentYear,
         ),
@@ -462,14 +475,33 @@ class DhkpPackageHelper {
     }
     invalidatePhotoCache();
 
-    // Gabungkan data perubahan ke data DHKP dasar bila data dasar sudah ada
+    // Gabungkan data perubahan ke data DHKP dasar:
+    // - Jika NOP + Tahun sudah ada: cocokkan dan perbarui status/tanggal/foto/catatan
+    // - Jika NOP sudah ada di tahun lain: gunakan rincian objek dari tahun lain, tapi buat baris baru untuk tahun ini
+    // - Jika NOP belum ada sama sekali: tambahkan NOP baru ke database
     final mergedRecords = <BlokRecord>[];
     for (final r in records) {
       final cleanNop = r.nop.replaceAll(RegExp(r'[^0-9]'), '');
-      final base = existingByNop[cleanNop];
-      if (base != null && (isDeltaArchive || isDatReport)) {
-        mergedRecords.add(_mergeDeltaWithBase(r, base));
+      final key = '$cleanNop|${r.tahunBayar}';
+      final exactBase = existingByKey[key];
+      final anyBase = existingByNopLatest[cleanNop];
+
+      if (exactBase != null && (isDeltaArchive || isDatReport)) {
+        mergedRecords.add(_mergeDeltaWithBase(r, exactBase));
+      } else if (anyBase != null && (isDeltaArchive || isDatReport)) {
+        mergedRecords.add(
+          anyBase.copyWith(
+            tahunBayar: r.tahunBayar,
+            jumlahPbb: r.jumlahPbb.isNotEmpty ? r.jumlahPbb : anyBase.jumlahPbb,
+            statusBayar: r.statusBayar,
+            tanggalBayar: r.tanggalBayar,
+            catatan: r.catatan,
+            namaFoto: r.namaFoto,
+            isTargetPemda: r.isTargetPemda,
+          ),
+        );
       } else {
+        // NOP baru, tambahkan langsung
         mergedRecords.add(r);
       }
     }
@@ -490,40 +522,12 @@ class DhkpPackageHelper {
     required Map<String, dynamic>? manifest,
   }) {
     if (isDatReport) {
-      final incomingBloks = <String>{};
-      for (final r in records) {
-        final b =
-            int.tryParse(r.blok)?.toString() ??
-            r.blok.replaceAll(RegExp(r'[^0-9]'), '');
-        if (b.isNotEmpty) incomingBloks.add(b);
-      }
-      if (manifest != null && manifest['changes'] is List) {
-        for (final item in manifest['changes'] as List) {
-          if (item is Map) {
-            final rawB = (item['blok'] ?? '').toString();
-            final b =
-                int.tryParse(rawB)?.toString() ??
-                rawB.replaceAll(RegExp(r'[^0-9]'), '');
-            if (b.isNotEmpty) incomingBloks.add(b);
-          }
-        }
-      }
+      // Laporan .dat diizinkan untuk mencocokkan data yang ada maupun menambahkan
+      // NOP baru ke Buku Catatan tanpa ditolak sebagai "Data tidak sesuai".
+      return;
+    }
 
-      final localBloks = existingRecords
-          .map(
-            (r) =>
-                int.tryParse(r.blok)?.toString() ??
-                r.blok.replaceAll(RegExp(r'[^0-9]'), ''),
-          )
-          .where((b) => b.isNotEmpty)
-          .toSet();
-
-      if (existingRecords.isEmpty ||
-          incomingBloks.isEmpty ||
-          !incomingBloks.every((b) => localBloks.contains(b))) {
-        throw const DhkpBackupValidationException('Data tidak sesuai');
-      }
-    } else if (requireBaseDhkp || isDeltaArchive) {
+    if (requireBaseDhkp || isDeltaArchive) {
       if (requireBaseDhkp && existingRecords.isEmpty) {
         throw const DhkpBackupValidationException(
           'Berkas DHKP dasar belum dimuat. Muat berkas DHKP terlebih dahulu sebelum menggunakan berkas cadangan perubahan.',
@@ -642,15 +646,19 @@ class DhkpPackageHelper {
   }
 
   static BlokRecord _mergeDeltaWithBase(BlokRecord r, BlokRecord base) {
+    final sameYear = r.tahunBayar == base.tahunBayar;
     return base.copyWith(
+      tahunBayar: r.tahunBayar,
       statusBayar: r.statusBayar,
       tanggalBayar: r.tanggalBayar.isNotEmpty
           ? r.tanggalBayar
-          : base.tanggalBayar,
-      catatan: r.catatan.isNotEmpty ? r.catatan : base.catatan,
+          : (sameYear ? base.tanggalBayar : ''),
+      catatan: r.catatan.isNotEmpty
+          ? r.catatan
+          : (sameYear ? base.catatan : ''),
       namaFoto: (r.namaFoto != null && r.namaFoto!.isNotEmpty)
           ? r.namaFoto
-          : base.namaFoto,
+          : (sameYear ? base.namaFoto : null),
       isTargetPemda: r.isTargetPemda,
       namaWajibPajak:
           (r.namaWajibPajak.isNotEmpty && !r.namaWajibPajak.startsWith('WP '))

@@ -496,6 +496,7 @@ Future<List<BlokRecord>?> showPilihBlokCekMassalDialog(
   required List<String> availableBloks,
   required Map<String, List<BlokRecord>> recordsByBlok,
   required int? selectedWilayah,
+  ValueNotifier<bool>? downloadSttsOption,
 }) {
   return showDialog<List<BlokRecord>>(
     context: context,
@@ -892,6 +893,23 @@ Future<List<BlokRecord>?> showPilihBlokCekMassalDialog(
                         ),
                       ),
                     ],
+                    if (downloadSttsOption != null) ...[
+                      const SizedBox(height: 8),
+                      SwitchListTile(
+                        value: downloadSttsOption.value,
+                        onChanged: (v) =>
+                            setDialogState(() => downloadSttsOption.value = v),
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text(
+                          'Unduh STTS untuk yang sudah bayar',
+                          style: TextStyle(fontSize: 13),
+                        ),
+                        subtitle: const Text(
+                          'Jika aktif, STTS NOP yang terdeteksi sudah bayar ikut diunduh. Jika tidak, hanya status yang dicek.',
+                          style: TextStyle(fontSize: 11),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -1237,6 +1255,9 @@ Future<void> showWhatsAppPhotoPreviewDialog(
   required Future<File?> Function() onPickAndSavePhoto,
 }) async {
   File? photoFile = initialPhotoFile;
+  bool isProcessing = false;
+  String? statusMessage;
+  bool isSuccess = false;
 
   await showDialog<void>(
     context: context,
@@ -1261,6 +1282,7 @@ Future<void> showWhatsAppPhotoPreviewDialog(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                // Header Dialog
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 16,
@@ -1304,6 +1326,49 @@ Future<void> showWhatsAppPhotoPreviewDialog(
                     ],
                   ),
                 ),
+
+                // Notifikasi Status (jika baru disimpan atau dihapus)
+                if (statusMessage != null)
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 10,
+                    ),
+                    color: isSuccess ? Colors.green.shade700 : Colors.red.shade700,
+                    child: Row(
+                      children: [
+                        Icon(
+                          isSuccess
+                              ? Icons.check_circle_rounded
+                              : Icons.info_outline_rounded,
+                          color: Colors.white,
+                          size: 18,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            statusMessage!,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                        InkWell(
+                          onTap: () => setDialogState(() => statusMessage = null),
+                          child: const Icon(
+                            Icons.close,
+                            color: Colors.white70,
+                            size: 16,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                // Area Gambar / Loading / Kosong
                 Flexible(
                   child: Container(
                     color: Colors.black87,
@@ -1312,13 +1377,78 @@ Future<void> showWhatsAppPhotoPreviewDialog(
                       maxHeight: 400,
                     ),
                     width: double.infinity,
-                    child: hasImage
+                    child: isProcessing
+                        ? Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const SizedBox(
+                                  width: 38,
+                                  height: 38,
+                                  child: CircularProgressIndicator(
+                                    color: Colors.white,
+                                    strokeWidth: 3,
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                Text(
+                                  hasImage
+                                      ? 'Menyimpan & memotong foto...'
+                                      : 'Memproses foto dokumentasi...',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                const Text(
+                                  'Mohon tunggu sebentar...',
+                                  style: TextStyle(
+                                    color: Colors.white70,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )
+                        : hasImage
                         ? InteractiveViewer(
                             panEnabled: true,
                             scaleEnabled: true,
                             minScale: 0.8,
                             maxScale: 4.0,
-                            child: Image.file(photoFile!, fit: BoxFit.contain),
+                            child: Image.file(
+                              photoFile!,
+                              key: ValueKey(
+                                '${photoFile!.path}_${photoFile!.existsSync() ? photoFile!.lastModifiedSync().millisecondsSinceEpoch : 0}',
+                              ),
+                              fit: BoxFit.contain,
+                              errorBuilder: (ctx, err, stack) => Center(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(24),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(
+                                        Icons.broken_image_outlined,
+                                        size: 48,
+                                        color: Colors.white70,
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        'Gagal menampilkan gambar: $err',
+                                        style: const TextStyle(
+                                          color: Colors.white70,
+                                          fontSize: 12,
+                                        ),
+                                        textAlign: TextAlign.center,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
                           )
                         : Center(
                             child: Padding(
@@ -1357,6 +1487,8 @@ Future<void> showWhatsAppPhotoPreviewDialog(
                           ),
                   ),
                 ),
+
+                // Tombol Aksi di Bawah
                 Padding(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 12,
@@ -1365,7 +1497,7 @@ Future<void> showWhatsAppPhotoPreviewDialog(
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
-                      if (hasImage) ...[
+                      if (hasImage && !isProcessing) ...[
                         TextButton.icon(
                           style: TextButton.styleFrom(
                             foregroundColor: Colors.red,
@@ -1386,6 +1518,9 @@ Future<void> showWhatsAppPhotoPreviewDialog(
                                     child: const Text('Batal'),
                                   ),
                                   FilledButton(
+                                    style: FilledButton.styleFrom(
+                                      backgroundColor: Colors.red,
+                                    ),
                                     onPressed: () => Navigator.pop(c, true),
                                     child: const Text('Hapus'),
                                   ),
@@ -1393,31 +1528,85 @@ Future<void> showWhatsAppPhotoPreviewDialog(
                               ),
                             );
                             if (confirm == true) {
-                              await onDeletePhoto();
-                              final refreshed =
-                                  await DhkpPackageHelper.findPhotoForNop(
-                                    record.nop,
-                                    customFileName: '',
-                                  );
                               setDialogState(() {
-                                photoFile = refreshed;
+                                isProcessing = true;
+                                statusMessage = null;
                               });
+                              try {
+                                if (photoFile != null) {
+                                  await FileImage(photoFile!).evict();
+                                }
+                                await onDeletePhoto();
+                                final refreshed =
+                                    await DhkpPackageHelper.findPhotoForNop(
+                                      record.nop,
+                                      customFileName: '',
+                                    );
+                                setDialogState(() {
+                                  photoFile = refreshed;
+                                  isProcessing = false;
+                                  isSuccess = true;
+                                  statusMessage = 'Foto berhasil dihapus.';
+                                });
+                              } catch (e) {
+                                setDialogState(() {
+                                  isProcessing = false;
+                                  isSuccess = false;
+                                  statusMessage = 'Gagal menghapus foto: $e';
+                                });
+                              }
                             }
                           },
                         ),
                         const Spacer(),
                       ],
                       FilledButton.icon(
-                        icon: const Icon(Icons.add_a_photo, size: 18),
-                        label: Text(hasImage ? 'Ganti Foto' : 'Upload Foto'),
-                        onPressed: () async {
-                          final newFile = await onPickAndSavePhoto();
-                          if (newFile != null) {
-                            setDialogState(() {
-                              photoFile = newFile;
-                            });
-                          }
-                        },
+                        icon: isProcessing
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Icon(Icons.add_a_photo, size: 18),
+                        label: Text(
+                          isProcessing
+                              ? 'Menyimpan...'
+                              : (hasImage ? 'Ganti Foto' : 'Upload Foto'),
+                        ),
+                        onPressed: isProcessing
+                            ? null
+                            : () async {
+                                setDialogState(() {
+                                  isProcessing = true;
+                                  statusMessage = null;
+                                });
+                                try {
+                                  final newFile = await onPickAndSavePhoto();
+                                  if (newFile != null) {
+                                    await FileImage(newFile).evict();
+                                    setDialogState(() {
+                                      photoFile = newFile;
+                                      isProcessing = false;
+                                      isSuccess = true;
+                                      statusMessage =
+                                          'Foto berhasil disimpan & didokumentasikan!';
+                                    });
+                                  } else {
+                                    setDialogState(() {
+                                      isProcessing = false;
+                                    });
+                                  }
+                                } catch (e) {
+                                  setDialogState(() {
+                                    isProcessing = false;
+                                    isSuccess = false;
+                                    statusMessage = 'Gagal menyimpan foto: $e';
+                                  });
+                                }
+                              },
                       ),
                     ],
                   ),

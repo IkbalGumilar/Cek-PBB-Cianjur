@@ -54,6 +54,7 @@ class ImportViewState extends State<ImportView> {
   String? _fileName;
   List<TaxRecord> _records = [];
   bool _loading = false;
+  bool _downloadStts = false;
   String _loadingMessage = 'Memuat berkas...';
   String? _errorText;
   String? _savedNotice;
@@ -430,7 +431,11 @@ class ImportViewState extends State<ImportView> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => BatchCheckScreen(records: records, tahun: tahun),
+        builder: (_) => BatchCheckScreen(
+          records: records,
+          tahun: tahun,
+          downloadStts: widget.mode == CheckMode.statusBayar && _downloadStts,
+        ),
       ),
     );
   }
@@ -582,7 +587,17 @@ class ImportViewState extends State<ImportView> {
                       ),
                       keyboardType: TextInputType.number,
                     ),
-                    const SizedBox(height: 14),
+                    const SizedBox(height: 6),
+                    SwitchListTile(
+                      value: _downloadStts,
+                      onChanged: (v) => setState(() => _downloadStts = v),
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Unduh STTS untuk yang sudah bayar'),
+                      subtitle: const Text(
+                        'Jika aktif, berkas STTS NOP yang terdeteksi sudah bayar ikut diunduh. Jika tidak, hanya status yang dicek.',
+                      ),
+                    ),
+                    const SizedBox(height: 8),
                   ],
                   if (_errorText != null) ...[
                     Container(
