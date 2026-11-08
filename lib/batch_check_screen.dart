@@ -216,8 +216,10 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
     }
   }
 
-  String _safeFileName(String name) =>
-      name.replaceAll(RegExp(r'[\\/:*?"<>|]'), '-');
+  String _safeFileName(String name) => name
+      .replaceAll(RegExp(r'[\r\n\t\\/:*?"<>|]'), '-')
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .trim();
 
   void _scrollToCurrent() {
     if (!_scrollController.hasClients) return;
@@ -240,35 +242,35 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
     });
 
     if (widget.downloadStts && _sttsDirectory == null) {
+      final blokStr = widget.sttsBlokNumber ??
+          (widget.records.isNotEmpty
+              ? nopBlok(widget.records.first.nop)
+              : '000');
+      final cleanBlok = blokStr.replaceAll(RegExp(r'[^0-9]'), '');
+      final blokFormatted =
+          cleanBlok.isNotEmpty ? cleanBlok.padLeft(3, '0') : blokStr;
+      final now = DateTime.now();
+      const namaHariList = [
+        'Senin',
+        'Selasa',
+        'Rabu',
+        'Kamis',
+        'Jumat',
+        'Sabtu',
+        'Minggu',
+      ];
+      final namaHari = namaHariList[now.weekday - 1];
+      final tgl = now.day.toString().padLeft(2, '0');
+      final bln = now.month.toString().padLeft(2, '0');
+      final thn = now.year.toString();
+      final folderName =
+          'STTS Blok $blokFormatted - $namaHari, $tgl-$bln-$thn';
+
       try {
         final pickedPath = await FilePicker.getDirectoryPath(
           dialogTitle: 'Pilih Folder Penyimpanan Berkas STTS',
         );
         if (pickedPath != null && pickedPath.isNotEmpty) {
-          final blokStr = widget.sttsBlokNumber ??
-              (widget.records.isNotEmpty
-                  ? nopBlok(widget.records.first.nop)
-                  : '000');
-          final cleanBlok = blokStr.replaceAll(RegExp(r'[^0-9]'), '');
-          final blokFormatted =
-              cleanBlok.isNotEmpty ? cleanBlok.padLeft(3, '0') : blokStr;
-          final now = DateTime.now();
-          const namaHariList = [
-            'Senin',
-            'Selasa',
-            'Rabu',
-            'Kamis',
-            'Jumat',
-            'Sabtu',
-            'Minggu',
-          ];
-          final namaHari = namaHariList[now.weekday - 1];
-          final tgl = now.day.toString().padLeft(2, '0');
-          final bln = now.month.toString().padLeft(2, '0');
-          final thn = now.year.toString();
-          final folderName =
-              'STTS Blok $blokFormatted - $namaHari, $tgl-$bln-$thn';
-
           final dir = Directory('$pickedPath/$folderName');
           if (!await dir.exists()) {
             await dir.create(recursive: true);
@@ -281,7 +283,7 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
       if (_sttsDirectory == null) {
         try {
           final docsDir = await AppStorage.getDocumentsDirectory();
-          final dir = Directory('${docsDir.path}/STTS');
+          final dir = Directory('${docsDir.path}/STTS/$folderName');
           if (!await dir.exists()) {
             await dir.create(recursive: true);
           }
@@ -647,9 +649,8 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
                 ? 'Sudah Bayar'
                 : (r.isChecked ? r.status : 'Belum Dicek'))
             .padRight(12);
-        final nominal = (r.jumlahPbb != null && r.jumlahPbb!.isNotEmpty
-                ? 'Rp ${cleanNominalRupiah(r.jumlahPbb!)}'
-                : '-')
+        final nominalVal = parseNominalRupiah(r.jumlahPbb);
+        final nominal = (nominalVal > 0 ? 'Rp ${formatRibuan(nominalVal)}' : '-')
             .padRight(13);
         final tgl = (r.tanggalBayar ?? '-').padRight(13);
         final stan = (r.nomorStan ?? '-').padRight(16);
