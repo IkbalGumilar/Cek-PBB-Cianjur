@@ -1,0 +1,54 @@
+{
+  "type": "FeatureCollection",
+  "name": "Fasilitas_Umum_Bobojong_OSM",
+  "features": [
+    {
+      "type": "Feature",
+      "id": "530932477",
+      "properties": {
+        "id": "530932477",
+        "nama": "Fasilitas Umum",
+        "tipe": "place_of_worship"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.20526638000001,
+          -6.76956904
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "13982926753",
+      "properties": {
+        "id": "13982926753",
+        "nama": "Fasilitas (fuel)",
+        "tipe": "fuel"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.2261674,
+          -6.7661662
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "kantor_desa_bobojong",
+      "properties": {
+        "id": "kantor_desa_bobojong",
+        "nama": "Kantor Desa Bobojong",
+        "tipe": "townhall"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.238769,
+          -6.763587
+        ]
+      }
+    }
+  ]
+}

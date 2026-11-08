@@ -9,12 +9,15 @@ import 'settings/backup_settings_screen.dart';
 import 'settings/security_settings_screen.dart';
 import 'settings/theme_settings_screen.dart';
 import 'settings/user_guide_screen.dart';
+import 'settings/wilayah_settings_screen.dart';
+import 'nop_helper.dart';
 import 'theme_controller.dart';
 
 export 'settings/about_app_screen.dart';
 export 'settings/backup_settings_screen.dart';
 export 'settings/security_settings_screen.dart';
 export 'settings/theme_settings_screen.dart';
+export 'settings/wilayah_settings_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   final ThemeController themeController;
@@ -174,6 +177,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            _SettingsMenuCard(
+              icon: Icons.domain_rounded,
+              iconColor: Colors.deepPurple.shade600,
+              title: 'Wilayah Kerja & Profil Desa',
+              subtitle:
+                  'Kec. $activeKecamatanName • Desa $activeDesaName ($activeNopPrefix)\nKetuk untuk mengganti Kecamatan atau Desa penugasan',
+              onTap: () async {
+                await _openSubScreen(const WilayahSettingsScreen());
+                if (mounted) setState(() {});
+              },
+            ),
+            const SizedBox(height: 12),
             _SettingsMenuCard(
               key: _themeCardKey,
               icon: Icons.palette_outlined,

@@ -202,18 +202,34 @@ class FileImporter {
       final njopBng = njopBngCol != -1 && row.length > njopBngCol
           ? row[njopBngCol].toString().trim()
           : '';
-      final kec =
-          kecCol != -1 &&
+      if (nopDigits.length == 18) {
+        final detectedPrefix = nopDigits.substring(0, 10);
+        if (activeNopPrefix != detectedPrefix) {
+          activeNopPrefix = detectedPrefix;
+        }
+      }
+
+      final rawKec = kecCol != -1 &&
               row.length > kecCol &&
               row[kecCol].toString().trim().isNotEmpty
           ? row[kecCol].toString().trim()
-          : 'MANDE';
-      final kel =
-          kelCol != -1 &&
+          : '';
+      final kec = rawKec.isNotEmpty
+          ? rawKec
+          : (nopDigits.length == 18
+              ? lookupKecamatanName(nopKecamatan(nopDigits))
+              : 'MANDE');
+
+      final rawKel = kelCol != -1 &&
               row.length > kelCol &&
               row[kelCol].toString().trim().isNotEmpty
           ? row[kelCol].toString().trim()
-          : 'BOBOJONG';
+          : '';
+      final kel = rawKel.isNotEmpty
+          ? rawKel
+          : (nopDigits.length == 18
+              ? lookupMandeKelurahanName(nopKelurahan(nopDigits))
+              : 'BOBOJONG');
       final almtObj = almtObjCol != -1 && row.length > almtObjCol
           ? row[almtObjCol].toString().trim()
           : '';

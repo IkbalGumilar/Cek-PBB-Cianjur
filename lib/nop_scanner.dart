@@ -32,16 +32,22 @@ class NopScanParser {
 
     for (final line in text.split(RegExp(r'[\r\n]+'))) {
       final compact = line.replaceAll(RegExp(r'[^0-9]'), '');
-      final prefixIndex = compact.indexOf(nopPrefix);
-      if (prefixIndex != -1 && compact.length - prefixIndex >= 18) {
-        final candidate = compact.substring(prefixIndex, prefixIndex + 18);
-        if (candidate.endsWith('0')) found.add(candidate);
+      final prefix = compact.contains(nopPrefix)
+          ? nopPrefix
+          : (compact.contains('3205') ? '3205' : '');
+      if (prefix.isNotEmpty) {
+        final prefixIndex = compact.indexOf(prefix);
+        if (compact.length - prefixIndex >= 18) {
+          final candidate = compact.substring(prefixIndex, prefixIndex + 18);
+          if (candidate.endsWith('0')) found.add(candidate);
+        }
       }
     }
 
     for (final match in RegExp(r'\d{5,18}').allMatches(text)) {
       final value = match.group(0)!;
-      if (value.length == 18 && value.startsWith(nopPrefix)) {
+      if (value.length == 18 &&
+          (value.startsWith(nopPrefix) || value.startsWith('3205'))) {
         if (value.endsWith('0')) found.add(value);
       } else if (_isShortNop(text, match)) {
         found.add(expandNop(value));

@@ -19,10 +19,10 @@ class TabRangkingRealisasi extends StatefulWidget {
 class _TabRangkingRealisasiState extends State<TabRangkingRealisasi> {
   String _bukuFilter = '123';
   String _tahun = '${DateTime.now().year}';
-  String _kelurahan = '3205200004';
-  String _namaKelurahan = 'BOBOJONG';
-  final _kecamatan = '3205200';
-  final _namaKecamatan = 'MANDE';
+  String _kelurahan = '';
+  String _namaKelurahan = 'Semua Desa';
+  String get _kecamatan => widget.client.activeKecamatanCode;
+  String get _namaKecamatan => widget.client.activeKecamatanName;
 
   Future<void> _directExcelExport() async {
     try {
@@ -31,16 +31,16 @@ class _TabRangkingRealisasiState extends State<TabRangkingRealisasi> {
         tahun: _tahun,
         kelurahan: _kelurahan,
         kecamatan: _kecamatan,
-        namakel: _namaKelurahan,
+        namakel: _kelurahan.isEmpty ? '' : _namaKelurahan,
         namakec: _namaKecamatan,
       );
       final suffixTahun = _tahun.isNotEmpty ? '_$_tahun' : '';
       final fileName = 'rangking_realisasi_buku_$_bukuFilter$suffixTahun.xlsx';
-      await DownloadHelper.saveBytes(bytes, fileName);
-      if (!mounted) return;
+      final location = await DownloadHelper.saveBytes(bytes, fileName);
+      if (!mounted || location == null) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Berhasil mengunduh $fileName'),
+          content: Text('Berhasil mengunduh $fileName\nTersimpan di: $location'),
           action: SnackBarAction(
             label: 'Bagikan',
             onPressed: () => NativeFileHelper.shareBytes(
@@ -77,6 +77,8 @@ class _TabRangkingRealisasiState extends State<TabRangkingRealisasi> {
         DesaKelurahanDropdown(
           client: widget.client,
           value: _kelurahan,
+          allowAll: true,
+          allLabel: 'Semua Desa / Kelurahan (Se-Kecamatan)',
           onChanged: (v) => setState(() => _kelurahan = v),
           onNameChanged: (name) => setState(() => _namaKelurahan = name),
         ),

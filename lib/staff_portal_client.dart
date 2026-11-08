@@ -37,6 +37,38 @@ class StaffPortalClient extends BaseHttpClient {
   List<BankOption>? _bankOptionsCache;
   bool _cookieManagerAttached = false;
 
+  String? _activeKecamatanCode;
+  String? _activeKecamatanName;
+  String? _activeKelurahanCode;
+  String? _activeKelurahanName;
+  List<KolektifKelurahan> _activeKelurahanOptions = const [];
+
+  String get activeKecamatanCode => _activeKecamatanCode ?? '3205200';
+  String get activeKecamatanName => _activeKecamatanName ?? 'MANDE';
+  String get activeKelurahanCode => _activeKelurahanCode ?? '3205200004';
+  String get activeKelurahanName => _activeKelurahanName ?? 'BOBOJONG';
+  List<KolektifKelurahan> get activeKelurahanOptions => _activeKelurahanOptions;
+
+  void setCustomWilayah({
+    String? kecamatanCode,
+    String? kecamatanName,
+    String? kelurahanCode,
+    String? kelurahanName,
+  }) {
+    if (kecamatanCode != null && kecamatanCode.isNotEmpty) {
+      _activeKecamatanCode = kecamatanCode;
+    }
+    if (kecamatanName != null && kecamatanName.isNotEmpty) {
+      _activeKecamatanName = kecamatanName;
+    }
+    if (kelurahanCode != null && kelurahanCode.isNotEmpty) {
+      _activeKelurahanCode = kelurahanCode;
+    }
+    if (kelurahanName != null && kelurahanName.isNotEmpty) {
+      _activeKelurahanName = kelurahanName;
+    }
+  }
+
   StaffPortalClient({super.customDio})
     : super(
         baseUrl: _baseUrl,
@@ -222,16 +254,35 @@ class StaffPortalClient extends BaseHttpClient {
   }
 
   /// Muat halaman Monitoring Wilayah sekali per sesi login.
-  Future<String> _ensureMonitoringPage() async {
-    if (_monitoringHtml != null) return _monitoringHtml!;
+  Future<String> _ensureMonitoringPage({bool forceReload = false}) async {
+    if (!forceReload && _monitoringHtml != null && _monitoringHtml!.isNotEmpty) {
+      return _monitoringHtml!;
+    }
     await _ensureCookieManager();
-    final response = await _dio.get<String>(
-      '/main.php',
-      queryParameters: {'param': _monitoringParam},
-      options: Options(responseType: ResponseType.plain),
-    );
-    _monitoringHtml = response.data ?? '';
-    return _monitoringHtml!;
+    try {
+      final response = await _dio.get<String>(
+        '/main.php',
+        queryParameters: {'param': _monitoringParam},
+        options: Options(responseType: ResponseType.plain),
+      );
+      final location = response.headers.value('location');
+      final data = response.data ?? '';
+      if (StaffPortalParser.isSessionExpired(
+        data,
+        statusCode: response.statusCode,
+        location: location,
+      )) {
+        _monitoringHtml = null;
+        _pageQ23 = null;
+        return '';
+      }
+      _monitoringHtml = data;
+      return _monitoringHtml!;
+    } catch (_) {
+      _monitoringHtml = null;
+      _pageQ23 = null;
+      rethrow;
+    }
   }
 
   /// Token `q` dari grup fungsi "s=23".
@@ -251,37 +302,88 @@ class StaffPortalClient extends BaseHttpClient {
     required Map<String, String> params,
     int page = 1,
   }) async {
-    final html = await _ensureMonitoringPage();
+    String html;
+    try {
+      html = await _ensureMonitoringPage();
+    } on DioException catch (e) {
+      return MonitoringTableResult(
+        errorMessage: BaseHttpClient.describeNetworkError(
+          e,
+          serviceName: 'Portal Staf V-Tax',
+        ),
+      );
+    } catch (e) {
+      return MonitoringTableResult(
+        errorMessage: 'Gagal menghubungkan ke Portal Staf: $e',
+      );
+    }
+
     final q = StaffPortalTokenExtractor.extractLoadQ(html, jsFunctionName);
     final funcMode = StaffPortalTokenExtractor.extractFuncMode(
       html,
       jsFunctionName,
     );
     if (q == null || funcMode == null) {
+      _monitoringHtml = null;
+      _pageQ23 = null;
       return const MonitoringTableResult(
         errorMessage:
-            'Gagal membaca token halaman Monitoring — sesi mungkin sudah berakhir, '
-            'coba buka ulang menu Monitoring (login ulang kalau diminta).',
+            'Gagal membaca token halaman Monitoring — sesi login mungkin sudah berakhir. '
+            'Silakan masuk kembali melalui Menu Petugas.',
       );
     }
-    final response = await _dio.post<String>(
-      '/main.php',
-      queryParameters: {
-        'q': q,
-        if (page > 1) 'p': '$page',
-      },
-      data: {
-        'query': query,
-        ...params,
-        'funcMode': funcMode,
-        if (page > 1) 'p': '$page',
-      },
-      options: Options(
-        contentType: Headers.formUrlEncodedContentType,
-        responseType: ResponseType.plain,
-      ),
-    );
-    return StaffPortalParser.parseGenericTable(response.data ?? '');
+
+    try {
+      final response = await _dio.post<String>(
+        '/main.php',
+        queryParameters: {
+          'q': q,
+          if (page > 1) 'p': '$page',
+        },
+        data: {
+          'query': query,
+          ...params,
+          'funcMode': funcMode,
+          if (page > 1) 'p': '$page',
+        },
+        options: Options(
+          contentType: Headers.formUrlEncodedContentType,
+          responseType: ResponseType.plain,
+        ),
+      );
+
+      final location = response.headers.value('location');
+      final body = response.data ?? '';
+      if (StaffPortalParser.isSessionExpired(
+        body,
+        statusCode: response.statusCode,
+        location: location,
+      )) {
+        _monitoringHtml = null;
+        _pageQ23 = null;
+        return const MonitoringTableResult(
+          errorMessage:
+              'Sesi login ke Portal Staf telah kedaluwarsa. Silakan masuk kembali melalui Menu Petugas.',
+        );
+      }
+
+      return StaffPortalParser.parseGenericTable(
+        body,
+        statusCode: response.statusCode,
+        location: location,
+      );
+    } on DioException catch (e) {
+      return MonitoringTableResult(
+        errorMessage: BaseHttpClient.describeNetworkError(
+          e,
+          serviceName: 'Portal Staf V-Tax',
+        ),
+      );
+    } catch (e) {
+      return MonitoringTableResult(
+        errorMessage: 'Gagal memuat data dari server: $e',
+      );
+    }
   }
 
   /// Tab "Sudah Bayar" — replika `onSubmitSudahBayar(1)`.
@@ -302,10 +404,12 @@ class StaffPortalClient extends BaseHttpClient {
     String operator = '',
     String tglPelimpahanAwal = '',
     String tglPelimpahanAkhir = '',
-    String kelurahan = '3205200004',
-    String kecamatan = '3205200',
+    String kelurahan = '',
+    String kecamatan = '',
     int page = 1,
   }) {
+    final effKec = kecamatan.isNotEmpty ? kecamatan : activeKecamatanCode;
+    final effKel = kelurahan.isNotEmpty ? kelurahan : activeKelurahanCode;
     return _fetchTab(
       jsFunctionName: 'onSubmitSudahBayar',
       query: 'Sudah_Bayar',
@@ -321,8 +425,8 @@ class StaffPortalClient extends BaseHttpClient {
         'st': '1',
         'tgl_pembayaran_1': tglBayarAwal,
         'tgl_pembayaran_2': tglBayarAkhir,
-        'kec': kecamatan,
-        'kel': kelurahan,
+        'kec': effKec,
+        'kel': effKel,
         'buku_1': bukuMin,
         'buku_2': bukuMax,
         'tgl_pelimpahan_1': tglPelimpahanAwal,
@@ -349,10 +453,12 @@ class StaffPortalClient extends BaseHttpClient {
     String kodeBayarIndividu = '',
     String bukuMin = '',
     String bukuMax = '',
-    String kelurahan = '3205200004',
-    String kecamatan = '3205200',
+    String kelurahan = '',
+    String kecamatan = '',
     int page = 1,
   }) {
+    final effKec = kecamatan.isNotEmpty ? kecamatan : activeKecamatanCode;
+    final effKel = kelurahan.isNotEmpty ? kelurahan : activeKelurahanCode;
     return _fetchTab(
       jsFunctionName: 'onSubmitBelumBayar',
       query: 'Belum_Bayar',
@@ -367,8 +473,8 @@ class StaffPortalClient extends BaseHttpClient {
         'st': '2',
         'tgl_pembayaran_1': '',
         'tgl_pembayaran_2': '',
-        'kec': kecamatan,
-        'kel': kelurahan,
+        'kec': effKec,
+        'kel': effKel,
         'buku_1': bukuMin,
         'buku_2': bukuMax,
         'tgl_pelimpahan_1': '',
@@ -397,11 +503,17 @@ class StaffPortalClient extends BaseHttpClient {
     String bank = '',
     String tglPelimpahanAwal = '',
     String tglPelimpahanAkhir = '',
-    String kelurahan = '3205200004',
-    String kecamatan = '3205200',
-    String namaKelurahan = 'BOBOJONG',
-    String namaKecamatan = 'MANDE',
+    String kelurahan = '',
+    String kecamatan = '',
+    String namaKelurahan = '',
+    String namaKecamatan = '',
   }) {
+    final effKec = kecamatan.isNotEmpty ? kecamatan : activeKecamatanCode;
+    final effKel = kelurahan.isNotEmpty ? kelurahan : activeKelurahanCode;
+    final effNamaKec =
+        namaKecamatan.isNotEmpty ? namaKecamatan : activeKecamatanName;
+    final effNamaKel =
+        namaKelurahan.isNotEmpty ? namaKelurahan : activeKelurahanName;
     return _fetchTab(
       jsFunctionName: 'showModelRealisasi1',
       query: 'Realisasi',
@@ -411,10 +523,10 @@ class StaffPortalClient extends BaseHttpClient {
         'th': tahunAwal,
         'th2': tahunAkhir,
         'st': '1',
-        'kc': kecamatan,
-        'n': namaKecamatan,
-        'kl': kelurahan,
-        'nl': namaKelurahan,
+        'kc': effKec,
+        'n': effNamaKec,
+        'kl': effKel,
+        'nl': effNamaKel,
         'eperiode': tglBayarAwal,
         'eperiode2': tglBayarAkhir,
         'tgl_pelimpahan': tglPelimpahanAwal,
@@ -442,11 +554,17 @@ class StaffPortalClient extends BaseHttpClient {
     String tglPelimpahanAwal = '',
     String tglPelimpahanAkhir = '',
     String orderBy = 'tahun',
-    String kelurahan = '3205200004',
-    String kecamatan = '3205200',
-    String namaKelurahan = 'BOBOJONG',
-    String namaKecamatan = 'MANDE',
+    String kelurahan = '',
+    String kecamatan = '',
+    String namaKelurahan = '',
+    String namaKecamatan = '',
   }) {
+    final effKec = kecamatan.isNotEmpty ? kecamatan : activeKecamatanCode;
+    final effKel = kelurahan.isNotEmpty ? kelurahan : activeKelurahanCode;
+    final effNamaKec =
+        namaKecamatan.isNotEmpty ? namaKecamatan : activeKecamatanName;
+    final effNamaKel =
+        namaKelurahan.isNotEmpty ? namaKelurahan : activeKelurahanName;
     return _fetchTab(
       jsFunctionName: 'showModelPiutang',
       query: 'Piutang',
@@ -454,10 +572,10 @@ class StaffPortalClient extends BaseHttpClient {
         'tahunawal': tahunAwal,
         'tahunakhir': tahunAkhir,
         'st': '1',
-        'kecamatan': kecamatan,
-        'namakec': namaKecamatan,
-        'kelurahan': kelurahan,
-        'namakel': namaKelurahan,
+        'kecamatan': effKec,
+        'namakec': effNamaKec,
+        'kelurahan': effKel,
+        'namakel': effNamaKel,
         'tglawal': tglBayarAwal,
         'tglakhir': tglBayarAkhir,
         'tglpelimpahanawal': tglPelimpahanAwal,
@@ -479,9 +597,11 @@ class StaffPortalClient extends BaseHttpClient {
     String kodeBayarKolektif = '',
     String namaGrup = '',
     String namaKolektor = '',
-    String kelurahan = '3205200004',
-    String kecamatan = '3205200',
+    String kelurahan = '',
+    String kecamatan = '',
   }) {
+    final effKec = kecamatan.isNotEmpty ? kecamatan : activeKecamatanCode;
+    final effKel = kelurahan.isNotEmpty ? kelurahan : activeKelurahanCode;
     return _fetchTab(
       jsFunctionName: 'onSubmitSudahBayarKolektif',
       query: 'Sudah_Bayar_Kolektif',
@@ -490,8 +610,8 @@ class StaffPortalClient extends BaseHttpClient {
         'tgl_pembayaran_2': tglBayarAkhir,
         'nama_grup': namaGrup,
         'nama_kolektor': namaKolektor,
-        'kc': kecamatan,
-        'kl': kelurahan,
+        'kc': effKec,
+        'kl': effKel,
         'kode_bayar_kolektif': kodeBayarKolektif,
         'tgl_cutoff_belum_bayar': '',
         'tgl_cutoff_kadaluarsa': '',
@@ -510,9 +630,11 @@ class StaffPortalClient extends BaseHttpClient {
     String kodeBayarKolektif = '',
     String namaGrup = '',
     String namaKolektor = '',
-    String kelurahan = '3205200004',
-    String kecamatan = '3205200',
+    String kelurahan = '',
+    String kecamatan = '',
   }) {
+    final effKec = kecamatan.isNotEmpty ? kecamatan : activeKecamatanCode;
+    final effKel = kelurahan.isNotEmpty ? kelurahan : activeKelurahanCode;
     return _fetchTab(
       jsFunctionName: 'onSubmitBelumBayarKolektif',
       query: 'Belum_Bayar_Kolektif',
@@ -525,8 +647,8 @@ class StaffPortalClient extends BaseHttpClient {
         'tgl_cutoff_belum_bayar': tglCutoffBelumBayar,
         'tgl_cutoff_kadaluarsa': tglCutoffKadaluarsa,
         'st': '2',
-        'kc': kecamatan,
-        'kl': kelurahan,
+        'kc': effKec,
+        'kl': effKel,
         'exp': '',
         'LBL_KEL': 'Desa/Kelurahan',
       },
@@ -537,65 +659,148 @@ class StaffPortalClient extends BaseHttpClient {
   Future<MonitoringTableResult> fetchRangkingRealisasi({
     String bukuFilter = '123',
     String tahun = '',
-    String kelurahan = '3205200004',
-    String kecamatan = '3205200',
-    String namaKecamatan = 'MANDE',
+    String kelurahan = '',
+    String kecamatan = '',
+    String namaKecamatan = '',
   }) {
+    final effKec = kecamatan.isNotEmpty ? kecamatan : activeKecamatanCode;
+    final effNamaKec =
+        namaKecamatan.isNotEmpty ? namaKecamatan : activeKecamatanName;
     return _fetchTab(
       jsFunctionName: 'showRangkingRealisasi',
       query: 'Ranking_Realisasi',
       params: {
         'th': tahun,
         'st': '1',
-        'kc': kecamatan,
+        'kc': effKec,
         'kl': kelurahan,
-        'n': namaKecamatan,
+        'n': effNamaKec,
         'bukuFilter': bukuFilter,
         'eperiode': '',
       },
     );
   }
 
-  /// Ambil info wilayah (Kecamatan & Kelurahan) untuk modul Monitoring Wilayah.
-  Future<({String kecamatanCode, String kelurahanCode, List<KolektifKelurahan> kelurahan})>
-      fetchMonitoringWilayahOptions() async {
+  static const _defaultMandeList = [
+    KolektifKelurahan(code: '3205200001', name: 'MEKARJAYA'),
+    KolektifKelurahan(code: '3205200002', name: 'SUKAMANAH'),
+    KolektifKelurahan(code: '3205200003', name: 'KADEMANGAN'),
+    KolektifKelurahan(code: '3205200004', name: 'BOBOJONG'),
+    KolektifKelurahan(code: '3205200005', name: 'CIKIDANGBAYABANG'),
+    KolektifKelurahan(code: '3205200006', name: 'MANDE'),
+    KolektifKelurahan(code: '3205200007', name: 'MURNISARI'),
+    KolektifKelurahan(code: '3205200008', name: 'MULYASARI'),
+    KolektifKelurahan(code: '3205200009', name: 'JAMALI'),
+    KolektifKelurahan(code: '3205200010', name: 'CIANDAM'),
+    KolektifKelurahan(code: '3205200011', name: 'KUTAWARINGIN'),
+    KolektifKelurahan(code: '3205200012', name: 'LEUWIKOJA'),
+  ];
+
+  /// Ambil info wilayah (Kecamatan & Kelurahan) secara dinamis dari akun login
+  /// atau server Bapenda untuk seluruh 32 kecamatan se-Kabupaten Cianjur.
+  Future<
+      ({
+        String kecamatanCode,
+        String kecamatanName,
+        String kelurahanCode,
+        List<KolektifKelurahan> kelurahan,
+      })> fetchMonitoringWilayahOptions() async {
     final html = await _ensureMonitoringPage();
     final idKec =
-        StaffPortalTokenExtractor.extractMonitoringIdKec(html) ?? '3205200';
+        StaffPortalTokenExtractor.extractMonitoringIdKec(html) ??
+        _activeKecamatanCode ??
+        '3205200';
     final idKel =
-        StaffPortalTokenExtractor.extractMonitoringIdKel(html) ?? '3205200004';
+        StaffPortalTokenExtractor.extractMonitoringIdKel(html) ??
+        _activeKelurahanCode ??
+        '3205200004';
+
+    _activeKecamatanCode = idKec;
+    _activeKelurahanCode = idKel;
+
+    // Ambil nama kecamatan dinamis dari server jika belum diketahui
+    if (_activeKecamatanName == null ||
+        _activeKecamatanName!.isEmpty ||
+        (_activeKecamatanName == 'MANDE' && idKec != '3205200')) {
+      final name = await _fetchKecamatanName(html, idKec);
+      if (name.isNotEmpty) {
+        _activeKecamatanName = name;
+      }
+    }
+
     var options = StaffPortalParser.parseMonitoringKelurahanOptions(html);
 
-    const defaultList = [
-      KolektifKelurahan(code: '3205200004', name: 'BOBOJONG'),
-      KolektifKelurahan(code: '3205200001', name: 'JAMALI'),
-      KolektifKelurahan(code: '3205200002', name: 'MANDE'),
-      KolektifKelurahan(code: '3205200003', name: 'KADEMANGAN'),
-      KolektifKelurahan(code: '3205200005', name: 'CIANDUR'),
-      KolektifKelurahan(code: '3205200006', name: 'CIKIDANGBAYABANG'),
-      KolektifKelurahan(code: '3205200007', name: 'KUTAWARINGIN'),
-      KolektifKelurahan(code: '3205200008', name: 'LEUWIKOJA'),
-      KolektifKelurahan(code: '3205200009', name: 'MEKARJAYA'),
-      KolektifKelurahan(code: '3205200010', name: 'MULYASARI'),
-      KolektifKelurahan(code: '3205200011', name: 'MURNISARI'),
-      KolektifKelurahan(code: '3205200012', name: 'SUKAMANAH'),
-    ];
+    // Jika dropdown di HTML mentah belum lengkap (karena di-load ajax oleh Bapenda),
+    // panggil endpoint resmi showKelurahan() server Bapenda
+    if (options.length <= 1) {
+      final remoteList = await _fetchKelurahanList(html, idKec);
+      if (remoteList.isNotEmpty) {
+        options = remoteList;
+      }
+    }
 
+    // Fallback cerdas: jika Mande gunakan daftar terverifikasi,
+    // jika kecamatan lain pertahankan ID kelurahan milik akun aktif
     if (options.isEmpty) {
-      options = List.of(defaultList);
-    } else {
-      for (final item in defaultList) {
+      if (idKec == '3205200') {
+        options = List.of(_defaultMandeList);
+      } else {
+        options = [
+          KolektifKelurahan(
+            code: idKel,
+            name: _activeKelurahanName ?? idKel,
+          ),
+        ];
+      }
+    } else if (idKec == '3205200') {
+      for (final item in _defaultMandeList) {
         if (!options.any((o) => o.code == item.code)) {
           options.add(item);
         }
       }
     }
 
+    _activeKelurahanOptions = options;
+
+    final found = options.where((o) => o.code == idKel).firstOrNull;
+    if (found != null && found.name.isNotEmpty) {
+      _activeKelurahanName = found.name;
+    }
+
     return (
       kecamatanCode: idKec,
+      kecamatanName: _activeKecamatanName ?? 'MANDE',
       kelurahanCode: idKel,
       kelurahan: options,
     );
+  }
+
+  /// Tarik daftar desa/kelurahan dinamis dari endpoint `showKelurahan()` di server Bapenda.
+  Future<List<KolektifKelurahan>> _fetchKelurahanList(
+    String html,
+    String kecamatanCode,
+  ) async {
+    final funcMode = StaffPortalTokenExtractor.extractFuncMode(
+      html,
+      'showKelurahan',
+      window: 800,
+    );
+    if (funcMode == null) return const [];
+    try {
+      final response = await _dio.post<String>(
+        '/main.php',
+        data: {'id': kecamatanCode, 'kel': '1', 'funcMode': funcMode},
+        options: Options(
+          contentType: Headers.formUrlEncodedContentType,
+          responseType: ResponseType.plain,
+        ),
+      );
+      return StaffPortalParser.parseKelurahanListFromJson(response.data ?? '');
+    } on DioException {
+      return const [];
+    } catch (_) {
+      return const [];
+    }
   }
 
   /// Daftar Bank untuk dropdown filter (tab Sudah Bayar & Realisasi).
@@ -640,16 +845,33 @@ class StaffPortalClient extends BaseHttpClient {
             'Gagal membaca token antrean Excel dari halaman Monitoring.',
       );
     }
-    final response = await _dio.post<String>(
-      '/main.php',
-      queryParameters: {'q': q},
-      data: {'st': '$st', 'funcMode': funcMode},
-      options: Options(
-        contentType: Headers.formUrlEncodedContentType,
-        responseType: ResponseType.plain,
-      ),
-    );
-    return StaffPortalParser.parseExcelQueueTable(response.data ?? '');
+    try {
+      final response = await _dio.post<String>(
+        '/main.php',
+        queryParameters: {'q': q},
+        data: {'st': '$st', 'funcMode': funcMode},
+        options: Options(
+          contentType: Headers.formUrlEncodedContentType,
+          responseType: ResponseType.plain,
+        ),
+      );
+      return StaffPortalParser.parseExcelQueueTable(
+        response.data ?? '',
+        statusCode: response.statusCode,
+        location: response.headers.value('location'),
+      );
+    } on DioException catch (e) {
+      return MonitoringExcelQueueResult(
+        errorMessage: BaseHttpClient.describeNetworkError(
+          e,
+          serviceName: 'Portal Staf V-Tax',
+        ),
+      );
+    } catch (e) {
+      return MonitoringExcelQueueResult(
+        errorMessage: 'Gagal memuat antrean unduhan Excel: $e',
+      );
+    }
   }
 
   /// Meminta server V-Tax untuk memproses ekspor Excel di latar belakang (background queue).
@@ -765,14 +987,16 @@ class StaffPortalClient extends BaseHttpClient {
       html,
       'excelRangkingRealisasi',
     );
+    final effKec = kecamatan.isNotEmpty ? kecamatan : activeKecamatanCode;
+    final effNamaKec = namakec.isNotEmpty ? namakec : activeKecamatanName;
     final response = await _dio.get<List<int>>(
       '/main.php',
       queryParameters: {
         'q': q,
         'query': 'Ranking_Realisasi',
-        'n': namakec,
+        'n': effNamaKec,
         'nKel': namakel,
-        'kc': kecamatan,
+        'kc': effKec,
         'kl': kelurahan,
         'st': '1',
         'th': tahun,
@@ -788,15 +1012,32 @@ class StaffPortalClient extends BaseHttpClient {
 
   /// Muat halaman Pembayaran Kolektif sekali per sesi login.
   Future<String> _ensureKolektifPage({bool forceReload = false}) async {
-    if (_kolektifHtml != null && !forceReload) return _kolektifHtml!;
+    if (_kolektifHtml != null && _kolektifHtml!.isNotEmpty && !forceReload) {
+      return _kolektifHtml!;
+    }
     await _ensureCookieManager();
-    final response = await _dio.get<String>(
-      '/main.php',
-      queryParameters: {'param': _kolektifParam},
-      options: Options(responseType: ResponseType.plain),
-    );
-    _kolektifHtml = response.data ?? '';
-    return _kolektifHtml!;
+    try {
+      final response = await _dio.get<String>(
+        '/main.php',
+        queryParameters: {'param': _kolektifParam},
+        options: Options(responseType: ResponseType.plain),
+      );
+      final location = response.headers.value('location');
+      final data = response.data ?? '';
+      if (StaffPortalParser.isSessionExpired(
+        data,
+        statusCode: response.statusCode,
+        location: location,
+      )) {
+        _kolektifHtml = null;
+        return '';
+      }
+      _kolektifHtml = data;
+      return _kolektifHtml!;
+    } catch (_) {
+      _kolektifHtml = null;
+      rethrow;
+    }
   }
 
   /// Kecamatan & daftar kelurahan yang boleh dipilih saat membuat grup.
@@ -1099,12 +1340,29 @@ class StaffPortalClient extends BaseHttpClient {
       queryParameters['columns[$i][search][regex]'] = 'false';
     }
 
-    final response = await _dio.get<String>(
-      '/main.php',
-      queryParameters: queryParameters,
-      options: Options(responseType: ResponseType.plain),
-    );
-    return StaffPortalParser.parseKolektifMemberJson(response.data ?? '');
+    try {
+      final response = await _dio.get<String>(
+        '/main.php',
+        queryParameters: queryParameters,
+        options: Options(responseType: ResponseType.plain),
+      );
+      return StaffPortalParser.parseKolektifMemberJson(
+        response.data ?? '',
+        statusCode: response.statusCode,
+        location: response.headers.value('location'),
+      );
+    } on DioException catch (e) {
+      return KolektifMemberListResult(
+        errorMessage: BaseHttpClient.describeNetworkError(
+          e,
+          serviceName: 'Portal Staf V-Tax',
+        ),
+      );
+    } catch (e) {
+      return KolektifMemberListResult(
+        errorMessage: 'Gagal memuat daftar anggota grup: $e',
+      );
+    }
   }
 
   /// TAMBAH NOP ke dalam grup — replika `cariNOP()`.
@@ -1372,11 +1630,28 @@ class StaffPortalClient extends BaseHttpClient {
       queryParameters['columns[$i][search][regex]'] = 'false';
     }
 
-    final response = await _dio.get<String>(
-      '/main.php',
-      queryParameters: queryParameters,
-      options: Options(responseType: ResponseType.plain),
-    );
-    return StaffPortalParser.parseKolektifGroupsJson(response.data ?? '');
+    try {
+      final response = await _dio.get<String>(
+        '/main.php',
+        queryParameters: queryParameters,
+        options: Options(responseType: ResponseType.plain),
+      );
+      return StaffPortalParser.parseKolektifGroupsJson(
+        response.data ?? '',
+        statusCode: response.statusCode,
+        location: response.headers.value('location'),
+      );
+    } on DioException catch (e) {
+      return KolektifListResult(
+        errorMessage: BaseHttpClient.describeNetworkError(
+          e,
+          serviceName: 'Portal Staf V-Tax',
+        ),
+      );
+    } catch (e) {
+      return KolektifListResult(
+        errorMessage: 'Gagal memuat daftar grup kolektif: $e',
+      );
+    }
   }
 }

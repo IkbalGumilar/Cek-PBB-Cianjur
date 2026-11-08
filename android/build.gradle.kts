@@ -19,12 +19,14 @@ subprojects {
     project.evaluationDependsOn(":app")
 }
 
-// media_store_plus dan flutter_secure_storage hardcode compileSdk tertentu.
-// Samakan ke compileSdk 36 (Android 16) yang terinstal di SDK lokal.
+// Samakan compileSdk seluruh subproject plugin ke 36 yang terinstal di SDK lokal.
 subprojects {
-    if (project.name == "media_store_plus" || project.name == "flutter_secure_storage") {
+    if (project.name != "app") {
         afterEvaluate {
-            extensions.findByType(com.android.build.gradle.LibraryExtension::class.java)?.compileSdk = 36
+            val libExt = extensions.findByType(com.android.build.gradle.LibraryExtension::class.java)
+            if (libExt != null && (libExt.compileSdk ?: 0) > 36) {
+                libExt.compileSdk = 36
+            }
         }
     }
 }

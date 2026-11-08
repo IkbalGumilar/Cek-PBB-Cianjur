@@ -4,9 +4,12 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
+import 'package:shared_preferences/shared_preferences.dart';
+
 import 'app_storage.dart';
 import 'blok_data_store.dart';
 import 'check_mode.dart';
+import 'cianjur_wilayah_data.dart';
 import 'feature_tour/feature_tour.dart';
 import 'nop_helper.dart';
 import 'nop_scanner.dart';
@@ -82,6 +85,8 @@ class _CheckFormViewState extends State<CheckFormView> {
   @override
   void initState() {
     super.initState();
+    activeWilayahRevision.addListener(_onWilayahChanged);
+    _loadSavedWilayah();
     _client = widget.client ?? PbbClient();
     _blokController.text = widget.initialBlok ?? '';
     _wilayahController.text = widget.initialWilayah ?? '';
@@ -90,6 +95,28 @@ class _CheckFormViewState extends State<CheckFormView> {
     }
     widget.onRegisterShowTour?.call(showTour);
     _loadCaptcha();
+  }
+
+  void _onWilayahChanged() {
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _loadSavedWilayah() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final kec = prefs.getString('startup_kec_code');
+      final kel = prefs.getString('startup_kel_code');
+      final desa = prefs.getString('startup_desa_name');
+      if (kec != null && kel != null) {
+        final kecObj = findKecamatanByCode(kec);
+        setActiveWilayah(
+          kecCode: kec,
+          kelCode: kel,
+          desaName: desa ?? (kecObj != null ? lookupCatalogDesaName(kec, kel) : null),
+          kecName: kecObj?.name,
+        );
+      }
+    } catch (_) {}
   }
 
   @override
@@ -115,6 +142,7 @@ class _CheckFormViewState extends State<CheckFormView> {
 
   @override
   void dispose() {
+    activeWilayahRevision.removeListener(_onWilayahChanged);
     _blokController.dispose();
     _wilayahController.dispose();
     _tahunController.dispose();
@@ -747,7 +775,9 @@ class _CheckFormViewState extends State<CheckFormView> {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 18),
+                      const SizedBox(height: 14),
+                      _buildQuickWilayahSelector(context),
+                      const SizedBox(height: 14),
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -986,6 +1016,270 @@ class _CheckFormViewState extends State<CheckFormView> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildQuickWilayahSelector(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest.withValues(alpha: 0.6),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: scheme.outlineVariant.withValues(alpha: 0.6),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.location_on_rounded,
+            size: 18,
+            color: scheme.primary,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text.rich(
+              overflow: TextOverflow.ellipsis,
+              TextSpan(
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: scheme.onSurface,
+                ),
+                children: [
+                  TextSpan(
+                    text: 'Wilayah: ',
+                    style: TextStyle(color: scheme.onSurfaceVariant),
+                  ),
+                  TextSpan(
+                    text: 'Kec. $activeKecamatanName • ',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  TextSpan(
+                    text: 'Desa $activeDesaName ',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: scheme.primary,
+                    ),
+                  ),
+                  TextSpan(
+                    text: '($activeNopPrefix)',
+                    style: TextStyle(
+                      fontFamily: 'monospace',
+                      fontSize: 11,
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          InkWell(
+            borderRadius: BorderRadius.circular(8),
+            onTap: () => _showSwitchDesaBottomSheet(context),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: scheme.primary.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Ganti Desa',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: scheme.primary,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(
+                    Icons.arrow_drop_down_rounded,
+                    size: 18,
+                    color: scheme.primary,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showSwitchDesaBottomSheet(BuildContext context) {
+    final kec = findKecamatanByCode(activeKecamatanCode);
+    final desaList = kec?.desaList ?? const <DesaOption>[];
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        final scheme = Theme.of(ctx).colorScheme;
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: scheme.outlineVariant,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                Row(
+                  children: [
+                    Icon(Icons.swap_horiz_rounded, color: scheme.primary),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Pilih Desa untuk Cek Pajak',
+                            style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                          ),
+                          Text(
+                            'Kecamatan: $activeKecamatanName ($activeKecamatanCode)',
+                            style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                                  color: scheme.onSurfaceVariant,
+                                ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                const Divider(),
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: MediaQuery.of(ctx).size.height * 0.45,
+                  ),
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: desaList.length,
+                    itemBuilder: (context, index) {
+                      final d = desaList[index];
+                      final isSelected = d.code == activeKelurahanCode;
+                      return ListTile(
+                        dense: true,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        leading: Icon(
+                          isSelected
+                              ? Icons.radio_button_checked_rounded
+                              : Icons.radio_button_unchecked_rounded,
+                          color: isSelected ? scheme.primary : scheme.outline,
+                          size: 20,
+                        ),
+                        title: Text(
+                          'Desa ${d.name} (${d.code})',
+                          style: TextStyle(
+                            fontWeight:
+                                isSelected ? FontWeight.bold : FontWeight.normal,
+                            color: isSelected ? scheme.primary : null,
+                          ),
+                        ),
+                        subtitle: Text(
+                          'Prefix NOP: 3205$activeKecamatanCode${d.code}',
+                          style: const TextStyle(fontSize: 11, fontFamily: 'monospace'),
+                        ),
+                        trailing: isSelected
+                            ? Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: scheme.primaryContainer,
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  'Aktif',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: scheme.onPrimaryContainer,
+                                  ),
+                                ),
+                              )
+                            : null,
+                        onTap: () async {
+                          final messenger = ScaffoldMessenger.of(context);
+                          setActiveWilayah(
+                            kecCode: activeKecamatanCode,
+                            kelCode: d.code,
+                            desaName: d.name,
+                            kecName: activeKecamatanName,
+                          );
+                          final prefs = await SharedPreferences.getInstance();
+                          await prefs.setString('startup_kel_code', d.code);
+                          await prefs.setString('startup_desa_name', d.name);
+
+                          if (ctx.mounted) Navigator.pop(ctx);
+                          if (mounted) {
+                            setState(() {});
+                            messenger.showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  'Desa aktif diubah ke ${d.name} (3205$activeKecamatanCode${d.code})',
+                                ),
+                                duration: const Duration(seconds: 2),
+                              ),
+                            );
+                          }
+                        },
+                      );
+                    },
+                  ),
+                ),
+                const Divider(),
+                const SizedBox(height: 6),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: scheme.surfaceContainerLow,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.info_outline_rounded, size: 18, color: scheme.outline),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Ingin mengganti Kecamatan ($activeKecamatanName)? Silakan buka menu Pengaturan Wilayah.',
+                          style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                                fontSize: 11,
+                                color: scheme.onSurfaceVariant,
+                              ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

@@ -46,10 +46,16 @@ class PbbResult {
     this.nomorStan,
   });
 
-  bool get isPaid =>
-      status.toLowerCase().contains('sudah') ||
-      status.toLowerCase().contains('lunas') ||
-      (tanggalBayar != null && tanggalBayar!.trim().isNotEmpty);
+  bool get isPaid {
+    final s = status.toLowerCase();
+    if (s.contains('belum')) return false;
+    return s.contains('sudah') ||
+        s.contains('lunas') ||
+        (tanggalBayar != null &&
+            tanggalBayar!.trim().isNotEmpty &&
+            tanggalBayar!.trim() != '-' &&
+            tanggalBayar!.trim() != '0');
+  }
 }
 
 class CaptchaError implements Exception {
@@ -148,9 +154,90 @@ class PbbClient extends BaseHttpClient {
         contentType.contains('application/pdf');
 
     if (isPdf) {
-      // Periksa apakah tahun target sebenarnya sudah lunas via STTS
-      // (misalnya jika PDF hanya berisi tunggakan tahun lampau seperti 2021/2023,
-      // atau jika ketetapan pokok bernilai Rp 0 / nihil).
+      final doc = PdfDocument(inputBytes: bytes);
+      final pdfText = PdfTextExtractor(doc).extractText();
+      doc.dispose();
+
+      // Periksa daftar tahun yang benar-benar tertunggak dari tabel print-pdf.
+      // Tabel memuat kolom: TAHUN PAJAK ... TOTAL PBB.
+      // Jika tahun target TIDAK tercantum di tabel tunggakan, maka tahun target sebenarnya SUDAH LUNAS
+      // (hanya memiliki riwayat tunggakan di tahun-tahun lampau).
+      final matchTabelTunggakan = RegExp(
+        r'TAHUN\s*\n\s*PAJAK([\s\S]*?)TOTAL\s+PBB',
+        caseSensitive: false,
+      ).firstMatch(pdfText);
+
+      final unpaidYears = <String>{};
+      if (matchTabelTunggakan != null) {
+        final block = matchTabelTunggakan.group(1) ?? '';
+        unpaidYears.addAll(
+          RegExp(r'\b(20\d{2})\b')
+              .allMatches(block)
+              .map((m) => m.group(1)!),
+        );
+      }
+
+      // Ambil nama wajib pajak dari print-pdf sebagai fallback jika STTS belum terurai
+      String? namaFromPdf;
+      final lines = pdfText
+          .split('\n')
+          .map((l) => l.trim())
+          .where((l) => l.isNotEmpty)
+          .toList();
+      final wpIdx = lines.indexWhere(
+        (l) =>
+            l.toLowerCase() == 'nama wajib pajak' ||
+            l.toLowerCase() == 'nama wp',
+      );
+      if (wpIdx != -1) {
+        for (int i = wpIdx + 1; i < lines.length && i <= wpIdx + 4; i++) {
+          final line = lines[i];
+          if (line != ':' &&
+              line.isNotEmpty &&
+              !line.toLowerCase().contains('alamat')) {
+            namaFromPdf = line.replaceAll(RegExp(r'^:\s*'), '').trim();
+            break;
+          }
+        }
+      }
+
+      final isTargetYearUnpaid = unpaidYears.contains(targetYear);
+
+      // Jika tahun target tidak ada di tabel tunggakan (atau kita verifikasi via STTS)
+      if (!isTargetYearUnpaid && unpaidYears.isNotEmpty) {
+        try {
+          final stts = await extractSttsInMemory(
+            nop: cleanNop,
+            tahun: targetYear,
+          );
+          return PbbResult(
+            'Sudah Bayar',
+            'PBB tahun $targetYear LUNAS (terdapat riwayat tunggakan tahun lain: ${unpaidYears.join(", ")})',
+            namaWajibPajak: stts?.namaWajibPajak ?? namaFromPdf,
+            tanggalBayar: stts?.tanggalBayar,
+            jumlahPbb: stts?.jumlahPbb,
+            nomorStan: stts?.nomorStan,
+          );
+        } catch (_) {}
+      }
+
+      // Cek apakah ketetapan PBB bernilai Rp 0 di dalam PDF
+      final isRp0 = RegExp(
+        r'JUMLAH\s+YANG\s+HARUS\s+DIBAYAR[\s:]+Rp\s*0\b',
+        caseSensitive: false,
+      ).hasMatch(pdfText);
+
+      if (isRp0) {
+        return PbbResult(
+          'Sudah Bayar',
+          'Ketetapan PBB Rp 0 (Lunas / Bebas Pajak)',
+          namaWajibPajak: namaFromPdf,
+          tanggalBayar: targetYear,
+          jumlahPbb: 'Rp 0',
+        );
+      }
+
+      // Periksa via STTS jika ada bukti bayar spesifik tahun target
       try {
         final stts = await extractSttsInMemory(
           nop: cleanNop,
@@ -160,36 +247,19 @@ class PbbClient extends BaseHttpClient {
           return PbbResult(
             'Sudah Bayar',
             'PBB tahun $targetYear LUNAS (terdapat riwayat tunggakan tahun lain)',
-            namaWajibPajak: stts.namaWajibPajak,
+            namaWajibPajak: stts.namaWajibPajak ?? namaFromPdf,
             tanggalBayar: stts.tanggalBayar,
             jumlahPbb: stts.jumlahPbb,
             nomorStan: stts.nomorStan,
           );
         }
+      } catch (_) {}
 
-        // Cek apakah tagihan bernilai Rp 0 di dalam PDF
-        final doc = PdfDocument(inputBytes: bytes);
-        final pdfText = PdfTextExtractor(doc).extractText();
-        doc.dispose();
-
-        final isRp0 = RegExp(
-          r'JUMLAH\s+YANG\s+HARUS\s+DIBAYAR[\s:]+Rp\s*0\b',
-          caseSensitive: false,
-        ).hasMatch(pdfText);
-
-        if (isRp0) {
-          return PbbResult(
-            'Sudah Bayar',
-            'Ketetapan PBB Rp 0 (Lunas / Bebas Pajak)',
-            tanggalBayar: targetYear,
-            jumlahPbb: 'Rp 0',
-          );
-        }
-      } catch (_) {
-        // Fallback jika verifikasi lanjutan mengalami kendala
-      }
-
-      return PbbResult('Belum Bayar', 'Terdapat tagihan tunggakan PBB aktif');
+      return PbbResult(
+        'Belum Bayar',
+        'Terdapat tagihan tunggakan PBB aktif (Tahun: ${unpaidYears.isNotEmpty ? unpaidYears.join(", ") : targetYear})',
+        namaWajibPajak: namaFromPdf,
+      );
     }
 
     final html = utf8.decode(bytes, allowMalformed: true);
@@ -581,6 +651,20 @@ class PbbClient extends BaseHttpClient {
 
     if (rows.isEmpty) {
       return TagihanResult.notFound(text);
+    }
+
+    if (totalKurangBayar.isEmpty) {
+      int sumPbb = 0;
+      int sumDenda = 0;
+      int sumKurang = 0;
+      for (final r in rows) {
+        sumPbb += parseNominalRupiah(r.pbb);
+        sumDenda += parseNominalRupiah(r.denda);
+        sumKurang += parseNominalRupiah(r.kurangBayar);
+      }
+      totalPbb = sumPbb > 0 ? sumPbb.toString() : totalPbb;
+      totalDenda = sumDenda > 0 ? sumDenda.toString() : totalDenda;
+      totalKurangBayar = sumKurang > 0 ? sumKurang.toString() : totalKurangBayar;
     }
 
     return TagihanResult(

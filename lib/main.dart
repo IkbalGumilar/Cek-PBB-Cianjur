@@ -13,13 +13,14 @@ import 'desktop_accent_color_helper.dart';
 import 'dhkp_widget_sync_service.dart';
 import 'document_preview_screen.dart';
 import 'dusun_data.dart';
-import 'main_shell.dart';
 import 'monitoring/staff_sync_bubble_overlay.dart';
 import 'network_status_overlay.dart';
 import 'batch_notification_service.dart';
 import 'blok_batch_check_tracker.dart';
 import 'incoming_file_service.dart';
+import 'nop_helper.dart';
 import 'spreadsheet_viewer_screen.dart';
+import 'splash_screen.dart';
 import 'theme_controller.dart';
 
 Widget _buildExternalViewer(String filePath) {
@@ -88,6 +89,7 @@ void main() async {
     }
   }
   await DusunData.instance.init();
+  await initActiveWilayah();
   unawaited(DhkpWidgetSyncService.syncFromDatabase());
   await BlokBatchCheckTracker.instance.init();
   await BatchNotificationService.instance.init();
@@ -320,7 +322,9 @@ class _CekPbbAppState extends State<CekPbbApp> with WidgetsBindingObserver {
                   widget.initialExternalFilePath != null &&
                       widget.initialExternalFilePath!.isNotEmpty
                   ? _buildExternalViewer(widget.initialExternalFilePath!)
-                  : MainShell(themeController: _themeController),
+                  : SplashScreen(
+                      themeController: _themeController,
+                    ),
               builder: (context, child) {
                 final content = Stack(
                   children: [

@@ -287,7 +287,7 @@ class BlokDataStore {
   /// Laporan data blok (opsional per tahun) untuk diunduh sebagai CSV —
   /// berbeda dari [exportDkhp] (backup teknis lengkap): laporan ini menyertakan
   /// kolom Blok & Nomor Wilayah terpisah supaya langsung terbaca saat dibuka.
-  Future<String> exportReportCsv({String? tahun}) async {
+  Future<String?> exportReportCsv({String? tahun}) async {
     final records = await forReport(tahun: tahun);
     final content = BlokCsvCodec.encodeReportCsv(records);
     final tahunPart = (tahun == null || tahun.isEmpty) ? 'semua_tahun' : tahun;

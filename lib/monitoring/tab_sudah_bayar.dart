@@ -28,8 +28,8 @@ class _TabSudahBayarState extends State<TabSudahBayar> {
   final _operator = TextEditingController();
   String _buku = 'semua';
   String _bank = '';
-  String _kelurahan = '3205200004';
-  final _kecamatan = '3205200';
+  late String _kelurahan = widget.client.activeKelurahanCode;
+  String get _kecamatan => widget.client.activeKecamatanCode;
 
   @override
   void dispose() {

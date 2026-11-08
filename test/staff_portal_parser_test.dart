@@ -361,6 +361,88 @@ void main() {
       expect(isSessionActive(doubleQuoteHtml), isTrue);
       expect(isSessionActive(unauthenticatedHtml), isFalse);
     });
+
+    test('isSessionExpired detects 302 redirects to login and login forms', () {
+      expect(
+        StaffPortalParser.isSessionExpired(
+          '',
+          statusCode: 302,
+          location: 'https://cianjurkab.v-tax.id/plogin.php',
+        ),
+        isTrue,
+      );
+      expect(
+        StaffPortalParser.isSessionExpired(
+          '',
+          statusCode: 302,
+          location: '/main.php',
+        ),
+        isTrue,
+      );
+      expect(
+        StaffPortalParser.isSessionExpired(
+          '<form action="plogin.php"><input name="usr"><input name="pwd"></form>',
+        ),
+        isTrue,
+      );
+      expect(
+        StaffPortalParser.isSessionExpired(
+          '<div>Sesi Anda telah berakhir, silahkan login kembali</div>',
+        ),
+        isTrue,
+      );
+      expect(
+        StaffPortalParser.isSessionExpired(
+          '<table><tr><td>1</td><td>320520000400100010</td></tr></table>',
+        ),
+        isFalse,
+      );
+    });
+
+    test('parseGenericTable handles session expiration and thousand-formatted pagination', () {
+      final expired = StaffPortalParser.parseGenericTable(
+        '<form action="plogin.php"><input name="cImage"></form>',
+      );
+      expect(expired.errorMessage, contains('kedaluwarsa'));
+
+      const htmlWithDots = '''
+        <table>
+          <tr><th>No</th><th>NOP</th></tr>
+          <tr><td>1</td><td>320520000400100010</td></tr>
+        </table>
+        <div id="paging-tbl">&nbsp;1 - 50 dari 15.515&nbsp;<span id="next-page" onclick="setPage('2','2')"></span></div>
+      ''';
+      final res = StaffPortalParser.parseGenericTable(htmlWithDots);
+      expect(res.errorMessage, isNull);
+      expect(res.pageStart, 1);
+      expect(res.pageEnd, 50);
+      expect(res.totalRecords, 15515);
+      expect(res.hasNextPage, isTrue);
+    });
+
+    test('kolektif and excel queue parsers recognize session expiration', () {
+      final qRes = StaffPortalParser.parseExcelQueueTable(
+        '<html><body>Silahkan login kembali</body></html>',
+      );
+      expect(qRes.errorMessage, contains('kedaluwarsa'));
+
+      final grpRes = StaffPortalParser.parseKolektifGroupsJson(
+        '<html><form action="plogin.php"></form></html>',
+      );
+      expect(grpRes.errorMessage, contains('kedaluwarsa'));
+
+      final memRes = StaffPortalParser.parseKolektifMemberJson(
+        '<html><form action="plogin.php"></form></html>',
+      );
+      expect(memRes.errorMessage, contains('kedaluwarsa'));
+
+      final actRes = StaffPortalParser.parseKolektifActionJson(
+        '<html><form action="plogin.php"></form></html>',
+      );
+      expect(actRes.success, isFalse);
+      expect(actRes.message, contains('kedaluwarsa'));
+      expect(actRes.responsDikenali, isFalse);
+    });
   });
 }
 

@@ -57,6 +57,7 @@ class ApkShareHelper {
       final savedLocation = await DownloadHelper.saveBytes(
         bytes,
         'CekPBBCianjur.apk',
+        useSaveAs: false,
       ).timeout(const Duration(seconds: 15));
       return savedLocation;
     } catch (_) {

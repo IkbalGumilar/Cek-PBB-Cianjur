@@ -1,13 +1,17 @@
 import 'dart:async';
+import 'dart:io';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'app_storage.dart';
 import 'batch_notification_service.dart';
 import 'blok_batch_check_tracker.dart';
 import 'blok_data_store.dart';
 import 'currency_format.dart';
 import 'download_helper.dart';
+import 'native_file_helper.dart';
 import 'nop_helper.dart';
 import 'pbb_client.dart';
 import 'result_screen.dart';
@@ -23,9 +27,14 @@ class BatchCheckScreen extends StatefulWidget {
   final Duration cooldownDuration;
   final bool autoStart;
 
-  /// Jika true, NOP yang terdeteksi sudah bayar juga diunduh berkas STTS-nya
-  /// (disimpan ke folder dokumen aplikasi). Jika false, tidak ada yang diunduh.
+  /// Jika true, NOP yang terdeteksi sudah bayar juga diunduh berkas STTS-nya.
   final bool downloadStts;
+
+  /// Folder khusus untuk menampung seluruh berkas STTS dan berkas informasi blok (.txt).
+  final Directory? sttsTargetDirectory;
+
+  /// Nomor blok yang sedang diperiksa (misalnya "001" atau "1").
+  final String? sttsBlokNumber;
 
   const BatchCheckScreen({
     super.key,
@@ -37,6 +46,8 @@ class BatchCheckScreen extends StatefulWidget {
     this.cooldownDuration = const Duration(seconds: 3),
     this.autoStart = true,
     this.downloadStts = false,
+    this.sttsTargetDirectory,
+    this.sttsBlokNumber,
   });
 
   @override
@@ -47,6 +58,7 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
   late final PbbClient _client;
   final ScrollController _scrollController = ScrollController();
 
+  Directory? _sttsDirectory;
   int _currentIndex = 0;
   bool _isRunning = false;
   bool _isPaused = false;
@@ -64,6 +76,7 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
   void initState() {
     super.initState();
     _client = widget.client ?? PbbClient();
+    _sttsDirectory = widget.sttsTargetDirectory;
     _actionSubscription = BatchNotificationService.actionStream.listen((action) {
       if (!mounted) return;
       switch (action) {
@@ -109,6 +122,10 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
     if (_cancelledNotified || _isCompleted) return;
     _cancelledNotified = true;
 
+    if (widget.downloadStts && _sttsDirectory != null) {
+      unawaited(_updateBlockInfoTxt(isFinal: true));
+    }
+
     if (_currentIndex > 0) {
       final sudahCount = widget.records.where((r) => r.isPaid).length;
       final belumCount = widget.records
@@ -143,7 +160,7 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
     }
   }
 
-  /// Unduh STTS NOP yang sudah bayar dan simpan ke folder "STTS". Hasilnya
+  /// Unduh STTS NOP yang sudah bayar dan simpan ke folder STTS khusus. Hasilnya
   /// dicatat di [TaxRecord.buktiBayarDownloaded]: true bila tersimpan, false
   /// bila STTS belum terbit di server atau gagal diunduh. Kegagalan di sini
   /// tidak menghentikan pengecekan massal.
@@ -175,10 +192,27 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
       final fileName = _safeFileName(
         'STTS ($label) No. (${nopBlok(cleanNop)}) (${nopWilayah(cleanNop)}) (${widget.tahun}).pdf',
       );
-      await DownloadHelper.saveBytes(bytes, fileName, subfolder: 'STTS');
-      record.buktiBayarDownloaded = true;
+
+      final dir = _sttsDirectory;
+      if (dir != null) {
+        final targetFile = File('${dir.path}/$fileName');
+        await targetFile.writeAsBytes(bytes);
+        record.buktiBayarDownloaded = true;
+      } else {
+        await DownloadHelper.saveBytes(
+          bytes,
+          fileName,
+          subfolder: 'STTS',
+          useSaveAs: false,
+        );
+        record.buktiBayarDownloaded = true;
+      }
     } catch (_) {
       record.buktiBayarDownloaded = false;
+    }
+
+    if (widget.downloadStts && _sttsDirectory != null) {
+      await _updateBlockInfoTxt(isFinal: false);
     }
   }
 
@@ -204,6 +238,61 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
       _isRunning = true;
       _isPaused = false;
     });
+
+    if (widget.downloadStts && _sttsDirectory == null) {
+      try {
+        final pickedPath = await FilePicker.getDirectoryPath(
+          dialogTitle: 'Pilih Folder Penyimpanan Berkas STTS',
+        );
+        if (pickedPath != null && pickedPath.isNotEmpty) {
+          final blokStr = widget.sttsBlokNumber ??
+              (widget.records.isNotEmpty
+                  ? nopBlok(widget.records.first.nop)
+                  : '000');
+          final cleanBlok = blokStr.replaceAll(RegExp(r'[^0-9]'), '');
+          final blokFormatted =
+              cleanBlok.isNotEmpty ? cleanBlok.padLeft(3, '0') : blokStr;
+          final now = DateTime.now();
+          const namaHariList = [
+            'Senin',
+            'Selasa',
+            'Rabu',
+            'Kamis',
+            'Jumat',
+            'Sabtu',
+            'Minggu',
+          ];
+          final namaHari = namaHariList[now.weekday - 1];
+          final tgl = now.day.toString().padLeft(2, '0');
+          final bln = now.month.toString().padLeft(2, '0');
+          final thn = now.year.toString();
+          final folderName =
+              'STTS Blok $blokFormatted - $namaHari, $tgl-$bln-$thn';
+
+          final dir = Directory('$pickedPath/$folderName');
+          if (!await dir.exists()) {
+            await dir.create(recursive: true);
+          }
+          _sttsDirectory = dir;
+        }
+      } catch (_) {}
+
+      // Fallback ke penyimpanan default dokumen jika dialog dibatalkan / di lingkungan pengujian
+      if (_sttsDirectory == null) {
+        try {
+          final docsDir = await AppStorage.getDocumentsDirectory();
+          final dir = Directory('${docsDir.path}/STTS');
+          if (!await dir.exists()) {
+            await dir.create(recursive: true);
+          }
+          _sttsDirectory = dir;
+        } catch (_) {}
+      }
+    }
+
+    if (widget.downloadStts && _sttsDirectory != null) {
+      await _updateBlockInfoTxt(isFinal: false);
+    }
 
     BatchNotificationService.instance.setActiveRecords(widget.records);
     await BatchNotificationService.instance.requestPermission();
@@ -286,6 +375,9 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
         record.status = 'Gagal Cek';
         record.rawText = lastError?.toString() ?? 'Koneksi terputus';
         await BlokBatchCheckTracker.instance.recordChecked(record.nop);
+        if (record.isPaid && widget.downloadStts && mounted) {
+          await _downloadSttsFor(record);
+        }
       }
 
       if (!mounted) return;
@@ -341,6 +433,9 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
           setState(() {
             _isCooldown = false;
           });
+          if (widget.downloadStts && _sttsDirectory != null) {
+            unawaited(_updateBlockInfoTxt(isFinal: false));
+          }
         }
       }
     }
@@ -352,6 +447,9 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
         _isCompleted = true;
         _statusMessage = 'Semua NOP selesai diperiksa.';
       });
+      if (widget.downloadStts && _sttsDirectory != null) {
+        await _updateBlockInfoTxt(isFinal: true);
+      }
       HapticFeedback.mediumImpact();
 
       final sudahCount = widget.records.where((r) => r.isPaid).length;
@@ -454,9 +552,133 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
     }
   }
 
+  Future<void> _updateBlockInfoTxt({bool isFinal = false}) async {
+    final dir = _sttsDirectory;
+    if (dir == null) return;
+
+    try {
+      final blokStr = widget.sttsBlokNumber ??
+          (widget.records.isNotEmpty
+              ? nopBlok(widget.records.first.nop)
+              : '000');
+      final cleanBlok = blokStr.replaceAll(RegExp(r'[^0-9]'), '');
+      final blokFormatted =
+          cleanBlok.isNotEmpty ? cleanBlok.padLeft(3, '0') : blokStr;
+      final txtFile = File('${dir.path}/INFORMASI_BLOK_$blokFormatted.txt');
+
+      final desaName = activeDesaName;
+      final kecName = activeKecamatanName;
+      final totalRecords = widget.records.length;
+      final sudahBayarList = widget.records.where((r) => r.isPaid).toList();
+      final belumBayarList = widget.records
+          .where((r) => !r.isPaid && r.isChecked)
+          .toList();
+      final gagalList =
+          widget.records.where((r) => r.status.contains('Gagal')).toList();
+      final sttsDownloadedCount = widget.records
+          .where((r) => r.buktiBayarDownloaded == true)
+          .length;
+
+      int totalNominalBayar = 0;
+      for (final r in sudahBayarList) {
+        totalNominalBayar += parseNominalRupiah(r.jumlahPbb);
+      }
+
+      int totalNominalBelum = 0;
+      for (final r in belumBayarList) {
+        totalNominalBelum += parseNominalRupiah(r.jumlahPbb);
+      }
+
+      final now = DateTime.now();
+      const namaHariList = [
+        'Senin',
+        'Selasa',
+        'Rabu',
+        'Kamis',
+        'Jumat',
+        'Sabtu',
+        'Minggu',
+      ];
+      final namaHari = namaHariList[now.weekday - 1];
+      final tglStr =
+          '${now.day.toString().padLeft(2, '0')}-${now.month.toString().padLeft(2, '0')}-${now.year}';
+      final jamStr =
+          '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}';
+
+      final buf = StringBuffer();
+      buf.writeln('================================================================================');
+      buf.writeln('                    INFORMASI REKAPITULASI PENGECEKAN BLOK');
+      buf.writeln('                              KABUPATEN CIANJUR');
+      buf.writeln('================================================================================');
+      buf.writeln('Kecamatan         : $kecName');
+      buf.writeln('Desa / Kelurahan  : $desaName');
+      buf.writeln('Nomor Blok        : Blok $blokFormatted');
+      buf.writeln('Tahun Pajak       : ${widget.tahun}');
+      buf.writeln('Waktu Pembuatan   : $namaHari, $tglStr $jamStr');
+      buf.writeln('Status Pengecekan : ${isFinal ? "Selesai" : "Sedang Berjalan / Sebagian"}');
+      buf.writeln('Folder Berkas STTS: ${dir.path}');
+      buf.writeln('--------------------------------------------------------------------------------');
+      buf.writeln('RINGKASAN PEMERIKSAAN:');
+      buf.writeln('--------------------------------------------------------------------------------');
+      buf.writeln('Total Objek Pajak (NOP)  : $totalRecords');
+      buf.writeln('Sudah Bayar (Lunas)      : ${sudahBayarList.length}');
+      buf.writeln('Belum Bayar              : ${belumBayarList.length}');
+      buf.writeln('Gagal / Kendala Cek      : ${gagalList.length}');
+      buf.writeln('Berkas STTS Terunduh     : $sttsDownloadedCount berkas PDF');
+      buf.writeln('Total Nominal Terbayar   : Rp ${formatRibuan(totalNominalBayar)}');
+      if (totalNominalBelum > 0) {
+        buf.writeln('Total Nominal Belum Bayar: Rp ${formatRibuan(totalNominalBelum)}');
+      }
+      buf.writeln('--------------------------------------------------------------------------------');
+      buf.writeln('DAFTAR RINCIAN OBJEK PAJAK (NOP):');
+      buf.writeln('--------------------------------------------------------------------------------');
+      buf.writeln('No. | NOP                  | Nama Wajib Pajak             | Status Bayar | Nominal PBB   | Tanggal Bayar | No. STAN         | File STTS');
+      buf.writeln('----+----------------------+------------------------------+--------------+---------------+---------------+------------------+------------------');
+
+      for (int i = 0; i < widget.records.length; i++) {
+        final r = widget.records[i];
+        final no = (i + 1).toString().padRight(3);
+        final nop = r.nop.padRight(20);
+        final nama = (r.namaWajibPajak ?? '-').trim();
+        final namaTrunc =
+            (nama.length > 28 ? '${nama.substring(0, 25)}...' : nama)
+                .padRight(28);
+        final status = (r.isPaid
+                ? 'Sudah Bayar'
+                : (r.isChecked ? r.status : 'Belum Dicek'))
+            .padRight(12);
+        final nominal = (r.jumlahPbb != null && r.jumlahPbb!.isNotEmpty
+                ? 'Rp ${cleanNominalRupiah(r.jumlahPbb!)}'
+                : '-')
+            .padRight(13);
+        final tgl = (r.tanggalBayar ?? '-').padRight(13);
+        final stan = (r.nomorStan ?? '-').padRight(16);
+        final sttsStatus = r.buktiBayarDownloaded == true
+            ? 'Terunduh'
+            : (r.isPaid ? 'Gagal/Tidak Terbit' : '-');
+
+        buf.writeln(
+            '$no | $nop | $namaTrunc | $status | $nominal | $tgl | $stan | $sttsStatus');
+      }
+
+      buf.writeln('================================================================================');
+      buf.writeln('Catatan:');
+      buf.writeln('- Berkas STTS (.pdf) hanya dapat diunduh untuk NOP yang telah berstatus Sudah Bayar.');
+      buf.writeln('- Berkas ini dihasilkan secara otomatis oleh Aplikasi Cek PBB Cianjur.');
+      buf.writeln('================================================================================');
+
+      await txtFile.writeAsString(buf.toString());
+    } catch (e) {
+      debugPrint('Gagal menulis berkas informasi blok: $e');
+    }
+  }
+
   void _goToResult() {
     _isRunning = false;
     _isPaused = false;
+    if (widget.downloadStts && _sttsDirectory != null) {
+      unawaited(_updateBlockInfoTxt(isFinal: true));
+    }
     unawaited(BatchNotificationService.instance.stopForegroundService());
     Navigator.pushReplacement(
       context,
@@ -563,6 +785,8 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
         .where((r) => r.status == 'Dilewati')
         .length;
     final sisaCount = (total - _currentIndex).clamp(0, total);
+    final sttsDownloadedCount =
+        widget.records.where((r) => r.buktiBayarDownloaded == true).length;
     final scheme = Theme.of(context).colorScheme;
 
     final progressVal = total == 0
@@ -622,6 +846,12 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
                               count: belumBayarCount,
                               color: Colors.orange,
                             ),
+                            if (widget.downloadStts)
+                              _buildCounterBadge(
+                                label: 'STTS',
+                                count: sttsDownloadedCount,
+                                color: Colors.teal,
+                              ),
                             if (blacklistCount > 0)
                               _buildCounterBadge(
                                 label: 'Blacklist',
@@ -647,6 +877,63 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
                             ),
                           ],
                         ),
+                        if (widget.downloadStts && _sttsDirectory != null) ...[
+                          const SizedBox(height: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.teal.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: Colors.teal.withValues(alpha: 0.3),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(
+                                  Icons.folder_outlined,
+                                  size: 16,
+                                  color: Colors.teal,
+                                ),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    'STTS: ${_sttsDirectory!.path.split(Platform.pathSeparator).last}',
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.teal,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                InkWell(
+                                  onTap: () =>
+                                      NativeFileHelper.showInFileManager(
+                                    _sttsDirectory!.path,
+                                  ),
+                                  child: const Padding(
+                                    padding:
+                                        EdgeInsets.symmetric(horizontal: 4),
+                                    child: Text(
+                                      'Buka Folder',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: Colors.teal,
+                                        fontWeight: FontWeight.bold,
+                                        decoration:
+                                            TextDecoration.underline,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),

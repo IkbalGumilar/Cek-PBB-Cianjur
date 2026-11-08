@@ -255,7 +255,7 @@ class _KelolaAnggotaScreenState extends State<KelolaAnggotaScreen> {
         prefix: 'anggota',
       );
       final lokasi = await DownloadHelper.saveBytes(bytes, namaBerkas);
-      if (!mounted) return;
+      if (!mounted || lokasi == null) return;
       _snack('Tersimpan di $lokasi');
     } catch (e) {
       if (!mounted) return;

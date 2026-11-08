@@ -389,6 +389,36 @@ class DhkpPackageHelper {
         );
         await DusunData.instance.setScope(DusunScope.fromJson(scopeMap));
       }
+
+      // Sinkronisasi wilayah & NOP aktif dari manifest
+      if (manifest['desa'] is Map) {
+        final desaMap = manifest['desa'] as Map;
+        final kecMap = manifest['kecamatan'] as Map?;
+        final kecCode = kecMap?['kode']?.toString() ?? '200';
+        final kelCode = desaMap['kode']?.toString() ?? '004';
+        final kecName = kecMap?['nama']?.toString();
+        final desaName = desaMap['nama']?.toString();
+
+        await saveActiveWilayah(
+          kecCode: kecCode,
+          kelCode: kelCode,
+          desaName: desaName,
+          kecName: kecName,
+        );
+      }
+
+      // Sinkronisasi koordinat kantor desa dari manifest
+      if (manifest['geospasial'] is Map || manifest['desa'] is Map) {
+        final geo = manifest['geospasial'] is Map ? manifest['geospasial'] as Map : null;
+        final kantor = geo?['kantor_desa'] as Map? ?? (manifest['desa'] is Map ? (manifest['desa'] as Map)['kantor_desa'] as Map? : null);
+        if (kantor != null) {
+          final lat = (kantor['lat'] as num?)?.toDouble();
+          final lng = (kantor['lng'] as num?)?.toDouble();
+          if (lat != null && lng != null) {
+            await DusunData.instance.setKantorDesaLocation(lat, lng);
+          }
+        }
+      }
     }
 
     final records = <BlokRecord>[];
@@ -469,7 +499,9 @@ class DhkpPackageHelper {
 
     // Ekstrak semua foto dokumentasi ke folder lokal setelah validasi lulus
     for (final p in photoFiles) {
-      final baseName = p.name.split('/').last;
+      final baseName =
+          p.name.split(RegExp(r'[\\/]')).last.replaceAll('..', '').trim();
+      if (baseName.isEmpty) continue;
       final targetFile = File('${photosDir.path}/$baseName');
       await targetFile.writeAsBytes(p.content as List<int>);
     }
@@ -707,13 +739,46 @@ class DhkpPackageHelper {
       final effectiveScope = scope ?? DusunData.instance.scope;
       final manifestMap = <String, dynamic>{
         'format': isDatReport ? 'laporan_dat_v1' : 'dhkp_delta_v1',
+        'versi_manifest': '2.0',
         'isDeltaOnly': deltaOnly,
         'dhkpFingerprint': dhkpFingerprint,
         'baseTotalNop': effectiveBase.length,
         'changedCount': changedList.length,
         'timestamp': DateTime.now().millisecondsSinceEpoch,
-        if (effectiveDusuns.isNotEmpty)
+        'kabupaten': {
+          'kode': '3205',
+          'nama': 'CIANJUR',
+          'provinsi': 'JAWA BARAT',
+        },
+        'kecamatan': {'kode': '200', 'nama': 'MANDE'},
+        'desa': {
+          'kode': '004',
+          'nama': 'BOBOJONG',
+          'prefix_nop': '3205200004',
+          'kantor_desa': {
+            'nama': 'Kantor Desa Bobojong',
+            'lat': -6.763587,
+            'lng': 107.238769,
+            'zoom_fokus': 17.5,
+          },
+        },
+        'geospasial': {
+          'pusat_peta': {
+            'lat': -6.7535737,
+            'lng': 107.260056,
+            'zoom_awal': 14.5,
+          },
+          'kantor_desa': {
+            'nama': 'Kantor Desa Bobojong',
+            'lat': -6.763587,
+            'lng': 107.238769,
+            'zoom_fokus': 17.5,
+          },
+        },
+        if (effectiveDusuns.isNotEmpty) ...{
           'dusuns': effectiveDusuns.map((d) => d.toJson()).toList(),
+          'kadus': effectiveDusuns.map((d) => d.toJson()).toList(),
+        },
         'scope': effectiveScope.toJson(),
         'changes': [
           for (final r in targetRecords)

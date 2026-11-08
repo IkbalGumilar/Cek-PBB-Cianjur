@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>Fasilitas Umum Desa Bobojong</name>
+    <description>Tempat ibadah, sekolah, dan kantor desa</description>
+    <Placemark>
+      <name>Fasilitas Umum</name>
+      <description><![CDATA[Fasum: place_of_worship]]></description>
+      <Point><coordinates>107.20526638000001,-6.76956904,0</coordinates></Point>
+    </Placemark>
+    <Placemark>
+      <name>Fasilitas (fuel)</name>
+      <description><![CDATA[Tipe: fuel]]></description>
+      <Point><coordinates>107.2261674,-6.7661662,0</coordinates></Point>
+    </Placemark>
+    <Placemark>
+      <name>Kantor Desa Bobojong</name>
+      <description><![CDATA[Pusat Pemerintahan Desa Bobojong, Kec. Mande]]></description>
+      <Point><coordinates>107.238769,-6.763587,0</coordinates></Point>
+    </Placemark>
+  </Document>
+</kml>

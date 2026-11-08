@@ -253,6 +253,7 @@ class _KolaseFotoScreenState extends State<KolaseFotoScreen> {
         _pdfFileName,
         subfolder: 'files',
       );
+      if (savedPath == null) return;
       messenger.showSnackBar(
         SnackBar(
           content: Text('Dokumen PDF berhasil disimpan di:\n$savedPath'),

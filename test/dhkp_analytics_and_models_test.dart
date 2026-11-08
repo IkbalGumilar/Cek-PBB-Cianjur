@@ -3,6 +3,7 @@ import 'package:cek_pbb_app/blok_record.dart';
 import 'package:cek_pbb_app/dhkp/blok_catatan_models.dart';
 import 'package:cek_pbb_app/dhkp/dhkp_chart_widgets.dart';
 import 'package:cek_pbb_app/dhkp_grafik_view.dart';
+import 'package:cek_pbb_app/nop_helper.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -94,11 +95,69 @@ void main() {
       expect(formatShortRupiah(1200000000), '1.2 M');
     });
 
-    test('parsePaymentDate parses ISO and DD-MM-YYYY dates', () {
+    test('parsePaymentDate parses ISO and DD-MM-YYYY dates and rejects standalone years', () {
       expect(parsePaymentDate('2026-04-16 14:59:06')?.month, 4);
       expect(parsePaymentDate('16-08-2026')?.month, 8);
+      expect(parsePaymentDate('2024'), isNull);
+      expect(parsePaymentDate('2025'), isNull);
       expect(parsePaymentDate('2026'), isNull);
+      expect(parsePaymentDate('2027'), isNull);
+      expect(parsePaymentDate('-'), isNull);
+      expect(parsePaymentDate('0'), isNull);
       expect(parsePaymentDate(''), isNull);
+    });
+
+    test('BlokRecord.isPaid strictly evaluates payment status and excludes Belum Bayar with date placeholders', () {
+      const unpaidWithDash = BlokRecord(
+        nop: '320520000400100010',
+        namaWajibPajak: 'TEST',
+        tahunBayar: '2026',
+        tanggalBayar: '-',
+        statusBayar: 'Belum Bayar',
+      );
+      expect(unpaidWithDash.isPaid, isFalse);
+
+      const unpaidWithYearOnly = BlokRecord(
+        nop: '320520000400100010',
+        namaWajibPajak: 'TEST',
+        tahunBayar: '2026',
+        tanggalBayar: '2026',
+        statusBayar: 'Belum Bayar',
+      );
+      expect(unpaidWithYearOnly.isPaid, isFalse);
+
+      const paidWithDate = BlokRecord(
+        nop: '320520000400100010',
+        namaWajibPajak: 'TEST',
+        tahunBayar: '2026',
+        tanggalBayar: '2026-05-10',
+        statusBayar: 'Sudah Bayar',
+      );
+      expect(paidWithDate.isPaid, isTrue);
+
+      const paidLunas = BlokRecord(
+        nop: '320520000400100010',
+        namaWajibPajak: 'TEST',
+        tahunBayar: '2026',
+        tanggalBayar: '',
+        statusBayar: 'Lunas',
+      );
+      expect(paidLunas.isPaid, isTrue);
+    });
+
+    test('isValidNop and NOP region segment helpers accurately validate and extract parts', () {
+      expect(isValidNop('320520000401701540'), isTrue);
+      expect(isValidNop('32.05.200.004.017-0154.0'), isTrue);
+      expect(isValidNop('32052000040170154'), isFalse); // 17 digits
+      expect(isValidNop('17154'), isFalse); // shorthand
+
+      const nop = '320520000401701540';
+      expect(nopPropinsi(nop), '32');
+      expect(nopKabupaten(nop), '05');
+      expect(nopKecamatan(nop), '200');
+      expect(nopKelurahan(nop), '004');
+      expect(nopBlok(nop), '017');
+      expect(nopWilayah(nop), '0154');
     });
 
     test('buildMonthGroups aggregates payments into 12 months', () {

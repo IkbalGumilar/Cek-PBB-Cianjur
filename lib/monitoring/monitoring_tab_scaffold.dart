@@ -268,7 +268,7 @@ class _MonitoringTabScaffoldState extends State<MonitoringTabScaffold> {
                     // Formulir filter saat dibuka
                     if (_filterExpanded) ...[
                       const Divider(height: 16),
-                      const WilayahBadge(),
+                      WilayahBadge(client: widget.client),
                       ...widget.formBuilder(context, _loading || _exportLoading),
                       const SizedBox(height: 16),
                     ],

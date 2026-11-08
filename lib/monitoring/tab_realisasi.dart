@@ -24,10 +24,10 @@ class _TabRealisasiState extends State<TabRealisasi> {
   final _tglPelimpahanAkhir = TextEditingController();
   String _buku = 'semua';
   String _bank = '';
-  String _kelurahan = '3205200004';
-  String _namaKelurahan = 'BOBOJONG';
-  final _kecamatan = '3205200';
-  final _namaKecamatan = 'MANDE';
+  late String _kelurahan = widget.client.activeKelurahanCode;
+  late String _namaKelurahan = widget.client.activeKelurahanName;
+  String get _kecamatan => widget.client.activeKecamatanCode;
+  String get _namaKecamatan => widget.client.activeKecamatanName;
 
   @override
   void dispose() {

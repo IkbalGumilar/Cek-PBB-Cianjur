@@ -22,8 +22,8 @@ class _TabBelumBayarState extends State<TabBelumBayar> {
   final _namaWp = TextEditingController();
   final _kodeBayarIndividu = TextEditingController();
   String _buku = 'semua';
-  String _kelurahan = '3205200004';
-  final _kecamatan = '3205200';
+  late String _kelurahan = widget.client.activeKelurahanCode;
+  String get _kecamatan => widget.client.activeKecamatanCode;
 
   @override
   void dispose() {

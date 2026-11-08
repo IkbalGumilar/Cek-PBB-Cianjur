@@ -141,9 +141,16 @@ class DhkpGrafikAnalytics {
   static DateTime? parsePaymentDate(String? raw) {
     if (raw == null) return null;
     final s = raw.trim();
-    if (s.isEmpty || s == '2026') return null;
+    if (s.isEmpty ||
+        RegExp(r'^\d{4}$').hasMatch(s) ||
+        s == '-' ||
+        s == '0') {
+      return null;
+    }
     try {
-      return DateTime.parse(s);
+      if (s.length > 4) {
+        return DateTime.parse(s);
+      }
     } catch (_) {}
     final dmy = RegExp(
       r'^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})(?:\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?',

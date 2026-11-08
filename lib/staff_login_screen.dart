@@ -147,7 +147,7 @@ class _StaffLoginScreenState extends State<StaffLoginScreen> {
         await _loadCaptcha();
       }
     } catch (e) {
-      setState(() => _errorText = 'Gagal login: $e');
+      if (mounted) setState(() => _errorText = 'Gagal login: $e');
     } finally {
       if (mounted) setState(() => _submitting = false);
     }

@@ -11,6 +11,10 @@ class FakeStaffPortalClient extends StaffPortalClient {
   final Map<String, MonitoringTableResult> responses;
   final Map<int, MonitoringTableResult>? pageResponses;
   final Map<int, MonitoringTableResult>? belumBayarPageResponses;
+  int fetchBelumBayarCallCount = 0;
+  int fetchSudahBayarCallCount = 0;
+  String? lastTglBayarAwal;
+  String? lastTglBayarAkhir;
 
   FakeStaffPortalClient({
     this.responses = const {},
@@ -32,6 +36,7 @@ class FakeStaffPortalClient extends StaffPortalClient {
     String kecamatan = '3205200',
     int page = 1,
   }) async {
+    fetchBelumBayarCallCount++;
     if (belumBayarPageResponses != null &&
         belumBayarPageResponses!.containsKey(page)) {
       return belumBayarPageResponses![page]!;
@@ -65,6 +70,9 @@ class FakeStaffPortalClient extends StaffPortalClient {
     String kecamatan = '3205200',
     int page = 1,
   }) async {
+    fetchSudahBayarCallCount++;
+    lastTglBayarAwal = tglBayarAwal;
+    lastTglBayarAkhir = tglBayarAkhir;
     if (pageResponses != null && pageResponses!.containsKey(page)) {
       return pageResponses![page]!;
     }
@@ -364,6 +372,42 @@ void main() {
 
       final all = await BlokDataStore.instance.loadAll();
       expect(all.any((r) => r.nop == '320520000402500099'), isFalse);
+    });
+
+    test('syncBloks defaults to paidOnly mode and never calls fetchBelumBayar', () async {
+      final client = FakeStaffPortalClient();
+
+      final outcome = await StaffDhkpSyncService.instance.syncBloks(
+        client: client,
+        tahun: '2026',
+        bloks: ['001'],
+        kelurahanCode: '3205200004',
+        kecamatanCode: '3205200',
+        pacingDelay: Duration.zero,
+      );
+
+      expect(outcome.isSuccess, isTrue);
+      expect(client.fetchBelumBayarCallCount, 0); // NEVER called in default paidOnly mode!
+      expect(client.fetchSudahBayarCallCount, 1);
+    });
+
+    test('syncBloks respects custom date range and forwards tglBayarAwal and tglBayarAkhir', () async {
+      final client = FakeStaffPortalClient();
+
+      final outcome = await StaffDhkpSyncService.instance.syncBloks(
+        client: client,
+        tahun: '2026',
+        bloks: ['001'],
+        kelurahanCode: '3205200004',
+        kecamatanCode: '3205200',
+        tglBayarAwal: '2026-11-01',
+        tglBayarAkhir: '2026-11-07',
+        pacingDelay: Duration.zero,
+      );
+
+      expect(outcome.isSuccess, isTrue);
+      expect(client.lastTglBayarAwal, '2026-11-01');
+      expect(client.lastTglBayarAkhir, '2026-11-07');
     });
   });
 

@@ -35,6 +35,8 @@ Future<void> _runScreen(
   _FakeClient client,
   List<TaxRecord> records, {
   required bool downloadStts,
+  Directory? sttsTargetDirectory,
+  String? sttsBlokNumber,
 }) async {
   await tester.runAsync(() async {
     await tester.pumpWidget(
@@ -46,6 +48,8 @@ Future<void> _runScreen(
           pacingDelay: Duration.zero,
           cooldownBatchSize: 0,
           downloadStts: downloadStts,
+          sttsTargetDirectory: sttsTargetDirectory,
+          sttsBlokNumber: sttsBlokNumber,
         ),
       ),
     );
@@ -98,5 +102,53 @@ void main() {
 
     expect(client.sttsRequests, isEmpty);
     expect(records[0].buktiBayarDownloaded, isNull);
+  });
+
+  testWidgets('unduh STTS dengan folder blok: PDF dan file info txt tersimpan langsung', (
+    tester,
+  ) async {
+    final client = _FakeClient();
+    final blokFolder = Directory('${tmp.path}/STTS Blok 001 - Minggu, 08-11-2026')
+      ..createSync(recursive: true);
+
+    final records = [
+      TaxRecord(
+        nop: '320520000402200011',
+        namaWajibPajak: 'FULAN',
+        jumlahPbb: '50.000',
+      ),
+      TaxRecord(
+        nop: '320520000402200050',
+        namaWajibPajak: 'FOO',
+        jumlahPbb: '25.000',
+      ),
+    ];
+
+    await _runScreen(
+      tester,
+      client,
+      records,
+      downloadStts: true,
+      sttsTargetDirectory: blokFolder,
+      sttsBlokNumber: '001',
+    );
+
+    // File STTS PDF tersimpan langsung di blokFolder
+    final pdfFiles = blokFolder
+        .listSync()
+        .whereType<File>()
+        .where((f) => f.path.endsWith('.pdf'))
+        .toList();
+    expect(pdfFiles.length, 1);
+    expect(pdfFiles.first.path, contains('FULAN'));
+
+    // File info txt tersimpan dan berisi rangkuman
+    final infoFile = File('${blokFolder.path}/INFORMASI_BLOK_001.txt');
+    expect(infoFile.existsSync(), isTrue);
+    final content = infoFile.readAsStringSync();
+    expect(content, contains('INFORMASI REKAPITULASI PENGECEKAN BLOK'));
+    expect(content, contains('Nomor Blok        : Blok 001'));
+    expect(content, contains('320520000402200011'));
+    expect(content, contains('Status Pengecekan : Selesai'));
   });
 }

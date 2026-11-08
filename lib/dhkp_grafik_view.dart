@@ -456,6 +456,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
         if (bytes == null) throw Exception('Gagal menangkap tampilan grafik.');
         final fileName = DhkpGrafikExporter.buildSafeFileName(title, 'png');
         final savedPath = await DownloadHelper.saveBytes(bytes, fileName);
+        if (savedPath == null) return;
         messenger.showSnackBar(
           SnackBar(content: Text('Gambar grafik disimpan di: $savedPath')),
         );
@@ -468,6 +469,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
         );
         final fileName = DhkpGrafikExporter.buildSafeFileName(title, 'pdf');
         final savedPath = await DownloadHelper.saveBytes(pdfBytes, fileName);
+        if (savedPath == null) return;
         messenger.showSnackBar(
           SnackBar(content: Text('Dokumen PDF grafik disimpan di: $savedPath')),
         );
@@ -505,7 +507,12 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
             mimeType: 'image/png',
           );
         } else {
-          final savedPath = await DownloadHelper.saveBytes(bytes, fileName);
+          final savedPath = await DownloadHelper.saveBytes(
+            bytes,
+            fileName,
+            useSaveAs: false,
+          );
+          if (savedPath == null) return;
           await NativeFileHelper.showInFileManager(savedPath);
           messenger.showSnackBar(
             SnackBar(content: Text('Gambar grafik disimpan dan dibuka di: $savedPath')),
@@ -526,7 +533,12 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
             mimeType: 'application/pdf',
           );
         } else {
-          final savedPath = await DownloadHelper.saveBytes(pdfBytes, fileName);
+          final savedPath = await DownloadHelper.saveBytes(
+            pdfBytes,
+            fileName,
+            useSaveAs: false,
+          );
+          if (savedPath == null) return;
           await NativeFileHelper.showInFileManager(savedPath);
           messenger.showSnackBar(
             SnackBar(content: Text('Dokumen PDF grafik disimpan dan dibuka di: $savedPath')),

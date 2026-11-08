@@ -394,6 +394,7 @@ class _DhkpRincianBulananSheetState extends State<DhkpRincianBulananSheet> {
         fileName,
         subfolder: 'documents',
       );
+      if (savedPath == null) return;
 
       messenger.showSnackBar(
         SnackBar(
@@ -434,7 +435,9 @@ class _DhkpRincianBulananSheetState extends State<DhkpRincianBulananSheet> {
           pdfBytes,
           fileName,
           subfolder: 'documents',
+          useSaveAs: false,
         );
+        if (savedPath == null) return;
         await NativeFileHelper.showInFileManager(savedPath);
         messenger.showSnackBar(
           SnackBar(

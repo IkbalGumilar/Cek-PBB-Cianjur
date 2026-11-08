@@ -9,28 +9,61 @@ import 'package:shared_preferences/shared_preferences.dart';
 class Dusun {
   final int number;
   final String name;
+  final String? alias;
   final List<String> bloks;
+  final double? focusLat;
+  final double? focusLng;
+  final double? focusZoom;
 
-  const Dusun({required this.number, String? name, required this.bloks})
-    : name = name ?? 'Dusun $number';
+  const Dusun({
+    required this.number,
+    String? name,
+    this.alias,
+    required this.bloks,
+    this.focusLat,
+    this.focusLng,
+    this.focusZoom,
+  }) : name = name ?? 'Dusun $number';
 
-  String get label => name.isNotEmpty ? name : 'Dusun $number';
+  String get label => alias != null && alias!.isNotEmpty
+      ? 'Dusun $number ($alias)'
+      : (name.isNotEmpty ? name : 'Dusun $number');
 
   Map<String, dynamic> toJson() => {
     'number': number,
     'name': name,
+    if (alias != null) 'alias': alias,
     'bloks': bloks,
+    if (focusLat != null && focusLng != null)
+      'titik_fokus': {
+        'lat': focusLat,
+        'lng': focusLng,
+        if (focusZoom != null) 'zoom': focusZoom,
+      },
   };
 
   factory Dusun.fromJson(Map<String, dynamic> json) {
+    double? fLat;
+    double? fLng;
+    double? fZoom;
+    if (json['titik_fokus'] is Map) {
+      final tf = json['titik_fokus'] as Map;
+      fLat = (tf['lat'] as num?)?.toDouble();
+      fLng = (tf['lng'] as num?)?.toDouble();
+      fZoom = (tf['zoom'] as num?)?.toDouble();
+    }
     return Dusun(
       number: (json['number'] as num?)?.toInt() ?? 0,
       name: json['name'] as String?,
+      alias: json['alias'] as String?,
       bloks:
           (json['bloks'] as List?)
               ?.map((e) => e.toString().padLeft(3, '0'))
               .toList() ??
           [],
+      focusLat: fLat,
+      focusLng: fLng,
+      focusZoom: fZoom,
     );
   }
 }
@@ -86,11 +119,44 @@ class DusunData {
 
   static const _prefDusunsKey = 'dusun_data_list_manifest';
   static const _prefScopeKey = 'dusun_data_scope_manifest';
+  static const _prefKantorLatKey = 'dusun_data_kantor_lat';
+  static const _prefKantorLngKey = 'dusun_data_kantor_lng';
+
+  double? _kantorDesaLat;
+  double? _kantorDesaLng;
+
+  double? get kantorDesaLat => _kantorDesaLat;
+  double? get kantorDesaLng => _kantorDesaLng;
+
+  Future<void> setKantorDesaLocation(double lat, double lng) async {
+    _kantorDesaLat = lat;
+    _kantorDesaLng = lng;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setDouble(_prefKantorLatKey, lat);
+      await prefs.setDouble(_prefKantorLngKey, lng);
+    } catch (_) {}
+  }
+
+  Future<void> clearKantorDesaLocation() async {
+    _kantorDesaLat = null;
+    _kantorDesaLng = null;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_prefKantorLatKey);
+      await prefs.remove(_prefKantorLngKey);
+    } catch (_) {}
+  }
 
   /// Cadangan bawaan bila belum ada manifest .dkhp yang pernah dimuat.
   static const List<Dusun> defaultBobojongDusuns = [
     Dusun(
       number: 1,
+      name: 'Dusun Bobojong',
+      alias: 'Bobojong',
+      focusLat: -6.770226,
+      focusLng: 107.213023,
+      focusZoom: 16.0,
       bloks: [
         '001',
         '002',
@@ -107,10 +173,20 @@ class DusunData {
     ),
     Dusun(
       number: 2,
+      name: 'Dusun Batulayang',
+      alias: 'Batulayang',
+      focusLat: -6.778046,
+      focusLng: 107.204368,
+      focusZoom: 16.0,
       bloks: ['005', '006', '007', '008', '009', '010', '019', '020', '021'],
     ),
     Dusun(
       number: 3,
+      name: 'Dusun Cibogo',
+      alias: 'Cibogo',
+      focusLat: -6.766719,
+      focusLng: 107.224754,
+      focusZoom: 16.0,
       bloks: [
         '017',
         '018',
@@ -126,11 +202,27 @@ class DusunData {
         '041',
       ],
     ),
-    Dusun(number: 4, bloks: ['032', '033', '035', '036']),
-    Dusun(number: 5, bloks: ['034', '037', '038', '039', '040']),
+    Dusun(
+      number: 4,
+      name: 'Dusun Cidamar',
+      alias: 'Cidamar',
+      focusLat: -6.756057,
+      focusLng: 107.254834,
+      focusZoom: 16.0,
+      bloks: ['032', '033', '035', '036'],
+    ),
+    Dusun(
+      number: 5,
+      name: 'Dusun Jangari',
+      alias: 'Jangari',
+      focusLat: -6.748191,
+      focusLng: 107.266108,
+      focusZoom: 16.0,
+      bloks: ['034', '037', '038', '039', '040'],
+    ),
   ];
 
-  List<Dusun> _allDusuns = List.of(defaultBobojongDusuns);
+  List<Dusun> _allDusuns = [];
   DusunScope _scope = const DusunScope(role: 'desa');
   bool _initialized = false;
 
@@ -161,6 +253,9 @@ class DusunData {
           _scope = DusunScope.fromJson(decoded);
         }
       }
+
+      _kantorDesaLat = prefs.getDouble(_prefKantorLatKey);
+      _kantorDesaLng = prefs.getDouble(_prefKantorLngKey);
     } catch (_) {}
     _initialized = true;
   }

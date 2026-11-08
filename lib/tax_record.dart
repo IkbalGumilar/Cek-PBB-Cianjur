@@ -23,8 +23,14 @@ class TaxRecord {
   });
 
   bool get isChecked => status.isNotEmpty;
-  bool get isPaid =>
-      status.startsWith('Sudah Bayar') ||
-      status.startsWith('Lunas') ||
-      (tanggalBayar != null && tanggalBayar!.trim().isNotEmpty);
+  bool get isPaid {
+    final s = status.toLowerCase();
+    if (s.contains('belum')) return false;
+    return s.startsWith('sudah') ||
+        s.startsWith('lunas') ||
+        (tanggalBayar != null &&
+            tanggalBayar!.trim().isNotEmpty &&
+            tanggalBayar!.trim() != '-' &&
+            tanggalBayar!.trim() != '0');
+  }
 }

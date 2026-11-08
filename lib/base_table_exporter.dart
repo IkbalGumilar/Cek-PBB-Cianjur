@@ -191,10 +191,18 @@ abstract class BaseTableExporter {
     return '$prefix${suffix}_${DateTime.now().millisecondsSinceEpoch}.${format.extension}';
   }
 
-  /// Simpan byte berkas hasil ekspor ke penyimpanan publik / dokumen.
-  static Future<String> saveExportedBytes({
+  /// Simpan byte berkas hasil ekspor ke penyimpanan publik / dokumen (Save As).
+  static Future<String?> saveExportedBytes({
     required Uint8List bytes,
     required String fileName,
     String? subfolder,
-  }) => DownloadHelper.saveBytes(bytes, fileName, subfolder: subfolder);
+    String? dialogTitle,
+    bool useSaveAs = true,
+  }) => DownloadHelper.saveBytes(
+        bytes,
+        fileName,
+        subfolder: subfolder,
+        dialogTitle: dialogTitle,
+        useSaveAs: useSaveAs,
+      );
 }

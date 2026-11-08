@@ -2,7 +2,7 @@ import 'base_table_exporter.dart';
 import 'tax_record.dart';
 
 class ResultExporter extends BaseTableExporter {
-  static Future<String> saveCsv(List<TaxRecord> records) async {
+  static Future<String?> saveCsv(List<TaxRecord> records) async {
     final bytes = BaseTableExporter.buildCsvData(
       const [
         'NOP',

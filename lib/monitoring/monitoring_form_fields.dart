@@ -198,6 +198,10 @@ class DesaKelurahanDropdown extends StatefulWidget {
   final String value;
   final ValueChanged<String> onChanged;
   final ValueChanged<String>? onNameChanged;
+  final bool allowAll;
+  final String allLabel;
+
+  final void Function(String kecCode, String kecName)? onKecamatanChanged;
 
   const DesaKelurahanDropdown({
     super.key,
@@ -205,6 +209,9 @@ class DesaKelurahanDropdown extends StatefulWidget {
     required this.value,
     required this.onChanged,
     this.onNameChanged,
+    this.onKecamatanChanged,
+    this.allowAll = false,
+    this.allLabel = 'Semua Desa / Kelurahan',
   });
 
   @override
@@ -215,27 +222,43 @@ class _DesaKelurahanDropdownState extends State<DesaKelurahanDropdown> {
   late final Future<
       ({
         String kecamatanCode,
+        String kecamatanName,
         String kelurahanCode,
         List<KolektifKelurahan> kelurahan,
-      })> _future = widget.client.fetchMonitoringWilayahOptions();
+      })> _future = widget.client.fetchMonitoringWilayahOptions().then((res) {
+    if (widget.onKecamatanChanged != null) {
+      widget.onKecamatanChanged!(res.kecamatanCode, res.kecamatanName);
+    }
+    return res;
+  });
 
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<
         ({
           String kecamatanCode,
+          String kecamatanName,
           String kelurahanCode,
           List<KolektifKelurahan> kelurahan,
         })>(
       future: _future,
       builder: (context, snapshot) {
         final options = snapshot.data?.kelurahan ??
-            const <KolektifKelurahan>[
-              KolektifKelurahan(code: '3205200004', name: 'BOBOJONG'),
-            ];
-        final selectedValue = options.any((o) => o.code == widget.value)
-            ? widget.value
-            : (snapshot.data?.kelurahanCode ?? '3205200004');
+            (widget.client.activeKelurahanOptions.isNotEmpty
+                ? widget.client.activeKelurahanOptions
+                : [
+                    KolektifKelurahan(
+                      code: widget.client.activeKelurahanCode,
+                      name: widget.client.activeKelurahanName,
+                    ),
+                  ]);
+        final defaultKel = snapshot.data?.kelurahanCode ??
+            widget.client.activeKelurahanCode;
+        final selectedValue = (widget.allowAll && widget.value.isEmpty)
+            ? ''
+            : (options.any((o) => o.code == widget.value)
+                ? widget.value
+                : defaultKel);
 
         return DropdownButtonFormField<String>(
           initialValue: selectedValue,
@@ -244,8 +267,9 @@ class _DesaKelurahanDropdownState extends State<DesaKelurahanDropdown> {
             labelText: 'Desa / Kelurahan *',
             prefixIcon: const Icon(Icons.holiday_village_outlined, size: 20),
             border: const OutlineInputBorder(),
-            helperText:
-                'Penting: Membatasi data wilayah agar tidak memuat seluruh Kab. Cianjur',
+            helperText: widget.allowAll
+                ? 'Pilih satu desa atau Semua Desa untuk melihat perbandingan ranking se-kecamatan'
+                : 'Penting: Membatasi data wilayah agar tidak memuat seluruh Kab. Cianjur',
             helperMaxLines: 2,
             suffixIcon: snapshot.connectionState == ConnectionState.waiting
                 ? const Padding(
@@ -259,6 +283,14 @@ class _DesaKelurahanDropdownState extends State<DesaKelurahanDropdown> {
                 : null,
           ),
           items: [
+            if (widget.allowAll)
+              DropdownMenuItem(
+                value: '',
+                child: Text(
+                  widget.allLabel,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
             for (final o in options)
               DropdownMenuItem(
                 value: o.code,
@@ -272,11 +304,15 @@ class _DesaKelurahanDropdownState extends State<DesaKelurahanDropdown> {
             if (v == null) return;
             widget.onChanged(v);
             if (widget.onNameChanged != null) {
-              final found = options.firstWhere(
-                (o) => o.code == v,
-                orElse: () => options.first,
-              );
-              widget.onNameChanged!(found.name);
+              if (v.isEmpty) {
+                widget.onNameChanged!(widget.allLabel);
+              } else {
+                final found = options.firstWhere(
+                  (o) => o.code == v,
+                  orElse: () => options.first,
+                );
+                widget.onNameChanged!(found.name);
+              }
             }
           },
         );
@@ -287,11 +323,18 @@ class _DesaKelurahanDropdownState extends State<DesaKelurahanDropdown> {
 
 /// Baris info wilayah terpilih
 class WilayahBadge extends StatelessWidget {
-  final String label;
-  const WilayahBadge({super.key, this.label = 'Desa Bobojong (3205200004)'});
+  final String? label;
+  final StaffPortalClient? client;
+
+  const WilayahBadge({super.key, this.label, this.client});
 
   @override
   Widget build(BuildContext context) {
+    final effectiveLabel = label ??
+        (client != null
+            ? 'Kec. ${client!.activeKecamatanName} - Desa ${client!.activeKelurahanName} (${client!.activeKelurahanCode})'
+            : 'Kabupaten Cianjur');
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
@@ -304,7 +347,7 @@ class WilayahBadge extends StatelessWidget {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              'Wilayah terpilih: $label',
+              'Wilayah terpilih: $effectiveLabel',
               style: const TextStyle(fontWeight: FontWeight.w500),
             ),
           ),

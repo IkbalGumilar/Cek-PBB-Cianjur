@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>Nama-Nama Kampung Desa Bobojong</name>
+    <description>Titik toponimi kampung/dusun Desa Bobojong</description>
+    <Placemark>
+      <name>Bobojong</name>
+      <description><![CDATA[Kampung: Bobojong (village)]]></description>
+      <Point><coordinates>107.2252272,-6.7666143,0</coordinates></Point>
+    </Placemark>
+  </Document>
+</kml>

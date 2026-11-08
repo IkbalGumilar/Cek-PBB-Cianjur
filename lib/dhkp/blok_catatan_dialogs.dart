@@ -525,6 +525,8 @@ Future<List<BlokRecord>?> showPilihBlokCekMassalDialog(
 
           final checkedTodayCount = checkedTodayList.length;
           final remainingCount = remainingToCheck.length;
+          final isDownloadStts = downloadSttsOption?.value == true;
+          final targetRecords = isDownloadStts ? blokRecords : remainingToCheck;
           final isAllPaid = totalCount > 0 && unpaidList.isEmpty;
           final isFullyCheckedToday =
               unpaidList.isNotEmpty && remainingCount == 0;
@@ -766,28 +768,70 @@ Future<List<BlokRecord>?> showPilihBlokCekMassalDialog(
                                 Container(
                                   padding: const EdgeInsets.all(10),
                                   decoration: BoxDecoration(
-                                    color: Colors.green.withValues(alpha: 0.1),
+                                    color: isDownloadStts
+                                        ? Colors.teal.withValues(alpha: 0.1)
+                                        : Colors.green.withValues(alpha: 0.1),
                                     borderRadius: BorderRadius.circular(8),
                                     border: Border.all(
-                                      color: Colors.green.withValues(
-                                        alpha: 0.3,
-                                      ),
+                                      color: isDownloadStts
+                                          ? Colors.teal.withValues(alpha: 0.3)
+                                          : Colors.green.withValues(
+                                              alpha: 0.3,
+                                            ),
                                     ),
                                   ),
-                                  child: const Row(
+                                  child: Row(
                                     children: [
                                       Icon(
-                                        Icons.check_circle_outline,
-                                        color: Colors.green,
+                                        isDownloadStts
+                                            ? Icons.download_done_rounded
+                                            : Icons.check_circle_outline,
+                                        color: isDownloadStts
+                                            ? Colors.teal
+                                            : Colors.green,
                                         size: 20,
                                       ),
-                                      SizedBox(width: 8),
+                                      const SizedBox(width: 8),
                                       Expanded(
                                         child: Text(
-                                          'Semua Lunas: Seluruh NOP pada blok ini sudah berstatus Sudah Bayar. Tidak ada tunggakan yang perlu dicek.',
+                                          isDownloadStts
+                                              ? 'Semua Lunas: Seluruh NOP pada blok ini sudah berstatus Sudah Bayar. Pengecekan akan berjalan untuk mengunduh seluruh berkas STTS ($totalCount NOP).'
+                                              : 'Semua Lunas: Seluruh NOP pada blok ini sudah berstatus Sudah Bayar. Tidak ada tunggakan yang perlu dicek.',
                                           style: TextStyle(
                                             fontSize: 12,
-                                            color: Colors.green,
+                                            color: isDownloadStts
+                                                ? Colors.teal.shade900
+                                                : Colors.green,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ] else if (isDownloadStts) ...[
+                                Container(
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: Colors.teal.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                      color: Colors.teal.withValues(alpha: 0.3),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      const Icon(
+                                        Icons.receipt_long,
+                                        color: Colors.teal,
+                                        size: 20,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          'Mode Unduh STTS Aktif: Seluruh $totalCount NOP (termasuk yang sudah bayar) akan diperiksa untuk mengunduh berkas STTS ke folder pilihan Anda.',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.teal.shade900,
                                           ),
                                         ),
                                       ),
@@ -905,7 +949,7 @@ Future<List<BlokRecord>?> showPilihBlokCekMassalDialog(
                           style: TextStyle(fontSize: 13),
                         ),
                         subtitle: const Text(
-                          'Jika aktif, STTS NOP yang terdeteksi sudah bayar ikut diunduh. Jika tidak, hanya status yang dicek.',
+                          'Jika aktif, berkas STTS seluruh NOP yang sudah lunas ikut diunduh ke folder khusus.',
                           style: TextStyle(fontSize: 11),
                         ),
                       ),
@@ -924,21 +968,27 @@ Future<List<BlokRecord>?> showPilihBlokCekMassalDialog(
                 label: Text(
                   currentBlok == null
                       ? 'Pilih Blok Terlebih Dahulu'
-                      : (isFullyCheckedToday
-                            ? 'Sudah Dicek (Coba Lagi Besok)'
-                            : (isAllPaid
-                                  ? 'Semua Lunas'
-                                  : (isPartialChecked
-                                        ? 'Lanjutkan Cek Sisa ($remainingCount NOP)'
-                                        : 'Mulai Cek ($remainingCount NOP)'))),
+                      : (totalCount == 0
+                            ? 'Data Blok Kosong'
+                            : (isDownloadStts
+                                  ? 'Mulai Cek & Unduh STTS ($totalCount NOP)'
+                                  : (isFullyCheckedToday
+                                        ? 'Sudah Dicek (Coba Lagi Besok)'
+                                        : (isAllPaid
+                                              ? 'Semua Lunas'
+                                              : (isPartialChecked
+                                                    ? 'Lanjutkan Cek Sisa ($remainingCount NOP)'
+                                                    : 'Mulai Cek ($remainingCount NOP)'))))),
                 ),
                 onPressed:
                     (currentBlok == null ||
-                        isFullyCheckedToday ||
-                        isAllPaid ||
-                        remainingCount == 0)
+                        totalCount == 0 ||
+                        (!isDownloadStts &&
+                            (isFullyCheckedToday ||
+                                isAllPaid ||
+                                remainingCount == 0)))
                     ? null
-                    : () => Navigator.pop(ctx, remainingToCheck),
+                    : () => Navigator.pop(ctx, targetRecords),
               ),
             ],
           );

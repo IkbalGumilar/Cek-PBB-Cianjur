@@ -26,6 +26,7 @@ import 'feature_tour/feature_tour.dart';
 import 'google_drive_picker_dialog.dart';
 import 'image_crop_helper.dart';
 import 'kolase_foto_screen.dart';
+import 'map/dhkp_map_screen.dart';
 import 'native_file_helper.dart';
 import 'nop_helper.dart';
 import 'operator_mode_store.dart';
@@ -74,8 +75,6 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
   final _horizontalScrollController = ScrollController();
 
   final _toggleGrafikButtonKey = GlobalKey(debugLabel: 'tour_dhkp_grafik_btn');
-  final _uploadButtonKey = GlobalKey(debugLabel: 'tour_dhkp_upload_btn');
-  final _buatLaporanButtonKey = GlobalKey(debugLabel: 'tour_dhkp_laporan_btn');
   final _moreMenuButtonKey = GlobalKey(debugLabel: 'tour_dhkp_more_btn');
   final _filterBlokTahunKey = GlobalKey(debugLabel: 'tour_dhkp_filter_bar');
   final _searchFilterSortKey = GlobalKey(debugLabel: 'tour_dhkp_search_bar');
@@ -128,29 +127,15 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
         icon: Icons.bar_chart_rounded,
       ),
       FeatureTourStep(
-        targetKey: _uploadButtonKey,
-        title: 'Tombol Unggah & Muat Berkas DHKP',
-        description:
-            'Gunakan tombol ini untuk memasukkan berkas daftar pajak (Excel, CSV, atau paket laporan .dat) dari penyimpanan perangkat maupun langsung dari Google Drive.',
-        actionHint:
-            'Data yang diunggah akan otomatis digabungkan dengan catatan dan foto bukti yang sudah ada.',
-        icon: Icons.upload_file_rounded,
-      ),
-      FeatureTourStep(
-        targetKey: _buatLaporanButtonKey,
-        title: 'Tombol Buat Paket Laporan (.dat)',
-        description:
-            'Mengemas seluruh data DHKP, status pembayaran terbaru, catatan petugas, serta seluruh foto lembaran STTS ke dalam satu berkas laporan lengkap (.dat) yang siap dikirimkan ke operator desa.',
-        icon: Icons.download_rounded,
-      ),
-      FeatureTourStep(
         targetKey: _moreMenuButtonKey,
-        title: 'Menu Cetak, Unduh Laporan, Kolase Foto, & Cek Massal',
+        title: 'Menu Aksi DHKP & Fitur Lanjutan',
         description:
-            'Tekan ikon tiga titik ini untuk membuka fitur lanjutan:\n'
-            '• Cetak & Bagikan Laporan: Mencetak atau mengirim rekap PDF/Excel/CSV.\n'
-            '• Kolase Gambar Dokumentasi: Menyusun foto-foto STTS menjadi lembaran kolase ukuran kertas F4.\n'
-            '• Cek Status Bayar Massal: Memeriksa ulang status lunas seluruh warga per blok secara otomatis.',
+            'Tekan ikon tiga titik ini untuk mengakses seluruh fitur utama:\n'
+            '• Unggah Berkas DHKP / Laporan (.dat): Memuat berkas daftar pajak.\n'
+            '• Buat Paket Laporan (.dat): Mengemas data DHKP dan foto STTS.\n'
+            '• Peta Objek Pajak: Menampilkan sebaran bidang tanah di peta.\n'
+            '• Cetak, Bagikan, & Unduh Laporan: Rekap PDF, Excel, atau CSV.\n'
+            '• Kolase Gambar Dokumentasi & Cek Status Bayar Massal.',
         icon: Icons.more_vert_rounded,
       ),
       FeatureTourStep(
@@ -580,11 +565,63 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
 
     if (selectedRecords == null || selectedRecords.isEmpty || !mounted) return;
 
+    Directory? targetSttsDir;
+    String? cleanBlok;
+    if (downloadStts) {
+      final pickedPath = await FilePicker.getDirectoryPath(
+        dialogTitle: 'Pilih Folder Penyimpanan Berkas STTS',
+      );
+      if (pickedPath == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Pengecekan massal dibatalkan karena folder penyimpanan STTS tidak dipilih.',
+              ),
+            ),
+          );
+        }
+        return;
+      }
+
+      final blokStr = nopBlok(selectedRecords.first.nop);
+      cleanBlok = blokStr.replaceAll(RegExp(r'[^0-9]'), '');
+      final blokFormatted =
+          cleanBlok.isNotEmpty ? cleanBlok.padLeft(3, '0') : blokStr;
+      final now = DateTime.now();
+      const namaHariList = [
+        'Senin',
+        'Selasa',
+        'Rabu',
+        'Kamis',
+        'Jumat',
+        'Sabtu',
+        'Minggu',
+      ];
+      final namaHari = namaHariList[now.weekday - 1];
+      final tgl = now.day.toString().padLeft(2, '0');
+      final bln = now.month.toString().padLeft(2, '0');
+      final thn = now.year.toString();
+      final folderName = 'STTS Blok $blokFormatted - $namaHari, $tgl-$bln-$thn';
+
+      targetSttsDir = Directory('$pickedPath/$folderName');
+      if (!await targetSttsDir.exists()) {
+        await targetSttsDir.create(recursive: true);
+      }
+    }
+
     final taxRecords = selectedRecords
-        .map((r) => TaxRecord(nop: r.nop, namaWajibPajak: r.namaWajibPajak))
+        .map((r) => TaxRecord(
+              nop: r.nop,
+              namaWajibPajak: r.namaWajibPajak,
+              status: r.isPaid ? 'Sudah Bayar' : 'Belum Bayar',
+              tanggalBayar: r.tanggalBayar,
+              jumlahPbb: r.jumlahPbb,
+            ))
         .toList();
     final tahun = _selectedTahun;
 
+    if (!mounted) return;
     await Navigator.push(
       context,
       MaterialPageRoute(
@@ -592,6 +629,8 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
           records: taxRecords,
           tahun: tahun,
           downloadStts: downloadStts,
+          sttsTargetDirectory: targetSttsDir,
+          sttsBlokNumber: cleanBlok,
         ),
       ),
     );
@@ -665,7 +704,7 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
         if (await tmp.exists()) await tmp.delete();
       } catch (_) {}
 
-      if (!mounted) return;
+      if (!mounted || location == null) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -1160,7 +1199,7 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
         prefix: prefix,
       );
       final location = await DownloadHelper.saveBytes(bytes, fileName);
-      if (!mounted) return;
+      if (!mounted || location == null) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Laporan tersimpan di $location')));
@@ -1305,6 +1344,21 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
     );
   }
 
+  void _bukaPeta() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => DhkpMapScreen(
+          initialRecords: _records,
+          initialDusun: _selectedWilayah,
+          initialBlok: (_selectedBlok != null && _selectedBlok != 'Semua')
+              ? _selectedBlok
+              : null,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -1337,44 +1391,82 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
                 ? 'Beralih ke Buku Catatan (Tabel)'
                 : 'Beralih ke Visual Grafik',
           ),
-          IconButton(
-            key: _uploadButtonKey,
-            onPressed: _uploadDataDialog,
-            icon: const Icon(Icons.upload_file),
-            tooltip: 'Unggah Berkas DHKP / Laporan (.dat)',
-          ),
-          IconButton(
-            key: _buatLaporanButtonKey,
-            onPressed: _buatLaporanDatDialog,
-            icon: const Icon(Icons.download_rounded),
-            tooltip: 'Buat Paket Laporan (.dat)',
-          ),
           FeatureTourHelpButton(onPressed: _onHelpPressed),
-          if (_bloks.isNotEmpty && !_tampilkanGrafik)
-            PopupMenuButton<String>(
-              key: _moreMenuButtonKey,
-              icon: const Icon(Icons.more_vert_rounded),
-              tooltip: 'Menu & Aksi Lainnya',
-              onSelected: (val) {
-                switch (val) {
-                  case 'cetak':
-                    _cetakLaporan();
-                    break;
-                  case 'bagikan':
-                    _bagikanLaporan();
-                    break;
-                  case 'unduh':
-                    _unduhLaporan();
-                    break;
-                  case 'kolase':
-                    _bukaKolaseFoto();
-                    break;
-                  case 'cek_massal':
-                    _cekStatusBayarMassal();
-                    break;
-                }
-              },
-              itemBuilder: (context) => [
+          PopupMenuButton<String>(
+            key: _moreMenuButtonKey,
+            icon: const Icon(Icons.more_vert_rounded),
+            tooltip: 'Menu & Aksi Lainnya',
+            onSelected: (val) {
+              switch (val) {
+                case 'unggah_dhkp':
+                  _uploadDataDialog();
+                  break;
+                case 'buat_laporan_dat':
+                  _buatLaporanDatDialog();
+                  break;
+                case 'peta_dhkp':
+                  _bukaPeta();
+                  break;
+                case 'cetak':
+                  _cetakLaporan();
+                  break;
+                case 'bagikan':
+                  _bagikanLaporan();
+                  break;
+                case 'unduh':
+                  _unduhLaporan();
+                  break;
+                case 'kolase':
+                  _bukaKolaseFoto();
+                  break;
+                case 'cek_massal':
+                  _cekStatusBayarMassal();
+                  break;
+              }
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'unggah_dhkp',
+                child: ListTile(
+                  leading: Icon(Icons.upload_file_outlined),
+                  title: Text('Unggah Berkas DHKP / Laporan (.dat)'),
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                ),
+              ),
+              if (_bloks.isNotEmpty) ...[
+                const PopupMenuItem(
+                  value: 'buat_laporan_dat',
+                  child: ListTile(
+                    leading: Icon(Icons.download_rounded),
+                    title: Text('Buat Paket Laporan (.dat)'),
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                  ),
+                ),
+                const PopupMenuItem(
+                  value: 'peta_dhkp',
+                  child: ListTile(
+                    leading: Icon(Icons.explore_outlined),
+                    title: Row(
+                      children: [
+                        Text('Peta Objek Pajak'),
+                        SizedBox(width: 6),
+                        Text(
+                          '(Eksperimental)',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Color(0xFFE67E22),
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                  ),
+                ),
+                const PopupMenuDivider(),
                 const PopupMenuItem(
                   value: 'cetak',
                   child: ListTile(
@@ -1422,7 +1514,8 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
                   ),
                 ),
               ],
-            ),
+            ],
+          ),
         ],
       ),
       body: SafeArea(
@@ -1443,7 +1536,7 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
                   child: Padding(
                     padding: EdgeInsets.all(24),
                     child: Text(
-                      'Belum ada data DHKP. Tekan tombol Unggah Data di kanan atas '
+                      'Belum ada data DHKP. Tekan menu tiga titik (⋮) di kanan atas lalu pilih Unggah Berkas DHKP '
                       'untuk memuat berkas daftar pajak.',
                       textAlign: TextAlign.center,
                     ),
@@ -1549,7 +1642,7 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
                                   DropdownMenuItem(
                                     value: b,
                                     child: Text(
-                                      'Blok ${int.parse(b)}',
+                                      'Blok ${int.tryParse(b) ?? b}',
                                       overflow: TextOverflow.ellipsis,
                                     ),
                                   ),

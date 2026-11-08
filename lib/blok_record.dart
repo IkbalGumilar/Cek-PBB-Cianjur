@@ -50,10 +50,15 @@ class BlokRecord {
     this.rtObjek = '',
   });
 
-  bool get isPaid =>
-      statusBayar.toLowerCase().contains('sudah') ||
-      statusBayar.toLowerCase().contains('lunas') ||
-      tanggalBayar.isNotEmpty;
+  bool get isPaid {
+    final s = statusBayar.toLowerCase();
+    if (s.contains('belum')) return false;
+    return s.contains('sudah') ||
+        s.contains('lunas') ||
+        (tanggalBayar.trim().isNotEmpty &&
+            tanggalBayar.trim() != '-' &&
+            tanggalBayar.trim() != '0');
+  }
 
   bool get isBlacklist =>
       !isPaid &&

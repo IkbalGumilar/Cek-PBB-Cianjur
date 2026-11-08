@@ -20,8 +20,8 @@ class _TabSudahBayarKolektifState extends State<TabSudahBayarKolektif> {
   final _kodeBayarKolektif = TextEditingController();
   final _namaGrup = TextEditingController();
   final _namaKolektor = TextEditingController();
-  String _kelurahan = '3205200004';
-  final _kecamatan = '3205200';
+  late String _kelurahan = widget.client.activeKelurahanCode;
+  String get _kecamatan => widget.client.activeKecamatanCode;
 
   @override
   void dispose() {

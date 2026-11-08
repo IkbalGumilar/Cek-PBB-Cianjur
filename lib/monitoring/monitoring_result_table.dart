@@ -76,7 +76,7 @@ class _MonitoringResultViewState extends State<MonitoringResultView> {
         widget.reportTitle,
       );
       final location = await DownloadHelper.saveBytes(bytes, fileName);
-      if (!mounted) return;
+      if (!mounted || location == null) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Tersimpan di $location')));

@@ -695,7 +695,7 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
                 style: TextStyle(fontStyle: FontStyle.italic),
               ),
               const SizedBox(height: 16),
-              const WilayahBadge(),
+              WilayahBadge(client: widget.client),
               const SizedBox(height: 12),
               OutlinedButton.icon(
                 key: _tambahGroupButtonKey,

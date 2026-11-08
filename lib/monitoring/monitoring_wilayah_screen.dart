@@ -129,7 +129,19 @@ class _MonitoringWilayahScreenState extends State<MonitoringWilayahScreen> {
         appBar: AppBar(
           backgroundColor: primaryColor,
           foregroundColor: onPrimary,
-          title: const Text('Pantauan Wilayah Desa'),
+          title: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Pantauan Wilayah Desa'),
+              Text(
+                'Kec. ${widget.client.activeKecamatanName} - Desa ${widget.client.activeKelurahanName}',
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.normal,
+                ),
+              ),
+            ],
+          ),
           actions: [
             IconButton(
               icon: const Icon(Icons.cloud_sync_rounded),

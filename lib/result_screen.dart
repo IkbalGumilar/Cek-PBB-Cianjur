@@ -51,6 +51,7 @@ class ResultScreen extends StatelessWidget {
             onPressed: () async {
               try {
                 final path = await ResultExporter.saveCsv(records);
+                if (path == null) return;
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(

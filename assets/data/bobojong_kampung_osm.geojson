@@ -1,0 +1,22 @@
+{
+  "type": "FeatureCollection",
+  "name": "Nama_Kampung_Bobojong_OSM",
+  "features": [
+    {
+      "type": "Feature",
+      "id": "1308674051",
+      "properties": {
+        "id": "1308674051",
+        "nama": "Bobojong",
+        "tipe": "village"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          107.2252272,
+          -6.7666143
+        ]
+      }
+    }
+  ]
+}

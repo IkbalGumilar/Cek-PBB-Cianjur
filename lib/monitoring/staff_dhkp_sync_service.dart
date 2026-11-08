@@ -12,11 +12,23 @@ import '../staff_portal_client.dart';
 
 /// Pilihan mode sinkronisasi DHKP dari Portal Staf
 enum StaffSyncMode {
-  full('Keseluruhan DHKP (Belum Bayar & Sudah Bayar)'),
-  paidOnly('Hanya Pelunasan (Sudah Bayar Saja)');
+  paidOnly('Hanya Pelunasan (Sudah Bayar Saja) ⚡ Cepat & Rekomendasi'),
+  full('Keseluruhan DHKP (Termasuk Belum Bayar) 🐢 Lambat');
 
   final String label;
   const StaffSyncMode(this.label);
+}
+
+/// Pilihan rentang waktu tanggal pelunasan untuk sinkronisasi cepat
+enum StaffSyncDatePreset {
+  allYear('Sepanjang Tahun Ini (01 Jan s/d Hari Ini)'),
+  last7Days('7 Hari Terakhir (⚡ Kilat / Harian)'),
+  last30Days('30 Hari Terakhir (1 Bulan)'),
+  thisMonth('Bulan Ini (Awal Bulan s/d Hari Ini)'),
+  custom('Pilih Tanggal Kustom...');
+
+  final String label;
+  const StaffSyncDatePreset(this.label);
 }
 
 /// Data hasil parsing satu baris tabel dari Portal Staf
@@ -323,7 +335,7 @@ class StaffDhkpSyncService {
     required List<String> bloks,
     required String kelurahanCode,
     required String kecamatanCode,
-    StaffSyncMode mode = StaffSyncMode.full,
+    StaffSyncMode mode = StaffSyncMode.paidOnly,
     String? tglBayarAwal,
     String? tglBayarAkhir,
     String? tglCutoff,
@@ -474,9 +486,9 @@ class StaffDhkpSyncService {
           );
 
           if (tableResult.errorMessage != null && tableResult.rows.isEmpty) {
-            if (page == 1) {
-              bbErrorMessage = tableResult.errorMessage;
-            }
+            bbErrorMessage ??= (page == 1)
+                ? tableResult.errorMessage
+                : 'Terputus di halaman $page: ${tableResult.errorMessage}';
             break;
           }
 
@@ -532,9 +544,9 @@ class StaffDhkpSyncService {
           );
 
           if (tableResult.errorMessage != null && tableResult.rows.isEmpty) {
-            if (page == 1) {
-              sbErrorMessage = tableResult.errorMessage;
-            }
+            sbErrorMessage ??= (page == 1)
+                ? tableResult.errorMessage
+                : 'Terputus di halaman $page: ${tableResult.errorMessage}';
             break;
           }
 
@@ -595,22 +607,43 @@ class StaffDhkpSyncService {
         );
       }
 
+      final isSessionDead = (bbErrorMessage?.contains('kedaluwarsa') ?? false) ||
+          (sbErrorMessage?.contains('kedaluwarsa') ?? false);
+      if (isSessionDead) {
+        return StaffDhkpSyncOutcome(
+          blokLabel: blokSummaryLabel,
+          tahun: tahun,
+          errorMessage:
+              'Sesi login ke Portal Staf telah kedaluwarsa. Silakan masuk kembali melalui Menu Petugas sebelum melanjutkan sinkronisasi.',
+        );
+      }
+
       if (mode == StaffSyncMode.paidOnly && sbErrorMessage != null && sbRows.isEmpty) {
         return StaffDhkpSyncOutcome(
           blokLabel: blokSummaryLabel,
           tahun: tahun,
           errorMessage: sbErrorMessage,
         );
-      } else if (mode == StaffSyncMode.full &&
-          bbErrorMessage != null &&
-          bbRows.isEmpty &&
-          sbErrorMessage != null &&
-          sbRows.isEmpty) {
-        return StaffDhkpSyncOutcome(
-          blokLabel: blokSummaryLabel,
-          tahun: tahun,
-          errorMessage: 'Belum Bayar: $bbErrorMessage; Sudah Bayar: $sbErrorMessage',
-        );
+      } else if (mode == StaffSyncMode.full) {
+        if (bbErrorMessage != null && bbRows.isEmpty && sbErrorMessage != null && sbRows.isEmpty) {
+          return StaffDhkpSyncOutcome(
+            blokLabel: blokSummaryLabel,
+            tahun: tahun,
+            errorMessage: 'Belum Bayar: $bbErrorMessage; Sudah Bayar: $sbErrorMessage',
+          );
+        } else if (bbErrorMessage != null && bbRows.isEmpty) {
+          return StaffDhkpSyncOutcome(
+            blokLabel: blokSummaryLabel,
+            tahun: tahun,
+            errorMessage: 'Gagal memuat data Belum Bayar: $bbErrorMessage',
+          );
+        } else if (sbErrorMessage != null && sbRows.isEmpty) {
+          return StaffDhkpSyncOutcome(
+            blokLabel: blokSummaryLabel,
+            tahun: tahun,
+            errorMessage: 'Gagal memuat data Sudah Bayar: $sbErrorMessage',
+          );
+        }
       }
 
       // -------------------------------------------------------------

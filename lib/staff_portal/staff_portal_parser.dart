@@ -15,6 +15,34 @@ class StaffPortalParser {
     return (text == null || text.isEmpty) ? null : text;
   }
 
+  /// Memeriksa apakah respons server menunjukkan sesi login telah kedaluwarsa atau dialihkan ke halaman login.
+  static bool isSessionExpired(
+    String html, {
+    int? statusCode,
+    String? location,
+  }) {
+    if (statusCode == 302) {
+      final loc = location?.toLowerCase() ?? '';
+      if (loc.contains('plogin.php') ||
+          loc.contains('login') ||
+          loc.endsWith('main.php') ||
+          loc.isEmpty) {
+        return true;
+      }
+    }
+    final lower = html.toLowerCase();
+    if (lower.contains('plogin.php') ||
+        (lower.contains('name="usr"') && lower.contains('name="pwd"')) ||
+        (lower.contains('name="cimage"') && lower.contains('captcha')) ||
+        lower.contains('sesi anda telah berakhir') ||
+        lower.contains('sesi telah habis') ||
+        lower.contains('silahkan login kembali') ||
+        lower.contains('session expired')) {
+      return true;
+    }
+    return false;
+  }
+
   static List<BankOption> parseBankJson(String body) {
     try {
       final decoded = jsonDecode(body);
@@ -86,7 +114,17 @@ class StaffPortalParser {
   /// Mendukung tabel multi-row header, tombol ekspor di atas tabel,
   /// pemisahan table header vs data, dan normalisasi panjang sel per baris
   /// agar DataTable Flutter tidak pernah crash karena mismatch sel.
-  static MonitoringTableResult parseGenericTable(String html) {
+  static MonitoringTableResult parseGenericTable(
+    String html, {
+    int? statusCode,
+    String? location,
+  }) {
+    if (isSessionExpired(html, statusCode: statusCode, location: location)) {
+      return const MonitoringTableResult(
+        errorMessage:
+            'Sesi login ke Portal Staf telah kedaluwarsa. Silakan masuk kembali melalui Menu Petugas.',
+      );
+    }
     final document = html_parser.parse(html);
     final summary = parseSummaryTotals(html);
     final tables = document.querySelectorAll('table');
@@ -195,10 +233,11 @@ class StaffPortalParser {
       }
     }
 
-    final pagingMatch = RegExp(r'(\d+)\s*-\s*(\d+)\s+dari\s+(\d+)').firstMatch(html);
+    final pagingMatch = RegExp(r'(\d+)\s*-\s*(\d+)\s+dari\s+([\d\.\,]+)').firstMatch(html);
     final pageStart = int.tryParse(pagingMatch?.group(1) ?? '') ?? 0;
     final pageEnd = int.tryParse(pagingMatch?.group(2) ?? '') ?? 0;
-    final totalRecords = int.tryParse(pagingMatch?.group(3) ?? '') ?? normalizedRows.length;
+    final rawTotal = pagingMatch?.group(3)?.replaceAll(RegExp(r'[^0-9]'), '') ?? '';
+    final totalRecords = int.tryParse(rawTotal) ?? normalizedRows.length;
     final hasNextPage = (html.contains('id="next-page"') || html.contains('name="next-page"')) &&
         pageEnd > 0 &&
         pageEnd < totalRecords;
@@ -225,7 +264,17 @@ class StaffPortalParser {
   }
 
   /// Parsing tabel antrean unduhan berkas Excel dari server V-Tax.
-  static MonitoringExcelQueueResult parseExcelQueueTable(String html) {
+  static MonitoringExcelQueueResult parseExcelQueueTable(
+    String html, {
+    int? statusCode,
+    String? location,
+  }) {
+    if (isSessionExpired(html, statusCode: statusCode, location: location)) {
+      return const MonitoringExcelQueueResult(
+        errorMessage:
+            'Sesi login ke Portal Staf telah kedaluwarsa. Silakan masuk kembali melalui Menu Petugas.',
+      );
+    }
     if (html.isEmpty) {
       return const MonitoringExcelQueueResult(errorMessage: 'Tidak ada data antrean.');
     }
@@ -374,7 +423,40 @@ class StaffPortalParser {
     return '';
   }
 
-  static KolektifMemberListResult parseKolektifMemberJson(String body) {
+  /// Parsing daftar desa/kelurahan dari respons JSON `showKelurahan()`.
+  static List<KolektifKelurahan> parseKelurahanListFromJson(String body) {
+    try {
+      final decoded = jsonDecode(body);
+      if (decoded is! Map || decoded['msg'] is! List) return const [];
+      final list = <KolektifKelurahan>[];
+      for (final item in decoded['msg'] as List) {
+        if (item is Map && item['id'] != null && item['name'] != null) {
+          final id = '${item['id']}'.trim();
+          final name = rapikanNamaWilayah('${item['name']}');
+          if (id.isNotEmpty &&
+              name.isNotEmpty &&
+              !list.any((k) => k.code == id)) {
+            list.add(KolektifKelurahan(code: id, name: name));
+          }
+        }
+      }
+      return list;
+    } on FormatException {
+      return const [];
+    }
+  }
+
+  static KolektifMemberListResult parseKolektifMemberJson(
+    String body, {
+    int? statusCode,
+    String? location,
+  }) {
+    if (isSessionExpired(body, statusCode: statusCode, location: location)) {
+      return const KolektifMemberListResult(
+        errorMessage:
+            'Sesi login ke Portal Staf telah kedaluwarsa. Silakan masuk kembali melalui Menu Petugas.',
+      );
+    }
     try {
       final decoded = jsonDecode(body);
       if (decoded is! Map || decoded['data'] is! List) {
@@ -419,7 +501,19 @@ class StaffPortalParser {
     }
   }
 
-  static KolektifActionResult parseKolektifActionJson(String body) {
+  static KolektifActionResult parseKolektifActionJson(
+    String body, {
+    int? statusCode,
+    String? location,
+  }) {
+    if (isSessionExpired(body, statusCode: statusCode, location: location)) {
+      return const KolektifActionResult(
+        success: false,
+        message:
+            'Sesi login ke Portal Staf telah kedaluwarsa. Silakan masuk kembali melalui Menu Petugas.',
+        responsDikenali: false,
+      );
+    }
     final trimmed = body.trim();
     try {
       final decoded = jsonDecode(trimmed);
@@ -447,7 +541,17 @@ class StaffPortalParser {
     );
   }
 
-  static KolektifListResult parseKolektifGroupsJson(String body) {
+  static KolektifListResult parseKolektifGroupsJson(
+    String body, {
+    int? statusCode,
+    String? location,
+  }) {
+    if (isSessionExpired(body, statusCode: statusCode, location: location)) {
+      return const KolektifListResult(
+        errorMessage:
+            'Sesi login ke Portal Staf telah kedaluwarsa. Silakan masuk kembali melalui Menu Petugas.',
+      );
+    }
     try {
       final decoded = jsonDecode(body);
       if (decoded is! Map || decoded['data'] is! List) {

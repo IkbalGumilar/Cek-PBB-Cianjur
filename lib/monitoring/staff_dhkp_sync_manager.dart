@@ -35,7 +35,9 @@ class StaffDhkpSyncManager extends ChangeNotifier {
   String? _kelurahan;
   String? _kecamatan;
   String? _blokLabel;
-  StaffSyncMode _mode = StaffSyncMode.full;
+  StaffSyncMode _mode = StaffSyncMode.paidOnly;
+  String? _tglBayarAwal;
+  String? _tglBayarAkhir;
 
   StreamSubscription<String>? _actionSub;
 
@@ -98,7 +100,9 @@ class StaffDhkpSyncManager extends ChangeNotifier {
     required String kelurahan,
     required String kecamatan,
     required String blokLabel,
-    StaffSyncMode mode = StaffSyncMode.full,
+    StaffSyncMode mode = StaffSyncMode.paidOnly,
+    String? tglBayarAwal,
+    String? tglBayarAkhir,
   }) {
     _client = client;
     _tahun = tahun;
@@ -107,6 +111,8 @@ class StaffDhkpSyncManager extends ChangeNotifier {
     _kecamatan = kecamatan;
     _blokLabel = blokLabel;
     _mode = mode;
+    _tglBayarAwal = tglBayarAwal;
+    _tglBayarAkhir = tglBayarAkhir;
 
     _isSyncing = true;
     _isPaused = false;
@@ -135,6 +141,8 @@ class StaffDhkpSyncManager extends ChangeNotifier {
         kelurahanCode: _kelurahan ?? '',
         kecamatanCode: _kecamatan ?? '',
         mode: _mode,
+        tglBayarAwal: _tglBayarAwal,
+        tglBayarAkhir: _tglBayarAkhir,
         onProgress: (p) {
           _progress = p;
           notifyListeners();

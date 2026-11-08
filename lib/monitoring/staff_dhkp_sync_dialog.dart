@@ -16,15 +16,21 @@ import 'staff_dhkp_sync_service.dart';
 Future<void> showStaffDhkpSyncDialog(
   BuildContext context, {
   required StaffPortalClient client,
-  String kelurahan = '3205200004',
-  String kecamatan = '3205200',
+  String? kelurahan,
+  String? kecamatan,
 }) async {
+  final effKel = (kelurahan != null && kelurahan.isNotEmpty)
+      ? kelurahan
+      : client.activeKelurahanCode;
+  final effKec = (kecamatan != null && kecamatan.isNotEmpty)
+      ? kecamatan
+      : client.activeKecamatanCode;
   await showDialog<void>(
     context: context,
     builder: (ctx) => _StaffDhkpSyncConfigDialog(
       client: client,
-      kelurahan: kelurahan,
-      kecamatan: kecamatan,
+      kelurahan: effKel,
+      kecamatan: effKec,
     ),
   );
 }
@@ -51,7 +57,11 @@ class _StaffDhkpSyncConfigDialogState
 
   late String _selectedTahun;
   String _selectedBlok = _semuaBlokKey;
-  StaffSyncMode _selectedMode = StaffSyncMode.full;
+  StaffSyncMode _selectedMode = StaffSyncMode.paidOnly;
+  StaffSyncDatePreset _selectedDatePreset = StaffSyncDatePreset.allYear;
+
+  DateTime? _customStartDate;
+  DateTime? _customEndDate;
 
   bool _loading = true;
   List<String> _bloks = [];
@@ -68,6 +78,38 @@ class _StaffDhkpSyncConfigDialogState
     final currentYear = DateTime.now().year;
     _selectedTahun = '$currentYear';
     _loadLocalData();
+  }
+
+  String get _effectiveStartDate {
+    final now = DateTime.now();
+    switch (_selectedDatePreset) {
+      case StaffSyncDatePreset.allYear:
+        return '$_selectedTahun-01-01';
+      case StaffSyncDatePreset.last7Days:
+        final d = now.subtract(const Duration(days: 7));
+        return '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+      case StaffSyncDatePreset.last30Days:
+        final d = now.subtract(const Duration(days: 30));
+        return '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+      case StaffSyncDatePreset.thisMonth:
+        return '$_selectedTahun-${now.month.toString().padLeft(2, '0')}-01';
+      case StaffSyncDatePreset.custom:
+        if (_customStartDate != null) {
+          final d = _customStartDate!;
+          return '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+        }
+        return '$_selectedTahun-01-01';
+    }
+  }
+
+  String get _effectiveEndDate {
+    final now = DateTime.now();
+    if (_selectedDatePreset == StaffSyncDatePreset.custom &&
+        _customEndDate != null) {
+      final d = _customEndDate!;
+      return '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+    }
+    return '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
   }
 
   Future<void> _loadLocalData() async {
@@ -132,6 +174,8 @@ class _StaffDhkpSyncConfigDialogState
       kecamatan: widget.kecamatan,
       blokLabel: blokLabel,
       mode: _selectedMode,
+      tglBayarAwal: _effectiveStartDate,
+      tglBayarAkhir: _effectiveEndDate,
     );
   }
 
@@ -275,6 +319,118 @@ class _StaffDhkpSyncConfigDialogState
                       if (val != null) setState(() => _selectedMode = val);
                     },
                   ),
+                  if (_selectedMode == StaffSyncMode.paidOnly) ...[
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<StaffSyncDatePreset>(
+                      initialValue: _selectedDatePreset,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Rentang Waktu Pelunasan',
+                        border: OutlineInputBorder(),
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 12,
+                        ),
+                      ),
+                      items: [
+                        for (final p in StaffSyncDatePreset.values)
+                          DropdownMenuItem(
+                            value: p,
+                            child: Text(
+                              p.label,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 13),
+                            ),
+                          ),
+                      ],
+                      onChanged: (val) {
+                        if (val != null) {
+                          setState(() => _selectedDatePreset = val);
+                        }
+                      },
+                    ),
+                    if (_selectedDatePreset == StaffSyncDatePreset.custom) ...[
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: () async {
+                                final now = DateTime.now();
+                                final picked = await showDatePicker(
+                                  context: context,
+                                  initialDate: _customStartDate ?? now,
+                                  firstDate: DateTime(2010),
+                                  lastDate: now,
+                                );
+                                if (picked != null) {
+                                  setState(() => _customStartDate = picked);
+                                }
+                              },
+                              icon: const Icon(Icons.date_range, size: 16),
+                              label: Text(
+                                _customStartDate == null
+                                    ? 'Tgl Mulai'
+                                    : '${_customStartDate!.day.toString().padLeft(2, '0')}/${_customStartDate!.month.toString().padLeft(2, '0')}/${_customStartDate!.year}',
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: () async {
+                                final now = DateTime.now();
+                                final picked = await showDatePicker(
+                                  context: context,
+                                  initialDate: _customEndDate ?? now,
+                                  firstDate: DateTime(2010),
+                                  lastDate: now,
+                                );
+                                if (picked != null) {
+                                  setState(() => _customEndDate = picked);
+                                }
+                              },
+                              icon: const Icon(Icons.event, size: 16),
+                              label: Text(
+                                _customEndDate == null
+                                    ? 'Tgl Selesai'
+                                    : '${_customEndDate!.day.toString().padLeft(2, '0')}/${_customEndDate!.month.toString().padLeft(2, '0')}/${_customEndDate!.year}',
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.teal.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: Colors.teal.withValues(alpha: 0.3),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.bolt, size: 16, color: Colors.teal),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              'Rentang: $_effectiveStartDate s/d $_effectiveEndDate',
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.teal,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 14),
 
                   // Kotak Status Konteks DHKP Tersimpan Saat Ini
