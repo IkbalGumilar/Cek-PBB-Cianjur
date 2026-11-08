@@ -4,6 +4,42 @@ Dokumentasi perubahan, peningkatan, dan perbaikan pada setiap rilis aplikasi. Fo
 
 ---
 
+## [v0.1.5-beta] - 2026-11-08
+
+### 🗺️ Peta Spasial DHKP Dinamis (Interactive GIS & Tax Polygon)
+- **Bounding Box Poligon Dinamis**: Visualisasi peta kini sepenuhnya mengadopsi poligon GeoJSON desa/kelurahan dinamis dan menghapus seluruh dependensi koordinat statis/hardcoded.
+- **Deteksi Penanda Kantor Desa Adaptif**: Marker Balai Desa otomatis tersembunyi secara cerdas jika koordinat referensi belum dikonfigurasi oleh pengguna di pengaturan wilayah.
+- **Ekstraksi Chip Kedusunan Otomatis**: Chip filter wilayah kedusunan pada peta kini memiliki mekanisme fallback otomatis yang mengekstrak daftar nomor dusun unik langsung dari data objek pajak aktif.
+- **Sebaran Titik Pajak (Tax Dots)**: Pemetaan sebaran objek pajak berbasis WGS84 dengan diferensiasi status visual (Lunas, Belum Lunas, Blacklist, dan Target Pemda).
+
+### ⚡ Cek Massal & Pengunduhan STTS Digital Terpadu
+- **Auto-Download STTS PDF Terintegrasi**: Penambahan opsi unduh STTS digital instan langsung di layar `BatchCheckScreen`.
+- **Delta Sync Hemat Kuota**: Pengunduhan dokumen STTS PDF resmi dari server hanya dieksekusi untuk NOP yang terverifikasi LUNAS, mencegah beban jaringan dan duplikasi berkas.
+- **Struktur Arsip Rapi**: Hasil pemeriksaan massal tersimpan otomatis dalam subfolder bertanggal per blok (`Blok_<nomor>/`), dilengkapi berkas ringkasan detail `INFORMASI_BLOK_<nomor>.txt` dan arsip `.zip`.
+
+### 📊 Diagram Capaian & Filter Bulanan Interaktif
+- **Lembar Rincian Bulanan (Monthly Breakdown)**: Komponen `DhkpRincianBulananSheet` untuk menganalisis dinamika dan realisasi pembayaran PBB per bulan kalender.
+- **Penyortiran Dinamis**: Mendukung pengurutan data realisasi berdasarkan nominal rupiah atau kronologi tanggal pembayaran.
+- **Ekspor Laporan Bersih**: Fitur ekspor ringkasan capaian ke format CSV standar dan laporan ringkasan teks.
+
+### 🌐 Dukungan Multi-Wilayah se-Kabupaten Cianjur
+- **Cakupan 32 Kecamatan & 360 Desa/Kelurahan**: Fleksibilitas penuh bagi pengguna untuk beralih atau mengatur wilayah kerja di seluruh kecamatan di Kabupaten Cianjur.
+- **Wizard Setup Interaktif**: Alur penyiapan awal (`StartupSetupScreen`) dan pengaturan wilayah (`WilayahSettingsScreen`) yang ramah pengguna dengan persistensi terenkripsi di penyimpanan lokal.
+
+### 🔐 Keamanan Data & Standar Kriptografi Modern
+- **Format Paket DHKP V2 (`DKH2`)**: Peningkatan standar enkripsi arsip DHKP menggunakan AES-256-GCM dengan penguatan kunci PBKDF2 100.000 iterasi.
+- **Autentikasi TOTP RFC 6238**: Modul verifikasi dua faktor berbasis waktu (6 digit TOTP) berstandar industri dengan toleransi pergeseran waktu (*time-drift window*).
+
+### 🛠️ Perbaikan 6 Edge-Case Bug & Keandalan
+- **Eliminasi Format Mata Uang Ganda**: Memperbaiki redundansi prefiks `"Rp Rp"` pada file ringkasan blok dengan parser mata uang terstandarisasi.
+- **Sanitasi Nama Berkas Lintas Platform**: Membersihkan karakter kontrol baris baru (`\r`, `\n`) dan tabulasi (`\t`) pada nama wajib pajak guna mencegah kegagalan I/O pada Android Storage Access Framework (SAF) dan Windows.
+- **Hierarki Subfolder Direktori Ekspor**: Memperbaiki fallback path ekspor pada pemeriksaan massal agar struktur subfolder bertanggal dan blok tetap terjaga.
+- **Proteksi Inisialisasi PDF**: Membungkus parser `PdfDocument` dengan blok pengaman `try-catch` untuk menangkal crash saat menerima respons jaringan yang tidak sempurna.
+- **Normalisasi Tanggal Pembayaran**: Memotong karakter baris baru liar pada hasil ekstraksi tanggal bayar dari server portal.
+- **Dynamic Chip Fallback**: Memperbaiki kestabilan chip dusun saat memuat paket data dengan metadata manifest minimal.
+
+---
+
 ## [v0.1.4-beta] - 2026-11-03
 
 ### 🚀 Fitur Baru & Peningkatan Aplikasi

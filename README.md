@@ -1,6 +1,6 @@
 # Cek PBB Cianjur
 
-[![Version](https://img.shields.io/badge/Version-v0.1.4--beta-orange.svg)](https://github.com/IkbalGumilar/Cek-PBB-Cianjur/releases/latest)
+[![Version](https://img.shields.io/badge/Version-v0.1.5--beta-orange.svg)](https://github.com/IkbalGumilar/Cek-PBB-Cianjur/releases/latest)
 [![Flutter](https://img.shields.io/badge/Flutter-3.x-02569B?logo=flutter)](https://flutter.dev)
 [![Dart](https://img.shields.io/badge/Dart-3.x-0175C2?logo=dart)](https://dart.dev)
 [![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20Windows%20%7C%20Linux-green.svg)]()
@@ -33,17 +33,20 @@ Aplikasi manajemen, pengecekan, monitoring, dan pelaporan Pajak Bumi dan Banguna
 - [Fitur Utama](#-fitur-utama)
 - [Arsitektur Keamanan](#-arsitektur-keamanan)
 - [Matriks Dukungan Platform](#-matriks-dukungan-platform)
-- [Panduan Modul & Tangkapan Layar](#-panduan-modul--tangkapan-layar)
+- [Panduan Modul & Alur Kerja](#-panduan-modul--alur-kerja)
   - [1. Pengecekan PBB-P2 & Pembayaran Multi-Kanal](#1-pengecekan-pbb-p2--pembayaran-multi-kanal)
-  - [2. Cek Banyak NOP Sekaligus](#2-cek-banyak-nop-sekaligus)
-  - [3. Manajemen Data DHKP & Catatan Blok](#3-manajemen-data-dhkp--catatan-blok)
-  - [4. Diagram Batang & Analitik Capaian DHKP Desktop Adaptif](#4-diagram-batang--analitik-capaian-dhkp-desktop-adaptif)
-  - [5. Monitoring Wilayah & Portal Staf BAPENDA (MFA)](#5-monitoring-wilayah--portal-staf-bapenda-mfa)
-  - [6. Pembayaran Kolektif & Surat Pengantar](#6-pembayaran-kolektif--surat-pengantar)
-  - [7. Cek Pajak Kendaraan Bermotor (Jawa Barat)](#7-cek-pajak-kendaraan-bermotor-jawa-barat)
-  - [8. Cek Desil & Bantuan Sosial (Kemensos)](#8-cek-desil--bantuan-sosial-kemensos)
-  - [9. Buku Panduan Penggunaan & Pusat Bantuan Interaktif](#9-buku-panduan-penggunaan--pusat-bantuan-interaktif)
-  - [10. Kustomisasi Tema, Keamanan & Pencadangan Data](#10-kustomisasi-tema-keamanan--pencadangan-data)
+  - [2. Cek Banyak NOP Sekaligus & Unduh STTS Otomatis](#2-cek-banyak-nop-sekaligus--unduh-stts-otomatis)
+  - [3. Manajemen DHKP, Kolase Foto & Penyimpanan "Save As"](#3-manajemen-dhkp-kolase-foto--penyimpanan-save-as)
+  - [4. Peta Spasial Objek Pajak DHKP (Citra Satelit & KML)](#4-peta-spasial-objek-pajak-dhkp-citra-satelit--kml)
+  - [5. Diagram Capaian & Rincian Pelunasan Bulanan](#5-diagram-capaian--rincian-pelunasan-bulanan)
+  - [6. Multi-Wilayah (32 Kecamatan) & Startup Setup Wizard](#6-multi-wilayah-32-kecamatan--startup-setup-wizard)
+  - [7. Monitoring Wilayah & Portal Staf (MFA Otomatis)](#7-monitoring-wilayah--portal-staf-mfa-otomatis)
+  - [8. Pembayaran Kolektif & Surat Pengantar](#8-pembayaran-kolektif--surat-pengantar)
+  - [9. Cek Pajak Kendaraan Bermotor (Jawa Barat)](#9-cek-pajak-kendaraan-bermotor-jawa-barat)
+  - [10. Cek Desil & Bantuan Sosial (Kemensos)](#10-cek-desil--bantuan-sosial-kemensos)
+  - [11. Layar Pembuka Resmi (Splash Screen)](#11-layar-pembuka-resmi-splash-screen)
+  - [12. Buku Panduan Penggunaan & Pusat Bantuan Interaktif](#12-buku-panduan-penggunaan--pusat-bantuan-interaktif)
+  - [13. Kustomisasi Tema, Keamanan & Pencadangan Data](#13-kustomisasi-tema-keamanan--pencadangan-data)
 - [Alur Pembaruan Otomatis](#-alur-pembaruan-otomatis)
 - [Panduan Pengembangan & Kompilasi](#-panduan-pengembangan--kompilasi)
 - [Pernyataan Privasi & Penafian](#-pernyataan-privasi--penafian)
@@ -56,31 +59,42 @@ Aplikasi manajemen, pengecekan, monitoring, dan pelaporan Pajak Bumi dan Banguna
 - **Pembayaran Multi-Kanal**:
   - **QRIS Dinamis**: Kode QR berlaku 1 jam sekali pakai, kompatibel dengan seluruh aplikasi dompet digital & m-banking di Indonesia (semua platform).
   - **Virtual Account Bank BJB**: Pembuatan nomor VA instan dengan integrasi pembuka aplikasi perbankan lokal yang terpasang di perangkat *(khusus Android)*.
-- **Manajemen DHKP (Daftar Himpunan Ketetapan Pajak)**:
-  - Pelacakan 4 indikator metrik utama: **Sudah Bayar**, **Belum Bayar**, **Target Pemda**, dan **Blacklist (Menunggak ≥ 5 Tahun)**.
-  - Pencatatan riwayat penagihan, status objek pajak, foto lokasi/bukti bayar dengan zoom interaktif, dan penambahan catatan khusus kolektor.
-  - **Ekspor Kolase Foto**: Penggabungan foto objek pajak/SPPT per blok ke dalam dokumen laporan siap cetak atau dibagikan ke instansi pembina.
-- **Diagram Capaian Desktop Adaptif**:
+- **Cek Massal & Pengunduhan STTS Per Blok Otomatis**:
+  - Pengecekan status bayar ratusan NOP secara serentak dalam satu proses terpadu.
+  - Opsi unduh berkas STTS otomatis bagi seluruh NOP yang telah lunas langsung ke folder blok bertanggal (`STTS Blok <blok> - <hari>, <tgl>-<bln>-<thn>`).
+  - Pembuatan berkas ringkasan otomatis `INFORMASI_BLOK_<blok>.txt` yang memuat statistik penerimaan, status pelunasan, dan status pengunduhan file STTS per NOP.
+- **Peta Spasial Objek Pajak DHKP (Google Satelit & KML)**:
+  - Pemetaan titik objek pajak interaktif di atas citra satelit Google Maps langsung tanpa poligon dummy yang menutupi atap rumah.
+  - Visualisasi kode warna status bayar: 🟢 Lunas, 🔴 Belum Bayar, 🟡 Multi-SPPT Sebagian, ⚫ Target Pemda.
+  - Relasi spasial antara lokasi objek pajak dan alamat pemilik (garis trajektori dan penyorotan rumah pemilik jika objek terpisah).
+  - Navigasi adaptif: tombol fokus batas wilayah dan fokus landmark kantor desa resmi hanya aktif saat koordinat sah tersedia.
+- **Diagram Capaian & Rincian Pelunasan Bulanan**:
   - Visualisasi grafik capaian persentase, pendapatan masuk, sisa tagihan, dan tren bulanan ala Microsoft Excel / Power BI.
-  - **Mode Pas Layar (Fit-to-Screen)**: Menampilkan seluruh 41 blok desa sekaligus dalam satu pandangan monitor tanpa terpotong.
-  - **Mode Bisa Digeser (Scrollable)**: Dilengkapi dukungan klik & seret mouse (*mouse drag-to-scroll*), roda scroll mouse (*mouse wheel*), dan scrollbar horizontal interaktif.
-- **Buku Panduan & Pusat Bantuan Interaktif (Terbaru di v0.1.2-beta)**:
+  - Rincian pelunasan bulanan interaktif: klik bulan tertentu untuk melihat daftar wajib pajak yang lunas lengkap dengan jam pelunasan dan 6 mode pengurutan fleksibel.
+  - Mode Pas Layar (*Fit-to-Screen*) dan Mode Geser (*Scrollable*) dengan dukungan navigasi mouse desktop.
+- **Sistem Penyimpanan "Save As" Bebas Izin**:
+  - Seluruh ekspor dokumen (PDF, CSV, Excel, Kolase Foto, Backup `.dkhp`) menggunakan dialog native OS (*Storage Access Framework*).
+  - Bebas memilih folder penyimpanan mana saja tanpa memerlukan izin akses penyimpanan runtime Android (`MANAGE_EXTERNAL_STORAGE`).
+- **Dukungan Multi-Wilayah (32 Kecamatan se-Kabupaten Cianjur)**:
+  - Wizard penyiapan awal (*Startup Setup Wizard*) interaktif bertahap dengan sapaan khas Sunda *"Sampurasun!"*.
+  - Katalog lengkap seluruh 32 kecamatan dan desa se-Kabupaten Cianjur terurut alfabetis (A–Z).
+  - Pengaturan wilayah mandiri dan peralihan desa cepat di menu utama.
+- **Portal Monitoring Staf BAPENDA & Otomatisasi MFA**:
+  - Akses aman bagi staf berwenang dengan autentikasi dua faktor (Google Authenticator MFA).
+  - Generator TOTP lokal terenkripsi (RFC 6238) dengan fitur Auto-Login tanpa membuka aplikasi autentikator eksternal.
+  - Mode sinkronisasi khusus pelunasan baru (*paidOnly*) dengan preset rentang tanggal (7 hari s/d 1 tahun) yang menghemat waktu sinkronisasi hingga 95%.
+- **Buku Panduan & Pusat Bantuan Interaktif**:
   - Modul dokumentasi visual 19 bab dengan 84 titik pin koordinat interaktif, pencarian cepat, filter kategori, mode zoom layar penuh, dan FAQ lengkap.
-- **Tur Fitur Spotlight Dinamis 60 FPS**:
-  - Memandu pengguna baru mengenal letak tombol dan alur kerja aplikasi secara visual dengan sorotan spotlight yang mengikuti posisi layar secara dinamis.
-- **Asosiasi Berkas Cerdas (WhatsApp & File Manager)**:
-  - Berkas arsip `.dkhp`, `.dhkp`, maupun laporan perubahan `.dat` dapat diketuk langsung dari chat WhatsApp atau pengelola berkas Android untuk membuka aplikasi dan memulihkan data otomatis.
-- **Sinkronisasi Multi-Petugas & Cloud Backup**:
-  - Terintegrasi langsung dengan Google Drive API untuk mengunduh dan menyinkronkan data antar-kolektor.
-  - Protokol delta sync terenkripsi untuk penggabungan perubahan catatan tanpa menimpa data rekan kerja.
-  - Penjadwalan cadangan harian otomatis berkala (pukul 02:00) dengan kebijakan rotasi retensi 3 berkas terlama.
+- **Layar Pembuka (Splash Screen) Resmi & Elegan**:
+  - Animasi pembuka resmi dengan lambang Kabupaten Cianjur dan identitas kelembagaan Bapenda, dilengkapi fitur *tap-to-skip*.
 - **OCR Offline Lokal (Edge ML)**:
   - Pemindaian berkas NOP dari gambar fisik STTS/SPPT tanpa koneksi internet *(khusus Android)*.
   - Pemindaian KTP/KK untuk input NIK 16 digit pada modul Bansos.
   - Pemindaian Plat Nomor Kendaraan (TNKB) dengan deteksi warna permukaan plat.
-- **Portal Monitoring Staf BAPENDA**:
-  - Akses aman berbasis kredensial staf + autentikasi dua faktor (Google Authenticator MFA).
-  - Monitoring piutang, realisasi per wilayah (Kecamatan/Kelurahan), rangking realisasi, dan pencetakan surat pengantar pembayaran kolektif.
+- **Sinkronisasi Multi-Petugas & Cloud Backup**:
+  - Terintegrasi langsung dengan Google Drive API untuk mengunduh dan menyinkronkan data antar-kolektor.
+  - Protokol delta sync terenkripsi untuk penggabungan perubahan catatan tanpa menimpa data rekan kerja.
+  - Penjadwalan cadangan harian otomatis berkala (pukul 02:00) dengan kebijakan rotasi retensi 3 berkas terlama.
 - **Keamanan Sistem Berlapis**:
   - Proteksi kunci biometrik (sidik jari/wajah), PIN 6-digit terenkripsi, atau kata sandi aplikasi dengan auto-lockout cerdas.
   - Enkripsi arsip `.dkhp` standar militer (PBKDF2-HMAC-SHA256 600.000 iterasi + AES-256-GCM).
@@ -126,14 +140,18 @@ Aplikasi ini memprioritaskan kerahasiaan dan integritas data wajib pajak melalui
 | **Cek Tagihan & Status Bayar PBB** | ✅ | ✅ | ✅ | Berjalan penuh di semua platform |
 | **Pembayaran QRIS Dinamis** | ✅ | ✅ | ✅ | Berlaku nasional via aplikasi e-wallet/m-banking |
 | **Pembayaran Virtual Account (VA)** | ✅ | ❌ | ❌ | Tergantung *intent* pemanggil m-banking lokal Android |
+| **Cek Massal & Unduh STTS Otomatis** | ✅ | ✅ | ✅ | Pengunduhan batch STTS & pembuatan rekap TXT blok |
 | **Manajemen DHKP & Catatan Blok** | ✅ | ✅ | ✅ | Sinkronisasi lokal & ekspor PDF/Excel/CSV |
-| **Diagram DHKP Desktop Adaptif** | ✅ | ✅ | ✅ | Mode Pas Layar & Geser dengan mouse drag |
+| **Peta Spasial DHKP (Satelit & KML)** | ✅ | ✅ | ✅ | Pemetaan koordinat, trajektori alamat & status warna |
+| **Diagram Capaian & Rincian Bulanan** | ✅ | ✅ | ✅ | Mode Pas Layar/Geser, rincian lunas & 6 mode sortir |
+| **Penyimpanan Bebas Izin ("Save As")** | ✅ | ✅ | ✅ | Dialog native SAF/OS tanpa izin runtime berlebih |
+| **Dukungan Multi-Wilayah (32 Kec)** | ✅ | ✅ | ✅ | Wizard penyiapan awal & katalog lengkap Cianjur |
+| **Monitoring Portal Staf & MFA Otomatis**| ✅ | ✅ | ✅ | Login terenkripsi dengan generator TOTP lokal aman |
 | **Buku Panduan Interaktif** | ✅ | ✅ | ✅ | 19 bab tutorial, 84 pinpoint visual, FAQ |
 | **Tur Fitur Spotlight 60 FPS** | ✅ | ✅ | ✅ | Mengikuti target scroll secara dinamis |
 | **Google Drive File Picker** | ✅ | ✅ | ✅ | Terintegrasi via Google Drive REST API |
 | **Pencadangan Otomatis (02:00)** | ✅ | ✅ | ✅ | Berjalan di latar belakang dengan rotasi retensi |
 | **Scan OCR (NOP, NIK, Plat Nomor)** | ✅ | ❌ | ❌ | Memanfaatkan engine Google ML Kit di perangkat |
-| **Monitoring Portal Staf & MFA** | ✅ | ✅ | ✅ | Login terenkripsi dengan Google Authenticator |
 | **Cek Desil & Bansos Kemensos** | ✅ | ✅ | ✅ | Input manual (semua OS) / Scan NIK (Android) |
 | **Cek Pajak Kendaraan Jabar** | ✅ | ✅ | ✅ | Input manual (semua OS) / Scan Plat (Android) |
 | **Kunci Biometrik / PIN / Password** | ✅ | ✅ | ✅ | Terintegrasi dengan sistem keamanan perangkat |
@@ -142,7 +160,7 @@ Aplikasi ini memprioritaskan kerahasiaan dan integritas data wajib pajak melalui
 
 ---
 
-## 📖 Panduan Modul & Tangkapan Layar
+## 📖 Panduan Modul & Alur Kerja
 
 ### 1. Pengecekan PBB-P2 & Pembayaran Multi-Kanal
 
@@ -161,53 +179,94 @@ Modul utama untuk memeriksa ketetapan pajak perorangan dan memproses pembayaran 
 
 ---
 
-### 2. Cek Banyak NOP Sekaligus
+### 2. Cek Banyak NOP Sekaligus & Unduh STTS Otomatis
 
-Memfasilitasi penagihan massal per RT/RW atau kelompok wajib pajak dalam satu langkah praktis.
+Memfasilitasi penagihan massal per RT/RW atau kelompok wajib pajak dalam satu langkah praktis dengan otomasi pengarsipan berkas.
 
 <p align="center">
   <img src="docs/images/03_cek_banyak_nop.png" width="300" alt="Cek Banyak NOP Sekaligus" />
 </p>
 
-- Masukkan daftar NOP atau nomor wilayah secara beruntun.
-- Sistem mengeksekusi pengecekan paralel dengan penanganan captcha otomatis.
-- Rekapitulasi total tagihan, jumlah NOP lunas, dan sisa tunggakan disajikan dalam satu tabel terpadu.
+- **Pengecekan Paralel Cepat**: Masukkan daftar NOP atau nomor wilayah secara beruntun. Sistem mengeksekusi pengecekan multi-thread secara efisien.
+- **Opsi Unduh STTS Otomatis**:
+  - Saat saklar *Unduh dengan STTS* diaktifkan sebelum memulai cek, sistem memunculkan dialog penyimpanan (*Save As*) untuk memilih lokasi folder penyimpanan (misalnya folder `Download`).
+  - Aplikasi secara otomatis membuat subfolder terstruktur per blok bertanggal:
+    `STTS Blok <blok> - <Hari>, <tgl>-<bln>-<thn>` (contoh: `STTS Blok 001 - Minggu, 08-11-2026`).
+  - Untuk setiap NOP yang berstatus lunas, sistem otomatis mengunduh salinan berkas resmi Surat Tanda Terima Setoran (STTS) dalam format PDF langsung ke dalam subfolder tersebut.
+- **Ringkasan Catatan Blok (`INFORMASI_BLOK_<blok>.txt`)**:
+  - Di dalam subfolder hasil unduhan, aplikasi menyusun berkas laporan teks komprehensif berisi statistik penerimaan blok, rekap jumlah lunas vs belum bayar, total rupiah realisasi, serta catatan status keberhasilan pengunduhan berkas STTS per wajib pajak.
 
 ---
 
-### 3. Manajemen Data DHKP & Catatan Blok
+### 3. Manajemen DHKP, Kolase Foto & Penyimpanan "Save As"
 
-Buku kerja digital bagi kolektor desa untuk mencatat realisasi lapangan, foto objek pajak, dan riwayat penagihan.
+Buku kerja digital bagi kolektor desa untuk mencatat realisasi lapangan, foto objek pajak, riwayat penagihan, dan ekspor dokumen mandiri.
 
 <p align="center">
   <img src="docs/images/06_dhkp_catatan.png" width="320" alt="Buku Catatan Blok DHKP" />
 </p>
 
-- **Filter 4 Metrik Instan**:
+- **Filter 5 Kategori Status**:
   - **Semua Data**: Menampilkan keseluruhan basis data DHKP blok wilayah kerja.
   - **Sudah Bayar**: Objek pajak yang telah terverifikasi lunas di BAPENDA.
   - **Belum Bayar**: Objek pajak dengan kewajiban pembayaran aktif.
   - **Target Pemda**: Objek pajak bernominal besar/prioritas pengawasan pemerintah daerah.
   - **Blacklist (≥ 5 Tahun)**: Objek pajak menunggak kronis lebih dari 5 tahun.
 - **Pembaruan Lapangan**: Unggah foto objek/SPPT, beri catatan khusus kolektor, dan simpan status penagihan.
-- **Ekspor Kolase Foto**: Penggabungan foto SPPT per blok ke dalam dokumen laporan PDF siap cetak.
+- **Penyimpanan Bebas Izin ("Save As")**:
+  - Seluruh operasi ekspor (laporan cetak PDF, rekapitulasi Excel, CSV DHKP, berkas backup terenkripsi `.dkhp`, hingga kolase foto) memanfaatkan antarmuka pemilih penyimpanan native sistem operasi (*Storage Access Framework*).
+  - Pengguna bebas menentukan folder penyimpanan mana pun (memori internal, kartu SD, folder dokumen, atau media OTG) tanpa membutuhkan izin akses penyimpanan luas runtime Android (`MANAGE_EXTERNAL_STORAGE`).
+- **Ekspor Kolase Foto**: Penggabungan foto-foto fisik SPPT objek pajak per blok ke dalam dokumen laporan PDF tertata rapi siap cetak untuk pengarsipan desa.
 
 ---
 
-### 4. Diagram Batang & Analitik Capaian DHKP Desktop Adaptif
+### 4. Peta Spasial Objek Pajak DHKP (Citra Satelit & KML)
 
-Dashboard analitik visual untuk memantau performa penerimaan pajak se-desa atau per blok.
+Pemetaan spasial interaktif objek pajak di atas citra satelit Google Maps beresolusi tinggi dengan akurasi koordinat berbasis data riil.
 
-- **Mode Pas Layar (Dirapatkan)**: Pada layar desktop lebar ($\ge 800$ px), seluruh 41 blok se-desa otomatis dimuat pas 100% layar. Perbandingan performa antar-blok terlihat seketika dalam satu layar tanpa terpotong.
-- **Mode Bisa Digeser (Scrollable)**: Dilengkapi dukungan interaksi mouse desktop:
-  - **Klik & Seret (*Mouse Drag*)**: Klik kiri di mana saja pada grafik lalu geser horizontal.
-  - **Roda Mouse (*Mouse Wheel*)**: Memutar roda mouse saat kursor di atas diagram otomatis menggulir horizontal.
-  - **Scrollbar Horizontal**: Scrollbar interaktif yang dapat diseret dengan kursor.
-- **Tombol Toggle Cepat**: Tombol **"Pas Layar" $\leftrightarrow$ "Bisa Digeser"** tersedia di Toolbar Kontrol dan Header Kartu Diagram.
+- **Inisialisasi Bersih (*Clean Slate*)**: Peta dirancang tanpa koordinat tiruan atau poligon buatan yang menutupi kontur atap rumah warga. Area peta dimulai secara bersih sesuai data spasial autentik wilayah kerja Anda.
+- **Dukungan Berkas KML**: Impor berkas `.kml` batas dusun/desa atau hasil ukur persil tanah untuk memplot koordinat objek pajak secara presisi.
+- **Kode Warna Status Pembayaran Spasial**:
+  - 🟢 **Hijau (Lunas)**: Objek pajak telah melunasi kewajiban tahun berjalan.
+  - 🔴 **Merah (Belum Bayar)**: Objek pajak masih memiliki tunggakan pajak aktif.
+  - 🟡 **Kuning (Multi-SPPT)**: Objek pajak memiliki beberapa SPPT dengan pelunasan sebagian.
+  - ⚫ **Hitam / Abu Gelap (Target Pemda)**: Objek pajak bernilai ketetapan besar dalam pengawasan khusus.
+- **Visualisasi Relasi Objek & Alamat Pemilik**: Apabila lokasi objek tanah terpisah dari domisili tempat tinggal pemilik, pengetukan titik objek menampilkan garis trajektori dan sorotan khusus ke alamat rumah pemilik tanah.
+- **Kontrol Navigasi Adaptif**: Tombol pemusatan batas wilayah desa (*Fit Bounds*) dan tombol fokus kantor desa hanya muncul ketika koordinat wilayah sah tersedia, menjamin navigasi peta selalu akurat dan responsif.
 
 ---
 
-### 5. Monitoring Wilayah & Portal Staf BAPENDA (MFA)
+### 5. Diagram Capaian & Rincian Pelunasan Bulanan
+
+Dashboard analitik visual untuk memantau performa realisasi penerimaan pajak se-desa maupun per blok kerja secara terperinci.
+
+- **Mode Pas Layar (Dirapatkan)**: Pada layar desktop lebar ($\ge 800$ px), grafik otomatis dirapatkan agar seluruh puluhan blok se-desa termuat 100% pas dalam satu pandangan layar tanpa terpotong.
+- **Mode Bisa Digeser (Scrollable)**: Dilengkapi interaksi kontrol mouse desktop lengkap:
+  - **Klik & Seret (*Mouse Drag*)**: Geser diagram ke kiri atau ke kanan secara halus.
+  - **Roda Mouse (*Mouse Wheel*)**: Menggulirkan roda mouse di atas diagram otomatis menggeser grafik secara horizontal.
+  - **Scrollbar Horizontal**: Penggeser interaktif yang dapat ditarik dengan kursor.
+- **Rincian Pelunasan Bulanan Interaktif**:
+  - Mengetuk bar diagram bulan tertentu akan membuka dialog rincian seluruh wajib pajak yang melunasi pembayaran pada bulan bersangkutan.
+  - Memuat informasi waktu transaksi lengkap hingga ke jam dan menit, nama wajib pajak, nominal pokok, denda, dan total setor.
+  - Dilengkapi **6 mode pengurutan fleksibel**: Waktu Transaksi (Terbaru $\leftrightarrow$ Terlama), Nomor NOP (Urut Maju $\leftrightarrow$ Mundur), dan Nominal Setor (Terbesar $\leftrightarrow$ Terkecil).
+  - Opsi ekspor langsung rekap bulanan ke berkas cetak atau laporan digital.
+
+---
+
+### 6. Multi-Wilayah (32 Kecamatan) & Startup Setup Wizard
+
+Fleksibilitas penggunaan untuk seluruh wilayah kerja pemerintahan desa di Kabupaten Cianjur.
+
+- **Wizard Penyiapan Awal (*Startup Setup Wizard*)**:
+  - Pengguna baru dipandu melalui alur sambutan interaktif bersuasana ramah dengan sapaan khas *"Sampurasun!"*.
+  - Tahapan penyiapan memandu pemilihan wilayah bertingkat: memilih Kecamatan, Desa/Kelurahan, dan melengkapi preferensi profil petugas.
+- **Katalog Lengkap 32 Kecamatan**:
+  - Mencakup seluruh 32 kecamatan se-Kabupaten Cianjur (Agrabinta, Bojongpicung, Campaka, Campaka Mulya, Cianjur, Cibeber, Cibinong, Cidaun, Cijati, Cikadu, Cikalongkulon, Cilaku, Cipanas, Ciranjang, Cugenang, Gekbrong, Haurwangi, Kadupandak, Karangtengah, Leles, Mande, Naringgul, Pacet, Pagelaran, Pasirkuda, Sindangbarang, Sukaluyu, Sukanagara, Sukaresmi, Takokak, Tanggeung, dan Warungkondang) beserta seluruh daftar desa/kelurahannya yang tersusun alfabetis rapi.
+- **Peralihan Desa Cepat**: Petugas lintas wilayah dapat beralih ke desa binaan lain kapan saja melalui menu Pengaturan tanpa menghapus arsip kerja desa sebelumnya.
+
+---
+
+### 7. Monitoring Wilayah & Portal Staf (MFA Otomatis)
 
 Modul administratif terotentikasi bagi staf desa/kelurahan yang memiliki akun portal resmi BAPENDA.
 
@@ -219,12 +278,18 @@ Modul administratif terotentikasi bagi staf desa/kelurahan yang memiliki akun po
 | :---: | :---: |
 | <img src="docs/images/10_pantauan_wilayah.png" width="300" alt="Pantauan Wilayah" /> | <img src="docs/images/11_pantauan_ranking.png" width="300" alt="Ranking Wilayah" /> |
 
-- **Autentikasi Dua Langkah**: Verifikasi kode TOTP Google Authenticator 6-digit dengan pintasan otomatis ke aplikasi autentikator.
-- **7 Tab Rekap Wilayah**: *Sudah Bayar*, *Belum Bayar*, *Realisasi*, *Piutang*, *Kolektif Sudah Bayar*, *Kolektif Belum Bayar*, dan *Ranking Realisasi Wilayah*.
+- **Otomatisasi Verifikasi Dua Langkah (MFA RFC 6238)**:
+  - Dilengkapi generator TOTP internal aman yang dapat mengkalkulasi kode verifikasi 6-digit secara lokal dari kunci rahasia terenkripsi di Keystore perangkat.
+  - Fitur *Auto-Login* memungkinkan proses verifikasi masuk portal berlangsung instan tanpa perlu repot membuka aplikasi Google Authenticator eksternal.
+- **Sinkronisasi Khusus Pelunasan Baru (*Paid-Only Sync*)**:
+  - Fitur pembaruan cerdas yang hanya menarik data objek pajak berstatus lunas dalam rentang waktu yang dipilih (7 hari, 14 hari, 30 hari, 3 bulan, 6 bulan, hingga 1 tahun).
+  - Menghemat penggunaan kuota internet dan mempercepat waktu tunggu sinkronisasi hingga 95% dibandingkan sinkronisasi data menyeluruh.
+- **7 Tab Rekapitulasi Wilayah Lengkap**:
+  - Memantau rincian *Sudah Bayar*, *Belum Bayar*, *Realisasi*, *Piutang*, *Kolektif Sudah Bayar*, *Kolektif Belum Bayar*, serta *Ranking Realisasi Wilayah* antar-desa/kecamatan.
 
 ---
 
-### 6. Pembayaran Kolektif & Surat Pengantar
+### 8. Pembayaran Kolektif & Surat Pengantar
 
 Pengelolaan draf penagihan kolektif massal dan pencetakan surat pengantar pembayaran resmi.
 
@@ -234,11 +299,11 @@ Pengelolaan draf penagihan kolektif massal dan pencetakan surat pengantar pembay
 
 - Pembuatan grup penagihan baru per RT/RW atau Dusun.
 - Impor massal anggota NOP dari berkas CSV/Excel.
-- Finalisasi draf penagihan, penerbitan kode bayar kolektif, dan pencetakan Surat Pengantar Setoran.
+- Finalisasi draf penagihan, penerbitan kode bayar kolektif, dan pencetakan Surat Pengantar Setoran resmi.
 
 ---
 
-### 7. Cek Pajak Kendaraan Bermotor (Jawa Barat)
+### 9. Cek Pajak Kendaraan Bermotor (Jawa Barat)
 
 Layanan terintegrasi untuk memeriksa kewajiban Pajak Kendaraan Bermotor (PKB) Samsat Jawa Barat.
 
@@ -247,12 +312,12 @@ Layanan terintegrasi untuk memeriksa kewajiban Pajak Kendaraan Bermotor (PKB) Sa
 </p>
 
 - Masukkan nomor polisi kendaraan dan pilih warna plat (Hitam/Putih, Kuning, Merah).
-- Didukung fitur **Scan Plat Nomor (OCR Offline)** menggunakan kamera perangkat.
+- Didukung fitur **Scan Plat Nomor (OCR Offline)** menggunakan kamera perangkat *(khusus Android)*.
 - Menyajikan rincian PKB Pokok, Denda, SWDKLLJ, PNBP STNK/TNKB, total bayar, dan tanggal jatuh tempo.
 
 ---
 
-### 8. Cek Desil & Bantuan Sosial (Kemensos)
+### 10. Cek Desil & Bantuan Sosial (Kemensos)
 
 Verifikasi status ekonomi dan data kepesertaan bantuan sosial warga terpadu.
 
@@ -260,12 +325,21 @@ Verifikasi status ekonomi dan data kepesertaan bantuan sosial warga terpadu.
   <img src="docs/images/05_cek_desil.png" width="300" alt="Cek Desil & Bansos Kemensos" />
 </p>
 
-- Masukkan 16 digit NIK atau gunakan fitur **Scan NIK KTP/KK (OCR Offline)**.
+- Masukkan 16 digit NIK atau gunakan fitur **Scan NIK KTP/KK (OCR Offline)** *(khusus Android)*.
 - Menampilkan kategori desil kesejahteraan serta status keaktifan bansos: **Sembako / BPNT**, **Program Keluarga Harapan (PKH)**, **PBI-JK (BPJS Kesehatan Gratis)**, dan **KPD**.
 
 ---
 
-### 9. Buku Panduan Penggunaan & Pusat Bantuan Interaktif
+### 11. Layar Pembuka Resmi (Splash Screen)
+
+Pengalaman visual pembuka aplikasi yang profesional dan representatif.
+
+- Menampilkan lambang resmi Pemerintah Kabupaten Cianjur dan identitas kelembagaan Badan Pendapatan Daerah.
+- Transisi animasi mulus yang dilengkapi fitur sentuh layar (*tap-to-skip*) untuk langsung menuju ke halaman utama tanpa jeda tunggu.
+
+---
+
+### 12. Buku Panduan Penggunaan & Pusat Bantuan Interaktif
 
 Modul edukasi visual mandiri yang memandu pengguna memahami seluruh fitur aplikasi secara rinci.
 
@@ -280,7 +354,7 @@ Modul edukasi visual mandiri yang memandu pengguna memahami seluruh fitur aplika
 
 ---
 
-### 10. Kustomisasi Tema, Keamanan & Pencadangan Data
+### 13. Kustomisasi Tema, Keamanan & Pencadangan Data
 
 Pengaturan kenyamanan visual, perlindungan privasi perangkat, dan pemulihan arsip data.
 
@@ -293,7 +367,7 @@ Pengaturan kenyamanan visual, perlindungan privasi perangkat, dan pemulihan arsi
 | <img src="docs/images/18_pengaturan_pencadangan.png" width="300" alt="Pencadangan & Cloud" /> | <img src="docs/images/20_pengaturan_tentang.png" width="300" alt="Tentang Aplikasi & Saweria" /> |
 
 - **Kustomisasi Tema**: Pilihan mode Terang, Gelap, Hitam AMOLED, serta 8 warna aksen dinamis atau pemilih warna kustom.
-- **Keamanan Aplikasi**: Penguncian otomatis berbasis Sidik Jari/Wajah, PIN 6-digit, atau Kata Sandi.
+- **Keamanan Aplikasi**: Penguncian otomatis berbasis Sidik Jari/Wajah, PIN 6-digit, atau Kata Sandi dengan proteksi lockout anti brute-force.
 - **Pencadangan & Pemulihan**: Ekspor-impor berkas `.dkhp` terenkripsi AES-256-GCM, sinkronisasi Google Drive, dan cadangan otomatis pukul 02:00 dini hari.
 - **Tentang Aplikasi**: Informasi versi, profil pengembang, tautan GitHub, donasi Saweria, dan pengecekan pembaruan.
 
@@ -338,9 +412,12 @@ Aplikasi dilengkapi mekanisme pemantauan rilis yang terhubung langsung ke REST A
      flutter build apk --release --split-per-abi
      ```
      Menghasilkan paket APK terpisah berdasarkan arsitektur CPU pada direktori `build/app/outputs/flutter-apk/`:
-     - `app-arm64-v8a-release.apk` (~20 MB - Smartphone Android 64-bit modern)
-     - `app-armeabi-v7a-release.apk` (~18 MB - Perangkat Android 32-bit legacy)
-     - `app-x86_64-release.apk` (~22 MB - Emulator / Tablet Intel)
+     - `app-arm64-v8a-release.apk` (~21.8 MB - Smartphone Android 64-bit modern)
+     - `app-armeabi-v7a-release.apk` (~19.5 MB - Perangkat Android 32-bit legacy)
+     - `app-x86_64-release.apk` (~23.2 MB - Emulator / Tablet Intel)
+     > [!TIP]
+     > **Efisiensi Memori & Instalasi Cepat (`useLegacyPackaging`)**  
+     > Berkas APK dikonfigurasi dengan `packaging { jniLibs { useLegacyPackaging = true } }`. Pustaka biner native C++ dan Flutter dieksekusi langsung tanpa memerlukan ekstraksi duplikasi di penyimpanan internal perangkat pengguna.
    - **Android Universal APK (Berkas gabungan seluruh ABI)**:
      ```bash
      flutter build apk --release
@@ -356,8 +433,8 @@ Aplikasi dilengkapi mekanisme pemantauan rilis yang terhubung langsung ke REST A
      "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" windows\installer.iss
      ```
      Hasil biner rilis:
-     - `build\Cek-PBB-Cianjur-Setup-v0.1.4-beta.exe` (Installer Mandiri)
-     - `build\Cek-PBB-Cianjur-Windows-x64-v0.1.4-beta.zip` (Portable ZIP)
+     - `build\Cek-PBB-Cianjur-Setup-v0.1.5-beta.exe` (Installer Mandiri)
+     - `build\Cek-PBB-Cianjur-Windows-x64-v0.1.5-beta.zip` (Portable ZIP)
    - **Linux Desktop**:
      ```bash
      flutter build linux --release

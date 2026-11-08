@@ -150,5 +150,7 @@ void main() {
     expect(content, contains('Nomor Blok        : Blok 001'));
     expect(content, contains('320520000402200011'));
     expect(content, contains('Status Pengecekan : Selesai'));
+    expect(content.contains('Rp Rp'), isFalse, reason: 'Tidak boleh ada format dobel Rp');
+    expect(content, contains('Rp 50.000'));
   });
 }
