@@ -1634,35 +1634,6 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                                           );
                                         }).toList();
                                       }
-                                      final dotDusunNums = _allDots
-                                          .map((d) => d.dusunNumber)
-                                          .where((n) => n > 0)
-                                          .toSet()
-                                          .toList()
-                                        ..sort();
-                                      if (dotDusunNums.isNotEmpty) {
-                                        return dotDusunNums.map((dNum) {
-                                          final isCurrent = _selectedDusun == dNum;
-                                          return Padding(
-                                            padding: const EdgeInsets.only(right: 6),
-                                            child: ChoiceChip(
-                                              label: Text('Dusun $dNum'),
-                                              selected: isCurrent,
-                                              onSelected: (val) {
-                                                if (val) _selectDusun(dNum);
-                                              },
-                                              selectedColor: const Color(0xFFF1C40F),
-                                              labelStyle: TextStyle(
-                                                fontSize: 11,
-                                                fontWeight: isCurrent
-                                                    ? FontWeight.bold
-                                                    : FontWeight.normal,
-                                                color: isCurrent ? Colors.black : null,
-                                              ),
-                                            ),
-                                          );
-                                        }).toList();
-                                      }
                                       return <Widget>[];
                                     }(),
                                   ],

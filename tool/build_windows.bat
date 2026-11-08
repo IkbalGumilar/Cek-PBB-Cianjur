@@ -6,17 +6,17 @@ echo =====================================================================
 echo.
 
 set "PROJECT_DIR=%~dp0.."
-set "APP_VERSION=v0.1.5-beta"
+set "APP_VERSION=v0.1.4-beta"
 cd /d "%PROJECT_DIR%"
 
-echo [0/4] Menyinkronkan dependensi plugin Windows di ephemeral...
+echo [0/3] Menyinkronkan dependensi plugin Windows di ephemeral...
 call dart run tool\sync_windows_plugins.dart
 if errorlevel 1 (
     echo [WARNING] Sinkronisasi plugin via Dart mengalami kendala, melanjutkan build...
 )
 
 echo.
-echo [1/4] Kompilasi rilis Flutter Windows langsung di direktori kerja Z:...
+echo [1/3] Kompilasi rilis Flutter Windows langsung di direktori kerja Z:...
 if not exist "build\native_assets\windows" mkdir "build\native_assets\windows"
 call flutter build windows --release
 if errorlevel 1 (
@@ -25,15 +25,10 @@ if errorlevel 1 (
 )
 
 echo.
-echo [2/4] Mengarsipkan paket Portable ZIP...
+echo [2/3] Mengarsipkan paket Portable ZIP...
 if not exist "build" mkdir "build"
-REM Bersihkan residu debug dan cache agar biner rilis benar-benar bersih dan ramping
+REM Bersihkan kernel_blob.bin (sisa debug) agar ukuran paket rilis ramping
 if exist "build\windows\x64\runner\Release\data\flutter_assets\kernel_blob.bin" del /f /q "build\windows\x64\runner\Release\data\flutter_assets\kernel_blob.bin"
-del /s /q "build\windows\x64\runner\Release\*.pdb" 2>nul
-del /s /q "build\windows\x64\runner\Release\*.ilk" 2>nul
-del /s /q "build\windows\x64\runner\Release\*.exp" 2>nul
-del /s /q "build\windows\x64\runner\Release\*.lib" 2>nul
-del /s /q "build\windows\x64\runner\Release\*.obj" 2>nul
 powershell -NoProfile -ExecutionPolicy Bypass -Command "Compress-Archive -Path 'build\windows\x64\runner\Release\*' -DestinationPath 'build\Cek-PBB-Cianjur-Windows-x64-%APP_VERSION%.zip' -Force"
 if errorlevel 1 (
     echo [WARNING] Gagal membuat berkas zip portable.
@@ -69,26 +64,6 @@ if defined ISCC (
 )
 
 echo.
-echo [4/4] Menghitung checksum SHA-256 untuk artefak Windows...
-powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-    "$checksumFile = 'build\Cek-PBB-Cianjur-%APP_VERSION%-checksums.sha256'; " ^
-    "$lines = @(); " ^
-    "if (Test-Path 'build\Cek-PBB-Cianjur-Setup-%APP_VERSION%.exe') { " ^
-    "  $h = (Get-FileHash 'build\Cek-PBB-Cianjur-Setup-%APP_VERSION%.exe' -Algorithm SHA256).Hash.ToLower(); " ^
-    "  $lines += ('{0}  Cek-PBB-Cianjur-Setup-%APP_VERSION%.exe' -f $h); " ^
-    "} " ^
-    "if (Test-Path 'build\Cek-PBB-Cianjur-Windows-x64-%APP_VERSION%.zip') { " ^
-    "  $h = (Get-FileHash 'build\Cek-PBB-Cianjur-Windows-x64-%APP_VERSION%.zip' -Algorithm SHA256).Hash.ToLower(); " ^
-    "  $lines += ('{0}  Cek-PBB-Cianjur-Windows-x64-%APP_VERSION%.zip' -f $h); " ^
-    "} " ^
-    "$lines | Out-File -FilePath $checksumFile -Encoding utf8; " ^
-    "Get-Content $checksumFile"
-
-if not exist "dist" mkdir "dist"
-if exist "build\Cek-PBB-Cianjur-Setup-%APP_VERSION%.exe" copy /y "build\Cek-PBB-Cianjur-Setup-%APP_VERSION%.exe" "dist\" >nul
-if exist "build\Cek-PBB-Cianjur-Windows-x64-%APP_VERSION%.zip" copy /y "build\Cek-PBB-Cianjur-Windows-x64-%APP_VERSION%.zip" "dist\" >nul
-
-echo.
 echo =====================================================================
-echo  BUILD SELESAI! Seluruh artefak tersimpan di direktori dist\ dan build\
+echo  BUILD SELESAI! Seluruh artefak tersimpan di direktori Z:\build
 echo =====================================================================

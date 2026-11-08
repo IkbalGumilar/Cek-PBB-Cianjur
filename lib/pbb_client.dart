@@ -363,8 +363,7 @@ class PbbClient extends BaseHttpClient {
         caseSensitive: false,
       ).firstMatch(text);
 
-      final rawTanggal = matchTanggal?.group(1)?.trim();
-      final tanggal = rawTanggal?.split('\n').first.trim();
+      final tanggal = matchTanggal?.group(1)?.trim();
       if (tanggal == null || tanggal.isEmpty) return null;
 
       final rawJumlah = matchJumlah?.group(1)?.trim();
@@ -422,21 +421,16 @@ class PbbClient extends BaseHttpClient {
         contentType.contains('application/pdf');
     if (!isPdf) return null;
 
-    try {
-      final document = PdfDocument(inputBytes: bytes);
-      final text = PdfTextExtractor(document).extractText();
-      document.dispose();
+    final document = PdfDocument(inputBytes: bytes);
+    final text = PdfTextExtractor(document).extractText();
+    document.dispose();
 
-      final rawTanggal = RegExp(
-        r'Tanggal\s+Transaksi\s*:\s*([0-9\-\:\s]+)',
-        caseSensitive: false,
-      ).firstMatch(text)?.group(1)?.trim();
-      final tanggal = rawTanggal?.split('\n').first.trim();
-      if (tanggal == null || tanggal.isEmpty) return null;
-      return bytes;
-    } catch (_) {
-      return null;
-    }
+    final tanggal = RegExp(
+      r'Tanggal\s+Transaksi\s*:\s*([0-9\-\:\s]+)',
+      caseSensitive: false,
+    ).firstMatch(text)?.group(1)?.trim();
+    if (tanggal == null || tanggal.isEmpty) return null;
+    return bytes;
   }
 
   Future<TagihanResult> checkTagihan({
