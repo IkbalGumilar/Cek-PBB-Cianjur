@@ -238,9 +238,10 @@ class StaffPortalParser {
     final pageEnd = int.tryParse(pagingMatch?.group(2) ?? '') ?? 0;
     final rawTotal = pagingMatch?.group(3)?.replaceAll(RegExp(r'[^0-9]'), '') ?? '';
     final totalRecords = int.tryParse(rawTotal) ?? normalizedRows.length;
-    final hasNextPage = (html.contains('id="next-page"') || html.contains('name="next-page"')) &&
-        pageEnd > 0 &&
-        pageEnd < totalRecords;
+    final hasNextPage = (pageEnd > 0 && pageEnd < totalRecords) ||
+        ((html.contains('id="next-page"') || html.contains('name="next-page"')) &&
+            pageEnd < totalRecords) ||
+        (pagingMatch == null && normalizedRows.length >= 50);
 
     if (normalizedRows.isEmpty) {
       return MonitoringTableResult(

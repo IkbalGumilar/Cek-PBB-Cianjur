@@ -3,6 +3,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:syncfusion_flutter_pdf/pdf.dart' as sf;
 import 'package:cek_pbb_app/document_preview_screen.dart';
 
 void main() {
@@ -262,5 +263,48 @@ void main() {
         expect((deco.border as Border).top.color, Colors.deepOrange);
       },
     );
+
+    testWidgets(
+      'DocumentPreviewScreen extracts PDF text, detects 18-digit NOPs for 1-tap copy, and renders Camelot bottom dock',
+      (tester) async {
+        final doc = sf.PdfDocument();
+        final page = doc.pages.add();
+        page.graphics.drawString(
+          'NOP: 32.05.200.004.001-0034.0 - ENOH BOBOJONG',
+          sf.PdfStandardFont(sf.PdfFontFamily.helvetica, 14),
+          bounds: const Rect.fromLTWH(20, 20, 450, 30),
+        );
+        final pdfBytes = Uint8List.fromList(await doc.save());
+        doc.dispose();
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: DocumentPreviewScreen(
+              pdfBytes: pdfBytes,
+              fileName: 'uji_dhkp_bobojong.pdf',
+            ),
+          ),
+        );
+        await tester.pump(const Duration(milliseconds: 300));
+
+        // Pastikan bilah bawah ala Google PDF / Camelot tampil (Salin Teks & 100%)
+        expect(find.text('Salin Teks'), findsOneWidget);
+        expect(find.text('100%'), findsOneWidget);
+
+        // Buka panel Pilih & Salin Teks
+        await tester.tap(find.text('Salin Teks'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 500));
+
+        // Pastikan teks halaman dan chip NOP 18-digit terdeteksi otomatis
+        expect(
+          find.textContaining('Pilih & Salin Teks (Halaman 1)'),
+          findsOneWidget,
+        );
+        expect(find.text('320520000400100340'), findsOneWidget);
+        expect(find.textContaining('ENOH BOBOJONG'), findsOneWidget);
+      },
+    );
   });
 }
+

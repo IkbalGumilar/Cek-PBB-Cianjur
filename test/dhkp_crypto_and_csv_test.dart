@@ -82,12 +82,12 @@ void main() {
     });
 
     test(
-      'decodeArchiveCsv auto-marks records >= 1,500,000 as Target Pemda when column is empty',
+      'decodeArchiveCsv auto-marks records >= 2,000,000 as Target Pemda when column is empty',
       () {
         const archiveCsv =
             'Nama WP,NOP,Tahun Bayar,Tanggal Bayar,Jumlah PBB,Status Bayar,Foto,Target Pemda\r\n'
             'WARGA BIASA,320520000401701540,2026,,50000,Belum Bayar,,\r\n'
-            'WAJIB PAJAK BESAR,320520000403005840,2026,,1500000,Belum Bayar,,\r\n';
+            'WAJIB PAJAK BESAR,320520000403005840,2026,,2000000,Belum Bayar,,\r\n';
         final decoded = BlokCsvCodec.decodeArchiveCsv(archiveCsv);
         expect(decoded, hasLength(2));
         expect(decoded[0].isTargetPemda, isFalse);

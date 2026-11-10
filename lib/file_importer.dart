@@ -28,7 +28,7 @@ class FileImporter {
   ///
   /// Otomatis memetakan seluruh kolom (Nama WP, NOP, Pokok PBB, Status Bayar, Target Pemda,
   /// Luas, NJOP, Alamat, RT) dan memvalidasi aturan:
-  /// 1. Pokok PBB >= Rp 1.500.000 otomatis berstatus Target Pemda (isTargetPemda = true).
+  /// 1. Pokok PBB >= Rp 2.000.000 otomatis berstatus Target Pemda (isTargetPemda = true).
   /// 2. Bila terdapat kolom Dusun, otomatis menyusun pemetaan Dusun dinamis di [DusunData].
   static Future<List<BlokRecord>> importBlokRecordsFrom(String path) async {
     final lower = path.toLowerCase();
@@ -177,7 +177,7 @@ class FileImporter {
 
       final pokokVal = parseNominalRupiah(pokok);
 
-      // Aturan Target Pemda: Pokok PBB >= Rp 1.500.000 atau bendera eksplisit Target Pemda
+      // Aturan Target Pemda: Pokok PBB >= Rp 2.000.000 atau bendera eksplisit Target Pemda
       final isTargetPemda =
           rawTp == '1' ||
           rawTp == 'true' ||
@@ -185,7 +185,7 @@ class FileImporter {
           rawTp == 'yes' ||
           rawTp.contains('target') ||
           rawTp.contains('pemda') ||
-          (pokokVal >= 1500000);
+          (pokokVal >= 2000000);
 
       final catatan = catatanCol != -1 && row.length > catatanCol
           ? row[catatanCol].toString().trim()

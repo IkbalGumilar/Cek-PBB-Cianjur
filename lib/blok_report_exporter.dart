@@ -3,20 +3,19 @@ import 'dart:typed_data';
 import 'base_table_exporter.dart';
 import 'blok_record.dart';
 import 'blok_report_pdf.dart';
-import 'tagihan_result.dart' show formatRupiah;
-
 import 'dhkp/blok_catatan_models.dart';
+import 'tagihan_result.dart' show formatRupiah;
 
 export 'base_table_exporter.dart' show AppExportFormat;
 
 typedef BlokExportFormat = AppExportFormat;
 
 const _reportHeader = [
+  'No',
   'Blok',
-  'Nomor Wilayah',
   'Nama WP',
   'NOP',
-  'Tahun Bayar',
+  'Tahun',
   'Tanggal Bayar',
   'Jumlah PBB',
   'Status Bayar',
@@ -33,6 +32,7 @@ class BlokReportExporter extends BaseTableExporter {
     List<BlokRecord> records, {
     String? tahun,
     String? blokTitle,
+    DhkpKategoriFilter? kategoriFilter,
     Future<void> Function(int current, int total)? onProgress,
     int pacingDelayMs = 120,
   }) async {
@@ -53,6 +53,7 @@ class BlokReportExporter extends BaseTableExporter {
           records,
           tahun: tahun,
           blokTitle: blokTitle,
+          kategoriFilter: kategoriFilter,
           totalPbb: totalPbb,
           onProgress: onProgress,
           pacingDelayMs: pacingDelayMs,
@@ -73,18 +74,20 @@ class BlokReportExporter extends BaseTableExporter {
         : 0.0;
 
     return [
-      for (final r in records)
+      for (var i = 0; i < records.length; i++)
         [
-          r.blok,
-          r.wilayah,
-          r.namaWajibPajak,
-          r.nop,
-          r.tahunBayar,
-          r.tanggalBayar,
-          r.jumlahPbb,
-          r.statusBayar,
-          r.isTargetPemda ? 'Target Pemda' : '-',
-          r.catatan,
+          '${i + 1}',
+          records[i].blok,
+          records[i].namaWajibPajak,
+          records[i].formattedNop,
+          records[i].tahunBayar,
+          records[i].tanggalBayar,
+          records[i].jumlahPbbValue > 0
+              ? formatRupiah(records[i].jumlahPbbValue)
+              : (records[i].jumlahPbb.isEmpty ? '-' : formatRupiah(records[i].jumlahPbb)),
+          records[i].statusBayar,
+          records[i].isTargetPemda ? 'Target Pemda' : '-',
+          records[i].catatan,
         ],
       [
         '',
@@ -141,10 +144,24 @@ class BlokReportExporter extends BaseTableExporter {
     BlokExportFormat format, {
     String? tahun,
     String prefix = 'laporan_data_blok',
+    DhkpKategoriFilter? kategoriFilter,
   }) {
+    var finalPrefix = prefix;
+    if (kategoriFilter != null && kategoriFilter != DhkpKategoriFilter.semua) {
+      final katSlug = switch (kategoriFilter) {
+        DhkpKategoriFilter.sudahBayar => 'sudah_bayar',
+        DhkpKategoriFilter.belumBayar => 'belum_bayar',
+        DhkpKategoriFilter.blacklist => 'blacklist',
+        DhkpKategoriFilter.targetPemda => 'target_pemda',
+        DhkpKategoriFilter.semua => '',
+      };
+      if (katSlug.isNotEmpty) {
+        finalPrefix = '${finalPrefix}_$katSlug';
+      }
+    }
     final tahunPart = (tahun == null || tahun.isEmpty) ? 'semua_tahun' : tahun;
     return BaseTableExporter.formatFileName(
-      prefix: prefix,
+      prefix: finalPrefix,
       identifier: tahunPart,
       format: format,
     );

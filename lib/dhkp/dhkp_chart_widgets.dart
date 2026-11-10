@@ -1755,7 +1755,7 @@ Widget renderDhkpComboBarLineTrend({
             ),
             const SizedBox(width: 5),
             Text(
-              'Garis: Tren Puncak (Jan–Des)',
+              'Garis: Tren Puncak (Jan - Des)',
               style: TextStyle(
                 fontSize: 10,
                 fontWeight: FontWeight.w600,

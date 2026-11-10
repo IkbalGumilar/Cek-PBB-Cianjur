@@ -7,6 +7,39 @@ import 'package:pdf/widgets.dart' as pw;
 import '../tagihan_result.dart' show formatRupiah;
 import 'dhkp_grafik_analytics.dart';
 
+String _cleanPdfText(String text) {
+  if (text.isEmpty) return text;
+  final replaced = text
+      .replaceAll('•', '-')
+      .replaceAll('—', '-')
+      .replaceAll('–', '-') // Konversi en-dash ke tanda minus biasa
+      .replaceAll('“', '"')
+      .replaceAll('”', '"')
+      .replaceAll('‘', "'")
+      .replaceAll('’', "'")
+      .replaceAll('…', '...')
+      .replaceAll('✓', '[Lunas]')
+      .replaceAll('✔', '[Lunas]')
+      .replaceAll('🎯', '[Target]')
+      .replaceAll('⛔', '[Blacklist]')
+      .replaceAll('⏳', '[Belum Bayar]')
+      .replaceAll('≥', '>=')
+      .replaceAll('≤', '<=')
+      .replaceAll('\u00A0', ' ');
+
+  final buffer = StringBuffer();
+  for (final rune in replaced.runes) {
+    if (rune == 10 || rune == 13 || rune == 9) {
+      buffer.writeCharCode(rune);
+    } else if ((rune >= 32 && rune <= 126) || (rune >= 160 && rune <= 255)) {
+      buffer.writeCharCode(rune);
+    } else {
+      buffer.write(' ');
+    }
+  }
+  return buffer.toString();
+}
+
 class DhkpGrafikExporter {
   const DhkpGrafikExporter._();
 
@@ -33,18 +66,51 @@ class DhkpGrafikExporter {
         ? 'Cakupan: Dusun $drillDownDusun (Per Blok)'
         : (groupByDusun ? 'Cakupan: Semua Dusun' : 'Cakupan: Semua Blok');
 
+    final cleanTitle = _cleanPdfText(title);
+    final cleanSubtitle = _cleanPdfText(subtitle);
+    final cleanScope = _cleanPdfText(scopeLabel);
+
+    final rawHeaders = [
+      activeTab == DhkpGrafikTab.trenBulanan ? 'Bulan' : 'Wilayah',
+      'Objek Lunas',
+      activeTab == DhkpGrafikTab.trenBulanan
+          ? 'Nominal Pembayaran'
+          : 'Sudah Bayar',
+      if (activeTab != DhkpGrafikTab.trenBulanan) 'Belum Bayar',
+      activeTab == DhkpGrafikTab.trenBulanan ? '% Porsi' : 'Persentase',
+    ];
+    final headers = rawHeaders.map(_cleanPdfText).toList();
+
+    final data = [
+      for (final g in groups)
+        activeTab == DhkpGrafikTab.trenBulanan
+            ? [
+                _cleanPdfText(g.label),
+                '${g.lunasNop}',
+                formatRupiah(g.lunasNominal),
+                '${g.lunasPct.toStringAsFixed(1)}%',
+              ]
+            : [
+                _cleanPdfText(g.label),
+                '${g.lunasNop}/${g.totalNop}',
+                formatRupiah(g.lunasNominal),
+                formatRupiah(g.belumBayarNominal),
+                '${g.lunasPct.toStringAsFixed(1)}%',
+              ],
+    ];
+
     doc.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(28),
         build: (context) => [
           pw.Text(
-            title,
+            cleanTitle,
             style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
           ),
           pw.SizedBox(height: 3),
           pw.Text(
-            '$subtitle • $scopeLabel',
+            '$cleanSubtitle | $cleanScope',
             style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700),
           ),
           pw.SizedBox(height: 12),
@@ -81,34 +147,8 @@ class DhkpGrafikExporter {
               ),
               cellStyle: const pw.TextStyle(fontSize: 9),
               cellAlignment: pw.Alignment.centerLeft,
-              headers: [
-                activeTab == DhkpGrafikTab.trenBulanan ? 'Bulan' : 'Wilayah',
-                'Objek Lunas',
-                activeTab == DhkpGrafikTab.trenBulanan
-                    ? 'Nominal Pembayaran'
-                    : 'Sudah Bayar',
-                if (activeTab != DhkpGrafikTab.trenBulanan) 'Belum Bayar',
-                activeTab == DhkpGrafikTab.trenBulanan
-                    ? '% Porsi'
-                    : 'Persentase',
-              ],
-              data: [
-                for (final g in groups)
-                  activeTab == DhkpGrafikTab.trenBulanan
-                      ? [
-                          g.label,
-                          '${g.lunasNop}',
-                          formatRupiah(g.lunasNominal),
-                          '${g.lunasPct.toStringAsFixed(1)}%',
-                        ]
-                      : [
-                          g.label,
-                          '${g.lunasNop}/${g.totalNop}',
-                          formatRupiah(g.lunasNominal),
-                          formatRupiah(g.belumBayarNominal),
-                          '${g.lunasPct.toStringAsFixed(1)}%',
-                        ],
-              ],
+              headers: headers,
+              data: data,
             ),
           ],
         ],

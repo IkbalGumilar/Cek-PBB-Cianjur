@@ -1,7 +1,8 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show HapticFeedback;
+import 'package:flutter/services.dart' show HapticFeedback, rootBundle;
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import '../blok_data_store.dart';
@@ -207,12 +208,203 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
       _osmWaterPolylines = [];
     });
 
-    if (_allDots.isNotEmpty) {
+    // Jika diuji dengan initialRecords kosong tanpa dots, biarkan peta bersih
+    if (widget.initialRecords != null &&
+        widget.initialRecords!.isEmpty &&
+        widget.initialDots == null) {
+      return;
+    }
+
+    await _loadSpatialAssets();
+
+    if (_allDots.isNotEmpty && mounted) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _fitDesaBounds();
       });
     }
   }
+
+  Future<void> _loadSpatialAssets() async {
+    // 1. Muat batas resmi Desa Bobojong (BIG)
+    List<LatLng> boundaryPts = [];
+    MapBounds? bounds;
+    try {
+      final jsonStr = await rootBundle.loadString('assets/data/bobojong_batas_big.geojson');
+      final data = json.decode(jsonStr) as Map<String, dynamic>;
+      final features = data['features'] as List? ?? [];
+      if (features.isNotEmpty) {
+        final geom = features.first['geometry'] as Map<String, dynamic>? ?? {};
+        final coords = (geom['coordinates'] as List? ?? []).firstOrNull as List? ?? [];
+        double minLat = 90, maxLat = -90, minLng = 180, maxLng = -180;
+        for (final pt in coords) {
+          if (pt is List && pt.length >= 2) {
+            final lng = (pt[0] as num).toDouble();
+            final lat = (pt[1] as num).toDouble();
+            boundaryPts.add(LatLng(lat, lng));
+            if (lat < minLat) minLat = lat;
+            if (lat > maxLat) maxLat = lat;
+            if (lng < minLng) minLng = lng;
+            if (lng > maxLng) maxLng = lng;
+          }
+        }
+        if (boundaryPts.isNotEmpty) {
+          bounds = MapBounds(minLat: minLat, maxLat: maxLat, minLng: minLng, maxLng: maxLng);
+        }
+      }
+    } catch (e) {
+      debugPrint('Info: Gagal membaca berkas batas desa: $e');
+    }
+
+    // 2. Muat batas desa-desa tetangga se-Kecamatan Mande (1 Kecamatan saja) untuk layer putih
+    final neighbors = <NeighborDesaInfo>[];
+    try {
+      final jsonStr = await rootBundle.loadString('assets/data/kecamatan_mande_desa_big.geojson');
+      final data = json.decode(jsonStr) as Map<String, dynamic>;
+      final features = data['features'] as List? ?? [];
+      for (final f in features) {
+        final props = f['properties'] as Map<String, dynamic>? ?? {};
+        final name = props['NAMOBJ'] as String? ?? '';
+        final kec = props['WADMKC'] as String? ?? 'Mande';
+        if (name.toLowerCase() == 'bobojong' || name.isEmpty) continue;
+        final geom = f['geometry'] as Map<String, dynamic>? ?? {};
+        final coords = (geom['coordinates'] as List? ?? []).firstOrNull as List? ?? [];
+        final pts = <LatLng>[];
+        double sumLat = 0, sumLng = 0;
+        for (final pt in coords) {
+          if (pt is List && pt.length >= 2) {
+            final lng = (pt[0] as num).toDouble();
+            final lat = (pt[1] as num).toDouble();
+            pts.add(LatLng(lat, lng));
+            sumLat += lat;
+            sumLng += lng;
+          }
+        }
+        if (pts.isNotEmpty) {
+          neighbors.add(
+            NeighborDesaInfo(
+              name: name,
+              kecamatan: kec,
+              polygon: pts,
+              center: LatLng(sumLat / pts.length, sumLng / pts.length),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('Info: Gagal membaca berkas desa tetangga: $e');
+    }
+
+    if (mounted) {
+      setState(() {
+        _desaBoundaryPoints = boundaryPts;
+        _desaBounds = bounds;
+        _neighborDesas = neighbors;
+      });
+    }
+  }
+
+  Future<void> _loadOsmBuildings() async {
+    try {
+      final jsonStr = await rootBundle.loadString('assets/data/bobojong_buildings_osm.geojson');
+      final data = json.decode(jsonStr) as Map<String, dynamic>;
+      final features = data['features'] as List? ?? [];
+      final osmBuildings = <Polygon>[];
+      for (final f in features) {
+        final geom = f['geometry'] as Map<String, dynamic>? ?? {};
+        final coordsList = geom['coordinates'] as List? ?? [];
+        if (coordsList.isEmpty) continue;
+        final ring = coordsList.first as List? ?? [];
+        final pts = <LatLng>[];
+        for (final pt in ring) {
+          if (pt is List && pt.length >= 2) {
+            pts.add(LatLng((pt[1] as num).toDouble(), (pt[0] as num).toDouble()));
+          }
+        }
+        if (pts.length >= 3) {
+          osmBuildings.add(
+            Polygon(
+              points: pts,
+              color: const Color(0xFFE67E22).withValues(alpha: 0.35),
+              borderColor: const Color(0xFFD35400).withValues(alpha: 0.85),
+              borderStrokeWidth: 1.0,
+            ),
+          );
+        }
+      }
+      if (mounted) {
+        setState(() => _osmBuildingPolygons = osmBuildings);
+      }
+    } catch (e) {
+      debugPrint('Info: Gagal membaca bangunan OSM: $e');
+    }
+  }
+
+  Future<void> _loadOsmRoads() async {
+    try {
+      final jsonStr = await rootBundle.loadString('assets/data/bobojong_roads_osm.geojson');
+      final data = json.decode(jsonStr) as Map<String, dynamic>;
+      final features = data['features'] as List? ?? [];
+      final osmRoads = <Polyline>[];
+      for (final f in features) {
+        final geom = f['geometry'] as Map<String, dynamic>? ?? {};
+        final coordsList = geom['coordinates'] as List? ?? [];
+        final pts = <LatLng>[];
+        for (final pt in coordsList) {
+          if (pt is List && pt.length >= 2) {
+            pts.add(LatLng((pt[1] as num).toDouble(), (pt[0] as num).toDouble()));
+          }
+        }
+        if (pts.length >= 2) {
+          osmRoads.add(
+            Polyline(
+              points: pts,
+              color: const Color(0xFFF39C12),
+              strokeWidth: 2.2,
+            ),
+          );
+        }
+      }
+      if (mounted) {
+        setState(() => _osmRoadPolylines = osmRoads);
+      }
+    } catch (e) {
+      debugPrint('Info: Gagal membaca jalan OSM: $e');
+    }
+  }
+
+  Future<void> _loadOsmWaterways() async {
+    try {
+      final jsonStr = await rootBundle.loadString('assets/data/bobojong_waterways_osm.geojson');
+      final data = json.decode(jsonStr) as Map<String, dynamic>;
+      final features = data['features'] as List? ?? [];
+      final osmWaterways = <Polyline>[];
+      for (final f in features) {
+        final geom = f['geometry'] as Map<String, dynamic>? ?? {};
+        final coordsList = geom['coordinates'] as List? ?? [];
+        final pts = <LatLng>[];
+        for (final pt in coordsList) {
+          if (pt is List && pt.length >= 2) {
+            pts.add(LatLng((pt[1] as num).toDouble(), (pt[0] as num).toDouble()));
+          }
+        }
+        if (pts.length >= 2) {
+          osmWaterways.add(
+            Polyline(
+              points: pts,
+              color: const Color(0xFF2980B9),
+              strokeWidth: 2.4,
+            ),
+          );
+        }
+      }
+      if (mounted) {
+        setState(() => _osmWaterPolylines = osmWaterways);
+      }
+    } catch (e) {
+      debugPrint('Info: Gagal membaca sungai OSM: $e');
+    }
+  }
+
 
   MapDusunZone? get _currentZone {
     if (_selectedDusun == null) return null;
@@ -812,6 +1004,9 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                           InkWell(
                             onTap: () {
                               setState(() => _showOsmBuildings = !_showOsmBuildings);
+                              if (_showOsmBuildings && _osmBuildingPolygons.isEmpty) {
+                                _loadOsmBuildings();
+                              }
                               setSheetState(() {});
                             },
                             child: Padding(
@@ -855,6 +1050,9 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                           InkWell(
                             onTap: () {
                               setState(() => _showOsmRoads = !_showOsmRoads);
+                              if (_showOsmRoads && _osmRoadPolylines.isEmpty) {
+                                _loadOsmRoads();
+                              }
                               setSheetState(() {});
                             },
                             child: Padding(
@@ -898,6 +1096,9 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                           InkWell(
                             onTap: () {
                               setState(() => _showOsmWaterways = !_showOsmWaterways);
+                              if (_showOsmWaterways && _osmWaterPolylines.isEmpty) {
+                                _loadOsmWaterways();
+                              }
                               setSheetState(() {});
                             },
                             child: Padding(

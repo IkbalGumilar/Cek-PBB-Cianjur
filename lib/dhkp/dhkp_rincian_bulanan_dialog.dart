@@ -14,6 +14,39 @@ import '../nop_helper.dart';
 import '../tagihan_result.dart' show formatRupiah;
 import 'dhkp_grafik_analytics.dart';
 
+String _cleanPdfText(String text) {
+  if (text.isEmpty) return text;
+  final replaced = text
+      .replaceAll('•', '-')
+      .replaceAll('—', '-')
+      .replaceAll('–', '-')
+      .replaceAll('“', '"')
+      .replaceAll('”', '"')
+      .replaceAll('‘', "'")
+      .replaceAll('’', "'")
+      .replaceAll('…', '...')
+      .replaceAll('✓', '[Lunas]')
+      .replaceAll('✔', '[Lunas]')
+      .replaceAll('🎯', '[Target]')
+      .replaceAll('⛔', '[Blacklist]')
+      .replaceAll('⏳', '[Belum Bayar]')
+      .replaceAll('≥', '>=')
+      .replaceAll('≤', '<=')
+      .replaceAll('\u00A0', ' ');
+
+  final buffer = StringBuffer();
+  for (final rune in replaced.runes) {
+    if (rune == 10 || rune == 13 || rune == 9) {
+      buffer.writeCharCode(rune);
+    } else if ((rune >= 32 && rune <= 126) || (rune >= 160 && rune <= 255)) {
+      buffer.writeCharCode(rune);
+    } else {
+      buffer.write(' ');
+    }
+  }
+  return buffer.toString();
+}
+
 /// Pilihan mode pengurutan data rincian pembayaran bulanan
 enum RincianBulananSortMode {
   terlama('Terlama (Awal Bulan)', 'Terlama', Icons.history_rounded),
@@ -21,7 +54,7 @@ enum RincianBulananSortMode {
   terbanyak('Nominal Terbanyak', 'Terbanyak', Icons.trending_up_rounded),
   tersedikit('Nominal Tersedikit', 'Tersedikit', Icons.trending_down_rounded),
   nop('Nomor NOP', 'NOP', Icons.pin_outlined),
-  nama('Nama WP (A–Z)', 'Nama', Icons.sort_by_alpha_rounded);
+  nama('Nama WP (A-Z)', 'Nama', Icons.sort_by_alpha_rounded);
 
   final String label;
   final String shortLabel;
@@ -189,7 +222,7 @@ class _DhkpRincianBulananSheetState extends State<DhkpRincianBulananSheet> {
       rows.add([
         '${i + 1}',
         formatNop(r.nop),
-        r.namaWajibPajak,
+        _cleanPdfText(r.namaWajibPajak),
         blok.isNotEmpty ? 'Blok $blok' : '-',
         tglJam,
         formatRupiah(r.jumlahPbbValue),
@@ -219,7 +252,7 @@ class _DhkpRincianBulananSheetState extends State<DhkpRincianBulananSheet> {
                   crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
                     pw.Text(
-                      'LAPORAN PEMBAYARAN PBB BULAN ${_monthName.toUpperCase()} ${widget.tahun}',
+                      'LAPORAN PEMBAYARAN PBB BULAN ${_monthName.toUpperCase()} ${_cleanPdfText(widget.tahun)}',
                       style: pw.TextStyle(
                         fontSize: 12,
                         fontWeight: pw.FontWeight.bold,
@@ -227,7 +260,7 @@ class _DhkpRincianBulananSheetState extends State<DhkpRincianBulananSheet> {
                     ),
                     pw.SizedBox(height: 2),
                     pw.Text(
-                      'Pemerintah Kabupaten Cianjur • Badan Pendapatan Daerah',
+                      'Pemerintah Kabupaten Cianjur | Badan Pendapatan Daerah',
                       style: const pw.TextStyle(
                         fontSize: 8,
                         color: PdfColors.grey700,
@@ -235,7 +268,7 @@ class _DhkpRincianBulananSheetState extends State<DhkpRincianBulananSheet> {
                     ),
                     pw.SizedBox(height: 2),
                     pw.Text(
-                      'Urutan: ${_sortMode.label}${_searchQuery.trim().isNotEmpty ? " • Filter: \"${_searchQuery.trim()}\"" : ""}',
+                      'Urutan: ${_cleanPdfText(_sortMode.label)}${_searchQuery.trim().isNotEmpty ? " | Filter: \"${_cleanPdfText(_searchQuery.trim())}\"" : ""}',
                       style: const pw.TextStyle(
                         fontSize: 8,
                         color: PdfColors.purple800,
@@ -254,7 +287,7 @@ class _DhkpRincianBulananSheetState extends State<DhkpRincianBulananSheet> {
             ),
             pw.SizedBox(height: 4),
             pw.Text(
-              'Total: ${targetRecords.length} Objek Pajak • Total Penerimaan: ${formatRupiah(totalNominal)}',
+              'Total: ${targetRecords.length} Objek Pajak | Total Penerimaan: ${formatRupiah(totalNominal)}',
               style: pw.TextStyle(
                 fontSize: 9,
                 fontWeight: pw.FontWeight.bold,

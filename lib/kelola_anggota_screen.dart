@@ -1,7 +1,10 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
+import 'blok_data_store.dart';
+import 'blok_record.dart';
 import 'currency_format.dart';
 import 'document_preview_screen.dart';
 import 'download_helper.dart';
@@ -10,6 +13,7 @@ import 'kolektif_import_screen.dart';
 import 'kolektif_nop_berkas.dart';
 import 'monitoring/monitoring_result_exporter.dart';
 import 'native_file_helper.dart';
+import 'nop_helper.dart';
 import 'staff_portal_client.dart';
 
 /// Layar "Kelola Anggota" satu grup kolektif — replika modal "Tambah NOP Pada
@@ -36,6 +40,15 @@ import 'staff_portal_client.dart';
 /// tidak ada kode bayar yang terbit. Karena itu alurnya tidak dibuat
 /// dua-langkah seperti di sana, cukup satu konfirmasi.
 class KelolaAnggotaScreen extends StatefulWidget {
+  static const String syncedGroupsPrefKey =
+      'kelola_anggota_auto_synced_groups_v1';
+  static final Set<String> _syncedGroupIdsMemory = <String>{};
+
+  @visibleForTesting
+  static void resetSyncedGroupsForTesting() {
+    _syncedGroupIdsMemory.clear();
+  }
+
   final StaffPortalClient client;
   final KolektifGroup group;
 
@@ -332,7 +345,13 @@ class _KelolaAnggotaScreenState extends State<KelolaAnggotaScreen> {
         status: widget.group.statusCode,
       );
       if (!mounted) return;
-      setState(() => _result = result);
+      setState(() {
+        _result = result;
+        if (result.members.isNotEmpty) {
+          _tampil = result.members.length;
+        }
+      });
+      await _sinkronkanAnggotaKeDhkpSekali(result);
     } catch (e) {
       if (!mounted) return;
       setState(
@@ -342,6 +361,183 @@ class _KelolaAnggotaScreenState extends State<KelolaAnggotaScreen> {
       );
     } finally {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  /// Otomatis menyinkronkan seluruh anggota di dalam grup ini ke database DHKP
+  /// lokal ([BlokDataStore]) menjadi berstatus `Sudah Bayar` saat halaman
+  /// `Kelola Anggota` dibuka pertama kali.
+  ///
+  /// Hanya berjalan **1 kali** untuk setiap grup: jika pengguna membuka halaman
+  /// ini untuk ke-2 kalinya (atau memuat ulang), proses sinkronisasi otomatis
+  /// ini tidak akan dijalankan lagi.
+  Future<void> _sinkronkanAnggotaKeDhkpSekali(
+    KolektifMemberListResult result,
+  ) async {
+    if (result.errorMessage != null || result.members.isEmpty) return;
+
+    final groupKey = widget.group.id.trim().isNotEmpty
+        ? widget.group.id.trim()
+        : widget.group.namaGroup.trim();
+    if (groupKey.isEmpty) return;
+
+    if (KelolaAnggotaScreen._syncedGroupIdsMemory.contains(groupKey)) {
+      return;
+    }
+
+    SharedPreferences? prefs;
+    List<String> syncedList = const <String>[];
+    try {
+      prefs = await SharedPreferences.getInstance();
+      syncedList =
+          prefs.getStringList(KelolaAnggotaScreen.syncedGroupsPrefKey) ??
+          const <String>[];
+      if (syncedList.contains(groupKey)) {
+        KelolaAnggotaScreen._syncedGroupIdsMemory.add(groupKey);
+        return;
+      }
+    } catch (_) {
+      // Tetap lanjutkan dengan penanda di memori jika SharedPreferences gagal.
+    }
+
+    // Tandai langsung agar pembukaan ke-2 tidak pernah menjalankan sistem ini lagi.
+    KelolaAnggotaScreen._syncedGroupIdsMemory.add(groupKey);
+    if (prefs != null) {
+      try {
+        await prefs.setStringList(
+          KelolaAnggotaScreen.syncedGroupsPrefKey,
+          <String>{...syncedList, groupKey}.toList(),
+        );
+      } catch (_) {}
+    }
+
+    try {
+      final allRecords = await BlokDataStore.instance.loadAll();
+      final keyToExisting = <String, BlokRecord>{
+        for (final r in allRecords) r.uniqueKey: r,
+      };
+      final nopToTemplate = <String, BlokRecord>{
+        for (final r in allRecords) r.nop: r,
+      };
+
+      final now = DateTime.now();
+      final nowStr =
+          '${now.year.toString().padLeft(4, '0')}-'
+          '${now.month.toString().padLeft(2, '0')}-'
+          '${now.day.toString().padLeft(2, '0')} '
+          '${now.hour.toString().padLeft(2, '0')}:'
+          '${now.minute.toString().padLeft(2, '0')}:'
+          '${now.second.toString().padLeft(2, '0')}';
+
+      final toUpsert = <String, BlokRecord>{};
+
+      for (final m in result.members) {
+        final cleanNop = m.nop.replaceAll(RegExp(r'[^0-9]'), '');
+        if (cleanNop.length != 18) continue;
+
+        final tahun = m.tahunPajak.trim().isNotEmpty
+            ? m.tahunPajak.trim()
+            : '${now.year}';
+        final key = '$cleanNop|$tahun';
+        final existing = toUpsert[key] ?? keyToExisting[key];
+        final template = existing ?? nopToTemplate[cleanNop];
+
+        final pokokVal = parseAngkaServer(m.pokok);
+        final String resolvedPbb;
+        if (pokokVal > 0) {
+          resolvedPbb = cleanNominalRupiah(pokokVal);
+        } else if (existing != null && existing.jumlahPbbValue > 0) {
+          resolvedPbb = existing.jumlahPbb;
+        } else {
+          resolvedPbb = 'Rp 0';
+        }
+
+        final hasExistingPaidDate =
+            existing != null &&
+            existing.isPaid &&
+            existing.tanggalBayar.trim().isNotEmpty &&
+            existing.tanggalBayar.trim() != '-' &&
+            existing.tanggalBayar.trim() != '0';
+        final effTgl = hasExistingPaidDate ? existing.tanggalBayar : nowStr;
+
+        final hasExistingPaidNote =
+            existing != null &&
+            existing.isPaid &&
+            existing.catatan.trim().toLowerCase().startsWith('sudah bayar');
+        final String catatanBayar;
+        if (hasExistingPaidNote) {
+          catatanBayar = existing.catatan;
+        } else if (pokokVal == 0 &&
+            (existing == null || existing.jumlahPbbValue == 0)) {
+          catatanBayar = 'Sudah bayar (Ketetapan Rp 0 / Nihil)';
+        } else {
+          catatanBayar = formatCatatanSudahBayar(effTgl, tahun);
+        }
+
+        final isTp = pokokVal > 2000000 || (existing?.isTargetPemda ?? false);
+
+        if (existing != null) {
+          final updated = existing.copyWith(
+            statusBayar: 'Sudah Bayar',
+            tanggalBayar: effTgl,
+            jumlahPbb: resolvedPbb,
+            namaWajibPajak: m.namaWp.trim().isNotEmpty
+                ? m.namaWp.trim()
+                : existing.namaWajibPajak,
+            kecamatan: m.kecamatan.trim().isNotEmpty
+                ? m.kecamatan.trim()
+                : existing.kecamatan,
+            kelurahan: m.kelurahan.trim().isNotEmpty
+                ? m.kelurahan.trim()
+                : existing.kelurahan,
+            isTargetPemda: isTp,
+            catatan: catatanBayar,
+          );
+          toUpsert[key] = updated;
+        } else {
+          final created = BlokRecord(
+            nop: cleanNop,
+            namaWajibPajak: m.namaWp.trim().isNotEmpty
+                ? m.namaWp.trim()
+                : (template?.namaWajibPajak ??
+                      'WP ${nopBlok(cleanNop)}/${nopWilayah(cleanNop)}'),
+            tahunBayar: tahun,
+            tanggalBayar: effTgl,
+            jumlahPbb: resolvedPbb,
+            statusBayar: 'Sudah Bayar',
+            isTargetPemda: isTp,
+            catatan: catatanBayar,
+            luasBumi: template?.luasBumi ?? '',
+            luasBangunan: template?.luasBangunan ?? '',
+            njopBumi: template?.njopBumi ?? '',
+            njopBangunan: template?.njopBangunan ?? '',
+            kecamatan: m.kecamatan.trim().isNotEmpty
+                ? m.kecamatan.trim()
+                : (template?.kecamatan ?? 'MANDE'),
+            kelurahan: m.kelurahan.trim().isNotEmpty
+                ? m.kelurahan.trim()
+                : (template?.kelurahan ??
+                      (widget.group.kelurahan.trim().isNotEmpty
+                          ? widget.group.kelurahan.trim()
+                          : 'BOBOJONG')),
+            alamatObjek: template?.alamatObjek ?? '',
+            alamatWp: template?.alamatWp ?? '',
+            rtObjek: template?.rtObjek ?? '',
+          );
+          toUpsert[key] = created;
+        }
+      }
+
+      if (toUpsert.isNotEmpty) {
+        await BlokDataStore.instance.upsertAll(toUpsert.values);
+        if (mounted) {
+          _snack(
+            '${toUpsert.length} data anggota otomatis disinkronkan menjadi Sudah Bayar di DHKP.',
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('Gagal sinkron otomatis anggota kolektif ke DHKP: $e');
     }
   }
 

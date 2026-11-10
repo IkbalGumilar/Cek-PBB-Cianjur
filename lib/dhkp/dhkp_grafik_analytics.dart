@@ -32,7 +32,7 @@ enum DhkpGrafikTab {
   sudahBayar('Sudah Bayar', 'Sudah Bayar', Icons.task_alt_rounded, Colors.blue),
   trenBulanan(
     'Tren Pembayaran',
-    'Tren Jan–Des',
+    'Tren Jan - Des',
     Icons.insights_rounded,
     Colors.purple,
   );
@@ -638,7 +638,7 @@ class DhkpGrafikAnalytics {
             icon: Icons.calendar_today_rounded,
           ),
           DhkpStatItem(
-            label: 'Total Jan–Des',
+            label: 'Total Jan - Des',
             value: 'Rp ${formatShortRupiah(sudahBayarNominal)}',
             sub: 'Penerimaan tahun ini',
             color: Colors.teal,

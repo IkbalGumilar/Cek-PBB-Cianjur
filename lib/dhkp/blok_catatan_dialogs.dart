@@ -6,15 +6,23 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import '../blok_batch_check_tracker.dart';
 import '../blok_record.dart';
 import '../blok_report_exporter.dart';
+import '../calculator/pbb_calculator_models.dart';
+import '../currency_format.dart';
 import '../dkhp_package_helper.dart';
 import '../dusun_data.dart';
 import 'blok_catatan_models.dart';
+import 'dhkp_nop_kalkulator_dialog.dart';
 
 Future<String?> showEditCatatanDialog(
   BuildContext context,
   BlokRecord record,
 ) async {
-  final controller = TextEditingController(text: record.catatan);
+  final cleanText = PbbTabunganHelper.cleanCatatan(record.catatan);
+  final tabungan = PbbTabunganHelper.extractTabungan(
+    record.catatan,
+    defaultTarget: record.jumlahPbbValue > 0 ? record.jumlahPbbValue : 50000,
+  );
+  final controller = TextEditingController(text: cleanText);
 
   final updated = await showDialog<bool>(
     context: context,
@@ -38,6 +46,33 @@ Future<String?> showEditCatatanDialog(
             'NOP: ${record.formattedNop} (Blok ${record.blok} No ${record.wilayah})',
             style: const TextStyle(fontSize: 12, color: Colors.grey),
           ),
+          if (tabungan.saldo > 0) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.pink.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: Colors.pink.shade300),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.savings_rounded, size: 16, color: Colors.pink.shade700),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'Tersimpan celengan warga: ${formatRupiah(tabungan.saldo)} (Aman & terlindungi)',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.pink.shade800,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 16),
           TextField(
             controller: controller,
@@ -67,7 +102,12 @@ Future<String?> showEditCatatanDialog(
     ),
   );
 
-  final result = updated == true ? controller.text.trim() : null;
+  final result = updated == true
+      ? PbbTabunganHelper.encodeCatatanWithTabungan(
+          controller.text.trim(),
+          tabungan,
+        )
+      : null;
   controller.dispose();
   return result;
 }
@@ -232,9 +272,7 @@ Future<void> showRincianObjekDialog(
                                   const SizedBox(height: 10),
                                   _buildRincianItem(
                                     'Pokok / Ketetapan PBB',
-                                    record.jumlahPbb.isNotEmpty
-                                        ? record.jumlahPbb
-                                        : '-',
+                                    record.formattedJumlahPbb,
                                     isBold: true,
                                   ),
                                   const SizedBox(height: 10),
@@ -278,35 +316,156 @@ Future<void> showRincianObjekDialog(
                               ],
                             ),
                           ),
-                        if (record.catatan.isNotEmpty)
-                          Container(
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: Colors.amber.withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(color: Colors.amber.shade700),
-                            ),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Icon(
-                                  Icons.info_outline,
-                                  size: 16,
-                                  color: Colors.amber.shade900,
+                        () {
+                          final cleanCatatan = PbbTabunganHelper.cleanCatatan(record.catatan);
+                          final tabungan = PbbTabunganHelper.extractTabungan(
+                            record.catatan,
+                            defaultTarget: record.jumlahPbbValue > 0 ? record.jumlahPbbValue : 50000,
+                          );
+                          final hasTabungan = tabungan.saldo > 0;
+                          final isLunasTabungan = tabungan.isLunas;
+
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              if (cleanCatatan.isNotEmpty)
+                                Container(
+                                  margin: const EdgeInsets.only(bottom: 10),
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: Colors.amber.withValues(alpha: 0.12),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: Colors.amber.shade700),
+                                  ),
+                                  child: Row(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Icon(
+                                        Icons.info_outline,
+                                        size: 16,
+                                        color: Colors.amber.shade900,
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Expanded(
+                                        child: Text(
+                                          'Catatan: $cleanCatatan',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.amber.shade900,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                                const SizedBox(width: 6),
-                                Expanded(
-                                  child: Text(
-                                    'Catatan: ${record.catatan}',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: Colors.amber.shade900,
+                              if (hasTabungan)
+                                InkWell(
+                                  onTap: () {
+                                    Navigator.pop(ctx);
+                                    showNopKalkulatorDialog(
+                                      context,
+                                      record: record,
+                                      initialTab: 1,
+                                      onCekTagihan: onCekTagihan,
+                                    );
+                                  },
+                                  borderRadius: BorderRadius.circular(6),
+                                  child: Container(
+                                    margin: const EdgeInsets.only(bottom: 10),
+                                    padding: const EdgeInsets.all(10),
+                                    decoration: BoxDecoration(
+                                      color: isLunasTabungan
+                                          ? Colors.green.withValues(alpha: 0.12)
+                                          : Colors.pink.withValues(alpha: 0.12),
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(
+                                        color: isLunasTabungan
+                                            ? Colors.green.shade600
+                                            : Colors.pink.shade300,
+                                      ),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          isLunasTabungan
+                                              ? Icons.check_circle_rounded
+                                              : Icons.savings_rounded,
+                                          size: 18,
+                                          color: isLunasTabungan
+                                              ? Colors.green.shade700
+                                              : Colors.pink.shade700,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            'Celengan Warga: ${formatRupiah(tabungan.saldo)} / ${formatRupiah(tabungan.target)} (${tabungan.persentase.toStringAsFixed(1)}%) ${isLunasTabungan ? "- LUNAS!" : ""}',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.bold,
+                                              color: isLunasTabungan
+                                                  ? Colors.green.shade900
+                                                  : Colors.pink.shade900,
+                                            ),
+                                          ),
+                                        ),
+                                        const Icon(Icons.chevron_right, size: 16),
+                                      ],
                                     ),
                                   ),
                                 ),
+                            ],
+                          );
+                        }(),
+                        const SizedBox(height: 6),
+                        InkWell(
+                          onTap: () {
+                            Navigator.pop(ctx);
+                            showNopKalkulatorDialog(
+                              context,
+                              record: record,
+                              onCekTagihan: onCekTagihan,
+                            );
+                          },
+                          borderRadius: BorderRadius.circular(8),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: isDark ? const Color(0xFF2E2215) : const Color(0xFFFFF3E0),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.orange.shade400),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.calculate_outlined, color: Colors.orange, size: 22),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Kalkulator Denda, Cicilan & AJB',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 12,
+                                          color: isDark ? Colors.orange.shade200 : Colors.orange.shade900,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        'Hitung denda keterlambatan, simulasi setoran cicilan warga, atau estimasi biaya pajak AJB untuk NOP ini.',
+                                        style: TextStyle(
+                                          fontSize: 10.5,
+                                          color: isDark ? Colors.grey.shade400 : Colors.grey.shade700,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const Icon(Icons.chevron_right, size: 20, color: Colors.orange),
                               ],
                             ),
                           ),
+                        ),
                       ],
                     ),
                   ),
@@ -322,6 +481,18 @@ Future<void> showRincianObjekDialog(
                     spacing: 8,
                     runSpacing: 8,
                     children: [
+                      OutlinedButton.icon(
+                        icon: const Icon(
+                          Icons.calculate_outlined,
+                          size: 16,
+                          color: Colors.orange,
+                        ),
+                        label: const Text('Kalkulator & Denda'),
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          showNopKalkulatorDialog(context, record: record);
+                        },
+                      ),
                       if (!record.isPaid)
                         OutlinedButton.icon(
                           icon: const Icon(

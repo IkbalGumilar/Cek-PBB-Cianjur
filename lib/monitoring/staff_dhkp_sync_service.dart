@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import '../batch_notification_service.dart';
 import '../blok_data_store.dart';
 import '../blok_record.dart';
+import '../currency_format.dart';
 import '../dhkp/dhkp_grafik_analytics.dart';
 import '../dhkp_widget_sync_service.dart';
 import '../nop_helper.dart';
@@ -46,6 +47,7 @@ class ParsedStaffRow {
   final String tanggalBayar;
   final String jumlahPbb;
   final String status;
+  final String tahun;
 
   const ParsedStaffRow({
     required this.nop,
@@ -61,6 +63,7 @@ class ParsedStaffRow {
     required this.tanggalBayar,
     required this.jumlahPbb,
     this.status = '',
+    this.tahun = '',
   });
 }
 
@@ -154,6 +157,8 @@ class StaffDhkpSyncService {
     int fallbackPokokIdx = -1;
     int statusIdx = -1;
     int tglIdx = -1;
+    int jamIdx = -1;
+    int tahunIdx = -1;
 
     for (var i = 0; i < headers.length; i++) {
       final h = headers[i].toUpperCase();
@@ -200,6 +205,14 @@ class StaffDhkpSyncService {
                   h.contains('TANGGAL') ||
                   h.contains('BAYAR')))) {
         tglIdx = i;
+      } else if (h.contains('JAM') || h.contains('WAKTU') || h.contains('PUKUL')) {
+        jamIdx = i;
+      } else if (h == 'THN' ||
+          h == 'TAHUN' ||
+          h.contains('THN PAJAK') ||
+          h.contains('TAHUN PAJAK') ||
+          h.contains('THN_PAJAK')) {
+        tahunIdx = i;
       } else if (h == 'STATUS') {
         statusIdx = i;
       }
@@ -252,9 +265,47 @@ class StaffDhkpSyncService {
     final tglRaw = (tglIdx != -1 && tglIdx < cells.length)
         ? cells[tglIdx].trim()
         : '';
-    final tgl = (tglRaw.isNotEmpty && tglRaw != '-' && tglRaw != '0')
+    var tgl = (tglRaw.isNotEmpty && tglRaw != '-' && tglRaw != '0')
         ? normalizePaymentDate(tglRaw, defaultTahun: defaultTahun)
         : '';
+
+    if (jamIdx != -1 && jamIdx < cells.length) {
+      final jamRaw = cells[jamIdx].trim();
+      if (RegExp(r'\d{1,2}:\d{1,2}').hasMatch(jamRaw) && !tgl.contains(':')) {
+        tgl = '$tgl $jamRaw';
+      }
+    }
+
+    String parsedTahun = '';
+    if (tahunIdx != -1 && tahunIdx < cells.length) {
+      final tDigits = cells[tahunIdx].replaceAll(RegExp(r'[^0-9]'), '').trim();
+      if (tDigits.length == 4) {
+        parsedTahun = tDigits;
+      }
+    }
+    if (parsedTahun.isEmpty) {
+      for (var i = 0; i < cells.length; i++) {
+        if (i == nopIdx ||
+            i == luasBumiIdx ||
+            i == njopBumiIdx ||
+            i == luasBgnIdx ||
+            i == njopBgnIdx ||
+            i == pokokBayarIdx ||
+            i == pokokKetetapanIdx ||
+            i == totalIdx ||
+            i == fallbackPokokIdx) {
+          continue;
+        }
+        final trimmed = cells[i].trim();
+        if (RegExp(r'^(19\d\d|20\d\d)$').hasMatch(trimmed)) {
+          parsedTahun = trimmed;
+          break;
+        }
+      }
+    }
+    if (parsedTahun.isEmpty && defaultTahun != null && defaultTahun.isNotEmpty) {
+      parsedTahun = defaultTahun;
+    }
 
     String extractDigits(int idx) {
       if (idx != -1 && idx < cells.length) {
@@ -304,15 +355,16 @@ class StaffDhkpSyncService {
       tanggalBayar: tgl,
       jumlahPbb: selectedPokok,
       status: status,
+      tahun: parsedTahun,
     );
   }
 
-  /// Menormalkan format tanggal bayar ke format YYYY-MM-DD
+  /// Menormalkan format tanggal bayar ke format YYYY-MM-DD (dan jam jika tersedia)
   static String normalizePaymentDate(String raw, {String? defaultTahun}) {
     if (raw.isEmpty || raw == '0' || raw == '-') return '';
 
-    // Jika sudah format YYYY-MM-DD
-    if (RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(raw)) {
+    // Jika sudah format YYYY-MM-DD atau YYYY-MM-DD HH:mm(:ss)
+    if (RegExp(r'^\d{4}-\d{2}-\d{2}(?:\s+\d{1,2}:\d{1,2}(?::\d{1,2})?)?$').hasMatch(raw)) {
       return raw;
     }
 
@@ -321,6 +373,13 @@ class StaffDhkpSyncService {
       final y = dt.year;
       final m = dt.month.toString().padLeft(2, '0');
       final d = dt.day.toString().padLeft(2, '0');
+      final hasTime = dt.hour != 0 || dt.minute != 0 || dt.second != 0;
+      if (hasTime) {
+        final h = dt.hour.toString().padLeft(2, '0');
+        final min = dt.minute.toString().padLeft(2, '0');
+        final sec = dt.second.toString().padLeft(2, '0');
+        return '$y-$m-$d $h:$min:$sec';
+      }
       return '$y-$m-$d';
     }
 
@@ -339,8 +398,10 @@ class StaffDhkpSyncService {
     String? tglBayarAwal,
     String? tglBayarAkhir,
     String? tglCutoff,
-    Duration pacingDelay = Duration.zero,
-    int maxPages = 200,
+    String bukuMin = '',
+    String bukuMax = '',
+    Duration pacingDelay = const Duration(milliseconds: 350),
+    int maxPages = 1000,
     void Function(StaffDhkpSyncProgress progress)? onProgress,
     bool Function()? shouldCancel,
     bool Function()? isPaused,
@@ -479,6 +540,8 @@ class StaffDhkpSyncService {
             tglCutoff: effectiveCutoff,
             tahunAwal: tahun,
             tahunAkhir: tahun,
+            bukuMin: bukuMin,
+            bukuMax: bukuMax,
             nop: '',
             kelurahan: kelurahanCode,
             kecamatan: kecamatanCode,
@@ -537,6 +600,8 @@ class StaffDhkpSyncService {
             tglBayarAkhir: effectiveTglAkhir,
             tahunAwal: tahun,
             tahunAkhir: tahun,
+            bukuMin: bukuMin,
+            bukuMax: bukuMax,
             nop: '',
             kelurahan: kelurahanCode,
             kecamatan: kecamatanCode,
@@ -577,9 +642,10 @@ class StaffDhkpSyncService {
         }
       }
 
-      // Jalankan proses unduh data: paralel jika mode full, langsung jika paidOnly
+      // Jalankan proses unduh data secara berurutan agar aman dari rate-limit server
       if (mode == StaffSyncMode.full) {
-        await Future.wait([runBelumBayar(), runSudahBayar()]);
+        await runBelumBayar();
+        await runSudahBayar();
       } else {
         await runSudahBayar();
       }
@@ -669,11 +735,11 @@ class StaffDhkpSyncService {
 
             String resolvedPbb = existing.jumlahPbb;
             if (parsedPbbVal > 0) {
-              resolvedPbb = parsed.jumlahPbb;
+              resolvedPbb = formatRupiah(parsedPbbVal);
             } else if (existingPbbVal > 0) {
               resolvedPbb = existing.jumlahPbb;
             } else if (priorPbb.isNotEmpty) {
-              resolvedPbb = priorPbb;
+              resolvedPbb = formatRupiah(priorPbb);
             }
 
             final updated = existing.copyWith(
@@ -729,11 +795,11 @@ class StaffDhkpSyncService {
             final existingPbbVal = existing.jumlahPbbValue;
             String resolvedPbb = existing.jumlahPbb;
             if (parsedPbbVal > 0) {
-              resolvedPbb = parsed.jumlahPbb;
+              resolvedPbb = cleanNominalRupiah(parsedPbbVal);
             } else if (existingPbbVal > 0) {
-              resolvedPbb = existing.jumlahPbb;
+              resolvedPbb = cleanNominalRupiah(existing.jumlahPbb);
             } else if (priorPbb.isNotEmpty) {
-              resolvedPbb = priorPbb;
+              resolvedPbb = cleanNominalRupiah(priorPbb);
             }
 
             final updated = existing.copyWith(
@@ -756,8 +822,8 @@ class StaffDhkpSyncService {
           }
         } else {
           final finalPbb = parsedPbbVal > 0
-              ? parsed.jumlahPbb
-              : (priorPbb.isNotEmpty ? priorPbb : parsed.jumlahPbb);
+              ? cleanNominalRupiah(parsedPbbVal)
+              : (priorPbb.isNotEmpty ? cleanNominalRupiah(priorPbb) : cleanNominalRupiah(parsed.jumlahPbb));
 
           final newRecord = BlokRecord(
             nop: parsed.nop,
@@ -777,6 +843,7 @@ class StaffDhkpSyncService {
             njopBumi: parsed.njopBumi,
             luasBangunan: parsed.luasBangunan,
             njopBangunan: parsed.njopBangunan,
+            isTargetPemda: parsedPbbVal >= 2000000,
             catatan: 'SPPT Baru terdeteksi dari Portal Staf',
           );
           keyToExisting[key] = newRecord;

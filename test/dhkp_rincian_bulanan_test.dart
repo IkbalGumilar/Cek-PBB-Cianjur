@@ -160,7 +160,7 @@ void main() {
       expect(find.text('Nominal Terbanyak'), findsOneWidget);
       expect(find.text('Nominal Tersedikit'), findsOneWidget);
       expect(find.text('Nomor NOP'), findsOneWidget);
-      expect(find.text('Nama WP (A–Z)'), findsOneWidget);
+      expect(find.text('Nama WP (A-Z)'), findsOneWidget);
 
       // Pilih Nominal Terbanyak
       await tester.tap(find.text('Nominal Terbanyak'));

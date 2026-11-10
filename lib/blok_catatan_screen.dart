@@ -11,8 +11,13 @@ import 'batch_check_screen.dart';
 import 'blok_data_store.dart';
 import 'blok_record.dart';
 import 'blok_report_exporter.dart';
+import 'blok_report_pdf.dart';
 import 'blok_sync_service.dart';
+import 'dhkp/dhkp_nop_kalkulator_dialog.dart';
+import 'dhkp/dhkp_target_pacing_dialog.dart';
+import 'calculator/pbb_calculator_models.dart';
 import 'check_mode.dart';
+import 'currency_format.dart';
 import 'dhkp/blok_catatan_dialogs.dart';
 import 'dhkp/blok_catatan_models.dart';
 import 'dhkp/blok_catatan_widgets.dart';
@@ -442,6 +447,26 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
       onCekStatusBayar: () => _bukaStatusBayar(record),
       onCekTagihan: () => _bukaTagihan(record),
       onEditRincian: () => _editRincianDialog(record),
+    );
+  }
+
+  /// Membuka kalkulator terpadu (Denda, Cicilan & Tabungan Warga, AJB)
+  Future<void> _bukaKalkulatorNop(BlokRecord record, {int initialTab = 0}) async {
+    await showNopKalkulatorDialog(
+      context,
+      record: record,
+      initialTab: initialTab,
+      onCekTagihan: () => _bukaTagihan(record),
+      onRecordUpdated: (updated) async {
+        await BlokDataStore.instance.upsert(updated);
+        unawaited(
+          BlokSyncService.instance.recordChange(
+            record: updated,
+            catatan: updated.catatan,
+          ),
+        );
+        await _loadRecords();
+      },
     );
   }
 
@@ -1183,6 +1208,7 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
         records,
         tahun: _selectedTahun,
         blokTitle: blokTitle,
+        kategoriFilter: _kategoriFilter,
         onProgress: (current, total) async {
           if (!mounted) return;
           setState(() {
@@ -1197,6 +1223,7 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
         opsi.format,
         tahun: _selectedTahun,
         prefix: prefix,
+        kategoriFilter: _kategoriFilter,
       );
       final location = await DownloadHelper.saveBytes(bytes, fileName);
       if (!mounted || location == null) return;
@@ -1244,6 +1271,7 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
         records,
         tahun: _selectedTahun,
         blokTitle: blokTitle,
+        kategoriFilter: _kategoriFilter,
         onProgress: (current, total) async {
           if (!mounted) return;
           setState(() {
@@ -1258,6 +1286,7 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
         opsi.format,
         tahun: _selectedTahun,
         prefix: prefix,
+        kategoriFilter: _kategoriFilter,
       );
       await NativeFileHelper.shareBytes(
         bytes: bytes,
@@ -1305,6 +1334,7 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
         records,
         tahun: _selectedTahun,
         blokTitle: blokTitle,
+        kategoriFilter: _kategoriFilter,
         onProgress: (current, total) async {
           if (!mounted) return;
           setState(() {
@@ -1313,10 +1343,11 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
         },
       );
       if (!mounted) return;
-      final tahunLabel = _selectedTahun;
-      final fileName = opsi.blok == semuaBlokValue
-          ? 'Laporan Data Blok ($tahunLabel).pdf'
-          : 'Laporan Blok ${opsi.blok} ($tahunLabel).pdf';
+      final fileName = '${buildReportJudul(
+        blokTitle: blokTitle,
+        kategoriFilter: _kategoriFilter,
+        tahun: _selectedTahun,
+      )}.pdf';
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -1359,6 +1390,25 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
     );
   }
 
+  void _bukaTargetPacingDialog() {
+    final blokTitle = _selectedBlok == null || _selectedBlok == semuaBlokValue
+        ? (_selectedWilayah != null
+            ? 'Dusun $_selectedWilayah'
+            : 'Semua Wilayah (Desa)')
+        : 'Blok $_selectedBlok';
+    showTargetPacingDialog(
+      context,
+      totalKetetapan: _summaryMetrics.totalNominal,
+      realisasi: _summaryMetrics.sudahBayarNominal,
+      totalNop: _summaryMetrics.totalCount,
+      wilayahTitle: blokTitle,
+    );
+  }
+
+  void _bukaKalkulatorAjb() {
+    showStandaloneAjbDialog(context);
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -1391,6 +1441,12 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
                 ? 'Beralih ke Buku Catatan (Tabel)'
                 : 'Beralih ke Visual Grafik',
           ),
+          IconButton(
+            key: const ValueKey('dhkp_target_pacing_btn'),
+            icon: const Icon(Icons.speed_rounded),
+            tooltip: 'Target & Pacing Realisasi',
+            onPressed: _bukaTargetPacingDialog,
+          ),
           FeatureTourHelpButton(onPressed: _onHelpPressed),
           PopupMenuButton<String>(
             key: _moreMenuButtonKey,
@@ -1421,6 +1477,9 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
                   break;
                 case 'cek_massal':
                   _cekStatusBayarMassal();
+                  break;
+                case 'kalkulator_ajb':
+                  _bukaKalkulatorAjb();
                   break;
               }
             },
@@ -1509,6 +1568,15 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
                   child: ListTile(
                     leading: Icon(Icons.fact_check_outlined),
                     title: Text('Cek Status Bayar Massal'),
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                  ),
+                ),
+                const PopupMenuItem(
+                  value: 'kalkulator_ajb',
+                  child: ListTile(
+                    leading: Icon(Icons.calculate_outlined),
+                    title: Text('Kalkulator AJB & Simulasi NJOP'),
                     contentPadding: EdgeInsets.zero,
                     dense: true,
                   ),
@@ -2134,13 +2202,7 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
                                                             Text(r.tahunBayar),
                                                           ),
                                                           DataCell(
-                                                            Text(
-                                                              r
-                                                                      .jumlahPbb
-                                                                      .isEmpty
-                                                                  ? '-'
-                                                                  : r.jumlahPbb,
-                                                            ),
+                                                            Text(r.formattedJumlahPbb),
                                                           ),
                                                           DataCell(
                                                             DhkpStatusBadge(
@@ -2200,41 +2262,88 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
                                                                     tooltip:
                                                                         'Cek Status Bayar (Update jika Lunas)',
                                                                   ),
+                                                                IconButton(
+                                                                  onPressed: () =>
+                                                                      _bukaKalkulatorNop(r),
+                                                                  icon: const Icon(
+                                                                    Icons
+                                                                        .calculate_outlined,
+                                                                    color: Colors
+                                                                        .deepPurple,
+                                                                  ),
+                                                                  tooltip:
+                                                                      'Kalkulator Denda, Cicilan & AJB',
+                                                                ),
                                                               ],
                                                             ),
                                                           ),
                                                           DataCell(
-                                                            IconButton(
-                                                              onPressed: () =>
-                                                                  _editCatatanDialog(
-                                                                    r,
+                                                            () {
+                                                              final cleanCatatan =
+                                                                  PbbTabunganHelper.cleanCatatan(
+                                                                r.catatan,
+                                                              );
+                                                              final tabungan =
+                                                                  PbbTabunganHelper.extractTabungan(
+                                                                r.catatan,
+                                                                defaultTarget:
+                                                                    r.jumlahPbbValue > 0
+                                                                        ? r.jumlahPbbValue
+                                                                        : 50000,
+                                                              );
+                                                              final hasCatatan =
+                                                                  cleanCatatan.isNotEmpty;
+                                                              final hasTabungan =
+                                                                  tabungan.saldo > 0;
+                                                              final isLunas =
+                                                                  tabungan.isLunas;
+
+                                                              return Row(
+                                                                mainAxisSize:
+                                                                    MainAxisSize.min,
+                                                                children: [
+                                                                  IconButton(
+                                                                    onPressed: () =>
+                                                                        _editCatatanDialog(
+                                                                      r,
+                                                                    ),
+                                                                    icon: Icon(
+                                                                      hasCatatan
+                                                                          ? Icons.edit_note
+                                                                          : Icons.description_outlined,
+                                                                      color: hasCatatan
+                                                                          ? Colors.amber.shade800
+                                                                          : Colors.grey.shade600,
+                                                                    ),
+                                                                    tooltip: hasCatatan
+                                                                        ? 'Catatan: $cleanCatatan'
+                                                                        : 'Tambah Catatan Petugas',
                                                                   ),
-                                                              icon: Icon(
-                                                                r
-                                                                        .catatan
-                                                                        .isNotEmpty
-                                                                    ? Icons
-                                                                          .edit_note
-                                                                    : Icons
-                                                                          .description_outlined,
-                                                                color:
-                                                                    r
-                                                                        .catatan
-                                                                        .isNotEmpty
-                                                                    ? Colors
-                                                                          .amber
-                                                                          .shade800
-                                                                    : Colors
-                                                                          .grey
-                                                                          .shade600,
-                                                              ),
-                                                              tooltip:
-                                                                  r
-                                                                      .catatan
-                                                                      .isNotEmpty
-                                                                  ? 'Catatan: ${r.catatan}'
-                                                                  : 'Tambah Catatan Petugas',
-                                                            ),
+                                                                  IconButton(
+                                                                    onPressed: () =>
+                                                                        _bukaKalkulatorNop(
+                                                                      r,
+                                                                      initialTab: 1,
+                                                                    ),
+                                                                    icon: Icon(
+                                                                      hasTabungan
+                                                                          ? Icons.savings_rounded
+                                                                          : Icons.savings_outlined,
+                                                                      color: isLunas
+                                                                          ? Colors.green.shade700
+                                                                          : (hasTabungan
+                                                                              ? Colors.pink.shade600
+                                                                              : Colors.grey.shade500),
+                                                                    ),
+                                                                    tooltip: isLunas
+                                                                        ? 'Celengan Warga: LUNAS (${formatRupiah(tabungan.saldo)})'
+                                                                        : (hasTabungan
+                                                                            ? 'Celengan Warga: ${formatRupiah(tabungan.saldo)} / ${formatRupiah(tabungan.target)} (${tabungan.persentase.toStringAsFixed(0)}%)'
+                                                                            : 'Mulai Tabungan / Cicilan PBB Warga'),
+                                                                  ),
+                                                                ],
+                                                              );
+                                                            }(),
                                                           ),
                                                         ],
                                                       );

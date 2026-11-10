@@ -80,5 +80,10 @@ String formatRupiah(Object? raw) {
   if (trimmed.isEmpty || trimmed == '-') {
     return '-';
   }
+  // Jika trimmed hanya deretan angka tanpa pemisah ribuan (mis. "24838"), format dengan pemisah ribuan:
+  if (RegExp(r'^\d+$').hasMatch(trimmed)) {
+    final val = int.tryParse(trimmed) ?? 0;
+    return 'Rp. ${formatRibuan(val)}';
+  }
   return 'Rp. $trimmed';
 }

@@ -47,6 +47,9 @@ void main() {
       expect(formatRupiah('51.245.00'), 'Rp. 51.245');
       expect(formatRupiah('52.453,00'), 'Rp. 52.453');
       expect(formatRupiah(52453), 'Rp. 52.453');
+      expect(formatRupiah('24838'), 'Rp. 24.838');
+      expect(formatRupiah('15711'), 'Rp. 15.711');
+      expect(formatRupiah('0'), 'Rp. 0');
       expect(formatRupiah('Rp 51.425'), 'Rp. 51.425');
       expect(formatRupiah('-'), '-');
       expect(formatRupiah(''), '-');

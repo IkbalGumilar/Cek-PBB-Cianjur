@@ -99,10 +99,13 @@ flutter:
     - logo/kabupaten-cianjur.png
     - assets/guide/
     - assets/data/bobojong_batas_big.geojson
-    - assets/data/wilayah_sekitar_big.geojson
+    - assets/data/bobojong_dusun_zones.geojson
     - assets/data/bobojong_buildings_osm.geojson
     - assets/data/bobojong_roads_osm.geojson
     - assets/data/bobojong_waterways_osm.geojson
+    - assets/data/bobojong_fasum_osm.geojson
+    - assets/data/bobojong_kampung_osm.geojson
+    - assets/data/kecamatan_mande_desa_big.geojson
 
   # To add assets to your application, add an assets section, like this:
   # assets:

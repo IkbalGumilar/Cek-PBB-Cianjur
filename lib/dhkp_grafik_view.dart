@@ -2397,15 +2397,15 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // 1. Diagram Batang & Garis Tren Bulanan (Jan – Des) - Menggantikan kurva rumput seperti gambar Brainly
+        // 1. Diagram Batang & Garis Tren Bulanan (Jan - Des) - Menggantikan kurva rumput seperti gambar Brainly
         if (showBatang) ...[
           _buildCollapsibleSectionCard(
             sectionKey: 'batang',
             icon: Icons.bar_chart_rounded,
             title: 'Diagram Batang & Garis Tren Bulanan',
             subtitle:
-                'Penerimaan kas per bulan dengan garis poligon tren puncak (Jan–Des)',
-            badgeText: 'Jan – Des',
+                'Penerimaan kas per bulan dengan garis poligon tren puncak (Jan - Des)',
+            badgeText: 'Jan - Des',
             accentColor: Colors.purple,
             isDark: isDark,
             groups: monthGroups,
@@ -2425,7 +2425,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
           _buildCollapsibleSectionCard(
             sectionKey: 'bar',
             icon: Icons.align_horizontal_left_rounded,
-            title: 'Diagram Mendatar: Rincian Bulanan (Jan–Des)',
+            title: 'Diagram Mendatar: Rincian Bulanan (Jan - Des)',
             subtitle: 'Daftar penerimaan kas dari awal hingga akhir tahun',
             badgeText: '12 Bulan',
             accentColor: Colors.purple,
@@ -2482,7 +2482,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
         _buildCollapsibleSectionCard(
           sectionKey: 'tabel',
           icon: Icons.table_chart_rounded,
-          title: 'Tabel Rincian Penerimaan Bulanan (Jan – Des)',
+          title: 'Tabel Rincian Penerimaan Bulanan (Jan - Des)',
           subtitle: 'Rekapitulasi jumlah pembayaran dan nilai rupiah per bulan',
           badgeText: '12 Bulan',
           accentColor: Colors.purple,

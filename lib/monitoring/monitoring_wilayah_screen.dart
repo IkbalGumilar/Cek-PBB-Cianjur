@@ -4,6 +4,7 @@ import '../feature_tour/feature_tour.dart';
 import '../settings_screen.dart';
 import '../staff_portal_client.dart';
 import '../theme_controller.dart';
+import 'staff_dhkp_generate_dialog.dart';
 import 'staff_dhkp_sync_dialog.dart';
 import 'staff_dhkp_sync_service.dart';
 import 'tab_belum_bayar.dart';
@@ -143,6 +144,14 @@ class _MonitoringWilayahScreenState extends State<MonitoringWilayahScreen> {
             ],
           ),
           actions: [
+            IconButton(
+              icon: const Icon(Icons.auto_awesome_rounded),
+              tooltip: 'Generate DHKP Baru (Timpa)',
+              onPressed: () => showStaffDhkpGenerateDialog(
+                context,
+                client: widget.client,
+              ),
+            ),
             IconButton(
               icon: const Icon(Icons.cloud_sync_rounded),
               tooltip: 'Sinkronkan Status ke DHKP',

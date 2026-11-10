@@ -65,6 +65,39 @@ abstract class BaseTableExporter {
     return Uint8List.fromList(excel.encode()!);
   }
 
+  static String _cleanPdfText(String text) {
+  if (text.isEmpty) return text;
+  final replaced = text
+      .replaceAll('•', '-')
+      .replaceAll('—', '-')
+      .replaceAll('–', '-')
+      .replaceAll('“', '"')
+      .replaceAll('”', '"')
+      .replaceAll('‘', "'")
+      .replaceAll('’', "'")
+      .replaceAll('…', '...')
+      .replaceAll('✓', '[Lunas]')
+      .replaceAll('✔', '[Lunas]')
+      .replaceAll('🎯', '[Target]')
+      .replaceAll('⛔', '[Blacklist]')
+      .replaceAll('⏳', '[Belum Bayar]')
+      .replaceAll('≥', '>=')
+      .replaceAll('≤', '<=')
+      .replaceAll('\u00A0', ' ');
+
+  final buffer = StringBuffer();
+  for (final rune in replaced.runes) {
+    if (rune == 10 || rune == 13 || rune == 9) {
+      buffer.writeCharCode(rune);
+    } else if ((rune >= 32 && rune <= 126) || (rune >= 160 && rune <= 255)) {
+      buffer.writeCharCode(rune);
+    } else {
+      buffer.write(' ');
+    }
+  }
+  return buffer.toString();
+}
+
   /// Membangun byte PDF tabel landscape standar.
   static Future<Uint8List> buildPdfData({
     required String title,
@@ -76,8 +109,11 @@ abstract class BaseTableExporter {
   }) async {
     final effectivePageFormat = pageFormat ?? PdfPageFormat.a4.landscape;
     final doc = pw.Document();
+    final cleanTitle = _cleanPdfText(title);
+    final cleanHeaders = headers.map(_cleanPdfText).toList();
+    final cleanRows = rows.map((r) => r.map(_cleanPdfText).toList()).toList();
 
-    if (rows.isEmpty) {
+    if (cleanRows.isEmpty) {
       doc.addPage(
         pw.Page(
           pageFormat: effectivePageFormat,
@@ -86,7 +122,7 @@ abstract class BaseTableExporter {
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
               pw.Text(
-                title,
+                cleanTitle,
                 style: pw.TextStyle(
                   fontSize: 12,
                   fontWeight: pw.FontWeight.bold,
@@ -104,59 +140,55 @@ abstract class BaseTableExporter {
       return doc.save();
     }
 
-    final totalPages = (rows.length / rowsPerPage).ceil();
-
-    for (var pageIdx = 0; pageIdx < totalPages; pageIdx++) {
-      final start = pageIdx * rowsPerPage;
-      final end = (start + rowsPerPage < rows.length)
-          ? start + rowsPerPage
-          : rows.length;
-      final pageRows = rows.sublist(start, end);
-
-      doc.addPage(
-        pw.Page(
-          pageFormat: effectivePageFormat,
-          margin: const pw.EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-          build: (context) => pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                children: [
-                  pw.Text(
-                    title,
-                    style: pw.TextStyle(
-                      fontSize: 11,
-                      fontWeight: pw.FontWeight.bold,
-                    ),
+    doc.addPage(
+      pw.MultiPage(
+        maxPages: 10000,
+        pageFormat: effectivePageFormat,
+        margin: const pw.EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+        header: (context) => pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Text(
+                  cleanTitle,
+                  style: pw.TextStyle(
+                    fontSize: 11,
+                    fontWeight: pw.FontWeight.bold,
                   ),
-                  pw.Text(
-                    'Hal ${pageIdx + 1} dari $totalPages',
-                    style: const pw.TextStyle(fontSize: 9),
-                  ),
-                ],
-              ),
-              pw.SizedBox(height: 8),
-              pw.TableHelper.fromTextArray(
-                headers: headers,
-                data: pageRows,
-                cellStyle: pw.TextStyle(fontSize: fontSize),
-                headerStyle: pw.TextStyle(
-                  fontSize: fontSize,
-                  fontWeight: pw.FontWeight.bold,
                 ),
-                cellAlignment: pw.Alignment.centerLeft,
-                headerAlignment: pw.Alignment.centerLeft,
-                cellPadding: const pw.EdgeInsets.symmetric(
-                  horizontal: 3,
-                  vertical: 2,
+                pw.Text(
+                  'Hal ${context.pageNumber} dari ${context.pagesCount}',
+                  style: const pw.TextStyle(fontSize: 9),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
+            pw.SizedBox(height: 8),
+          ],
         ),
-      );
-    }
+        build: (context) => [
+          pw.TableHelper.fromTextArray(
+            headers: cleanHeaders,
+            data: cleanRows,
+            cellStyle: pw.TextStyle(fontSize: fontSize),
+            headerStyle: pw.TextStyle(
+              fontSize: fontSize,
+              fontWeight: pw.FontWeight.bold,
+            ),
+            headerDecoration: const pw.BoxDecoration(
+              color: PdfColors.grey200,
+            ),
+            cellAlignment: pw.Alignment.centerLeft,
+            headerAlignment: pw.Alignment.centerLeft,
+            cellPadding: const pw.EdgeInsets.symmetric(
+              horizontal: 3,
+              vertical: 2,
+            ),
+          ),
+        ],
+      ),
+    );
     return doc.save();
   }
 

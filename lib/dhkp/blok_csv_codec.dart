@@ -170,7 +170,7 @@ class BlokCsvCodec {
       final pokokVal = parseNominalRupiah(pokok);
       final isTargetPemda =
           _isTruthyTargetPemda(rawTargetPemda) ||
-          (rawTargetPemda.isEmpty && pokokVal >= 1500000);
+          (rawTargetPemda.isEmpty && pokokVal >= 2000000);
 
       records.add(
         BlokRecord(

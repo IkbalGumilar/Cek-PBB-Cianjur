@@ -121,10 +121,10 @@ class DhkpSummaryMetrics {
 
   static String formatPct(double val) {
     if (val.isNaN || val.isInfinite || val <= 0) return '0%';
-    if (val >= 100 || (val - val.roundToDouble()).abs() < 0.05) {
+    if (val >= 100 || (val - val.roundToDouble()).abs() < 0.005) {
       return '${val.round()}%';
     }
-    return '${val.toStringAsFixed(1).replaceAll('.', ',')}%';
+    return '${val.toStringAsFixed(2).replaceAll('.', ',')}%';
   }
 
   String get pctSudah => totalNominal > 0

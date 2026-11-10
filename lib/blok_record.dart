@@ -76,6 +76,10 @@ class BlokRecord {
   /// dipakai untuk kalkulasi total dan pengurutan nominal PBB.
   int get jumlahPbbValue => parseNominalRupiah(jumlahPbb);
 
+  /// Format tampilan nominal PBB dengan awalan Rupiah (mis. "Rp. 51.425").
+  String get formattedJumlahPbb =>
+      jumlahPbbValue > 0 ? formatRupiah(jumlahPbbValue) : (jumlahPbb.isNotEmpty ? jumlahPbb : '-');
+
   /// NOP+tahun mengidentifikasi satu baris pembayaran secara unik (satu NOP
   /// bisa punya beberapa baris untuk tahun yang berbeda-beda).
   String get uniqueKey => '$nop|$tahunBayar';
@@ -180,19 +184,27 @@ String formatCatatanSudahBayar(String tglBayar, [String? tahunBayar]) {
         : 'Sudah bayar';
   }
   final parts = t.split(' ');
-  final dateParts = parts[0].split('-');
+  final dateSep = parts[0].contains('/') ? '/' : '-';
+  final dateParts = parts[0].split(dateSep);
   if (dateParts.length == 3) {
-    final y = dateParts[0];
-    final m = dateParts[1];
-    final d = int.tryParse(dateParts[2])?.toString() ?? dateParts[2];
+    String y, m, d;
+    if (dateParts[0].length == 4) {
+      y = dateParts[0];
+      m = dateParts[1].padLeft(2, '0');
+      d = int.tryParse(dateParts[2])?.toString() ?? dateParts[2];
+    } else {
+      d = int.tryParse(dateParts[0])?.toString() ?? dateParts[0];
+      m = dateParts[1].padLeft(2, '0');
+      y = dateParts[2];
+    }
     final namaBulan = _bulanIndo[m] ?? m;
     final timePart = parts.length > 1 ? parts[1].trim() : '';
     if (timePart.isNotEmpty && timePart != '00:00:00') {
-      return 'Sudah bayar tanggal $d bulan $namaBulan $y jam $timePart';
+      return 'Sudah bayar pada tanggal $d bulan $namaBulan $y jam $timePart';
     } else if (timePart == '00:00:00') {
-      return 'Sudah bayar tanggal $d bulan $namaBulan $y jam 00:00';
+      return 'Sudah bayar pada tanggal $d bulan $namaBulan $y jam 00:00';
     } else {
-      return 'Sudah bayar tanggal $d bulan $namaBulan $y';
+      return 'Sudah bayar pada tanggal $d bulan $namaBulan $y';
     }
   }
   return 'Sudah bayar $t';
