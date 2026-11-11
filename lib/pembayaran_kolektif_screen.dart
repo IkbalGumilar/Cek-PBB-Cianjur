@@ -472,14 +472,10 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
     try {
       final bytes = await widget.client.fetchSuratPengantarPdf(group.id);
       if (!mounted) return;
-      Navigator.push(
+      await DocumentPreviewScreen.printOrPreview(
         context,
-        MaterialPageRoute(
-          builder: (_) => DocumentPreviewScreen(
-            pdfBytes: bytes,
-            fileName: 'Surat Pengantar ${group.namaGroup}.pdf',
-          ),
-        ),
+        pdfBytes: bytes,
+        fileName: 'Surat Pengantar ${group.namaGroup}.pdf',
       );
     } on StateError catch (e) {
       if (!mounted) return;

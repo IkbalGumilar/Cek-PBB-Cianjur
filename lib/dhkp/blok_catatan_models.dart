@@ -22,8 +22,13 @@ class BlokNavigationRequest {
 class OpsiEksporResult {
   final String blok;
   final BlokExportFormat format;
+  final bool sertakanNihil;
 
-  const OpsiEksporResult({required this.blok, required this.format});
+  const OpsiEksporResult({
+    required this.blok,
+    required this.format,
+    this.sertakanNihil = true,
+  });
 }
 
 class EditRincianResult {
@@ -136,6 +141,15 @@ class DhkpSummaryMetrics {
       : '0%';
 
   String get pctTotal => '100%';
+
+  /// Menyaring SPPT Nihil (Rp 0) jika [excludeNihil] bernilai true.
+  static List<BlokRecord> filterOutNihil(
+    List<BlokRecord> records, {
+    required bool excludeNihil,
+  }) {
+    if (!excludeNihil) return records;
+    return records.where((r) => r.jumlahPbbValue > 0).toList();
+  }
 
   static List<BlokRecord> filterByKategori(
     List<BlokRecord> records,

@@ -6,10 +6,11 @@ echo =====================================================================
 echo.
 
 set "PROJECT_DIR=%~dp0.."
-set "APP_VERSION=v0.1.5-beta"
+set "APP_VERSION=v0.1.6-beta"
 cd /d "%PROJECT_DIR%"
 
-echo [0/4] Menyinkronkan dependensi plugin Windows di ephemeral...
+echo [0/4] Mengunduh dependensi & menyinkronkan plugin Windows di ephemeral...
+call flutter pub get
 call dart run tool\sync_windows_plugins.dart
 if errorlevel 1 (
     echo [WARNING] Sinkronisasi plugin via Dart mengalami kendala, melanjutkan build...
@@ -68,27 +69,27 @@ if defined ISCC (
     echo Paket Portable ZIP tetap tersedia di folder build.
 )
 
+if not exist "dist" mkdir "dist"
+if exist "build\Cek-PBB-Cianjur-Setup-%APP_VERSION%.exe" move /y "build\Cek-PBB-Cianjur-Setup-%APP_VERSION%.exe" "dist\Cek-PBB-Cianjur-Setup-%APP_VERSION%.exe" >nul
+if exist "build\Cek-PBB-Cianjur-Windows-x64-%APP_VERSION%.zip" move /y "build\Cek-PBB-Cianjur-Windows-x64-%APP_VERSION%.zip" "dist\Cek-PBB-Cianjur-Portable-%APP_VERSION%.zip" >nul
+
 echo.
-echo [4/4] Menghitung checksum SHA-256 untuk artefak Windows...
+echo [4/4] Menghitung checksum SHA-256 untuk artefak Windows di dist\...
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-    "$checksumFile = 'build\Cek-PBB-Cianjur-%APP_VERSION%-checksums.sha256'; " ^
+    "$checksumFile = 'dist\Cek-PBB-Cianjur-%APP_VERSION%-checksums.sha256'; " ^
     "$lines = @(); " ^
-    "if (Test-Path 'build\Cek-PBB-Cianjur-Setup-%APP_VERSION%.exe') { " ^
-    "  $h = (Get-FileHash 'build\Cek-PBB-Cianjur-Setup-%APP_VERSION%.exe' -Algorithm SHA256).Hash.ToLower(); " ^
+    "if (Test-Path 'dist\Cek-PBB-Cianjur-Setup-%APP_VERSION%.exe') { " ^
+    "  $h = (Get-FileHash 'dist\Cek-PBB-Cianjur-Setup-%APP_VERSION%.exe' -Algorithm SHA256).Hash.ToLower(); " ^
     "  $lines += ('{0}  Cek-PBB-Cianjur-Setup-%APP_VERSION%.exe' -f $h); " ^
     "} " ^
-    "if (Test-Path 'build\Cek-PBB-Cianjur-Windows-x64-%APP_VERSION%.zip') { " ^
-    "  $h = (Get-FileHash 'build\Cek-PBB-Cianjur-Windows-x64-%APP_VERSION%.zip' -Algorithm SHA256).Hash.ToLower(); " ^
-    "  $lines += ('{0}  Cek-PBB-Cianjur-Windows-x64-%APP_VERSION%.zip' -f $h); " ^
+    "if (Test-Path 'dist\Cek-PBB-Cianjur-Portable-%APP_VERSION%.zip') { " ^
+    "  $h = (Get-FileHash 'dist\Cek-PBB-Cianjur-Portable-%APP_VERSION%.zip' -Algorithm SHA256).Hash.ToLower(); " ^
+    "  $lines += ('{0}  Cek-PBB-Cianjur-Portable-%APP_VERSION%.zip' -f $h); " ^
     "} " ^
     "$lines | Out-File -FilePath $checksumFile -Encoding utf8; " ^
     "Get-Content $checksumFile"
 
-if not exist "dist" mkdir "dist"
-if exist "build\Cek-PBB-Cianjur-Setup-%APP_VERSION%.exe" copy /y "build\Cek-PBB-Cianjur-Setup-%APP_VERSION%.exe" "dist\" >nul
-if exist "build\Cek-PBB-Cianjur-Windows-x64-%APP_VERSION%.zip" copy /y "build\Cek-PBB-Cianjur-Windows-x64-%APP_VERSION%.zip" "dist\" >nul
-
 echo.
 echo =====================================================================
-echo  BUILD SELESAI! Seluruh artefak tersimpan di direktori dist\ dan build\
+echo  BUILD SELESAI! Seluruh artefak tersimpan di direktori dist\
 echo =====================================================================

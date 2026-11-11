@@ -3,9 +3,11 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:pdf/pdf.dart' show PdfPageFormat;
 import 'package:printing/printing.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart' as sf;
 
@@ -13,16 +15,17 @@ import 'app_security_service.dart';
 import 'base_table_exporter.dart';
 
 /// Pembaca Dokumen PDF bergaya Google PDF Viewer (Camelot):
-/// 1. **Lapisan Teks Dapat Dipilih & Disalin (Selectable Text Layer)**:
-///    Teks di atas kanvas PDF dapat langsung diblok/disorot (drag/long-press) untuk
-///    disalin ke papan klip, ditambah panel cepat "Salin Teks & NOP" per halaman.
-/// 2. **UX Navigasi & Zoom Halus ala Camelot / Google PDF**:
-///    - Double-tap zoom tepat ke titik sentuh/klik dengan animasi mulus (bukan melompat ke pojok kiri atas).
+/// 1. **Lapisan Teks Presisi Dapat Dipilih & Disalin (Selectable Text Layer)**:
+///    Teks di atas kanvas PDF dipetakan per kata/kolom sehingga dapat langsung
+///    diblok/disorot (drag/long-press di Android maupun mouse drag + Ctrl+C di Desktop)
+///    dengan presisi sesuai posisi visual teks di PDF.
+/// 2. **Cetak Langsung Driver OS di Desktop (Direct Print Driver)**:
+///    Memanggil dialog driver printer sistem operasi secara langsung di PC/Desktop
+///    maupun lewat pintasan `Ctrl + P`.
+/// 3. **UX Navigasi & Zoom Halus ala Camelot / Google PDF**:
+///    - Double-tap zoom tepat ke titik sentuh/klik dengan animasi mulus.
 ///    - Zoom +/- terpusat pada tengah layar & dukungan Ctrl+Scroll di desktop.
 ///    - Fast-Scroll Scrubber (penggeser cepat di tepi kanan) untuk dokumen puluhan halaman.
-///    - Bilah kontrol melayang di bagian bawah (Navigasi Halaman, Zoom, Salin Teks, Cetak).
-/// 3. **Ekstraksi Teks Asinkron Bertahap**:
-///    Membuka dokumen puluhan halaman (seperti DHKP) secara instan tanpa membekukan UI.
 /// 4. **Validasi Keamanan & Mode Kotak Pasir (Sandboxed)**:
 ///    Verifikasi magic bytes `%PDF-`, batas ukuran 150 MB, dan perlindungan kunci aplikasi.
 class DocumentPreviewScreen extends StatefulWidget {
@@ -41,6 +44,76 @@ class DocumentPreviewScreen extends StatefulWidget {
          pdfBytes != null || pdfFile != null,
          'Salah satu dari pdfBytes atau pdfFile wajib disediakan.',
        );
+
+  /// Override khusus pengujian untuk mensimulasikan platform Desktop/Mobile.
+  @visibleForTesting
+  static bool? debugIsDesktopOverride;
+
+  /// Handler kustom khusus pengujian ketika mencetak langsung ke driver OS.
+  @visibleForTesting
+  static Future<void> Function(Uint8List pdfBytes, String fileName)?
+  debugPrintHandler;
+
+  /// Apakah aplikasi sedang berjalan pada perangkat Desktop (Windows, Linux, macOS).
+  static bool get isDesktop {
+    if (debugIsDesktopOverride != null) return debugIsDesktopOverride!;
+    return !kIsWeb &&
+        (Platform.isWindows || Platform.isLinux || Platform.isMacOS);
+  }
+
+  /// Pada PC/Desktop, langsung memanggil driver printer bawaan OS (`Printing.layoutPdf`)
+  /// tanpa membuka layar pratinjau terlebih dahulu agar petugas bisa langsung memilih
+  /// halaman tertentu, ukuran kertas, orientasi, dan fitur lengkap driver printer.
+  /// Pada perangkat Mobile (Android/iOS), membuka layar pratinjau dokumen PDF.
+  static Future<void> printOrPreview(
+    BuildContext context, {
+    required Uint8List pdfBytes,
+    required String fileName,
+    PdfPageFormat? format,
+  }) async {
+    if (isDesktop) {
+      if (debugPrintHandler != null) {
+        await debugPrintHandler!(pdfBytes, fileName);
+        return;
+      }
+      await Printing.layoutPdf(
+        onLayout: (_) async => pdfBytes,
+        name: fileName,
+        format: format ?? PdfPageFormat.standard,
+      );
+      return;
+    }
+    if (!context.mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => DocumentPreviewScreen(
+          pdfBytes: pdfBytes,
+          fileName: fileName,
+        ),
+      ),
+    );
+  }
+
+  /// Mengekstrak segmen teks terpetakan per kata/kolom pada halaman pertama PDF
+  /// untuk keperluan pengujian unit (`@visibleForTesting`).
+  @visibleForTesting
+  static List<({String text, Rect normalizedBounds})>
+  extractTightSelectableSpansForTest(Uint8List pdfBytes, {int pageIndex = 0}) {
+    final doc = sf.PdfDocument(inputBytes: pdfBytes);
+    try {
+      final pSize = doc.pages[pageIndex].size;
+      final lines = sf.PdfTextExtractor(doc).extractTextLines(
+        startPageIndex: pageIndex,
+        endPageIndex: pageIndex,
+      );
+      return _DocumentPreviewScreenState.buildTightSelectableSpans(
+        lines,
+        pSize,
+      );
+    } finally {
+      doc.dispose();
+    }
+  }
 
   /// Batas ukuran maksimal berkas PDF yang aman diproses dalam memori (150 MB).
   static const int maxSafePdfSizeBytes = 150 * 1024 * 1024;
@@ -189,7 +262,8 @@ class _PdfSearchMatch {
   });
 }
 
-/// Satu baris teks terpetakan koordinatnya pada halaman PDF untuk lapisan seleksi teks.
+/// Satu segmen teks/kata/kolom terpetakan koordinatnya secara presisi pada halaman PDF
+/// untuk lapisan seleksi teks langsung di atas kanvas (`SelectionArea`).
 class _PdfSelectableLine {
   final String text;
   final Rect normalizedBounds;
@@ -206,10 +280,6 @@ class _DocumentPreviewScreenState extends State<DocumentPreviewScreen>
   bool _isLoading = false;
   String? _errorMessage;
   bool _isFullscreen = false;
-
-  /// Mode seleksi teks aktif secara default agar teks pada halaman PDF dapat
-  /// langsung diblok/disalin seperti Google PDF Viewer / Camelot.
-  bool _isTextSelectionEnabled = true;
 
   final TransformationController _transformationController =
       TransformationController();
@@ -236,11 +306,9 @@ class _DocumentPreviewScreenState extends State<DocumentPreviewScreen>
   final ValueNotifier<double> _currentZoomScaleNotifier = ValueNotifier<double>(
     1.0,
   );
-  final ValueNotifier<String> _selectedCanvasTextNotifier =
-      ValueNotifier<String>('');
   Timer? _pageIndicatorTimer;
 
-  // Objek dokumen Syncfusion untuk ekstraksi teks & koordinat baris per halaman
+  // Objek dokumen Syncfusion untuk ekstraksi teks & koordinat kata/kolom per halaman
   sf.PdfDocument? _pdfDocument;
   final List<Size> _pageSizes = [];
   final Map<int, List<_PdfSelectableLine>> _pageSelectableLines = {};
@@ -316,8 +384,9 @@ class _DocumentPreviewScreenState extends State<DocumentPreviewScreen>
     }
   }
 
-  /// Mengekstrak teks dan koordinat baris per halaman secara bertahap (non-blocking)
-  /// agar pembukaan dokumen multi-halaman tetap instan dan mulus.
+  /// Mengekstrak teks dan koordinat kata/kolom per halaman secara bertahap (non-blocking)
+  /// agar seleksi teks langsung di atas kanvas PDF akurat sesuai posisi kolom/kata
+  /// dan pembukaan dokumen multi-halaman tetap instan.
   Future<void> _extractDocumentTextAsync() async {
     final bytes = _loadedBytes;
     if (bytes == null) return;
@@ -356,21 +425,7 @@ class _DocumentPreviewScreenState extends State<DocumentPreviewScreen>
               startPageIndex: i,
               endPageIndex: i,
             );
-            final mapped = <_PdfSelectableLine>[];
-            for (final line in lines) {
-              final clean = line.text.trim();
-              if (clean.isEmpty || line.bounds.width <= 0 || line.bounds.height <= 0) {
-                continue;
-              }
-              final norm = Rect.fromLTWH(
-                (line.bounds.left / pSize.width).clamp(0.0, 0.99),
-                (line.bounds.top / pSize.height).clamp(0.0, 0.99),
-                (line.bounds.width / pSize.width).clamp(0.01, 1.0),
-                (line.bounds.height / pSize.height).clamp(0.008, 1.0),
-              );
-              mapped.add(_PdfSelectableLine(text: clean, normalizedBounds: norm));
-            }
-            _pageSelectableLines[i] = mapped;
+            _pageSelectableLines[i] = _buildTightSelectableSpans(lines, pSize);
           } catch (_) {
             // Abaikan bila halaman tertentu gagal diekstrak koordinat barisnya.
           }
@@ -387,6 +442,90 @@ class _DocumentPreviewScreenState extends State<DocumentPreviewScreen>
     } catch (e) {
       debugPrint('Gagal mengekstrak teks PDF: $e');
     }
+  }
+
+  static List<({String text, Rect normalizedBounds})>
+  buildTightSelectableSpans(List<sf.TextLine> lines, Size pSize) {
+    final mapped = <({String text, Rect normalizedBounds})>[];
+
+    void addNormalizedSpan(String text, Rect bounds) {
+      final clean = text.trim();
+      if (clean.isEmpty || bounds.width <= 0 || bounds.height <= 0) return;
+      final norm = Rect.fromLTWH(
+        (bounds.left / pSize.width).clamp(0.0, 0.995),
+        (bounds.top / pSize.height).clamp(0.0, 0.995),
+        (bounds.width / pSize.width).clamp(0.004, 1.0),
+        (bounds.height / pSize.height).clamp(0.005, 1.0),
+      );
+      mapped.add((text: clean, normalizedBounds: norm));
+    }
+
+    for (final line in lines) {
+      final lineClean = line.text.trim();
+      if (lineClean.isEmpty ||
+          line.bounds.width <= 0 ||
+          line.bounds.height <= 0) {
+        continue;
+      }
+
+      final words = line.wordCollection;
+      if (words.isEmpty) {
+        addNormalizedSpan(lineClean, line.bounds);
+        continue;
+      }
+
+      final validWords = <sf.TextWord>[
+        for (final w in words)
+          if (w.text.trim().isNotEmpty &&
+              w.bounds.width > 0 &&
+              w.bounds.height > 0)
+            w,
+      ];
+
+      if (validWords.isEmpty) {
+        addNormalizedSpan(lineClean, line.bounds);
+        continue;
+      }
+
+      final sb = StringBuffer(validWords.first.text.trim());
+      Rect groupBounds = validWords.first.bounds;
+
+      for (int wIdx = 1; wIdx < validWords.length; wIdx++) {
+        final w = validWords[wIdx];
+        final wText = w.text.trim();
+        final horizontalGap = w.bounds.left - groupBounds.right;
+        final maxWordSpaceGap = math.max(6.5, groupBounds.height * 0.75);
+        final sameBaseline =
+            (w.bounds.top - groupBounds.top).abs() <= groupBounds.height * 0.65;
+
+        if (horizontalGap >= -2.0 &&
+            horizontalGap <= maxWordSpaceGap &&
+            sameBaseline) {
+          sb.write(' ');
+          sb.write(wText);
+          groupBounds = groupBounds.expandToInclude(w.bounds);
+        } else {
+          addNormalizedSpan(sb.toString(), groupBounds);
+          sb
+            ..clear()
+            ..write(wText);
+          groupBounds = w.bounds;
+        }
+      }
+      addNormalizedSpan(sb.toString(), groupBounds);
+    }
+
+    return mapped;
+  }
+
+  List<_PdfSelectableLine> _buildTightSelectableSpans(
+    List<sf.TextLine> lines,
+    Size pSize,
+  ) {
+    return [
+      for (final s in buildTightSelectableSpans(lines, pSize))
+        _PdfSelectableLine(text: s.text, normalizedBounds: s.normalizedBounds),
+    ];
   }
 
   void _onTransformationChanged() {
@@ -656,215 +795,6 @@ class _DocumentPreviewScreenState extends State<DocumentPreviewScreen>
     }
   }
 
-  Future<void> _copyToClipboard(String text, {String? label}) async {
-    final clean = text.trim();
-    if (clean.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Tidak ada teks pada halaman ini yang dapat disalin.'),
-        ),
-      );
-      return;
-    }
-    await Clipboard.setData(ClipboardData(text: clean));
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(label ?? 'Teks berhasil disalin ke papan klip.'),
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 2),
-      ),
-    );
-  }
-
-  /// Menampilkan lembar bawah (Bottom Sheet) gaya Google PDF / Camelot untuk
-  /// menyalin teks per halaman, seluruh dokumen, maupun menyalin NOP 18-digit
-  /// yang terdeteksi secara otomatis dengan 1 ketukan.
-  Future<void> _showCopyTextSheet() async {
-    final currentPage = _currentPageNotifier.value;
-    final int pageIdx = (currentPage - 1)
-        .clamp(0, math.max(0, _pageTexts.length - 1))
-        .toInt();
-    final pageText = pageIdx < _pageTexts.length ? _pageTexts[pageIdx].trim() : '';
-    final allText = _pageTexts.where((t) => t.trim().isNotEmpty).join('\n\n--- Halaman Berikutnya ---\n\n').trim();
-
-    // Deteksi NOP 18 digit (baik berformat titik/strip maupun angka bersambung) pada halaman aktif
-    final nopRegex = RegExp(
-      r'\b(?:\d{2}[.\-\s]?\d{2}[.\-\s]?\d{3}[.\-\s]?\d{3}[.\-\s]?\d{3}[.\-\s]?\d{4}[.\-\s]?\d|\d{18})\b',
-    );
-    final detectedNops = <String>{};
-    for (final m in nopRegex.allMatches(pageText)) {
-      final raw = m.group(0) ?? '';
-      final digits = raw.replaceAll(RegExp(r'[^0-9]'), '');
-      if (digits.length == 18) {
-        detectedNops.add(digits);
-      }
-    }
-
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      showDragHandle: true,
-      builder: (ctx) {
-        final theme = Theme.of(ctx);
-        return DraggableScrollableSheet(
-          expand: false,
-          initialChildSize: 0.68,
-          minChildSize: 0.4,
-          maxChildSize: 0.92,
-          builder: (ctx, scrollController) {
-            return Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.copy_all_rounded,
-                        color: theme.colorScheme.primary,
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Pilih & Salin Teks (Halaman $currentPage)',
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            Text(
-                              'Blok sebagian teks di bawah atau gunakan tombol salin cepat.',
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      FilledButton.icon(
-                        onPressed: pageText.isEmpty
-                            ? null
-                            : () {
-                                Navigator.pop(ctx);
-                                _copyToClipboard(
-                                  pageText,
-                                  label:
-                                      'Seluruh teks Halaman $currentPage disalin ke papan klip.',
-                                );
-                              },
-                        icon: const Icon(Icons.content_copy, size: 18),
-                        label: Text('Salin Halaman $currentPage'),
-                      ),
-                      if (_pageTexts.length > 1)
-                        OutlinedButton.icon(
-                          onPressed: allText.isEmpty
-                              ? null
-                              : () {
-                                  Navigator.pop(ctx);
-                                  _copyToClipboard(
-                                    allText,
-                                    label:
-                                        'Seluruh teks dokumen (${_pageTexts.length} halaman) disalin.',
-                                  );
-                                },
-                          icon: const Icon(Icons.library_books_outlined, size: 18),
-                          label: Text('Salin Semua (${_pageTexts.length} Hal)'),
-                        ),
-                    ],
-                  ),
-                  if (detectedNops.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    Text(
-                      'NOP Terdeteksi di Halaman Ini (Ketuk untuk Menyalin):',
-                      style: theme.textTheme.labelMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: theme.colorScheme.primary,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    SizedBox(
-                      height: 38,
-                      child: ListView.separated(
-                        scrollDirection: Axis.horizontal,
-                        itemCount: detectedNops.length,
-                        separatorBuilder: (_, _) => const SizedBox(width: 8),
-                        itemBuilder: (context, index) {
-                          final nop = detectedNops.elementAt(index);
-                          return ActionChip(
-                            avatar: const Icon(Icons.copy, size: 15),
-                            label: Text(
-                              nop,
-                              style: const TextStyle(
-                                fontFamily: 'monospace',
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            onPressed: () {
-                              _copyToClipboard(
-                                nop,
-                                label: 'NOP $nop disalin ke papan klip.',
-                              );
-                            },
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 12),
-                  Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.surfaceContainerLowest,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: theme.colorScheme.outlineVariant,
-                        ),
-                      ),
-                      child: pageText.isEmpty
-                          ? const Center(
-                              child: Text(
-                                'Halaman ini berupa gambar pindaian atau belum memiliki lapisan teks yang dapat diekstrak.',
-                                textAlign: TextAlign.center,
-                              ),
-                            )
-                          : Scrollbar(
-                              controller: scrollController,
-                              thumbVisibility: true,
-                              child: SingleChildScrollView(
-                                controller: scrollController,
-                                child: SelectableText(
-                                  pageText,
-                                  style: const TextStyle(
-                                    fontFamily: 'monospace',
-                                    fontSize: 13,
-                                    height: 1.5,
-                                  ),
-                                ),
-                              ),
-                            ),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
   void _openSearch() {
     setState(() {
       _isSearchOpen = true;
@@ -1046,6 +976,13 @@ class _DocumentPreviewScreenState extends State<DocumentPreviewScreen>
 
   Future<void> _printDocument() async {
     if (_loadedBytes != null) {
+      if (DocumentPreviewScreen.debugPrintHandler != null) {
+        await DocumentPreviewScreen.debugPrintHandler!(
+          _loadedBytes!,
+          widget.fileName,
+        );
+        return;
+      }
       await Printing.layoutPdf(
         onLayout: (_) => _loadedBytes!,
         name: widget.fileName,
@@ -1080,7 +1017,6 @@ class _DocumentPreviewScreenState extends State<DocumentPreviewScreen>
     _isDraggingScrollbarNotifier.dispose();
     _isZoomedNotifier.dispose();
     _currentZoomScaleNotifier.dispose();
-    _selectedCanvasTextNotifier.dispose();
     _transformationController.dispose();
     _pageScrollController.dispose();
     _searchController.dispose();
@@ -1125,6 +1061,10 @@ class _DocumentPreviewScreenState extends State<DocumentPreviewScreen>
               _resetZoom,
           const SingleActivator(LogicalKeyboardKey.keyF, control: true):
               _openSearch,
+          const SingleActivator(LogicalKeyboardKey.keyP, control: true):
+              _printDocument,
+          const SingleActivator(LogicalKeyboardKey.keyP, meta: true):
+              _printDocument,
           const SingleActivator(LogicalKeyboardKey.escape): () {
             if (_isSearchOpen) {
               _closeSearch();
@@ -1219,18 +1159,13 @@ class _DocumentPreviewScreenState extends State<DocumentPreviewScreen>
                               onPressed: _openSearch,
                             ),
                             IconButton(
-                              icon: const Icon(Icons.copy_all_rounded),
-                              tooltip: 'Pilih & Salin Teks / NOP',
-                              onPressed: _showCopyTextSheet,
-                            ),
-                            IconButton(
                               icon: const Icon(Icons.download_outlined),
                               tooltip: 'Unduh PDF',
                               onPressed: () => _download(context),
                             ),
                             IconButton(
                               icon: const Icon(Icons.print_outlined),
-                              tooltip: 'Cetak',
+                              tooltip: 'Cetak (Ctrl+P)',
                               onPressed: _printDocument,
                             ),
                             PopupMenuButton<String>(
@@ -1238,15 +1173,6 @@ class _DocumentPreviewScreenState extends State<DocumentPreviewScreen>
                               tooltip: 'Menu Lainnya',
                               onSelected: (val) async {
                                 switch (val) {
-                                  case 'toggle_selection':
-                                    setState(() {
-                                      _isTextSelectionEnabled =
-                                          !_isTextSelectionEnabled;
-                                    });
-                                    break;
-                                  case 'copy_sheet':
-                                    await _showCopyTextSheet();
-                                    break;
                                   case 'fullscreen':
                                     _toggleFullscreen();
                                     break;
@@ -1277,31 +1203,6 @@ class _DocumentPreviewScreenState extends State<DocumentPreviewScreen>
                                 }
                               },
                               itemBuilder: (context) => [
-                                PopupMenuItem(
-                                  value: 'toggle_selection',
-                                  child: Row(
-                                    children: [
-                                      Icon(
-                                        _isTextSelectionEnabled
-                                            ? Icons.check_box_outlined
-                                            : Icons.check_box_outline_blank,
-                                        size: 20,
-                                      ),
-                                      const SizedBox(width: 12),
-                                      const Text('Seleksi Teks di Kanvas PDF'),
-                                    ],
-                                  ),
-                                ),
-                                const PopupMenuItem(
-                                  value: 'copy_sheet',
-                                  child: Row(
-                                    children: [
-                                      Icon(Icons.copy_all_rounded, size: 20),
-                                      SizedBox(width: 12),
-                                      Text('Panel Salin Teks & NOP'),
-                                    ],
-                                  ),
-                                ),
                                 const PopupMenuItem(
                                   value: 'fullscreen',
                                   child: Row(
@@ -1405,160 +1306,91 @@ class _DocumentPreviewScreenState extends State<DocumentPreviewScreen>
                     ),
                   )
                 else if (_loadedBytes != null)
-                  PdfPreview.builder(
-                    build: (format) async => _loadedBytes!,
-                    useActions: false,
-                    dpi: 170,
-                    loadingWidget: const Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          CircularProgressIndicator(),
-                          SizedBox(height: 16),
-                          Text('Menyiapkan pratinjau dokumen...'),
-                        ],
+                  SelectionArea(
+                    child: PdfPreview.builder(
+                      build: (format) async => _loadedBytes!,
+                      useActions: false,
+                      dpi: 170,
+                      loadingWidget: const Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            CircularProgressIndicator(),
+                            SizedBox(height: 16),
+                            Text('Menyiapkan pratinjau dokumen...'),
+                          ],
+                        ),
                       ),
-                    ),
-                    scrollViewDecoration: BoxDecoration(
-                      color: isDark
-                          ? const Color(0xFF16181A)
-                          : const Color(0xFF323639), // Warna kanvas Google PDF Viewer
-                    ),
-                    pagesBuilder: (context, pages) {
-                      if (_totalPagesNotifier.value != pages.length &&
-                          pages.isNotEmpty) {
-                        WidgetsBinding.instance.addPostFrameCallback((_) {
-                          if (mounted) {
-                            _totalPagesNotifier.value = pages.length;
-                          }
-                        });
-                      }
-                      while (_pageKeys.length < pages.length) {
-                        _pageKeys.add(GlobalKey());
-                      }
+                      scrollViewDecoration: BoxDecoration(
+                        color: isDark
+                            ? const Color(0xFF16181A)
+                            : const Color(0xFF323639), // Warna kanvas Google PDF Viewer
+                      ),
+                      pagesBuilder: (context, pages) {
+                        if (_totalPagesNotifier.value != pages.length &&
+                            pages.isNotEmpty) {
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            if (mounted) {
+                              _totalPagesNotifier.value = pages.length;
+                            }
+                          });
+                        }
+                        while (_pageKeys.length < pages.length) {
+                          _pageKeys.add(GlobalKey());
+                        }
 
-                      final viewerContent = Listener(
-                        behavior: HitTestBehavior.translucent,
-                        onPointerSignal: _handlePointerSignal,
-                        child: GestureDetector(
-                          onDoubleTapDown: (details) {
-                            _doubleTapLocalPosition = details.localPosition;
-                          },
-                          onDoubleTap: _handleDoubleTap,
-                          child: ValueListenableBuilder<bool>(
-                            valueListenable: _isZoomedNotifier,
-                            builder: (context, isZoomed, _) {
-                              return InteractiveViewer(
-                                transformationController:
-                                    _transformationController,
-                                minScale: 0.8,
-                                maxScale: 6.0,
-                                scaleFactor: double.maxFinite,
-                                panEnabled: isZoomed,
-                                boundaryMargin: EdgeInsets.zero,
-                                child: Center(
-                                  child: ConstrainedBox(
-                                    constraints: const BoxConstraints(
-                                      maxWidth: 960,
-                                    ),
-                                    child: SingleChildScrollView(
-                                      controller: _pageScrollController,
-                                      physics: const DesktopPdfScrollPhysics(),
-                                      padding: const EdgeInsets.only(
-                                        top: 16,
-                                        bottom: 96,
+                        return Listener(
+                          behavior: HitTestBehavior.translucent,
+                          onPointerSignal: _handlePointerSignal,
+                          child: GestureDetector(
+                            onDoubleTapDown: (details) {
+                              _doubleTapLocalPosition = details.localPosition;
+                            },
+                            onDoubleTap: _handleDoubleTap,
+                            child: ValueListenableBuilder<bool>(
+                              valueListenable: _isZoomedNotifier,
+                              builder: (context, isZoomed, _) {
+                                return InteractiveViewer(
+                                  transformationController:
+                                      _transformationController,
+                                  minScale: 0.8,
+                                  maxScale: 6.0,
+                                  scaleFactor: double.maxFinite,
+                                  panEnabled: isZoomed,
+                                  boundaryMargin: EdgeInsets.zero,
+                                  child: Center(
+                                    child: ConstrainedBox(
+                                      constraints: const BoxConstraints(
+                                        maxWidth: 960,
                                       ),
-                                      child: Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          for (int i = 0; i < pages.length; i++)
-                                            _buildPageItem(pages[i], i),
-                                        ],
+                                      child: SingleChildScrollView(
+                                        controller: _pageScrollController,
+                                        physics: const DesktopPdfScrollPhysics(),
+                                        padding: const EdgeInsets.only(
+                                          top: 16,
+                                          bottom: 96,
+                                        ),
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            for (int i = 0; i < pages.length; i++)
+                                              _buildPageItem(pages[i], i),
+                                          ],
+                                        ),
                                       ),
                                     ),
                                   ),
-                                ),
-                              );
-                            },
+                                );
+                              },
+                            ),
                           ),
-                        ),
-                      );
-
-                      if (!_isTextSelectionEnabled) {
-                        return viewerContent;
-                      }
-
-                      return SelectionArea(
-                        onSelectionChanged: (content) {
-                          _selectedCanvasTextNotifier.value =
-                              content?.plainText.trim() ?? '';
-                        },
-                        child: viewerContent,
-                      );
-                    },
+                        );
+                      },
+                    ),
                   ),
 
                 // Scrubber / Fast-Scroll Thumb di tepi kanan bergaya Camelot (Google PDF)
                 _buildCamelotFastScrollbar(context),
-
-                // Tombol cepat "Salin Teks Terpilih" saat pengguna memblok teks di kanvas PDF
-                ValueListenableBuilder<String>(
-                  valueListenable: _selectedCanvasTextNotifier,
-                  builder: (context, selectedText, _) {
-                    if (selectedText.isEmpty) return const SizedBox.shrink();
-                    return Positioned(
-                      left: 16,
-                      right: 16,
-                      bottom: 84,
-                      child: Center(
-                        child: Material(
-                          elevation: 6,
-                          borderRadius: BorderRadius.circular(28),
-                          color: theme.colorScheme.primary,
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(28),
-                            onTap: () {
-                              _copyToClipboard(
-                                selectedText,
-                                label:
-                                    'Teks terpilih (${selectedText.length} karakter) disalin.',
-                              );
-                            },
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 10,
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    Icons.copy_rounded,
-                                    size: 18,
-                                    color: theme.colorScheme.onPrimary,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Flexible(
-                                    child: Text(
-                                      'Salin Teks: "${selectedText.replaceAll('\n', ' ')}"',
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        color: theme.colorScheme.onPrimary,
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 13,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
 
                 // Banner hasil pencarian mengambang di bawah
                 if (_isSearchOpen && _matches.isNotEmpty)
@@ -1838,8 +1670,7 @@ class _DocumentPreviewScreenState extends State<DocumentPreviewScreen>
   }
 
   /// Bilah kontrol melayang di bagian bawah ala Google Drive PDF Viewer:
-  /// Menyediakan navigasi halaman (◀ Hal X/Y ▶), kontrol Zoom (- 100% +),
-  /// dan tombol cepat "Salin Teks".
+  /// Menyediakan navigasi halaman (◀ Hal X/Y ▶) dan kontrol Zoom (- 100% +).
   Widget _buildGooglePdfBottomDock(BuildContext context) {
     final theme = Theme.of(context);
     return Positioned(
@@ -1949,28 +1780,6 @@ class _DocumentPreviewScreenState extends State<DocumentPreviewScreen>
                     tooltip: 'Perbesar (Ctrl++)',
                     onPressed: _zoomIn,
                   ),
-                  const SizedBox(
-                    height: 20,
-                    child: VerticalDivider(width: 12),
-                  ),
-                  TextButton.icon(
-                    style: TextButton.styleFrom(
-                      visualDensity: VisualDensity.compact,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 6,
-                      ),
-                    ),
-                    onPressed: _showCopyTextSheet,
-                    icon: const Icon(Icons.copy_all_rounded, size: 17),
-                    label: const Text(
-                      'Salin Teks',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
                 ],
               ),
             ),
@@ -2027,9 +1836,9 @@ class _DocumentPreviewScreenState extends State<DocumentPreviewScreen>
                     height: renderHeight,
                   ),
                 ),
-                // Lapisan teks transparan terpetakan koordinatnya agar dapat diblok/disalin
-                // langsung di atas halaman PDF seperti Google PDF Viewer / Camelot.
-                if (_isTextSelectionEnabled && selectableLines.isNotEmpty)
+                // Lapisan teks transparan terpetakan koordinatnya per kata/kolom
+                // agar dapat langsung diblok/disalin di atas halaman PDF.
+                if (selectableLines.isNotEmpty)
                   Positioned.fill(
                     child: Stack(
                       children: [
@@ -2072,8 +1881,8 @@ class _DocumentPreviewScreenState extends State<DocumentPreviewScreen>
     final norm = line.normalizedBounds;
     final left = norm.left * renderWidth;
     final top = norm.top * renderHeight;
-    final width = math.max(8.0, norm.width * renderWidth);
-    final height = math.max(6.0, norm.height * renderHeight);
+    final width = math.max(4.0, norm.width * renderWidth);
+    final height = math.max(5.0, norm.height * renderHeight);
 
     return Positioned(
       left: left,

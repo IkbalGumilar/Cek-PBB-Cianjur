@@ -27,7 +27,10 @@ class StatusBayarResultCard extends StatelessWidget {
 
   bool get _isPaid => result.status.startsWith('Sudah Bayar');
 
-  Future<void> _previewBuktiBayar(BuildContext context) async {
+  Future<void> _previewBuktiBayar(
+    BuildContext context, {
+    bool directPrint = false,
+  }) async {
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -39,13 +42,21 @@ class StatusBayarResultCard extends StatelessWidget {
       Navigator.pop(context);
       final fileName =
           'Bukti Bayar (${result.namaWajibPajak ?? nop}) No. (${nopBlok(nop)}) (${nopWilayah(nop)}) ($tahun).pdf';
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) =>
-              DocumentPreviewScreen(pdfBytes: bytes, fileName: fileName),
-        ),
-      );
+      if (directPrint) {
+        await DocumentPreviewScreen.printOrPreview(
+          context,
+          pdfBytes: bytes,
+          fileName: fileName,
+        );
+      } else {
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) =>
+                DocumentPreviewScreen(pdfBytes: bytes, fileName: fileName),
+          ),
+        );
+      }
     } catch (e) {
       if (!context.mounted) return;
       Navigator.pop(context);
@@ -84,12 +95,19 @@ class StatusBayarResultCard extends StatelessWidget {
                 ),
               ),
             ),
-            if (_isPaid)
+            if (_isPaid) ...[
+              IconButton(
+                onPressed: () =>
+                    _previewBuktiBayar(context, directPrint: true),
+                icon: const Icon(Icons.print_outlined),
+                tooltip: 'Cetak Bukti Bayar',
+              ),
               IconButton(
                 onPressed: () => _previewBuktiBayar(context),
                 icon: const Icon(Icons.visibility),
                 tooltip: 'Detail',
               ),
+            ],
           ],
         ),
       ),
@@ -254,12 +272,10 @@ class TagihanResultCard extends StatelessWidget {
       Navigator.pop(context);
       final fileName =
           'Tagihan PBB (${result.namaWajibPajak}) No. (${nopBlok(nop)}) (${nopWilayah(nop)}).pdf';
-      Navigator.push(
+      await DocumentPreviewScreen.printOrPreview(
         context,
-        MaterialPageRoute(
-          builder: (_) =>
-              DocumentPreviewScreen(pdfBytes: bytes, fileName: fileName),
-        ),
+        pdfBytes: bytes,
+        fileName: fileName,
       );
     } catch (e) {
       if (!context.mounted) return;

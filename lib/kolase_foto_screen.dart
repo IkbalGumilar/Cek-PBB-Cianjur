@@ -1,7 +1,7 @@
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:printing/printing.dart';
 
 import 'blok_data_store.dart';
@@ -341,243 +341,259 @@ class _KolaseFotoScreenState extends State<KolaseFotoScreen> {
       blok: _selectedBlok == 'Semua' ? null : _selectedBlok,
     );
 
-    return Scaffold(
-      backgroundColor: const Color(
-        0xFF1E1E1E,
-      ), // Dark theme canvas seperti screenshot
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF262626),
-        foregroundColor: Colors.white,
-        elevation: 0,
-        title: const Text(
-          'Gabungkan Beberapa Gambar',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-        ),
-        actions: [
-          // Filter Wilayah / Blok
-          PopupMenuButton<String>(
-            key: _filterBlokKey,
-            tooltip: 'Pilih Cakupan Blok / Wilayah',
-            icon: const Icon(Icons.filter_list_rounded),
-            initialValue: _selectedBlok,
-            onSelected: (val) {
-              if (val != _selectedBlok) {
-                setState(() => _selectedBlok = val);
-                _loadPhotos();
-              }
-            },
-            itemBuilder: (ctx) => [
-              const PopupMenuItem(
-                value: 'Semua',
-                child: Text('Semua Blok (1 Wilayah Full)'),
+    return CallbackShortcuts(
+      bindings: <ShortcutActivator, VoidCallback>{
+        const SingleActivator(LogicalKeyboardKey.keyP, control: true):
+            _cetakLangsung,
+        const SingleActivator(LogicalKeyboardKey.keyP, meta: true):
+            _cetakLangsung,
+      },
+      child: Focus(
+        autofocus: true,
+        child: Scaffold(
+          backgroundColor: const Color(
+            0xFF1E1E1E,
+          ), // Dark theme canvas seperti screenshot
+          appBar: AppBar(
+            backgroundColor: const Color(0xFF262626),
+            foregroundColor: Colors.white,
+            elevation: 0,
+            title: const Text(
+              'Gabungkan Beberapa Gambar',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+            ),
+            actions: [
+              // Filter Wilayah / Blok
+              PopupMenuButton<String>(
+                key: _filterBlokKey,
+                tooltip: 'Pilih Cakupan Blok / Wilayah',
+                icon: const Icon(Icons.filter_list_rounded),
+                initialValue: _selectedBlok,
+                onSelected: (val) {
+                  if (val != _selectedBlok) {
+                    setState(() => _selectedBlok = val);
+                    _loadPhotos();
+                  }
+                },
+                itemBuilder: (ctx) => [
+                  const PopupMenuItem(
+                    value: 'Semua',
+                    child: Text('Semua Blok (1 Wilayah Full)'),
+                  ),
+                  const PopupMenuDivider(),
+                  for (final b in widget.bloks)
+                    PopupMenuItem(value: b, child: Text('Blok $b')),
+                ],
               ),
-              const PopupMenuDivider(),
-              for (final b in widget.bloks)
-                PopupMenuItem(value: b, child: Text('Blok $b')),
+              IconButton(
+                icon: const Icon(Icons.refresh),
+                tooltip: 'Muat Ulang Foto Dokumentasi',
+                onPressed: _busyExport ? null : _loadPhotos,
+              ),
+              FeatureTourHelpButton(onPressed: showTour, color: Colors.white),
             ],
           ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            tooltip: 'Muat Ulang Foto Dokumentasi',
-            onPressed: _busyExport ? null : _loadPhotos,
-          ),
-          FeatureTourHelpButton(onPressed: showTour, color: Colors.white),
-        ],
-      ),
-      body: Column(
-        children: [
-          // Sub-header informasi cakupan & jumlah foto
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            color: const Color(0xFF2B2B2B),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    _selectedBlok == 'Semua'
-                        ? '1 Wilayah Full (Semua Blok)'
-                        : 'Wilayah: Blok $_selectedBlok',
-                    style: const TextStyle(
-                      color: Colors.white70,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
+          body: Column(
+            children: [
+              // Sub-header informasi cakupan & jumlah foto
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 3,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.teal.shade900,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    '${_photoBytes.length} Foto • Kertas F4',
-                    style: TextStyle(
-                      color: Colors.teal.shade200,
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          SmoothActivityBanner(
-            isActive: _busyExport,
-            message: _busyExportMessage,
-            icon: Icons.picture_as_pdf_outlined,
-            accentColor: Colors.tealAccent.shade700,
-            margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-          ),
-
-          // Area Canvas Preview (Kertas F4 di background gelap)
-          Expanded(
-            key: _previewCanvasKey,
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 350),
-              switchInCurve: Curves.easeOutCubic,
-              switchOutCurve: Curves.easeInCubic,
-              child: _loading
-                  ? const SmoothLoadingCard(
-                      key: ValueKey('kolase-loading'),
-                      isDarkCanvas: true,
-                      icon: Icons.auto_awesome_mosaic_outlined,
-                      title: 'Memuat Gambar Dokumentasi',
-                      subtitle:
-                          'Menyiapkan & memotong gambar dokumentasi ke rasio persegi 1:1...',
-                      badgeText: 'Memuat gambar dokumentasi',
-                    )
-                  : _photoBytes.isEmpty
-                  ? Center(
-                      key: const ValueKey('kolase-empty'),
-                      child: Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.photo_library_outlined,
-                              size: 64,
-                              color: Colors.grey.shade600,
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              _selectedBlok == 'Semua'
-                                  ? 'Belum ada foto dokumentasi di semua blok.'
-                                  : 'Belum ada foto dokumentasi di Blok $_selectedBlok.',
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 15,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            const Text(
-                              'Kolase memuat gambar dokumentasi petugas yang diambil di daftar catatan blok.',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: Colors.white70,
-                                fontSize: 13,
-                              ),
-                            ),
-                            const SizedBox(height: 20),
-                            OutlinedButton.icon(
-                              onPressed: _loadPhotos,
-                              icon: const Icon(
-                                Icons.refresh,
-                                color: Colors.tealAccent,
-                              ),
-                              label: const Text(
-                                'Muat Ulang Foto',
-                                style: TextStyle(color: Colors.white),
-                              ),
-                              style: OutlinedButton.styleFrom(
-                                side: const BorderSide(color: Colors.teal),
-                              ),
-                            ),
-                          ],
+                color: const Color(0xFF2B2B2B),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        _selectedBlok == 'Semua'
+                            ? '1 Wilayah Full (Semua Blok)'
+                            : 'Wilayah: Blok $_selectedBlok',
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
-                    )
-                  : Column(
-                      key: const ValueKey('kolase-content'),
-                      children: [
-                        Expanded(
-                          child: PageView.builder(
-                            controller: _pageController,
-                            itemCount: totalPages,
-                            onPageChanged: (idx) {
-                              setState(() => _currentPreviewPage = idx);
-                            },
-                            itemBuilder: (context, pageIdx) {
-                              return _buildF4PagePreview(
-                                pageIndex: pageIdx,
-                                totalPages: totalPages,
-                                judul: judul,
-                              );
-                            },
-                          ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.teal.shade900,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        '${_photoBytes.length} Foto • Kertas F4',
+                        style: TextStyle(
+                          color: Colors.teal.shade200,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
                         ),
-                        // Indikator Halaman
-                        if (totalPages > 1)
-                          Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 4),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              SmoothActivityBanner(
+                isActive: _busyExport,
+                message: _busyExportMessage,
+                icon: Icons.picture_as_pdf_outlined,
+                accentColor: Colors.tealAccent.shade700,
+                margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+              ),
+
+              // Area Canvas Preview (Kertas F4 di background gelap)
+              Expanded(
+                key: _previewCanvasKey,
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 350),
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeInCubic,
+                  child: _loading
+                      ? const SmoothLoadingCard(
+                          key: ValueKey('kolase-loading'),
+                          isDarkCanvas: true,
+                          icon: Icons.auto_awesome_mosaic_outlined,
+                          title: 'Memuat Gambar Dokumentasi',
+                          subtitle:
+                              'Menyiapkan & memotong gambar dokumentasi ke rasio persegi 1:1...',
+                          badgeText: 'Memuat gambar dokumentasi',
+                        )
+                      : _photoBytes.isEmpty
+                      ? Center(
+                          key: const ValueKey('kolase-empty'),
+                          child: Padding(
+                            padding: const EdgeInsets.all(24),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
                               children: [
-                                IconButton(
-                                  icon: const Icon(
-                                    Icons.chevron_left,
-                                    color: Colors.white70,
-                                  ),
-                                  onPressed: _currentPreviewPage > 0
-                                      ? () => _pageController.previousPage(
-                                          duration: const Duration(
-                                            milliseconds: 300,
-                                          ),
-                                          curve: Curves.easeInOut,
-                                        )
-                                      : null,
+                                Icon(
+                                  Icons.photo_library_outlined,
+                                  size: 64,
+                                  color: Colors.grey.shade600,
                                 ),
+                                const SizedBox(height: 16),
                                 Text(
-                                  'Halaman ${_currentPreviewPage + 1} dari $totalPages',
+                                  _selectedBlok == 'Semua'
+                                      ? 'Belum ada foto dokumentasi di semua blok.'
+                                      : 'Belum ada foto dokumentasi di Blok $_selectedBlok.',
+                                  textAlign: TextAlign.center,
                                   style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                const Text(
+                                  'Kolase memuat gambar dokumentasi petugas yang diambil di daftar catatan blok.',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
                                     color: Colors.white70,
                                     fontSize: 13,
-                                    fontWeight: FontWeight.w500,
                                   ),
                                 ),
-                                IconButton(
+                                const SizedBox(height: 20),
+                                OutlinedButton.icon(
+                                  onPressed: _loadPhotos,
                                   icon: const Icon(
-                                    Icons.chevron_right,
-                                    color: Colors.white70,
+                                    Icons.refresh,
+                                    color: Colors.tealAccent,
                                   ),
-                                  onPressed:
-                                      _currentPreviewPage < totalPages - 1
-                                      ? () => _pageController.nextPage(
-                                          duration: const Duration(
-                                            milliseconds: 300,
-                                          ),
-                                          curve: Curves.easeInOut,
-                                        )
-                                      : null,
+                                  label: const Text(
+                                    'Muat Ulang Foto',
+                                    style: TextStyle(color: Colors.white),
+                                  ),
+                                  style: OutlinedButton.styleFrom(
+                                    side: const BorderSide(color: Colors.teal),
+                                  ),
                                 ),
                               ],
                             ),
                           ),
-                      ],
-                    ),
-            ),
-          ),
+                        )
+                      : Column(
+                          key: const ValueKey('kolase-content'),
+                          children: [
+                            Expanded(
+                              child: PageView.builder(
+                                controller: _pageController,
+                                itemCount: totalPages,
+                                onPageChanged: (idx) {
+                                  setState(() => _currentPreviewPage = idx);
+                                },
+                                itemBuilder: (context, pageIdx) {
+                                  return _buildF4PagePreview(
+                                    pageIndex: pageIdx,
+                                    totalPages: totalPages,
+                                    judul: judul,
+                                  );
+                                },
+                              ),
+                            ),
+                            // Indikator Halaman
+                            if (totalPages > 1)
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 4,
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    IconButton(
+                                      icon: const Icon(
+                                        Icons.chevron_left,
+                                        color: Colors.white70,
+                                      ),
+                                      onPressed: _currentPreviewPage > 0
+                                          ? () => _pageController.previousPage(
+                                              duration: const Duration(
+                                                milliseconds: 300,
+                                              ),
+                                              curve: Curves.easeInOut,
+                                            )
+                                          : null,
+                                    ),
+                                    Text(
+                                      'Halaman ${_currentPreviewPage + 1} dari $totalPages',
+                                      style: const TextStyle(
+                                        color: Colors.white70,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(
+                                        Icons.chevron_right,
+                                        color: Colors.white70,
+                                      ),
+                                      onPressed:
+                                          _currentPreviewPage < totalPages - 1
+                                          ? () => _pageController.nextPage(
+                                              duration: const Duration(
+                                                milliseconds: 300,
+                                              ),
+                                              curve: Curves.easeInOut,
+                                            )
+                                          : null,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                          ],
+                        ),
+                ),
+              ),
 
-          // Bagian Bawah: Selector Template Grid & Action Bar
-          _buildBottomToolbar(),
-        ],
+              // Bagian Bawah: Selector Template Grid & Action Bar
+              _buildBottomToolbar(),
+            ],
+          ),
+        ),
       ),
     );
   }

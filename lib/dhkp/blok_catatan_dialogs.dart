@@ -1292,11 +1292,13 @@ Future<OpsiEksporResult?> showPilihOpsiEksporDialog(
   required String actionButtonLabel,
   required IconData actionIcon,
   bool fixedPdf = false,
+  bool initialSertakanNihil = true,
 }) {
   String currentBlok = (selectedBlok != null && selectedBlok != semuaBlokValue)
       ? selectedBlok
       : semuaBlokValue;
   BlokExportFormat currentFormat = BlokExportFormat.pdf;
+  bool sertakanNihil = initialSertakanNihil;
 
   return showDialog<OpsiEksporResult>(
     context: context,
@@ -1407,6 +1409,48 @@ Future<OpsiEksporResult?> showPilihOpsiEksporDialog(
                     const SizedBox(height: 14),
                   ],
                   Container(
+                    decoration: BoxDecoration(
+                      color: scheme.surfaceContainerHighest.withValues(
+                        alpha: 0.45,
+                      ),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: scheme.outlineVariant.withValues(alpha: 0.6),
+                      ),
+                    ),
+                    child: CheckboxListTile(
+                      value: sertakanNihil,
+                      dense: true,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 2,
+                      ),
+                      controlAffinity: ListTileControlAffinity.leading,
+                      title: const Text(
+                        'Sertakan SPPT Rp 0 (Nihil)',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      subtitle: Text(
+                        sertakanNihil
+                            ? 'Objek pajak dengan ketetapan Rp 0 tetap dimasukkan ke cetakan/berkas.'
+                            : 'Objek pajak dengan ketetapan Rp 0 dikecualikan dari cetakan/berkas.',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                      onChanged: (val) {
+                        if (val != null) {
+                          setDialogState(() => sertakanNihil = val);
+                        }
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
                       color: isPerBlok
@@ -1457,7 +1501,11 @@ Future<OpsiEksporResult?> showPilihOpsiEksporDialog(
                 label: Text(actionButtonLabel),
                 onPressed: () => Navigator.pop(
                   ctx,
-                  OpsiEksporResult(blok: currentBlok, format: currentFormat),
+                  OpsiEksporResult(
+                    blok: currentBlok,
+                    format: currentFormat,
+                    sertakanNihil: sertakanNihil,
+                  ),
                 ),
               ),
             ],

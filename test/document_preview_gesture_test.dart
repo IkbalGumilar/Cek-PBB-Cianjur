@@ -4,6 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart' as sf;
+import 'package:cek_pbb_app/blok_record.dart';
+import 'package:cek_pbb_app/dhkp/blok_catatan_models.dart';
+import 'package:cek_pbb_app/dhkp/dhkp_rincian_bulanan_dialog.dart';
 import 'package:cek_pbb_app/document_preview_screen.dart';
 
 void main() {
@@ -265,14 +268,21 @@ void main() {
     );
 
     testWidgets(
-      'DocumentPreviewScreen extracts PDF text, detects 18-digit NOPs for 1-tap copy, and renders Camelot bottom dock',
+      'DocumentPreviewScreen removes all Salin Teks buttons and renders tight column-aware selectable text spans directly on page',
       (tester) async {
         final doc = sf.PdfDocument();
         final page = doc.pages.add();
+        final font = sf.PdfStandardFont(sf.PdfFontFamily.helvetica, 12);
+        // Gambar 2 kolom terpisah pada baris yang sama untuk menguji pemisahan kolom
         page.graphics.drawString(
-          'NOP: 32.05.200.004.001-0034.0 - ENOH BOBOJONG',
-          sf.PdfStandardFont(sf.PdfFontFamily.helvetica, 14),
-          bounds: const Rect.fromLTWH(20, 20, 450, 30),
+          '32.05.200.004.001-0034.0',
+          font,
+          bounds: const Rect.fromLTWH(20, 40, 160, 20),
+        );
+        page.graphics.drawString(
+          'ENOH BOBOJONG',
+          font,
+          bounds: const Rect.fromLTWH(240, 40, 180, 20),
         );
         final pdfBytes = Uint8List.fromList(await doc.save());
         doc.dispose();
@@ -287,22 +297,183 @@ void main() {
         );
         await tester.pump(const Duration(milliseconds: 300));
 
-        // Pastikan bilah bawah ala Google PDF / Camelot tampil (Salin Teks & 100%)
-        expect(find.text('Salin Teks'), findsOneWidget);
+        // Pastikan semua tombol/pil "Salin Teks" sudah dihapus bersih
+        expect(find.text('Salin Teks'), findsNothing);
+        expect(find.textContaining('Salin Teks:'), findsNothing);
+        expect(find.byIcon(Icons.copy_all_rounded), findsNothing);
+
+        // Pastikan bilah bawah tetap menampilkan kontrol zoom & halaman
         expect(find.text('100%'), findsOneWidget);
+        expect(find.byType(SelectionArea), findsOneWidget);
 
-        // Buka panel Pilih & Salin Teks
-        await tester.tap(find.text('Salin Teks'));
-        await tester.pump();
-        await tester.pump(const Duration(milliseconds: 500));
-
-        // Pastikan teks halaman dan chip NOP 18-digit terdeteksi otomatis
-        expect(
-          find.textContaining('Pilih & Salin Teks (Halaman 1)'),
-          findsOneWidget,
+        // Pastikan ekstraksi span seleksi teks memisahkan 2 kolom berjauhan menjadi 2 span ketat
+        final spans = DocumentPreviewScreen.extractTightSelectableSpansForTest(
+          pdfBytes,
         );
-        expect(find.text('320520000400100340'), findsOneWidget);
-        expect(find.textContaining('ENOH BOBOJONG'), findsOneWidget);
+        expect(spans.length, greaterThanOrEqualTo(2));
+        expect(
+          spans.any((s) => s.text.contains('32.05.200.004.001-0034.0')),
+          isTrue,
+        );
+        expect(spans.any((s) => s.text.contains('ENOH BOBOJONG')), isTrue);
+        final col1 = spans.firstWhere(
+          (s) => s.text.contains('32.05.200.004.001-0034.0'),
+        );
+        final col2 = spans.firstWhere(
+          (s) => s.text.contains('ENOH BOBOJONG'),
+        );
+        expect(
+          col1.normalizedBounds.right,
+          lessThan(col2.normalizedBounds.left),
+        );
+      },
+    );
+
+    testWidgets(
+      'DocumentPreviewScreen.printOrPreview invokes printer driver directly on Desktop and opens preview on Mobile',
+      (tester) async {
+        final doc = sf.PdfDocument();
+        doc.pages.add().graphics.drawString(
+          'Uji Cetak Langsung',
+          sf.PdfStandardFont(sf.PdfFontFamily.helvetica, 12),
+          bounds: const Rect.fromLTWH(20, 20, 200, 20),
+        );
+        final pdfBytes = Uint8List.fromList(await doc.save());
+        doc.dispose();
+
+        int printCallCount = 0;
+        String? printedFileName;
+        DocumentPreviewScreen.debugPrintHandler = (bytes, fileName) async {
+          printCallCount++;
+          printedFileName = fileName;
+        };
+        addTearDown(() {
+          DocumentPreviewScreen.debugPrintHandler = null;
+          DocumentPreviewScreen.debugIsDesktopOverride = null;
+        });
+
+        // 1. Mode Desktop -> langsung memanggil driver printer tanpa membuka DocumentPreviewScreen
+        DocumentPreviewScreen.debugIsDesktopOverride = true;
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Builder(
+              builder: (context) => Scaffold(
+                body: ElevatedButton(
+                  onPressed: () => DocumentPreviewScreen.printOrPreview(
+                    context,
+                    pdfBytes: pdfBytes,
+                    fileName: 'Laporan_Desktop.pdf',
+                  ),
+                  child: const Text('Cetak'),
+                ),
+              ),
+            ),
+          ),
+        );
+
+        await tester.tap(find.text('Cetak'));
+        await tester.pumpAndSettle();
+
+        expect(printCallCount, 1);
+        expect(printedFileName, 'Laporan_Desktop.pdf');
+        expect(find.byType(DocumentPreviewScreen), findsNothing);
+
+        // 2. Mode Mobile -> membuka DocumentPreviewScreen terlebih dahulu
+        DocumentPreviewScreen.debugIsDesktopOverride = false;
+        await tester.tap(find.text('Cetak'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+
+        expect(printCallCount, 1); // belum bertambah sebelum tekan tombol cetak di preview
+        expect(find.byType(DocumentPreviewScreen), findsOneWidget);
+
+        // 3. Menekan Ctrl + P di dalam DocumentPreviewScreen langsung memanggil driver printer
+        await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+        await tester.sendKeyDownEvent(LogicalKeyboardKey.keyP);
+        await tester.sendKeyUpEvent(LogicalKeyboardKey.keyP);
+        await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+        await tester.pump();
+
+        expect(printCallCount, 2);
+      },
+    );
+
+    test(
+      'DhkpSummaryMetrics.filterOutNihil excludes SPPT Rp 0 when excludeNihil is true',
+      () {
+        const records = [
+          BlokRecord(
+            nop: '320301000100100010',
+            namaWajibPajak: 'WAJIB PAJAK AKTIF',
+            alamatObjek: 'KP BOBOJONG',
+            alamatWp: 'KP BOBOJONG',
+            jumlahPbb: '25000',
+            tahunBayar: '2026',
+            statusBayar: 'Sudah Bayar',
+            tanggalBayar: '10-01-2026',
+          ),
+          BlokRecord(
+            nop: '320301000100100020',
+            namaWajibPajak: 'WAJIB PAJAK NIHIL',
+            alamatObjek: 'KP BOBOJONG',
+            alamatWp: 'KP BOBOJONG',
+            jumlahPbb: '0',
+            tahunBayar: '2026',
+            statusBayar: 'Belum Bayar',
+            tanggalBayar: '',
+          ),
+        ];
+
+        final included = DhkpSummaryMetrics.filterOutNihil(
+          records,
+          excludeNihil: false,
+        );
+        expect(included.length, 2);
+
+        final excluded = DhkpSummaryMetrics.filterOutNihil(
+          records,
+          excludeNihil: true,
+        );
+        expect(excluded.length, 1);
+        expect(excluded.first.namaWajibPajak, 'WAJIB PAJAK AKTIF');
+      },
+    );
+
+    test(
+      'generateDhkpRincianBulananPdfBytes generates valid single-month PDF report',
+      () async {
+        const janRecords = [
+          BlokRecord(
+            nop: '320301000100100010',
+            namaWajibPajak: 'ASEP JANUARI',
+            alamatObjek: 'KP BOBOJONG',
+            alamatWp: 'KP BOBOJONG',
+            jumlahPbb: '50000',
+            tahunBayar: '2026',
+            statusBayar: 'Sudah Bayar',
+            tanggalBayar: '15-01-2026 09:30:00',
+          ),
+        ];
+
+        final pdfBytes = await generateDhkpRincianBulananPdfBytes(
+          targetRecords: janRecords,
+          monthIndex: 1,
+          tahun: '2026',
+        );
+        expect(pdfBytes, isNotEmpty);
+
+        final parsedDoc = sf.PdfDocument(inputBytes: pdfBytes);
+        final extractedText = sf
+            .PdfTextExtractor(parsedDoc)
+            .extractText()
+            .replaceAll(RegExp(r'\s+'), ' ');
+        parsedDoc.dispose();
+
+        expect(
+          extractedText,
+          contains('LAPORAN PEMBAYARAN PBB BULAN JANUARI 2026'),
+        );
+        expect(extractedText, contains('ASEP JANUARI'));
       },
     );
   });

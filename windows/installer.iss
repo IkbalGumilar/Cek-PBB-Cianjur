@@ -6,7 +6,7 @@
 ; =====================================================================
 
 #define MyAppName "Cek PBB Cianjur"
-#define MyAppVersion "0.1.5-beta"
+#define MyAppVersion "0.1.6-beta"
 #define MyAppPublisher "Ikbal Gumilar"
 #define MyAppURL "https://github.com/IkbalGumilar/Cek-PBB-Cianjur"
 #define MyAppSupportURL "https://github.com/IkbalGumilar/Cek-PBB-Cianjur/issues"
@@ -39,12 +39,12 @@ OutputDir=..\build
 OutputBaseFilename=Cek-PBB-Cianjur-Setup-v{#MyAppVersion}
 
 ; Metadata Informasi Versi Windows
-VersionInfoVersion=0.1.5.11
+VersionInfoVersion=0.1.6.12
 VersionInfoCompany={#MyAppPublisher}
 VersionInfoDescription=Pemasang Resmi {#MyAppName} untuk Windows
 VersionInfoTextVersion={#MyAppVersion}
 VersionInfoProductName={#MyAppName}
-VersionInfoProductVersion=0.1.5.11
+VersionInfoProductVersion=0.1.6.12
 VersionInfoCopyright=Hak Cipta (c) 2026 {#MyAppPublisher}
 
 ; Ikon & Grafis Wizard

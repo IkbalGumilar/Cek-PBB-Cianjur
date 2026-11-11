@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../document_preview_screen.dart';
 import '../download_helper.dart';
@@ -128,14 +129,10 @@ class _MonitoringResultViewState extends State<MonitoringResultView> {
         widget.reportTitle,
       );
       if (!mounted) return;
-      Navigator.push(
+      await DocumentPreviewScreen.printOrPreview(
         context,
-        MaterialPageRoute(
-          builder: (_) => DocumentPreviewScreen(
-            pdfBytes: bytes,
-            fileName: '${widget.reportTitle}.pdf',
-          ),
-        ),
+        pdfBytes: bytes,
+        fileName: '${widget.reportTitle}.pdf',
       );
     } catch (e) {
       if (!mounted) return;
@@ -194,64 +191,78 @@ class _MonitoringResultViewState extends State<MonitoringResultView> {
       return row.take(safeHeaders.length).toList();
     }).toList();
 
-    return Padding(
-      padding: const EdgeInsets.only(top: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
+    return CallbackShortcuts(
+      bindings: <ShortcutActivator, VoidCallback>{
+        const SingleActivator(LogicalKeyboardKey.keyP, control: true): () {
+          if (!_busy) _cetak(result);
+        },
+        const SingleActivator(LogicalKeyboardKey.keyP, meta: true): () {
+          if (!_busy) _cetak(result);
+        },
+      },
+      child: Focus(
+        autofocus: false,
+        child: Padding(
+          padding: const EdgeInsets.only(top: 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Expanded(
-                child: Text(
-                  '${result.rows.length} data',
-                  style: Theme.of(context).textTheme.titleSmall,
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '${result.rows.length} data',
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: _busy ? null : () => _unduh(result),
+                    icon: const Icon(Icons.download_outlined),
+                    tooltip: 'Unduh (PDF/Excel/CSV)',
+                  ),
+                  IconButton(
+                    onPressed: _busy ? null : () => _bagikan(result),
+                    icon: const Icon(Icons.share_outlined),
+                    tooltip: 'Bagikan (PDF/Excel/CSV)',
+                  ),
+                  IconButton(
+                    onPressed: _busy ? null : () => _cetak(result),
+                    icon: const Icon(Icons.print_outlined),
+                    tooltip: 'Cetak (Ctrl+P)',
+                  ),
+                ],
+              ),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: DataTable(
+                  columns: [
+                    for (final h in safeHeaders)
+                      DataColumn(label: Text(h.isEmpty ? '-' : h)),
+                  ],
+                  rows: [
+                    for (final row in safeRows)
+                      DataRow(
+                        cells: [for (final cell in row) DataCell(Text(cell))],
+                      ),
+                  ],
                 ),
               ),
-              IconButton(
-                onPressed: _busy ? null : () => _unduh(result),
-                icon: const Icon(Icons.download_outlined),
-                tooltip: 'Unduh (PDF/Excel/CSV)',
-              ),
-              IconButton(
-                onPressed: _busy ? null : () => _bagikan(result),
-                icon: const Icon(Icons.share_outlined),
-                tooltip: 'Bagikan (PDF/Excel/CSV)',
-              ),
-              IconButton(
-                onPressed: _busy ? null : () => _cetak(result),
-                icon: const Icon(Icons.print_outlined),
-                tooltip: 'Cetak',
-              ),
+              if (hasMore)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Center(
+                    child: OutlinedButton(
+                      onPressed: () =>
+                          setState(() => _visibleCount += _pageSize),
+                      child: Text(
+                        'Muat 10 Data Lagi (sisa ${result.rows.length - _visibleCount})',
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: DataTable(
-              columns: [
-                for (final h in safeHeaders)
-                  DataColumn(label: Text(h.isEmpty ? '-' : h)),
-              ],
-              rows: [
-                for (final row in safeRows)
-                  DataRow(
-                    cells: [for (final cell in row) DataCell(Text(cell))],
-                  ),
-              ],
-            ),
-          ),
-          if (hasMore)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Center(
-                child: OutlinedButton(
-                  onPressed: () => setState(() => _visibleCount += _pageSize),
-                  child: Text(
-                    'Muat 10 Data Lagi (sisa ${result.rows.length - _visibleCount})',
-                  ),
-                ),
-              ),
-            ),
-        ],
+        ),
       ),
     );
   }

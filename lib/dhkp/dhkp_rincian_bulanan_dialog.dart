@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
@@ -60,6 +60,166 @@ enum RincianBulananSortMode {
   final String shortLabel;
   final IconData icon;
   const RincianBulananSortMode(this.label, this.shortLabel, this.icon);
+}
+
+/// Menghasilkan bytes PDF untuk laporan pembayaran PBB pada 1 bulan tertentu.
+/// Dapat dipanggil dari dialog rincian bulanan maupun langsung saat menekan
+/// Ctrl+P / ikon cetak pada diagram batang Tren Pembayaran.
+Future<Uint8List> generateDhkpRincianBulananPdfBytes({
+  required List<BlokRecord> targetRecords,
+  required int monthIndex,
+  required String tahun,
+  RincianBulananSortMode sortMode = RincianBulananSortMode.terlama,
+  String searchQuery = '',
+}) async {
+  final doc = pw.Document();
+  final monthName =
+      (monthIndex >= 1 && monthIndex <= DhkpGrafikAnalytics.fullMonthNames.length)
+          ? DhkpGrafikAnalytics.fullMonthNames[monthIndex - 1]
+          : 'Bulan $monthIndex';
+  final totalNominal =
+      targetRecords.fold<int>(0, (sum, r) => sum + r.jumlahPbbValue);
+
+  final rows = <List<String>>[];
+  for (int i = 0; i < targetRecords.length; i++) {
+    final r = targetRecords[i];
+    final blok = nopBlok(r.nop);
+    final tglJam = DhkpGrafikAnalytics.formatTanggalJamBayar(r.tanggalBayar);
+    rows.add([
+      '${i + 1}',
+      formatNop(r.nop),
+      _cleanPdfText(r.namaWajibPajak),
+      blok.isNotEmpty ? 'Blok $blok' : '-',
+      tglJam,
+      formatRupiah(r.jumlahPbbValue),
+    ]);
+  }
+
+  const headers = [
+    'No',
+    'NOP',
+    'Nama Wajib Pajak',
+    'Blok',
+    'Tanggal & Jam Bayar',
+    'Jumlah PBB',
+  ];
+
+  doc.addPage(
+    pw.MultiPage(
+      pageFormat: PdfPageFormat.a4,
+      margin: const pw.EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      header: (context) => pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text(
+                    'LAPORAN PEMBAYARAN PBB BULAN ${monthName.toUpperCase()} ${_cleanPdfText(tahun)}',
+                    style: pw.TextStyle(
+                      fontSize: 12,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                  pw.SizedBox(height: 2),
+                  pw.Text(
+                    'Pemerintah Kabupaten Cianjur | Badan Pendapatan Daerah',
+                    style: const pw.TextStyle(
+                      fontSize: 8,
+                      color: PdfColors.grey700,
+                    ),
+                  ),
+                  pw.SizedBox(height: 2),
+                  pw.Text(
+                    'Urutan: ${_cleanPdfText(sortMode.label)}${searchQuery.trim().isNotEmpty ? " | Filter: \"${_cleanPdfText(searchQuery.trim())}\"" : ""}',
+                    style: const pw.TextStyle(
+                      fontSize: 8,
+                      color: PdfColors.purple800,
+                    ),
+                  ),
+                ],
+              ),
+              pw.Text(
+                'Hal ${context.pageNumber} / ${context.pagesCount}',
+                style: const pw.TextStyle(
+                  fontSize: 8,
+                  color: PdfColors.grey700,
+                ),
+              ),
+            ],
+          ),
+          pw.SizedBox(height: 4),
+          pw.Text(
+            'Total: ${targetRecords.length} Objek Pajak | Total Penerimaan: ${formatRupiah(totalNominal)}',
+            style: pw.TextStyle(
+              fontSize: 9,
+              fontWeight: pw.FontWeight.bold,
+              color: PdfColors.teal900,
+            ),
+          ),
+          pw.Divider(thickness: 1, color: PdfColors.grey400),
+          pw.SizedBox(height: 4),
+        ],
+      ),
+      build: (context) => [
+        pw.TableHelper.fromTextArray(
+          headers: headers,
+          data: rows,
+          headerStyle: pw.TextStyle(
+            fontSize: 8,
+            fontWeight: pw.FontWeight.bold,
+          ),
+          headerDecoration: const pw.BoxDecoration(
+            color: PdfColors.grey200,
+          ),
+          cellStyle: const pw.TextStyle(fontSize: 7.5),
+          cellAlignment: pw.Alignment.centerLeft,
+          cellAlignments: {
+            0: pw.Alignment.center,
+            5: pw.Alignment.centerRight,
+          },
+          cellPadding: const pw.EdgeInsets.symmetric(
+            horizontal: 4,
+            vertical: 3,
+          ),
+        ),
+        pw.SizedBox(height: 8),
+        pw.Container(
+          padding: const pw.EdgeInsets.all(6),
+          decoration: pw.BoxDecoration(
+            color: PdfColors.teal50,
+            border: pw.Border.all(color: PdfColors.teal200),
+            borderRadius: const pw.BorderRadius.all(pw.Radius.circular(4)),
+          ),
+          child: pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Text(
+                'TOTAL BULAN ${monthName.toUpperCase()}',
+                style: pw.TextStyle(
+                  fontSize: 8.5,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+              pw.Text(
+                formatRupiah(totalNominal),
+                style: pw.TextStyle(
+                  fontSize: 9,
+                  fontWeight: pw.FontWeight.bold,
+                  color: PdfColors.teal900,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+
+  return doc.save();
 }
 
 /// Menampilkan modal/dialog interaktif berisi daftar seluruh wajib pajak
@@ -208,152 +368,14 @@ class _DhkpRincianBulananSheetState extends State<DhkpRincianBulananSheet> {
   int get _totalNominal =>
       _monthRecords.fold<int>(0, (sum, r) => sum + r.jumlahPbbValue);
 
-  Future<Uint8List> _generatePdfBytes() async {
-    final doc = pw.Document();
-    final targetRecords = _filteredRecords;
-    final totalNominal =
-        targetRecords.fold<int>(0, (sum, r) => sum + r.jumlahPbbValue);
-
-    final rows = <List<String>>[];
-    for (int i = 0; i < targetRecords.length; i++) {
-      final r = targetRecords[i];
-      final blok = nopBlok(r.nop);
-      final tglJam = DhkpGrafikAnalytics.formatTanggalJamBayar(r.tanggalBayar);
-      rows.add([
-        '${i + 1}',
-        formatNop(r.nop),
-        _cleanPdfText(r.namaWajibPajak),
-        blok.isNotEmpty ? 'Blok $blok' : '-',
-        tglJam,
-        formatRupiah(r.jumlahPbbValue),
-      ]);
-    }
-
-    const headers = [
-      'No',
-      'NOP',
-      'Nama Wajib Pajak',
-      'Blok',
-      'Tanggal & Jam Bayar',
-      'Jumlah PBB',
-    ];
-
-    doc.addPage(
-      pw.MultiPage(
-        pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-        header: (context) => pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.start,
-          children: [
-            pw.Row(
-              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-              children: [
-                pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
-                  children: [
-                    pw.Text(
-                      'LAPORAN PEMBAYARAN PBB BULAN ${_monthName.toUpperCase()} ${_cleanPdfText(widget.tahun)}',
-                      style: pw.TextStyle(
-                        fontSize: 12,
-                        fontWeight: pw.FontWeight.bold,
-                      ),
-                    ),
-                    pw.SizedBox(height: 2),
-                    pw.Text(
-                      'Pemerintah Kabupaten Cianjur | Badan Pendapatan Daerah',
-                      style: const pw.TextStyle(
-                        fontSize: 8,
-                        color: PdfColors.grey700,
-                      ),
-                    ),
-                    pw.SizedBox(height: 2),
-                    pw.Text(
-                      'Urutan: ${_cleanPdfText(_sortMode.label)}${_searchQuery.trim().isNotEmpty ? " | Filter: \"${_cleanPdfText(_searchQuery.trim())}\"" : ""}',
-                      style: const pw.TextStyle(
-                        fontSize: 8,
-                        color: PdfColors.purple800,
-                      ),
-                    ),
-                  ],
-                ),
-                pw.Text(
-                  'Hal ${context.pageNumber} / ${context.pagesCount}',
-                  style: const pw.TextStyle(
-                    fontSize: 8,
-                    color: PdfColors.grey700,
-                  ),
-                ),
-              ],
-            ),
-            pw.SizedBox(height: 4),
-            pw.Text(
-              'Total: ${targetRecords.length} Objek Pajak | Total Penerimaan: ${formatRupiah(totalNominal)}',
-              style: pw.TextStyle(
-                fontSize: 9,
-                fontWeight: pw.FontWeight.bold,
-                color: PdfColors.teal900,
-              ),
-            ),
-            pw.Divider(thickness: 1, color: PdfColors.grey400),
-            pw.SizedBox(height: 4),
-          ],
-        ),
-        build: (context) => [
-          pw.TableHelper.fromTextArray(
-            headers: headers,
-            data: rows,
-            headerStyle: pw.TextStyle(
-              fontSize: 8,
-              fontWeight: pw.FontWeight.bold,
-            ),
-            headerDecoration: const pw.BoxDecoration(
-              color: PdfColors.grey200,
-            ),
-            cellStyle: const pw.TextStyle(fontSize: 7.5),
-            cellAlignment: pw.Alignment.centerLeft,
-            cellAlignments: {
-              0: pw.Alignment.center,
-              5: pw.Alignment.centerRight,
-            },
-            cellPadding: const pw.EdgeInsets.symmetric(
-              horizontal: 4,
-              vertical: 3,
-            ),
-          ),
-          pw.SizedBox(height: 8),
-          pw.Container(
-            padding: const pw.EdgeInsets.all(6),
-            decoration: pw.BoxDecoration(
-              color: PdfColors.teal50,
-              border: pw.Border.all(color: PdfColors.teal200),
-              borderRadius: const pw.BorderRadius.all(pw.Radius.circular(4)),
-            ),
-            child: pw.Row(
-              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-              children: [
-                pw.Text(
-                  'TOTAL BULAN ${_monthName.toUpperCase()}',
-                  style: pw.TextStyle(
-                    fontSize: 8.5,
-                    fontWeight: pw.FontWeight.bold,
-                  ),
-                ),
-                pw.Text(
-                  formatRupiah(totalNominal),
-                  style: pw.TextStyle(
-                    fontSize: 9,
-                    fontWeight: pw.FontWeight.bold,
-                    color: PdfColors.teal900,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
+  Future<Uint8List> _generatePdfBytes() {
+    return generateDhkpRincianBulananPdfBytes(
+      targetRecords: _filteredRecords,
+      monthIndex: widget.monthIndex,
+      tahun: widget.tahun,
+      sortMode: _sortMode,
+      searchQuery: _searchQuery,
     );
-
-    return doc.save();
   }
 
   Uint8List _generateCsvBytes() {
@@ -495,13 +517,10 @@ class _DhkpRincianBulananSheetState extends State<DhkpRincianBulananSheet> {
       if (!mounted) return;
       final fileName =
           'Laporan_Bayar_${_monthName.toLowerCase()}_${widget.tahun}.pdf';
-      await Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => DocumentPreviewScreen(
-            pdfBytes: pdfBytes,
-            fileName: fileName,
-          ),
-        ),
+      await DocumentPreviewScreen.printOrPreview(
+        context,
+        pdfBytes: pdfBytes,
+        fileName: fileName,
       );
     } catch (e) {
       if (mounted) {
@@ -519,10 +538,19 @@ class _DhkpRincianBulananSheetState extends State<DhkpRincianBulananSheet> {
     final scheme = Theme.of(context).colorScheme;
     final filtered = _filteredRecords;
 
-    return DraggableScrollableSheet(
-      initialChildSize: 0.85,
-      minChildSize: 0.5,
-      maxChildSize: 0.95,
+    return CallbackShortcuts(
+      bindings: <ShortcutActivator, VoidCallback>{
+        const SingleActivator(LogicalKeyboardKey.keyP, control: true):
+            _handlePrint,
+        const SingleActivator(LogicalKeyboardKey.keyP, meta: true):
+            _handlePrint,
+      },
+      child: Focus(
+        autofocus: true,
+        child: DraggableScrollableSheet(
+          initialChildSize: 0.85,
+          minChildSize: 0.5,
+          maxChildSize: 0.95,
       builder: (context, scrollController) {
         return Container(
           decoration: BoxDecoration(
@@ -976,6 +1004,8 @@ class _DhkpRincianBulananSheetState extends State<DhkpRincianBulananSheet> {
           ),
         );
       },
+        ),
+      ),
     );
   }
 }

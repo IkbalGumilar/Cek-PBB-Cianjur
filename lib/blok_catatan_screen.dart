@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 
 import 'app_security_service.dart';
@@ -60,6 +60,7 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
   String _selectedTahun = '${DateTime.now().year}';
   int? _selectedWilayah;
   DhkpKategoriFilter _kategoriFilter = DhkpKategoriFilter.semua;
+  bool _sembunyikanNihil = false;
   BlokSortBy _sortBy = BlokSortBy.blokWilayah;
   List<BlokRecord> _records = [];
   List<BlokRecord> _allScopeRecords = [];
@@ -86,6 +87,7 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
   final _tableAreaKey = GlobalKey(debugLabel: 'tour_dhkp_table_area');
   final _summaryFooterKey = GlobalKey(debugLabel: 'tour_dhkp_summary_footer');
   VoidCallback? _showGrafikTour;
+  Future<void> Function()? _printGrafikCallback;
 
   @override
   void initState() {
@@ -312,9 +314,13 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
             sortBy: _sortBy,
           );
 
-    final metrics = DhkpSummaryMetrics.compute(allScope);
-    var records = DhkpSummaryMetrics.filterByKategori(
+    final filteredScope = DhkpSummaryMetrics.filterOutNihil(
       allScope,
+      excludeNihil: _sembunyikanNihil,
+    );
+    final metrics = DhkpSummaryMetrics.compute(filteredScope);
+    var records = DhkpSummaryMetrics.filterByKategori(
+      filteredScope,
       _kategoriFilter,
     );
     records = DhkpSummaryMetrics.filterBySearch(records, _searchQuery);
@@ -324,7 +330,7 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
       _photosDir = photosDir;
       _cachedPhotoFileNames = photoNames;
       _records = records;
-      _allScopeRecords = allScope;
+      _allScopeRecords = filteredScope;
       _summaryMetrics = metrics;
 
       final maxPage = _rowsPerPage > 0
@@ -344,9 +350,10 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
   /// yang sedang dipakai di layar.
   Future<List<BlokRecord>> _scopedRecordsForExport([
     String? blokOverride,
+    bool? excludeNihilOverride,
   ]) async {
     final blok = blokOverride ?? _selectedBlok;
-    final records = (blok == null || blok == semuaBlokValue)
+    final rawRecords = (blok == null || blok == semuaBlokValue)
         ? (_whitelist.isNotEmpty
               ? await BlokDataStore.instance.byWhitelist(
                   _whitelist,
@@ -355,6 +362,10 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
               : await BlokDataStore.instance.forReport(tahun: _selectedTahun))
         : await BlokDataStore.instance.byBlok(blok, tahun: _selectedTahun);
 
+    final records = DhkpSummaryMetrics.filterOutNihil(
+      rawRecords,
+      excludeNihil: excludeNihilOverride ?? _sembunyikanNihil,
+    );
     return DhkpSummaryMetrics.filterByKategori(records, _kategoriFilter);
   }
 
@@ -395,6 +406,20 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
       setBusy: true,
       busyMessage: 'Menyaring kategori: ${kategori.label}...',
       busyIcon: Icons.filter_alt_outlined,
+    );
+  }
+
+  void _toggleSembunyikanNihil() {
+    setState(() {
+      _sembunyikanNihil = !_sembunyikanNihil;
+      _currentPage = 0;
+    });
+    _loadRecords(
+      setBusy: true,
+      busyMessage: _sembunyikanNihil
+          ? 'Mengecualikan SPPT Rp 0 (Nihil)...'
+          : 'Menampilkan kembali SPPT Rp 0 (Nihil)...',
+      busyIcon: Icons.money_off_csred_outlined,
     );
   }
 
@@ -1175,6 +1200,7 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
       actionButtonLabel: actionButtonLabel,
       actionIcon: actionIcon,
       fixedPdf: fixedPdf,
+      initialSertakanNihil: !_sembunyikanNihil,
     );
   }
 
@@ -1192,7 +1218,10 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
       _busyIcon = Icons.download_rounded;
     });
     try {
-      final records = await _scopedRecordsForExport(opsi.blok);
+      final records = await _scopedRecordsForExport(
+        opsi.blok,
+        !opsi.sertakanNihil,
+      );
       if (records.isEmpty) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1255,7 +1284,10 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
       _busyIcon = Icons.share_rounded;
     });
     try {
-      final records = await _scopedRecordsForExport(opsi.blok);
+      final records = await _scopedRecordsForExport(
+        opsi.blok,
+        !opsi.sertakanNihil,
+      );
       if (records.isEmpty) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1306,7 +1338,9 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
   Future<void> _cetakLaporan() async {
     final opsi = await _pilihOpsiEkspor(
       title: 'Cetak Laporan DHKP',
-      actionButtonLabel: 'Buka Cetakan',
+      actionButtonLabel: DocumentPreviewScreen.isDesktop
+          ? 'Cetak Langsung'
+          : 'Buka Cetakan',
       actionIcon: Icons.print_rounded,
       fixedPdf: true,
     );
@@ -1314,11 +1348,14 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
 
     setState(() {
       _busy = true;
-      _busyMessage = 'Menyiapkan pratinjau cetak PDF...';
+      _busyMessage = 'Menyiapkan dokumen cetak PDF...';
       _busyIcon = Icons.print_rounded;
     });
     try {
-      final records = await _scopedRecordsForExport(opsi.blok);
+      final records = await _scopedRecordsForExport(
+        opsi.blok,
+        !opsi.sertakanNihil,
+      );
       if (records.isEmpty) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1348,12 +1385,81 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
         kategoriFilter: _kategoriFilter,
         tahun: _selectedTahun,
       )}.pdf';
-      Navigator.push(
+      await DocumentPreviewScreen.printOrPreview(
         context,
-        MaterialPageRoute(
-          builder: (_) =>
-              DocumentPreviewScreen(pdfBytes: bytes, fileName: fileName),
+        pdfBytes: bytes,
+        fileName: fileName,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Gagal menyiapkan cetakan: $e')));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// Pintasan Cetak Cepat (`Ctrl + P` atau tombol Cetak Langsung di AppBar):
+  /// - Jika sedang di tab Grafik: langsung mencetak grafik/diagram aktif (atau 1 bulan
+  ///   yang dipilih pada Tren Pembayaran).
+  /// - Jika sedang di tampilan Tabel DHKP: langsung mencetak data `_records` yang sedang
+  ///   disaring di layar (mengikuti filter Dusun/Blok, Tahun, Kategori, Tanpa Rp 0,
+  ///   kata kunci pencarian, dan urutan aktif) ke driver printer tanpa dialog berulang.
+  Future<void> _cetakLangsungShortcut() async {
+    if (_loading || _busy) return;
+    if (_tampilkanGrafik) {
+      await _printGrafikCallback?.call();
+      return;
+    }
+
+    if (_records.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Belum ada data pada tampilan filter saat ini untuk dicetak.',
+          ),
         ),
+      );
+      return;
+    }
+
+    setState(() {
+      _busy = true;
+      _busyMessage = 'Menyiapkan cetakan sesuai filter tampilan saat ini...';
+      _busyIcon = Icons.print_rounded;
+    });
+    try {
+      final blokTitle =
+          (_selectedBlok == null || _selectedBlok == semuaBlokValue)
+              ? (_selectedWilayah != null
+                  ? 'Dusun $_selectedWilayah'
+                  : 'Semua Blok')
+              : 'Blok $_selectedBlok';
+      final targetRecords = List<BlokRecord>.from(_records);
+      final bytes = await BlokReportExporter.build(
+        BlokExportFormat.pdf,
+        targetRecords,
+        tahun: _selectedTahun,
+        blokTitle: blokTitle,
+        kategoriFilter: _kategoriFilter,
+        onProgress: (current, total) async {
+          if (!mounted) return;
+          setState(() {
+            _busyMessage = 'Menyusun halaman $current dari $total...';
+          });
+        },
+      );
+      if (!mounted) return;
+      final fileName = '${buildReportJudul(
+        blokTitle: blokTitle,
+        kategoriFilter: _kategoriFilter,
+        tahun: _selectedTahun,
+      )}.pdf';
+      await DocumentPreviewScreen.printOrPreview(
+        context,
+        pdfBytes: bytes,
+        fileName: fileName,
       );
     } catch (e) {
       if (!mounted) return;
@@ -1412,45 +1518,60 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Data DHKP'),
-        actions: [
-          IconButton(
-            key: _toggleGrafikButtonKey,
-            onPressed: () {
-              FeatureTourController.dismissActiveTour();
-              setState(() {
-                _tampilkanGrafik = !_tampilkanGrafik;
-                _updateScreenSecurity();
-              });
-              if (!_tampilkanGrafik) {
-                FeatureTourController.startTourIfNeeded(
-                  context: context,
-                  tourId: 'dhkp_table_view',
-                  steps: _buildTableTourSteps(),
-                );
-              }
-            },
-            icon: Icon(
-              _tampilkanGrafik
-                  ? Icons.receipt_long_rounded
-                  : Icons.bar_chart_rounded,
-            ),
-            tooltip: _tampilkanGrafik
-                ? 'Beralih ke Buku Catatan (Tabel)'
-                : 'Beralih ke Visual Grafik',
-          ),
-          IconButton(
-            key: const ValueKey('dhkp_target_pacing_btn'),
-            icon: const Icon(Icons.speed_rounded),
-            tooltip: 'Target & Pacing Realisasi',
-            onPressed: _bukaTargetPacingDialog,
-          ),
-          FeatureTourHelpButton(onPressed: _onHelpPressed),
-          PopupMenuButton<String>(
-            key: _moreMenuButtonKey,
-            icon: const Icon(Icons.more_vert_rounded),
+    return CallbackShortcuts(
+      bindings: <ShortcutActivator, VoidCallback>{
+        const SingleActivator(LogicalKeyboardKey.keyP, control: true):
+            _cetakLangsungShortcut,
+        const SingleActivator(LogicalKeyboardKey.keyP, meta: true):
+            _cetakLangsungShortcut,
+      },
+      child: Focus(
+        autofocus: true,
+        child: Scaffold(
+          appBar: AppBar(
+            title: const Text('Data DHKP'),
+            actions: [
+              IconButton(
+                key: const ValueKey('dhkp_direct_print_btn'),
+                icon: const Icon(Icons.print_outlined),
+                tooltip: 'Cetak tampilan saat ini (Ctrl+P)',
+                onPressed: _cetakLangsungShortcut,
+              ),
+              IconButton(
+                key: _toggleGrafikButtonKey,
+                onPressed: () {
+                  FeatureTourController.dismissActiveTour();
+                  setState(() {
+                    _tampilkanGrafik = !_tampilkanGrafik;
+                    _updateScreenSecurity();
+                  });
+                  if (!_tampilkanGrafik) {
+                    FeatureTourController.startTourIfNeeded(
+                      context: context,
+                      tourId: 'dhkp_table_view',
+                      steps: _buildTableTourSteps(),
+                    );
+                  }
+                },
+                icon: Icon(
+                  _tampilkanGrafik
+                      ? Icons.receipt_long_rounded
+                      : Icons.bar_chart_rounded,
+                ),
+                tooltip: _tampilkanGrafik
+                    ? 'Beralih ke Buku Catatan (Tabel)'
+                    : 'Beralih ke Visual Grafik',
+              ),
+              IconButton(
+                key: const ValueKey('dhkp_target_pacing_btn'),
+                icon: const Icon(Icons.speed_rounded),
+                tooltip: 'Target & Pacing Realisasi',
+                onPressed: _bukaTargetPacingDialog,
+              ),
+              FeatureTourHelpButton(onPressed: _onHelpPressed),
+              PopupMenuButton<String>(
+                key: _moreMenuButtonKey,
+                icon: const Icon(Icons.more_vert_rounded),
             tooltip: 'Menu & Aksi Lainnya',
             onSelected: (val) {
               switch (val) {
@@ -1889,6 +2010,69 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
                               ),
                             ),
                             const SizedBox(width: 6),
+                            Tooltip(
+                              message: _sembunyikanNihil
+                                  ? 'SPPT Rp 0 (Nihil) sedang dikecualikan — ketuk untuk menampilkan kembali'
+                                  : 'Kecualikan SPPT Rp 0 (Nihil) dari tampilan dan cetakan',
+                              child: InkWell(
+                                key: const ValueKey('dhkp_exclude_nihil_btn'),
+                                borderRadius: BorderRadius.circular(6),
+                                onTap: _toggleSembunyikanNihil,
+                                child: Container(
+                                  height: 40,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: _sembunyikanNihil
+                                        ? Theme.of(
+                                            context,
+                                          ).colorScheme.tertiaryContainer
+                                        : null,
+                                    border: Border.all(
+                                      color: _sembunyikanNihil
+                                          ? Theme.of(
+                                              context,
+                                            ).colorScheme.tertiary
+                                          : Theme.of(
+                                              context,
+                                            ).colorScheme.outline,
+                                    ),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.money_off_csred_outlined,
+                                        size: 18,
+                                        color: _sembunyikanNihil
+                                            ? Theme.of(context)
+                                                  .colorScheme
+                                                  .onTertiaryContainer
+                                            : null,
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        'Tanpa Rp 0',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: _sembunyikanNihil
+                                              ? FontWeight.w700
+                                              : FontWeight.w500,
+                                          color: _sembunyikanNihil
+                                              ? Theme.of(context)
+                                                    .colorScheme
+                                                    .onTertiaryContainer
+                                              : null,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
                             PopupMenuButton<BlokSortBy>(
                               tooltip: 'Urutkan: ${_sortBy.label}',
                               initialValue: _sortBy,
@@ -1984,6 +2168,8 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
                                 onTahunChanged: _pilihTahun,
                                 onRegisterShowTour: (fn) =>
                                     _showGrafikTour = fn,
+                                onRegisterPrintShortcut: (fn) =>
+                                    _printGrafikCallback = fn,
                               )
                             : _records.isEmpty
                             ? const Center(
@@ -2383,6 +2569,8 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
                     ],
                   ),
                 ),
+            ),
+          ),
         ),
       ),
     );

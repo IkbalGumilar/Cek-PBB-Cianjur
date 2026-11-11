@@ -315,14 +315,10 @@ class _KelolaAnggotaScreenState extends State<KelolaAnggotaScreen> {
         _judulBerkas,
       );
       if (!mounted) return;
-      Navigator.push(
+      await DocumentPreviewScreen.printOrPreview(
         context,
-        MaterialPageRoute(
-          builder: (_) => DocumentPreviewScreen(
-            pdfBytes: bytes,
-            fileName: '$_judulBerkas.pdf',
-          ),
-        ),
+        pdfBytes: bytes,
+        fileName: '$_judulBerkas.pdf',
       );
     } catch (e) {
       if (!mounted) return;

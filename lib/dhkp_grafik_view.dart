@@ -29,6 +29,7 @@ class DhkpGrafikView extends StatefulWidget {
   final String? selectedTahun;
   final ValueChanged<String>? onTahunChanged;
   final ValueChanged<VoidCallback>? onRegisterShowTour;
+  final ValueChanged<Future<void> Function()>? onRegisterPrintShortcut;
 
   const DhkpGrafikView({
     super.key,
@@ -38,6 +39,7 @@ class DhkpGrafikView extends StatefulWidget {
     this.selectedTahun,
     this.onTahunChanged,
     this.onRegisterShowTour,
+    this.onRegisterPrintShortcut,
   });
 
   @override
@@ -116,6 +118,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
           'Blok ${int.tryParse(widget.selectedBlok!) ?? widget.selectedBlok}';
     }
     widget.onRegisterShowTour?.call(showTour);
+    widget.onRegisterPrintShortcut?.call(printCurrentSelection);
     _loadSavedPreferences();
     _animController.forward();
     DhkpWidgetSyncService.syncFromRecords(widget.records);
@@ -552,44 +555,9 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
     }
   }
 
-  Future<void> _handlePrintSection({
-    required String sectionKey,
-    required String title,
-    required String subtitle,
-    required List<DhkpGroupInfo> groups,
-  }) async {
-    final messenger = ScaffoldMessenger.of(context);
-    try {
-      final pdfBytes = await _generateSectionPdf(
-        sectionKey: sectionKey,
-        title: title,
-        subtitle: subtitle,
-        groups: groups,
-      );
-      if (!mounted) return;
-      final fileName = DhkpGrafikExporter.buildSafeFileName(title, 'pdf');
-      await Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) =>
-              DocumentPreviewScreen(pdfBytes: pdfBytes, fileName: fileName),
-        ),
-      );
-    } catch (e) {
-      messenger.showSnackBar(
-        SnackBar(content: Text('Gagal menyiapkan cetak grafik: $e')),
-      );
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final colorScheme = Theme.of(context).colorScheme;
-
-    // 1. Filter kalkulasi murni desa (Target Pemda dipisah tidak dihitung)
+  (List<BlokRecord> murniRecords, bool hasMultiDusun, List<int> uniqueDusuns, List<String> availableYears)
+  _resolveFilteredMurniRecords() {
     final allMurni = widget.records.where((r) => !r.isTargetPemda).toList();
-
-    // Periksa apakah data asli mencakup beberapa dusun (Skala Desa vs Skala Dusun)
     final uniqueDusuns = <int>{};
     for (final r in allMurni) {
       for (final d in dusunList) {
@@ -600,7 +568,6 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
       }
     }
     final hasMultiDusun = uniqueDusuns.length > 1;
-
     final availableYears = allMurni
         .map((r) => r.tahunBayar)
         .where((t) => t.isNotEmpty)
@@ -615,7 +582,6 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
           : availableYears.first;
     }
 
-    // 2. Terapkan drill-down dusun jika sedang aktif
     var murniRecords = allMurni;
     if (hasMultiDusun && _drillDownDusun != null) {
       final dObj = dusunByNumber(_drillDownDusun!);
@@ -623,8 +589,271 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
       murniRecords = murniRecords.where((r) => dBloks.contains(r.blok)).toList();
     }
     if (availableYears.isNotEmpty) {
-      murniRecords = murniRecords.where((r) => r.tahunBayar == _selectedTahun).toList();
+      murniRecords =
+          murniRecords.where((r) => r.tahunBayar == _selectedTahun).toList();
     }
+    return (
+      murniRecords,
+      hasMultiDusun,
+      uniqueDusuns.toList()..sort(),
+      availableYears,
+    );
+  }
+
+  Future<void> _printSingleSelectedMonth(
+    List<BlokRecord> murniRecords,
+    int monthIndex,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final monthRecords = DhkpGrafikAnalytics.getPaidRecordsForMonth(
+        murniRecords,
+        monthIndex,
+        tahun: _selectedTahun,
+      );
+      final monthName = (monthIndex >= 1 &&
+              monthIndex <= DhkpGrafikAnalytics.fullMonthNames.length)
+          ? DhkpGrafikAnalytics.fullMonthNames[monthIndex - 1]
+          : 'Bulan_$monthIndex';
+      final pdfBytes = await generateDhkpRincianBulananPdfBytes(
+        targetRecords: monthRecords,
+        monthIndex: monthIndex,
+        tahun: _selectedTahun,
+      );
+      if (!mounted) return;
+      final fileName =
+          'Laporan_Bayar_${monthName.toLowerCase()}_$_selectedTahun.pdf';
+      await DocumentPreviewScreen.printOrPreview(
+        context,
+        pdfBytes: pdfBytes,
+        fileName: fileName,
+      );
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Gagal menyiapkan cetak laporan bulanan: $e')),
+      );
+    }
+  }
+
+  /// Mencetak tampilan grafik/diagram aktif saat ini (dipanggil saat menekan Ctrl+P
+  /// atau tombol Cetak di AppBar ketika tab Grafik sedang dibuka).
+  /// - Untuk tab Tren Bulanan:
+  ///   * Jika pengguna sudah mengeklik salah satu batang bulan (misal "Jan".."Des"),
+  ///     maka mencetak khusus rincian pembayaran 1 bulan tersebut saja.
+  ///   * Jika tidak ada bulan yang diklik, mencetak rekapitulasi seluruh 12 bulan.
+  /// - Untuk tab Persentase / Pendapatan / Belum Bayar / Sudah Bayar:
+  ///   * Mencetak diagram yang sedang dipilih (Batang / Mendatar / Lingkaran)
+  ///     beserta tabel data tab aktif.
+  Future<void> printCurrentSelection() async {
+    final (murniRecords, hasMultiDusun, _, _) = _resolveFilteredMurniRecords();
+    if (murniRecords.isEmpty) return;
+
+    if (_activeTab == DhkpGrafikTab.trenBulanan) {
+      final selectedMonthIdx = _selectedItemLabel != null
+          ? DhkpGrafikAnalytics.monthNames.indexOf(_selectedItemLabel!) + 1
+          : 0;
+      if (selectedMonthIdx >= 1 && selectedMonthIdx <= 12) {
+        await _printSingleSelectedMonth(murniRecords, selectedMonthIdx);
+        return;
+      }
+
+      final monthGroups = DhkpGrafikAnalytics.buildMonthGroups(
+        murniRecords,
+        tahun: _selectedTahun,
+      );
+      final (sectionKey, title, subtitle) = switch (_selectedStyle) {
+        ChartStyle.bar => (
+          'bar',
+          'Diagram Mendatar: Rincian Bulanan (Jan - Des)',
+          'Daftar penerimaan kas dari awal hingga akhir tahun',
+        ),
+        ChartStyle.pie => (
+          'pie',
+          'Diagram Lingkaran: Porsi Penerimaan per Bulan',
+          'Kontribusi tiap bulan terhadap total penerimaan tahunan',
+        ),
+        ChartStyle.batang || ChartStyle.semua => (
+          'batang',
+          'Diagram Batang & Garis Tren Bulanan',
+          'Penerimaan kas per bulan dengan garis poligon tren puncak (Jan - Des)',
+        ),
+      };
+      await _handlePrintSection(
+        sectionKey: sectionKey,
+        title: title,
+        subtitle: subtitle,
+        groups: monthGroups,
+      );
+      return;
+    }
+
+    final sectionKey = switch (_selectedStyle) {
+      ChartStyle.bar => 'bar',
+      ChartStyle.pie => 'pie',
+      ChartStyle.batang || ChartStyle.semua => 'batang',
+    };
+
+    switch (_activeTab) {
+      case DhkpGrafikTab.persentase:
+        final groups = _groupData(
+          murniRecords,
+          hasMultiDusun: hasMultiDusun,
+          sortValueFn: (g) => g.lunasPct,
+        );
+        final (title, subtitle) = switch (sectionKey) {
+          'bar' => (
+            'Diagram Mendatar: Capaian Persentase Wilayah',
+            'Tingkat pencapaian pembayaran terhadap target 100%',
+          ),
+          'pie' => (
+            'Diagram Lingkaran: Sudah Tercapai vs Sisa Target',
+            'Perbandingan persentase lunas dan sisa yang belum masuk',
+          ),
+          _ => (
+            'Diagram Batang: Capaian Persentase (%)',
+            'Skala capaian 0% sampai 100% per wilayah',
+          ),
+        };
+        await _handlePrintSection(
+          sectionKey: sectionKey,
+          title: title,
+          subtitle: subtitle,
+          groups: groups,
+        );
+      case DhkpGrafikTab.pendapatan:
+        final groups = _groupData(
+          murniRecords,
+          hasMultiDusun: hasMultiDusun,
+          sortValueFn: (g) => g.lunasNominal.toDouble(),
+        );
+        final (title, subtitle) = switch (sectionKey) {
+          'bar' => (
+            'Diagram Mendatar: Peringkat Pendapatan (Rp)',
+            'Perbandingan uang masuk antar wilayah',
+          ),
+          'pie' => (
+            'Diagram Lingkaran: Porsi Pendapatan Masuk',
+            'Perbandingan sumbangan penerimaan tiap wilayah',
+          ),
+          _ => (
+            'Diagram Batang: Pendapatan Masuk (Rp)',
+            'Ketuk batang untuk melihat rincian wilayah',
+          ),
+        };
+        await _handlePrintSection(
+          sectionKey: sectionKey,
+          title: title,
+          subtitle: subtitle,
+          groups: groups,
+        );
+      case DhkpGrafikTab.belumBayar:
+        final groups = _groupData(
+          murniRecords,
+          hasMultiDusun: hasMultiDusun,
+          sortValueFn: (g) => g.belumBayarNominal.toDouble(),
+        );
+        final (title, subtitle) = switch (sectionKey) {
+          'bar' => (
+            'Diagram Mendatar: Urutan Belum Bayar per Wilayah',
+            'Wilayah dengan sisa tagihan belum lunas terbesar',
+          ),
+          'pie' => (
+            'Diagram Lingkaran: Sebaran Belum Bayar',
+            'Perbandingan sisa tagihan antar wilayah',
+          ),
+          _ => (
+            'Diagram Batang: Tagihan Belum Bayar (Rp)',
+            'Jumlah tagihan yang masih perlu ditagih per wilayah',
+          ),
+        };
+        await _handlePrintSection(
+          sectionKey: sectionKey,
+          title: title,
+          subtitle: subtitle,
+          groups: groups,
+        );
+      case DhkpGrafikTab.sudahBayar:
+        final groups = _groupData(
+          murniRecords,
+          hasMultiDusun: hasMultiDusun,
+          sortValueFn: (g) => g.lunasNop.toDouble(),
+        );
+        final (title, subtitle) = switch (sectionKey) {
+          'bar' => (
+            'Diagram Mendatar: Urutan Objek Lunas',
+            'Urutan wilayah berdasarkan jumlah warga yang sudah bayar',
+          ),
+          'pie' => (
+            'Diagram Lingkaran: Sebaran Objek Lunas',
+            'Perbandingan jumlah wajib pajak yang telah membayar',
+          ),
+          _ => (
+            'Diagram Batang: Jumlah Objek Sudah Bayar',
+            'Banyaknya objek pajak yang sudah lunas per wilayah',
+          ),
+        };
+        await _handlePrintSection(
+          sectionKey: sectionKey,
+          title: title,
+          subtitle: subtitle,
+          groups: groups,
+        );
+      case DhkpGrafikTab.trenBulanan:
+        break;
+    }
+  }
+
+  Future<void> _handlePrintSection({
+    required String sectionKey,
+    required String title,
+    required String subtitle,
+    required List<DhkpGroupInfo> groups,
+  }) async {
+    // Jika di tab Tren Pembayaran dan pengguna sedang memilih 1 batang bulan tertentu,
+    // cetak langsung laporan 1 bulan yang dipilih tersebut saja.
+    if (_activeTab == DhkpGrafikTab.trenBulanan && _selectedItemLabel != null) {
+      final selectedMonthIdx =
+          DhkpGrafikAnalytics.monthNames.indexOf(_selectedItemLabel!) + 1;
+      if (selectedMonthIdx >= 1 && selectedMonthIdx <= 12) {
+        final (murniRecords, _, _, _) = _resolveFilteredMurniRecords();
+        await _printSingleSelectedMonth(murniRecords, selectedMonthIdx);
+        return;
+      }
+    }
+
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final pdfBytes = await _generateSectionPdf(
+        sectionKey: sectionKey,
+        title: title,
+        subtitle: subtitle,
+        groups: groups,
+      );
+      if (!mounted) return;
+      final fileName = DhkpGrafikExporter.buildSafeFileName(title, 'pdf');
+      await DocumentPreviewScreen.printOrPreview(
+        context,
+        pdfBytes: pdfBytes,
+        fileName: fileName,
+      );
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Gagal menyiapkan cetak grafik: $e')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final colorScheme = Theme.of(context).colorScheme;
+
+    final (
+      murniRecords,
+      hasMultiDusun,
+      sortedUniqueDusuns,
+      availableYears,
+    ) = _resolveFilteredMurniRecords();
 
     final totalNop = murniRecords.length;
     final sudahBayarList = murniRecords.where((r) => r.isPaid).toList();
@@ -652,118 +881,129 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
             ? (totalNop > 0 ? 100.0 : 0.0)
             : lunasNopPct);
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.only(bottom: 36),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // 1. TOP TAB BAR: 5 KATEGORI UTAMA
-          KeyedSubtree(
-            key: _topTabsKey,
-            child: _buildTopCategoryTabs(isDark, colorScheme),
-          ),
-          const SizedBox(height: 10),
-
-          // 2. FILTER CEPAT DUSUN (UNTUK DESA: SEMUA DUSUN / SEMUA BLOK / PER DUSUN)
-          if (hasMultiDusun) ...[
-            KeyedSubtree(
-              key: _scopeBarKey,
-              child: _buildScopeQuickBar(
-                uniqueDusuns.toList()..sort(),
-                isDark,
-                colorScheme,
+    return CallbackShortcuts(
+      bindings: <ShortcutActivator, VoidCallback>{
+        const SingleActivator(LogicalKeyboardKey.keyP, control: true):
+            printCurrentSelection,
+        const SingleActivator(LogicalKeyboardKey.keyP, meta: true):
+            printCurrentSelection,
+      },
+      child: Focus(
+        autofocus: false,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.only(bottom: 36),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // 1. TOP TAB BAR: 5 KATEGORI UTAMA
+              KeyedSubtree(
+                key: _topTabsKey,
+                child: _buildTopCategoryTabs(isDark, colorScheme),
               ),
-            ),
-            const SizedBox(height: 10),
-          ],
+              const SizedBox(height: 10),
 
-          // 2b. FILTER CEPAT TAHUN (JIKA DATA MENCAKUP LEBIH DARI 1 TAHUN)
-          if (availableYears.length > 1) ...[
-            _buildYearQuickBar(
-              availableYears,
-              isDark,
-              colorScheme,
-            ),
-            const SizedBox(height: 10),
-          ],
+              // 2. FILTER CEPAT DUSUN (UNTUK DESA: SEMUA DUSUN / SEMUA BLOK / PER DUSUN)
+              if (hasMultiDusun) ...[
+                KeyedSubtree(
+                  key: _scopeBarKey,
+                  child: _buildScopeQuickBar(
+                    sortedUniqueDusuns,
+                    isDark,
+                    colorScheme,
+                  ),
+                ),
+                const SizedBox(height: 10),
+              ],
 
-          // 3. KARTU RINGKASAN UTAMA DI ATAS (3 METRIK KUNCI SESUAI TAB)
-          KeyedSubtree(
-            key: _statCardsKey,
-            child: buildDhkpStatRow(
-              DhkpGrafikAnalytics.buildHighlightStats(
-                activeTab: _activeTab,
-                totalNop: totalNop,
-                sudahBayarCount: sudahBayarList.length,
-                belumBayarCount: belumBayarList.length,
-                sudahBayarNominal: sudahBayarNominal,
-                belumBayarNominal: belumBayarNominal,
-                totalNominalTarget: totalNominalTarget,
-                lunasNominalPct: lunasNominalPct,
-                lunasNopPct: lunasNopPct,
-                records: murniRecords,
+              // 2b. FILTER CEPAT TAHUN (JIKA DATA MENCAKUP LEBIH DARI 1 TAHUN)
+              if (availableYears.length > 1) ...[
+                _buildYearQuickBar(
+                  availableYears,
+                  isDark,
+                  colorScheme,
+                ),
+                const SizedBox(height: 10),
+              ],
+
+              // 3. KARTU RINGKASAN UTAMA DI ATAS (3 METRIK KUNCI SESUAI TAB)
+              KeyedSubtree(
+                key: _statCardsKey,
+                child: buildDhkpStatRow(
+                  DhkpGrafikAnalytics.buildHighlightStats(
+                    activeTab: _activeTab,
+                    totalNop: totalNop,
+                    sudahBayarCount: sudahBayarList.length,
+                    belumBayarCount: belumBayarList.length,
+                    sudahBayarNominal: sudahBayarNominal,
+                    belumBayarNominal: belumBayarNominal,
+                    totalNominalTarget: totalNominalTarget,
+                    lunasNominalPct: lunasNominalPct,
+                    lunasNopPct: lunasNopPct,
+                    records: murniRecords,
+                  ),
+                  isDark,
+                ),
               ),
-              isDark,
-            ),
-          ),
-          const SizedBox(height: 10),
+              const SizedBox(height: 10),
 
-          // 4. TOOLBAR KONTROL: PILIH DIAGRAM + URUTAN + LIPAT/BUKA SEMUA
-          KeyedSubtree(
-            key: _controlToolbarKey,
-            child: _buildControlToolbar(hasMultiDusun, isDark, colorScheme),
-          ),
-          const SizedBox(height: 12),
+              // 4. TOOLBAR KONTROL: PILIH DIAGRAM + URUTAN + LIPAT/BUKA SEMUA
+              KeyedSubtree(
+                key: _controlToolbarKey,
+                child: _buildControlToolbar(hasMultiDusun, isDark, colorScheme),
+              ),
+              const SizedBox(height: 12),
 
-          // 5. PANEL DETAIL INTERAKTIF (MUNCUL SAAT SALAH SATU WILAYAH DIKLIK)
-          if (_selectedItemLabel != null) ...[
-            _buildSelectedDetailBanner(murniRecords, hasMultiDusun, isDark),
-            const SizedBox(height: 12),
-          ],
+              // 5. PANEL DETAIL INTERAKTIF (MUNCUL SAAT SALAH SATU WILAYAH DIKLIK)
+              if (_selectedItemLabel != null) ...[
+                _buildSelectedDetailBanner(murniRecords, hasMultiDusun, isDark),
+                const SizedBox(height: 12),
+              ],
 
-          // 6. KONTEN GRAFIK & TABEL DENGAN FITUR LIPAT + UNDUH/BAGIKAN/CETAK
-          KeyedSubtree(
-            key: _chartContentKey,
-            child: AnimatedBuilder(
-              animation: _animation,
-              builder: (context, _) {
-                return switch (_activeTab) {
-                  DhkpGrafikTab.pendapatan => _buildPendapatanSection(
-                    murniRecords,
-                    hasMultiDusun,
-                    sudahBayarNominal,
-                    totalNominalTarget,
-                    isDark,
-                  ),
-                  DhkpGrafikTab.persentase => _buildPersentaseSection(
-                    murniRecords,
-                    hasMultiDusun,
-                    lunasNominalPct,
-                    isDark,
-                  ),
-                  DhkpGrafikTab.belumBayar => _buildBelumBayarSection(
-                    murniRecords,
-                    hasMultiDusun,
-                    belumBayarNominal,
-                    totalNominalTarget,
-                    isDark,
-                  ),
-                  DhkpGrafikTab.sudahBayar => _buildSudahBayarSection(
-                    murniRecords,
-                    hasMultiDusun,
-                    sudahBayarList.length,
-                    sudahBayarNominal,
-                    isDark,
-                  ),
-                  DhkpGrafikTab.trenBulanan => _buildTrenBulananSection(
-                    murniRecords,
-                    isDark,
-                  ),
-                };
-              },
-            ),
+              // 6. KONTEN GRAFIK & TABEL DENGAN FITUR LIPAT + UNDUH/BAGIKAN/CETAK
+              KeyedSubtree(
+                key: _chartContentKey,
+                child: AnimatedBuilder(
+                  animation: _animation,
+                  builder: (context, _) {
+                    return switch (_activeTab) {
+                      DhkpGrafikTab.pendapatan => _buildPendapatanSection(
+                        murniRecords,
+                        hasMultiDusun,
+                        sudahBayarNominal,
+                        totalNominalTarget,
+                        isDark,
+                      ),
+                      DhkpGrafikTab.persentase => _buildPersentaseSection(
+                        murniRecords,
+                        hasMultiDusun,
+                        lunasNominalPct,
+                        isDark,
+                      ),
+                      DhkpGrafikTab.belumBayar => _buildBelumBayarSection(
+                        murniRecords,
+                        hasMultiDusun,
+                        belumBayarNominal,
+                        totalNominalTarget,
+                        isDark,
+                      ),
+                      DhkpGrafikTab.sudahBayar => _buildSudahBayarSection(
+                        murniRecords,
+                        hasMultiDusun,
+                        sudahBayarList.length,
+                        sudahBayarNominal,
+                        isDark,
+                      ),
+                      DhkpGrafikTab.trenBulanan => _buildTrenBulananSection(
+                        murniRecords,
+                        isDark,
+                      ),
+                    };
+                  },
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -1473,37 +1713,67 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
                   final mIdx =
                       DhkpGrafikAnalytics.monthNames.indexOf(match.label) + 1;
                   if (mIdx <= 0) return const SizedBox.shrink();
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 6),
-                    child: FilledButton.tonalIcon(
-                      style: FilledButton.styleFrom(
-                        visualDensity: VisualDensity.compact,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 4,
+                  return Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(right: 6),
+                        child: FilledButton.tonalIcon(
+                          style: FilledButton.styleFrom(
+                            visualDensity: VisualDensity.compact,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 4,
+                            ),
+                          ),
+                          onPressed: () {
+                            showDhkpRincianBulananDialog(
+                              context,
+                              allRecords: records,
+                              monthIndex: mIdx,
+                              tahun: _selectedTahun,
+                              isDark: isDark,
+                            );
+                          },
+                          icon: const Icon(
+                            Icons.receipt_long_rounded,
+                            size: 15,
+                          ),
+                          label: const Text(
+                            'Rincian',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                         ),
                       ),
-                      onPressed: () {
-                        showDhkpRincianBulananDialog(
-                          context,
-                          allRecords: records,
-                          monthIndex: mIdx,
-                          tahun: _selectedTahun,
-                          isDark: isDark,
-                        );
-                      },
-                      icon: const Icon(
-                        Icons.receipt_long_rounded,
-                        size: 15,
-                      ),
-                      label: const Text(
-                        'Rincian',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
+                      Padding(
+                        padding: const EdgeInsets.only(right: 6),
+                        child: OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            visualDensity: VisualDensity.compact,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 4,
+                            ),
+                          ),
+                          onPressed: () =>
+                              _printSingleSelectedMonth(records, mIdx),
+                          icon: const Icon(
+                            Icons.print_outlined,
+                            size: 15,
+                          ),
+                          label: const Text(
+                            'Cetak Bulan Ini',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                         ),
                       ),
-                    ),
+                    ],
                   );
                 }(),
               ],
