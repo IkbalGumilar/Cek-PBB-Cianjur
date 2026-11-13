@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -78,6 +79,9 @@ class _NopKalkulatorDialogContentState
   late TextEditingController _catatanTabunganCtrl;
   String _cicilanFrekuensi = 'Mingguan';
   int _cicilanDurasiBulan = 6;
+  late List<List<int>> _draftTtdStrokes;
+  List<int>? _activeTtdStroke;
+  bool _ttdDirty = false;
 
   // State Tab AJB
   late TextEditingController _luasTanahCtrl;
@@ -96,6 +100,9 @@ class _NopKalkulatorDialogContentState
     );
     _nominalMutasiCtrl = TextEditingController();
     _catatanTabunganCtrl = TextEditingController(text: _tabungan.catatan);
+    _draftTtdStrokes = _tabungan.tandaTanganStrokes
+        .map((s) => List<int>.from(s))
+        .toList();
 
     _tabController = TabController(
       length: 3,
@@ -300,6 +307,94 @@ class _NopKalkulatorDialogContentState
       updatedTabungan,
       successMessage: 'Catatan tabungan cicilan berhasil disimpan!',
     );
+  }
+
+  void _pilihAlokasiKelebihan(PbbKelebihanAlokasi alokasi) {
+    final updated = _tabungan.copyWith(kelebihanAlokasi: alokasi);
+    _updateTabunganState(
+      updated,
+      successMessage: 'Alokasi kelebihan dicatat: ${alokasi.label}',
+    );
+  }
+
+  List<int> _toNormalizedPoint(Offset localPos, Size canvasSize) {
+    final nx = ((localPos.dx / canvasSize.width) * 1000).round().clamp(0, 1000);
+    final ny = ((localPos.dy / canvasSize.height) * 1000).round().clamp(0, 1000);
+    return [nx, ny];
+  }
+
+  void _startSignatureStroke(Offset localPos, Size canvasSize) {
+    if (canvasSize.width <= 0 || canvasSize.height <= 0) return;
+    final pt = _toNormalizedPoint(localPos, canvasSize);
+    setState(() {
+      _activeTtdStroke = pt;
+      _ttdDirty = true;
+    });
+  }
+
+  void _appendSignatureStroke(Offset localPos, Size canvasSize) {
+    final active = _activeTtdStroke;
+    if (active == null || canvasSize.width <= 0 || canvasSize.height <= 0) {
+      return;
+    }
+    final pt = _toNormalizedPoint(localPos, canvasSize);
+    if (active.length >= 2) {
+      final prevX = active[active.length - 2];
+      final prevY = active[active.length - 1];
+      if ((pt[0] - prevX).abs() < 6 && (pt[1] - prevY).abs() < 6) return;
+    }
+    setState(() {
+      active.add(pt[0]);
+      active.add(pt[1]);
+    });
+  }
+
+  void _endSignatureStroke() {
+    final active = _activeTtdStroke;
+    if (active == null) return;
+    setState(() {
+      if (active.length >= 2) {
+        _draftTtdStrokes.add(active);
+      }
+      _activeTtdStroke = null;
+    });
+  }
+
+  void _simpanTandaTanganWp() {
+    if (_draftTtdStrokes.isEmpty) {
+      _updateTabunganState(
+        _tabungan,
+        errorMessage: 'Silakan buat tanda tangan WP pada area kanvas terlebih dahulu.',
+      );
+      return;
+    }
+    final cleanStrokes = _draftTtdStrokes
+        .where((s) => s.length >= 2)
+        .map((s) => List<int>.from(s))
+        .toList();
+    final updated = _tabungan.copyWith(
+      tandaTanganStrokes: cleanStrokes,
+      tandaTanganWaktu: _formatNow(),
+    );
+    setState(() => _ttdDirty = false);
+    _updateTabunganState(
+      updated,
+      successMessage: 'Tanda tangan digital WP berhasil disimpan!',
+    );
+  }
+
+  void _hapusTandaTanganWp() {
+    setState(() {
+      _draftTtdStrokes.clear();
+      _activeTtdStroke = null;
+      _ttdDirty = false;
+    });
+    if (_tabungan.hasTandaTangan) {
+      _updateTabunganState(
+        _tabungan.copyWith(clearTandaTangan: true),
+        successMessage: 'Tanda tangan digital WP dihapus.',
+      );
+    }
   }
 
   Future<void> _pickDate({
@@ -704,9 +799,11 @@ class _NopKalkulatorDialogContentState
                           ),
                         ),
                         Text(
-                          isLunas
-                              ? 'Alhamdulillah! Saldo Tabungan Sudah Lunas'
-                              : 'Kumpulkan cicilan warga hingga cukup untuk bayar PBB',
+                          _tabungan.hasKelebihan
+                              ? 'Lunas + lebih ${formatRupiah(_tabungan.kelebihanSaldo)} — tentukan alokasi sisa'
+                              : (isLunas
+                                  ? 'Alhamdulillah! Saldo Tabungan Sudah Lunas'
+                                  : 'Kumpulkan cicilan warga hingga cukup untuk bayar PBB'),
                           style: TextStyle(
                             fontSize: 11,
                             color: isDark ? Colors.white70 : Colors.black87,
@@ -720,7 +817,10 @@ class _NopKalkulatorDialogContentState
                       tooltip: 'Samakan target dengan tagihan pokok (${formatRupiah(pokok)})',
                       icon: const Icon(Icons.sync_rounded, size: 20),
                       onPressed: () {
-                        final updated = _tabungan.copyWith(target: pokok);
+                        final updated = _tabungan.copyWith(
+                          target: pokok,
+                          clearKelebihanAlokasi: _tabungan.saldo <= pokok,
+                        );
                         _updateTabunganState(
                           updated,
                           successMessage: 'Target disesuaikan ke ${formatRupiah(pokok)}',
@@ -807,24 +907,44 @@ class _NopKalkulatorDialogContentState
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    isLunas
-                        ? 'LUNAS (100%)'
-                        : 'Kurang: ${formatRupiah(_tabungan.sisaKekurangan)}',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: isLunas
-                          ? (isDark ? Colors.green.shade300 : Colors.green.shade800)
-                          : (isDark ? Colors.orange.shade300 : Colors.orange.shade900),
+                  Flexible(
+                    child: Text(
+                      _tabungan.hasKelebihan
+                          ? 'LUNAS + LEBIH ${formatRupiah(_tabungan.kelebihanSaldo)}'
+                          : (isLunas
+                              ? 'LUNAS (100%)'
+                              : 'Kurang: ${formatRupiah(_tabungan.sisaKekurangan)}'),
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: isLunas
+                            ? (isDark ? Colors.green.shade300 : Colors.green.shade800)
+                            : (isDark ? Colors.orange.shade300 : Colors.orange.shade900),
+                      ),
                     ),
                   ),
-                  Text(
-                    '${_tabungan.persentase.toStringAsFixed(1)}%',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: isDark ? Colors.white70 : Colors.black87,
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: _tabungan.hasKelebihan
+                        ? const EdgeInsets.symmetric(horizontal: 6, vertical: 2)
+                        : EdgeInsets.zero,
+                    decoration: _tabungan.hasKelebihan
+                        ? BoxDecoration(
+                            color: isDark
+                                ? Colors.teal.shade800
+                                : Colors.teal.shade100,
+                            borderRadius: BorderRadius.circular(6),
+                          )
+                        : null,
+                    child: Text(
+                      '${_tabungan.persentase.toStringAsFixed(1)}%',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: _tabungan.hasKelebihan
+                            ? (isDark ? Colors.teal.shade200 : Colors.teal.shade900)
+                            : (isDark ? Colors.white70 : Colors.black87),
+                      ),
                     ),
                   ),
                 ],
@@ -892,6 +1012,11 @@ class _NopKalkulatorDialogContentState
           ),
         const SizedBox(height: 16),
 
+        if (_tabungan.hasKelebihan) ...[
+          _buildKelebihanAlokasiSection(isDark),
+          const SizedBox(height: 16),
+        ],
+
         // ------------------------------------------
         // INPUT SETOR / TARIK TABUNGAN
         // ------------------------------------------
@@ -956,7 +1081,7 @@ class _NopKalkulatorDialogContentState
               label: const Text('+100 rb'),
               onPressed: () {
                 final current = _parseNumeric(_nominalMutasiCtrl);
-                _nominalMutasiCtrl.text = (current + 10000).toString();
+                _nominalMutasiCtrl.text = (current + 100000).toString();
               },
             ),
             if (_tabungan.sisaKekurangan > 0)
@@ -1245,6 +1370,12 @@ class _NopKalkulatorDialogContentState
         const SizedBox(height: 16),
 
         // ------------------------------------------
+        // TANDA TANGAN DIGITAL WP (PERSETUJUAN & SERAH TERIMA)
+        // ------------------------------------------
+        _buildTandaTanganWpSection(isDark),
+        const SizedBox(height: 16),
+
+        // ------------------------------------------
         // BAGIKAN BUKTI TABUNGAN & SALIN
         // ------------------------------------------
         Row(
@@ -1279,6 +1410,266 @@ class _NopKalkulatorDialogContentState
           ],
         ),
       ],
+    );
+  }
+
+  Widget _buildKelebihanAlokasiSection(bool isDark) {
+    final selected = _tabungan.kelebihanAlokasi;
+    return Container(
+      key: const Key('kelebihan_alokasi_card'),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF132A2E) : const Color(0xFFE0F2F1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isDark ? Colors.teal.shade600 : Colors.teal.shade300,
+          width: 1.2,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.account_balance_wallet_outlined,
+                size: 18,
+                color: isDark ? Colors.teal.shade200 : Colors.teal.shade800,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Alokasi Sisa / Kembalian (${formatRupiah(_tabungan.kelebihanSaldo)})',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12.5,
+                    color: isDark ? Colors.teal.shade100 : Colors.teal.shade900,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Setoran mencapai ${_tabungan.persentase.toStringAsFixed(1)}% dari target. Tandai peruntukan dana lebih:',
+            style: TextStyle(
+              fontSize: 11,
+              color: isDark ? Colors.white70 : Colors.black87,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            children: PbbKelebihanAlokasi.values.map((opt) {
+              final isSelected = selected == opt;
+              final icon = opt == PbbKelebihanAlokasi.kembalianKeWp
+                  ? Icons.assignment_return_outlined
+                  : Icons.volunteer_activism_outlined;
+              return ChoiceChip(
+                selected: isSelected,
+                avatar: Icon(
+                  icon,
+                  size: 16,
+                  color: isSelected
+                      ? Colors.white
+                      : (isDark ? Colors.teal.shade200 : Colors.teal.shade800),
+                ),
+                label: Text(opt.label),
+                selectedColor: Colors.teal.shade700,
+                labelStyle: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: isSelected
+                      ? Colors.white
+                      : (isDark ? Colors.white : Colors.black87),
+                ),
+                onSelected: (_) => _pilihAlokasiKelebihan(opt),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            selected != null
+                ? 'Tercatat: ${selected.label}'
+                : 'Belum dipilih — silakan pilih Dikembalikan ke WP atau Tip Petugas.',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: selected != null ? FontWeight.w600 : FontWeight.normal,
+              color: selected != null
+                  ? (isDark ? Colors.green.shade300 : Colors.teal.shade900)
+                  : (isDark ? Colors.amber.shade200 : Colors.orange.shade900),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTandaTanganWpSection(bool isDark) {
+    final hasAnyStrokes = _draftTtdStrokes.isNotEmpty || _activeTtdStroke != null;
+    final canSave = _draftTtdStrokes.isNotEmpty &&
+        (_ttdDirty || !_tabungan.hasTandaTangan);
+
+    final String statusLabel;
+    final Color statusBg;
+    final Color statusFg;
+    if (_tabungan.hasTandaTangan && !_ttdDirty) {
+      statusLabel = _tabungan.tandaTanganWaktu.isNotEmpty
+          ? 'Tersimpan • ${_tabungan.tandaTanganWaktu}'
+          : 'Tersimpan';
+      statusBg = isDark ? Colors.green.shade900 : Colors.green.shade100;
+      statusFg = isDark ? Colors.green.shade200 : Colors.green.shade900;
+    } else if (_ttdDirty) {
+      statusLabel = 'Belum disimpan';
+      statusBg = isDark ? Colors.amber.shade900 : Colors.amber.shade100;
+      statusFg = isDark ? Colors.amber.shade200 : Colors.amber.shade900;
+    } else {
+      statusLabel = 'Belum ada TTD';
+      statusBg = isDark ? Colors.white12 : Colors.black12;
+      statusFg = isDark ? Colors.white70 : Colors.black54;
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E242B) : const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isDark ? Colors.white12 : Colors.black12,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.draw_rounded, size: 18),
+              const SizedBox(width: 6),
+              const Expanded(
+                child: Text(
+                  'Tanda Tangan Digital WP',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: statusBg,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  statusLabel,
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w600,
+                    color: statusFg,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Bukti persetujuan cicilan & serah terima dana dengan wajib pajak.',
+            style: TextStyle(
+              fontSize: 11,
+              color: isDark ? Colors.grey.shade300 : Colors.grey.shade700,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Container(
+            height: 130,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: _tabungan.hasTandaTangan && !_ttdDirty
+                    ? Colors.green.shade500
+                    : Colors.blueGrey.shade300,
+                width: 1.2,
+              ),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(9),
+              child: LayoutBuilder(
+                builder: (ctx, constraints) {
+                  final canvasSize = Size(constraints.maxWidth, 130);
+                  return RawGestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    gestures: <Type, GestureRecognizerFactory>{
+                      EagerGestureRecognizer:
+                          GestureRecognizerFactoryWithHandlers<
+                              EagerGestureRecognizer>(
+                        EagerGestureRecognizer.new,
+                        (_) {},
+                      ),
+                    },
+                    child: Listener(
+                      key: const Key('ttd_wp_canvas'),
+                      behavior: HitTestBehavior.opaque,
+                      onPointerDown: (e) =>
+                          _startSignatureStroke(e.localPosition, canvasSize),
+                      onPointerMove: (e) =>
+                          _appendSignatureStroke(e.localPosition, canvasSize),
+                      onPointerUp: (_) => _endSignatureStroke(),
+                      onPointerCancel: (_) => _endSignatureStroke(),
+                      child: Stack(
+                        children: [
+                          CustomPaint(
+                            size: canvasSize,
+                            painter: _TandaTanganWpPainter(
+                              strokes: _draftTtdStrokes,
+                              activeStroke: _activeTtdStroke,
+                            ),
+                          ),
+                          if (!hasAnyStrokes)
+                            Center(
+                              child: IgnorePointer(
+                                child: Text(
+                                  'Goreskan tanda tangan WP di area ini',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey.shade400,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  key: const Key('btn_hapus_ttd_wp'),
+                  onPressed: (hasAnyStrokes || _tabungan.hasTandaTangan)
+                      ? _hapusTandaTanganWp
+                      : null,
+                  icon: const Icon(Icons.cleaning_services_outlined, size: 16),
+                  label: const Text('Hapus TTD'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: FilledButton.icon(
+                  key: const Key('btn_simpan_ttd_wp'),
+                  onPressed: canSave ? _simpanTandaTanganWp : null,
+                  icon: const Icon(Icons.check_rounded, size: 16),
+                  label: const Text('Simpan TTD'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
@@ -1738,4 +2129,78 @@ class _StandaloneAjbDialogContentState
       ),
     );
   }
+}
+
+/// CustomPainter untuk menggambar tanda tangan digital WP dari koordinat ternormalisasi (0..1000).
+class _TandaTanganWpPainter extends CustomPainter {
+  final List<List<int>> strokes;
+  final List<int>? activeStroke;
+
+  const _TandaTanganWpPainter({
+    required this.strokes,
+    required this.activeStroke,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final baselinePaint = Paint()
+      ..color = Colors.grey.shade300
+      ..strokeWidth = 1.0;
+    final baselineY = size.height * 0.80;
+    canvas.drawLine(
+      Offset(14, baselineY),
+      Offset(size.width - 14, baselineY),
+      baselinePaint,
+    );
+
+    final inkPaint = Paint()
+      ..color = const Color(0xFF0F172A)
+      ..strokeWidth = 2.6
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..style = PaintingStyle.stroke;
+
+    final dotPaint = Paint()
+      ..color = const Color(0xFF0F172A)
+      ..style = PaintingStyle.fill;
+
+    final allStrokes = <List<int>>[
+      ...strokes,
+      ?activeStroke,
+    ];
+
+    for (final pts in allStrokes) {
+      if (pts.length < 2) continue;
+      if (pts.length == 2) {
+        final x = (pts[0] / 1000.0) * size.width;
+        final y = (pts[1] / 1000.0) * size.height;
+        canvas.drawCircle(Offset(x, y), 1.8, dotPaint);
+        continue;
+      }
+
+      final path = Path();
+      final x0 = (pts[0] / 1000.0) * size.width;
+      final y0 = (pts[1] / 1000.0) * size.height;
+      path.moveTo(x0, y0);
+
+      for (int i = 2; i < pts.length - 1; i += 2) {
+        final prevX = (pts[i - 2] / 1000.0) * size.width;
+        final prevY = (pts[i - 1] / 1000.0) * size.height;
+        final currX = (pts[i] / 1000.0) * size.width;
+        final currY = (pts[i + 1] / 1000.0) * size.height;
+        final midX = (prevX + currX) / 2;
+        final midY = (prevY + currY) / 2;
+        path.quadraticBezierTo(prevX, prevY, midX, midY);
+      }
+
+      final lastX = (pts[pts.length - 2] / 1000.0) * size.width;
+      final lastY = (pts[pts.length - 1] / 1000.0) * size.height;
+      path.lineTo(lastX, lastY);
+
+      canvas.drawPath(path, inkPaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _TandaTanganWpPainter oldDelegate) => true;
 }

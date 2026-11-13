@@ -1,17 +1,23 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
+import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show HapticFeedback, rootBundle;
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import '../blok_backup_scheduler.dart';
 import '../blok_data_store.dart';
 import '../blok_record.dart';
+import '../download_helper.dart';
 import '../dusun_data.dart';
 import '../nop_helper.dart';
 import '../services/location_service.dart';
 import 'kml_parser.dart';
 import 'map_models.dart';
+import 'map_nop_picker_dialog.dart';
+import 'map_pin_store.dart';
 
 /// Pilihan provider layer peta langsung (Pilihan Layer Peta).
 enum LiveMapProvider {
@@ -92,11 +98,18 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
 
   List<MapTaxDot> _allDots = [];
   List<MapDusunZone> _zones = [];
+  List<BlokRecord> _uniqueDhkpRecords = [];
+  List<MapPinEntry> _savedPins = [];
 
   int? _selectedDusun;
   String? _selectedBlok;
   MapDotStatus? _filterStatus;
   MapTaxDot? _selectedDot;
+
+  bool _isPinPlacementMode = false;
+  bool _isFetchingGps = false;
+  FieldLocationResult? _currentGpsLocation;
+  LatLng? _draftPinLatLng;
 
   LiveMapProvider _activeProvider = LiveMapProvider.googleHybrid;
 
@@ -192,7 +205,7 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
   }
 
   Future<void> _loadData() async {
-    // Peta secara bawaan bersih tanpa titik atau zonasi dummy hingga berkas spasial/KML dimuat
+    // Peta secara bawaan bersih tanpa titik atau zonasi dummy hingga berkas spasial/KML/pin dimuat
     if (!mounted) return;
     setState(() {
       _allDots = widget.initialDots != null ? List.of(widget.initialDots!) : [];
@@ -215,13 +228,37 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
       return;
     }
 
-    await _loadSpatialAssets();
+    await Future.wait([
+      _loadSpatialAssets(),
+      _loadSavedPinsAndDhkp(),
+    ]);
 
     if (_allDots.isNotEmpty && mounted) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _fitDesaBounds();
       });
     }
+  }
+
+  Future<void> _loadSavedPinsAndDhkp() async {
+    final rawRecords =
+        widget.initialRecords ?? await BlokDataStore.instance.loadAll();
+    final uniqueRecords =
+        MapPinStore.buildLatestRecordByNop(rawRecords).values.toList()
+          ..sort((a, b) => a.nop.compareTo(b.nop));
+
+    final pins = await MapPinStore.instance.loadAll();
+    if (!mounted) return;
+    setState(() {
+      _uniqueDhkpRecords = uniqueRecords;
+      _savedPins = pins;
+      if (widget.initialDots == null && pins.isNotEmpty) {
+        _allDots = MapPinStore.buildGroupedDots(
+          pins: pins,
+          dhkpRecords: uniqueRecords,
+        );
+      }
+    });
   }
 
   Future<void> _loadSpatialAssets() async {
@@ -438,10 +475,88 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
   int get _countFasum =>
       _visibleDots.where((d) => d.status == MapDotStatus.fasum).length;
 
+  Future<void> _ensureUniqueDhkpLoaded() async {
+    if (_uniqueDhkpRecords.isNotEmpty) return;
+    final raw = widget.initialRecords ?? await BlokDataStore.instance.loadAll();
+    if (!mounted) return;
+    setState(() {
+      _uniqueDhkpRecords =
+          MapPinStore.buildLatestRecordByNop(raw).values.toList()
+            ..sort((a, b) => a.nop.compareTo(b.nop));
+    });
+  }
+
+  void _safeMoveMap(LatLng target, double zoom, {bool animated = true}) {
+    try {
+      if (animated) {
+        _animatedMapMove(target, zoom);
+      } else {
+        _mapController.move(target, zoom);
+      }
+    } catch (_) {
+      try {
+        _mapController.move(target, zoom);
+      } catch (_) {}
+    }
+  }
+
+  void _applyUpdatedPins(
+    List<MapPinEntry> updatedPins, {
+    MapCoordinate? focusCoordinate,
+    String? selectCoordinateKey,
+  }) {
+    BlokBackupScheduler.instance.markDirty();
+    final groupedDots = MapPinStore.buildGroupedDots(
+      pins: updatedPins,
+      dhkpRecords: _uniqueDhkpRecords,
+    );
+
+    final targetSelectKey = selectCoordinateKey ??
+        (_selectedDot != null
+            ? MapPinEntry.coordinateKey(
+                _selectedDot!.coordinate.latitude,
+                _selectedDot!.coordinate.longitude,
+              )
+            : null);
+
+    MapTaxDot? nextSelected;
+    if (targetSelectKey != null) {
+      for (final dot in groupedDots) {
+        final k = MapPinEntry.coordinateKey(
+          dot.coordinate.latitude,
+          dot.coordinate.longitude,
+        );
+        if (k == targetSelectKey) {
+          nextSelected = dot;
+          break;
+        }
+      }
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _savedPins = updatedPins;
+      _allDots = groupedDots;
+      _selectedDot = nextSelected;
+      _draftPinLatLng = null;
+    });
+
+    if (focusCoordinate != null) {
+      double currentZoom = 16.5;
+      try {
+        currentZoom = math.max(_mapController.camera.zoom, 16.5);
+      } catch (_) {}
+      _safeMoveMap(focusCoordinate.toLatLng(), currentZoom);
+    }
+  }
+
   Future<void> _pickKmlFile() async {
     try {
       final currentRecords =
           widget.initialRecords ?? await BlokDataStore.instance.loadAll();
+      final uniqueRecords =
+          MapPinStore.buildLatestRecordByNop(currentRecords).values.toList()
+            ..sort((a, b) => a.nop.compareTo(b.nop));
       final files = await FilePicker.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['kml', 'xml'],
@@ -450,10 +565,31 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
         final file = File(files.first.path!);
         final text = await file.readAsString();
         final parseResult =
-            KmlParser.parse(text, dhkpRecords: currentRecords);
+            KmlParser.parse(text, dhkpRecords: uniqueRecords);
         if (parseResult.dots.isNotEmpty) {
+          final entries = MapPinStore.entriesFromDots(
+            parseResult.dots,
+            source: 'kml',
+          );
+          var updatedPins = _savedPins;
+          if (entries.isNotEmpty) {
+            await MapPinStore.instance
+                .mergeImportedPins(entries, onlyIfNewer: false);
+            updatedPins = await MapPinStore.instance.loadAll();
+            BlokBackupScheduler.instance.markDirty();
+          }
+          final groupedDots = updatedPins.isNotEmpty
+              ? MapPinStore.buildGroupedDots(
+                  pins: updatedPins,
+                  dhkpRecords: uniqueRecords,
+                )
+              : parseResult.dots;
+
+          if (!mounted) return;
           setState(() {
-            _allDots = parseResult.dots;
+            _uniqueDhkpRecords = uniqueRecords;
+            _savedPins = updatedPins;
+            _allDots = groupedDots;
             if (parseResult.dusunZones.isNotEmpty) {
               _zones = parseResult.dusunZones;
             }
@@ -461,13 +597,14 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
           });
           // Geser kamera ke titik pertama hasil KML
           final firstDot = parseResult.dots.first;
-          _mapController.move(firstDot.coordinate.toLatLng(), 16.0);
+          _safeMoveMap(firstDot.coordinate.toLatLng(), 16.0, animated: false);
 
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(
-                    'Berhasil memuat berkas KML: ${parseResult.dots.length} objek pajak terpetakan!'),
+                  'Berhasil memuat KML: ${parseResult.dots.length} titik digabungkan (total ${_allDots.length} titik aktif).',
+                ),
                 backgroundColor: Colors.green.shade700,
               ),
             );
@@ -488,6 +625,315 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Gagal memuat KML: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _activateGpsLocation() async {
+    if (_isFetchingGps) return;
+    setState(() => _isFetchingGps = true);
+
+    final result = await LocationService.instance.getCurrentFieldLocation();
+    if (!mounted) return;
+
+    if (result == null) {
+      setState(() => _isFetchingGps = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Lokasi GPS belum tersedia. Aktifkan GPS dan izin lokasi perangkat, lalu coba lagi.',
+          ),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _isFetchingGps = false;
+      _currentGpsLocation = result;
+    });
+
+    double targetZoom = result.isFallbackIp ? 14.5 : 17.5;
+    try {
+      targetZoom = math.max(_mapController.camera.zoom, targetZoom);
+    } catch (_) {}
+    _safeMoveMap(LatLng(result.latitude, result.longitude), targetZoom);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          result.isFallbackIp
+              ? 'Posisi perkiraan (${result.sourceDescription}). Gunakan Pin Manual di peta agar presisi.'
+              : 'Lokasi GPS terkunci (${result.sourceDescription}). Tekan "Tandai NOP di GPS" untuk menyematkan pin.',
+        ),
+        backgroundColor:
+            result.isFallbackIp ? Colors.orange.shade800 : Colors.blue.shade700,
+        action: SnackBarAction(
+          label: 'Tandai NOP',
+          textColor: Colors.white,
+          onPressed: () {
+            _pinAtCoordinate(
+              LatLng(result.latitude, result.longitude),
+              source: 'gps',
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pinAtCoordinate(
+    LatLng point, {
+    String source = 'manual',
+  }) async {
+    await _ensureUniqueDhkpLoaded();
+    if (!mounted) return;
+
+    final targetCoord = MapCoordinate(point.latitude, point.longitude);
+    final targetKey =
+        MapPinEntry.coordinateKey(point.latitude, point.longitude);
+
+    final existingNopsAtCoordinate = <String>{};
+    final existingPinCoordByNop = <String, MapCoordinate>{};
+    for (final pin in _savedPins) {
+      final coord = MapCoordinate(pin.latitude, pin.longitude);
+      existingPinCoordByNop[pin.nop] = coord;
+      if (MapPinEntry.coordinateKey(pin.latitude, pin.longitude) == targetKey) {
+        existingNopsAtCoordinate.add(pin.nop);
+      }
+    }
+
+    setState(() {
+      _draftPinLatLng = point;
+    });
+
+    final selectedRecords = await showMapNopPickerDialog(
+      context,
+      coordinate: targetCoord,
+      uniqueDhkpRecords: _uniqueDhkpRecords,
+      existingNopsAtCoordinate: existingNopsAtCoordinate,
+      existingPinCoordByNop: existingPinCoordByNop,
+      sourceLabel: source == 'gps' ? 'GPS Lapangan' : 'Pin Manual',
+    );
+
+    if (!mounted) return;
+    if (selectedRecords == null || selectedRecords.isEmpty) {
+      setState(() => _draftPinLatLng = null);
+      return;
+    }
+
+    final movedCount = selectedRecords.where((rec) {
+      final norm = MapPinEntry.normalizePinNop(rec.nop);
+      final prev = existingPinCoordByNop[norm];
+      return prev != null &&
+          MapPinEntry.coordinateKey(prev.latitude, prev.longitude) != targetKey;
+    }).length;
+
+    final updatedPins = await MapPinStore.instance.assignNopsAtCoordinate(
+      coordinate: targetCoord,
+      selectedRecords: selectedRecords,
+      source: source,
+    );
+    if (!mounted) return;
+
+    HapticFeedback.mediumImpact();
+    setState(() => _isPinPlacementMode = false);
+    _applyUpdatedPins(
+      updatedPins,
+      focusCoordinate: targetCoord,
+      selectCoordinateKey: targetKey,
+    );
+
+    final infoSuffix = movedCount > 0
+        ? ' ($movedCount NOP dipindah/digabungkan ke koordinat ini)'
+        : '';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Tersimpan ${selectedRecords.length} NOP pada titik ini$infoSuffix.',
+        ),
+        backgroundColor: Colors.green.shade700,
+      ),
+    );
+  }
+
+  Future<void> _removeSingleNopFromDot(
+    MapTaxDot dot,
+    BlokRecord entry,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Hapus NOP dari Titik Ini?'),
+        content: Text(
+          'NOP ${entry.nop} (${entry.namaWajibPajak}) akan dihapus dari titik peta ini.\n\n'
+          '${dot.spptList.length > 1 ? 'NOP lainnya pada koordinat yang sama tetap dipertahankan. ' : ''}'
+          'Data tagihan DHKP tidak akan terhapus.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red.shade700,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Hapus NOP'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    await _ensureUniqueDhkpLoaded();
+    final coordKey = MapPinEntry.coordinateKey(
+      dot.coordinate.latitude,
+      dot.coordinate.longitude,
+    );
+    final updatedPins = await MapPinStore.instance.removeNop(entry.nop);
+    if (!mounted) return;
+
+    _applyUpdatedPins(updatedPins, selectCoordinateKey: coordKey);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('NOP ${entry.nop} dilepas dari koordinat peta.')),
+    );
+  }
+
+  Future<void> _removeWholeDot(MapTaxDot dot) async {
+    final count = dot.spptList.length;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Hapus Titik Koordinat?'),
+        content: Text(
+          'Seluruh $count NOP pada titik ini akan dihapus penandaannya dari peta. Data tagihan DHKP tetap aman.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red.shade700,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Hapus Titik'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    await _ensureUniqueDhkpLoaded();
+    final updatedPins =
+        await MapPinStore.instance.removeByCoordinate(dot.coordinate);
+    if (!mounted) return;
+
+    _applyUpdatedPins(updatedPins);
+    setState(() => _selectedDot = null);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Titik koordinat berhasil dihapus.')),
+    );
+  }
+
+  Future<void> _clearAllSavedPins() async {
+    if (_savedPins.isEmpty && _allDots.isEmpty) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Kosongkan Semua Pin Peta?'),
+        content: Text(
+          'Seluruh ${_savedPins.length} penandaan NOP di peta akan dihapus. Data DHKP utama tetap aman.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red.shade700,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Kosongkan'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    await MapPinStore.instance.clearAll();
+    BlokBackupScheduler.instance.markDirty();
+    if (!mounted) return;
+
+    setState(() {
+      _savedPins = [];
+      _allDots = [];
+      _selectedDot = null;
+      _draftPinLatLng = null;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Semua penandaan koordinat di peta telah dihapus.')),
+    );
+  }
+
+  Future<void> _exportKmlFile() async {
+    if (_allDots.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Belum ada titik objek pajak untuk diekspor ke KML.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    try {
+      final desaLabel = activeDesaName.isNotEmpty ? activeDesaName : 'BOBOJONG';
+      final kmlContent = KmlParser.exportToKml(
+        villageName: desaLabel,
+        dots: _allDots,
+        zones: _zones,
+      );
+      final bytes = Uint8List.fromList(utf8.encode(kmlContent));
+      final now = DateTime.now();
+      final dateTag =
+          '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
+      final desaSlug = desaLabel
+          .toLowerCase()
+          .replaceAll(RegExp(r'[^a-z0-9]+'), '_')
+          .replaceAll(RegExp(r'^_+|_+$'), '');
+      final fileName =
+          'peta_pbb_${desaSlug.isEmpty ? 'desa' : desaSlug}_$dateTag.kml';
+
+      final savedPath = await DownloadHelper.saveBytes(
+        bytes,
+        fileName,
+        dialogTitle: 'Ekspor Koordinat Peta (.kml)',
+      );
+      if (!mounted) return;
+      if (savedPath != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'KML berhasil diekspor (${_allDots.length} titik): $savedPath',
+            ),
+            backgroundColor: Colors.green.shade700,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal mengekspor KML: $e')),
         );
       }
     }
@@ -1197,13 +1643,22 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                 ),
                 onChanged: (query) {
                   if (query.trim().isEmpty) return;
-                  final q = query.toLowerCase();
+                  final q = query.trim().toLowerCase();
                   final match = _visibleDots.cast<MapTaxDot?>().firstWhere(
-                        (d) =>
-                            d!.namaWajibPajak.toLowerCase().contains(q) ||
-                            d.nop.contains(q),
-                        orElse: () => null,
+                    (d) {
+                      if (d == null) return false;
+                      if (d.namaWajibPajak.toLowerCase().contains(q) ||
+                          d.nop.toLowerCase().contains(q)) {
+                        return true;
+                      }
+                      return d.spptList.any(
+                        (r) =>
+                            r.nop.toLowerCase().contains(q) ||
+                            r.namaWajibPajak.toLowerCase().contains(q),
                       );
+                    },
+                    orElse: () => null,
+                  );
                   if (match != null) {
                     _selectDot(match);
                   }
@@ -1280,10 +1735,60 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
               });
             },
           ),
-          IconButton(
-            icon: const Icon(Icons.file_upload_outlined),
-            tooltip: 'Unggah Berkas KML',
-            onPressed: _pickKmlFile,
+          PopupMenuButton<String>(
+            key: const ValueKey('btn_kml_menu'),
+            icon: const Icon(Icons.import_export_rounded),
+            tooltip: 'Menu Impor / Ekspor KML',
+            onSelected: (value) {
+              switch (value) {
+                case 'upload_kml':
+                  _pickKmlFile();
+                  break;
+                case 'export_kml':
+                  _exportKmlFile();
+                  break;
+                case 'clear_pins':
+                  _clearAllSavedPins();
+                  break;
+              }
+            },
+            itemBuilder: (ctx) => [
+              const PopupMenuItem(
+                value: 'upload_kml',
+                child: Row(
+                  children: [
+                    Icon(Icons.file_upload_outlined, size: 18),
+                    SizedBox(width: 10),
+                    Text('Unggah Berkas KML'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'export_kml',
+                child: Row(
+                  children: [
+                    Icon(Icons.file_download_outlined, size: 18),
+                    SizedBox(width: 10),
+                    Text('Ekspor Pin ke KML (.kml)'),
+                  ],
+                ),
+              ),
+              if (_savedPins.isNotEmpty || _allDots.isNotEmpty)
+                const PopupMenuItem(
+                  value: 'clear_pins',
+                  child: Row(
+                    children: [
+                      Icon(Icons.delete_sweep_outlined,
+                          size: 18, color: Colors.red),
+                      SizedBox(width: 10),
+                      Text(
+                        'Hapus Semua Pin Peta',
+                        style: TextStyle(color: Colors.red),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
           ),
         ],
       ),
@@ -1299,10 +1804,17 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                 minZoom: 11.0,
                 maxZoom: 19.0,
                 onTap: (tapPosition, point) {
+                  if (_isPinPlacementMode) {
+                    _pinAtCoordinate(point, source: 'manual');
+                    return;
+                  }
                   // Tutup kartu jika mengetuk sembarang area peta
                   if (_selectedDot != null) {
                     setState(() => _selectedDot = null);
                   }
+                },
+                onLongPress: (tapPosition, point) {
+                  _pinAtCoordinate(point, source: 'manual');
                 },
               ),
               children: [
@@ -1585,64 +2097,171 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                         ),
                       ),
                     ),
+                    ],
+                  ),
+
+                // 1.6 Titik Objek Pajak (Pin Multi-NOP, GPS, dan Draft Pin)
+                MarkerLayer(
+                  markers: [
                     ...filteredDots.map((dot) {
                     final isSelected = _selectedDot?.id == dot.id;
                     final dotColor = dot.status.color;
                     final size = isSelected ? 34.0 : 26.0;
+                    final nopCount = dot.spptList.length;
 
                     return Marker(
                       point: dot.coordinate.toLatLng(),
                       width: size,
                       height: size,
                       child: GestureDetector(
-                        onTap: () => _selectDot(dot),
-                        child: AnimatedBuilder(
-                          animation: _pulseController,
-                          builder: (context, _) {
-                            final pulse =
-                                isSelected ? _pulseController.value : 0.0;
-                            return Container(
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: dotColor,
-                                border: Border.all(
-                                  color: isSelected
-                                      ? const Color(0xFFF1C40F)
-                                      : Colors.white,
-                                  width: isSelected ? 2.5 : 1.5,
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: isSelected
-                                        ? const Color(0xFFF1C40F)
-                                            .withValues(alpha: 0.6 + pulse * 0.3)
-                                        : dotColor.withValues(alpha: 0.5),
-                                    blurRadius: isSelected ? 12 : 5,
-                                    spreadRadius: isSelected ? 3 : 1,
-                                  ),
-                                ],
-                              ),
-                              alignment: Alignment.center,
-                              child: dot.status == MapDotStatus.fasum
-                                  ? const Icon(Icons.account_balance_rounded,
-                                      size: 12, color: Colors.white)
-                                  : Text(
-                                      dot.nomorUrut.length >= 2
-                                          ? dot.nomorUrut.substring(
-                                              dot.nomorUrut.length - 2)
-                                          : dot.nomorUrut,
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 9,
-                                        fontWeight: FontWeight.w900,
-                                      ),
-                                    ),
+                        key: ValueKey('map_dot_${dot.id}'),
+                        onTap: () {
+                          if (_isPinPlacementMode) {
+                            _pinAtCoordinate(
+                              dot.coordinate.toLatLng(),
+                              source: 'manual',
                             );
-                          },
+                            return;
+                          }
+                          _selectDot(dot);
+                        },
+                        child: Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            AnimatedBuilder(
+                              animation: _pulseController,
+                              builder: (context, _) {
+                                final pulse =
+                                    isSelected ? _pulseController.value : 0.0;
+                                return Container(
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: dotColor,
+                                    border: Border.all(
+                                      color: isSelected
+                                          ? const Color(0xFFF1C40F)
+                                          : Colors.white,
+                                      width: isSelected ? 2.5 : 1.5,
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: isSelected
+                                            ? const Color(0xFFF1C40F)
+                                                .withValues(
+                                                    alpha: 0.6 + pulse * 0.3)
+                                            : dotColor.withValues(alpha: 0.5),
+                                        blurRadius: isSelected ? 12 : 5,
+                                        spreadRadius: isSelected ? 3 : 1,
+                                      ),
+                                    ],
+                                  ),
+                                  alignment: Alignment.center,
+                                  child: dot.status == MapDotStatus.fasum
+                                      ? const Icon(
+                                          Icons.account_balance_rounded,
+                                          size: 12,
+                                          color: Colors.white,
+                                        )
+                                      : Text(
+                                          dot.nomorUrut.length >= 2
+                                              ? dot.nomorUrut.substring(
+                                                  dot.nomorUrut.length - 2)
+                                              : dot.nomorUrut,
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 9,
+                                            fontWeight: FontWeight.w900,
+                                          ),
+                                        ),
+                                );
+                              },
+                            ),
+                            if (nopCount > 1)
+                              Positioned(
+                                right: -6,
+                                top: -6,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 4,
+                                    vertical: 1,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF0F766E),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                      color: Colors.white,
+                                      width: 1,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    '$nopCount',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 8.5,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
                         ),
                       ),
                     );
                   }),
+                    if (_currentGpsLocation != null)
+                      Marker(
+                        point: LatLng(
+                          _currentGpsLocation!.latitude,
+                          _currentGpsLocation!.longitude,
+                        ),
+                        width: 40,
+                        height: 40,
+                        child: GestureDetector(
+                          onTap: () => _pinAtCoordinate(
+                            LatLng(
+                              _currentGpsLocation!.latitude,
+                              _currentGpsLocation!.longitude,
+                            ),
+                            source: 'gps',
+                          ),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Colors.blue.withValues(alpha: 0.2),
+                            ),
+                            alignment: Alignment.center,
+                            child: Container(
+                              width: 18,
+                              height: 18,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: const Color(0xFF2563EB),
+                                border: Border.all(
+                                  color: Colors.white,
+                                  width: 2.5,
+                                ),
+                                boxShadow: const [
+                                  BoxShadow(
+                                    color: Colors.black38,
+                                    blurRadius: 4,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    if (_draftPinLatLng != null)
+                      Marker(
+                        point: _draftPinLatLng!,
+                        width: 42,
+                        height: 42,
+                        child: const Icon(
+                          Icons.location_pin,
+                          color: Color(0xFFF39C12),
+                          size: 38,
+                        ),
+                      ),
                 ],
               ),
               ],
@@ -1904,12 +2523,163 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                   ),
           ),
 
-          // 3. TOMBOL CEPAT KANAN (Fokus Batas Desa, Re-center, Zoom In, Zoom Out)
+          if (_isPinPlacementMode || _currentGpsLocation != null)
+            Positioned(
+              left: 14,
+              right: 76,
+              bottom: _selectedDot != null
+                  ? (_selectedDot!.spptList.length > 1 ? 310 : 250)
+                  : (_allDots.isNotEmpty ? 54 : 16),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: _isPinPlacementMode
+                      ? const Color(0xEE0F766E)
+                      : (isDark
+                          ? const Color(0xEE1E293B)
+                          : Colors.white.withValues(alpha: 0.96)),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: _isPinPlacementMode
+                        ? const Color(0xFF5EEAD4)
+                        : Colors.blue.withValues(alpha: 0.45),
+                  ),
+                  boxShadow: const [
+                    BoxShadow(color: Colors.black26, blurRadius: 8),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      _isPinPlacementMode
+                          ? Icons.touch_app_rounded
+                          : Icons.my_location_rounded,
+                      size: 18,
+                      color: _isPinPlacementMode
+                          ? Colors.white
+                          : Colors.blue.shade600,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _isPinPlacementMode
+                            ? 'Mode Pasang Pin: ketuk peta untuk menandai WP/NOP'
+                            : 'GPS: ${_currentGpsLocation!.sourceDescription}',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: _isPinPlacementMode
+                              ? Colors.white
+                              : (isDark ? Colors.white : Colors.black87),
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    if (_isPinPlacementMode)
+                      TextButton(
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        onPressed: () {
+                          setState(() => _isPinPlacementMode = false);
+                        },
+                        child: const Text('Batal'),
+                      )
+                    else if (_currentGpsLocation != null) ...[
+                      FilledButton.tonal(
+                        style: FilledButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                        ),
+                        onPressed: () => _pinAtCoordinate(
+                          LatLng(
+                            _currentGpsLocation!.latitude,
+                            _currentGpsLocation!.longitude,
+                          ),
+                          source: 'gps',
+                        ),
+                        child: const Text(
+                          'Tandai NOP',
+                          style: TextStyle(fontSize: 11),
+                        ),
+                      ),
+                      IconButton(
+                        visualDensity: VisualDensity.compact,
+                        icon: const Icon(Icons.close_rounded, size: 16),
+                        tooltip: 'Tutup Penanda GPS',
+                        onPressed: () {
+                          setState(() => _currentGpsLocation = null);
+                        },
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+
+          // 3. TOMBOL CEPAT KANAN (GPS, Pasang Pin, Fokus Batas Desa, Zoom In, Zoom Out)
           Positioned(
             right: 14,
-            bottom: _selectedDot != null ? 220 : 70,
+            bottom: _selectedDot != null
+                ? (_selectedDot!.spptList.length > 1 ? 310 : 250)
+                : 70,
             child: Column(
               children: [
+                FloatingActionButton.small(
+                  key: const ValueKey('btn_gps_field_location'),
+                  heroTag: 'btn_gps_field_location',
+                  backgroundColor: _currentGpsLocation != null
+                      ? Colors.blue.shade700
+                      : (isDark
+                          ? const Color(0xEE1A2234)
+                          : Colors.white.withValues(alpha: 0.94)),
+                  tooltip: 'Gunakan Koordinat GPS Sekarang',
+                  onPressed: _isFetchingGps ? null : _activateGpsLocation,
+                  child: _isFetchingGps
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Icon(
+                          Icons.my_location_rounded,
+                          color: _currentGpsLocation != null
+                              ? Colors.white
+                              : Colors.blue.shade600,
+                        ),
+                ),
+                const SizedBox(height: 8),
+                FloatingActionButton.small(
+                  key: const ValueKey('btn_toggle_pin_mode'),
+                  heroTag: 'btn_toggle_pin_mode',
+                  backgroundColor: _isPinPlacementMode
+                      ? const Color(0xFF0F766E)
+                      : (isDark
+                          ? const Color(0xEE1A2234)
+                          : Colors.white.withValues(alpha: 0.94)),
+                  tooltip: _isPinPlacementMode
+                      ? 'Batalkan Mode Pasang Pin'
+                      : 'Pasang Pin Manual (Ketuk / Tahan Peta)',
+                  onPressed: () {
+                    setState(() {
+                      _isPinPlacementMode = !_isPinPlacementMode;
+                      if (_isPinPlacementMode) _selectedDot = null;
+                    });
+                  },
+                  child: Icon(
+                    _isPinPlacementMode
+                        ? Icons.close_rounded
+                        : Icons.add_location_alt_rounded,
+                    color: _isPinPlacementMode
+                        ? Colors.white
+                        : const Color(0xFF0F766E),
+                  ),
+                ),
+                const SizedBox(height: 8),
                 if (_desaBoundaryPoints.isNotEmpty ||
                     _desaBounds != null ||
                     _allDots.isNotEmpty) ...[
@@ -1973,7 +2743,9 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
           if (_allDots.isNotEmpty)
             Positioned(
               left: 14,
-              bottom: _selectedDot != null ? 220 : 16,
+              bottom: _selectedDot != null
+                  ? (_selectedDot!.spptList.length > 1 ? 310 : 250)
+                  : 16,
               child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
@@ -2062,9 +2834,13 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
     );
   }
 
-  /// Kartu Rincian Objek Pajak
+  /// Kartu Rincian Objek Pajak (mendukung 1 atau lebih NOP pada 1 koordinat)
   Widget _buildDetailCard(MapTaxDot dot, bool isDark) {
     final isOwnerSame = dot.isOwnerAddressSame;
+    final hasMultiNop = dot.spptList.length > 1;
+    final statusLabelText = hasMultiNop && dot.statusBayar.isNotEmpty
+        ? dot.statusBayar
+        : dot.status.label;
 
     return Card(
       elevation: 14,
@@ -2073,144 +2849,287 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
         borderRadius: BorderRadius.circular(16),
         side: const BorderSide(color: Color(0xFFF1C40F), width: 1.5),
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Header Kartu
-            Row(
-              children: [
-                CircleAvatar(
-                  radius: 16,
-                  backgroundColor: dot.status.color,
-                  child: Icon(dot.status.icon, size: 18, color: Colors.white),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        dot.namaWajibPajak,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      Text(
-                        'NOP: ${dot.nop}',
-                        style: const TextStyle(
-                          fontFamily: 'monospace',
-                          fontSize: 11,
-                          color: Colors.blueGrey,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.close, size: 18),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                  onPressed: () => setState(() => _selectedDot = null),
-                ),
-              ],
-            ),
-            const Divider(height: 16),
-
-            // Baris Rincian PBB & Status
-            Row(
-              children: [
-                Expanded(
-                  child: _buildStatItem(
-                    label: 'STATUS BAYAR',
-                    value: dot.status.label,
-                    valueColor: dot.status.color,
-                  ),
-                ),
-                Expanded(
-                  child: _buildStatItem(
-                    label: 'POKOK PBB',
-                    value: dot.jumlahPbb.isNotEmpty ? dot.jumlahPbb : '-',
-                  ),
-                ),
-                Expanded(
-                  child: _buildStatItem(
-                    label: 'BLOK / NO URUT',
-                    value: 'Blok ${dot.blok} (#${dot.nomorUrut})',
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-
-            // Relasi Alamat WP
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              decoration: BoxDecoration(
-                color: isOwnerSame
-                    ? Colors.green.withValues(alpha: 0.1)
-                    : Colors.amber.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: isOwnerSame
-                      ? Colors.green.withValues(alpha: 0.3)
-                      : Colors.amber.withValues(alpha: 0.4),
-                ),
-              ),
-              child: Row(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxHeight: 330),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Header Kartu
+              Row(
                 children: [
-                  Icon(
-                    isOwnerSame ? Icons.home_rounded : Icons.landscape_rounded,
-                    size: 20,
-                    color: isOwnerSame ? Colors.green : Colors.amber.shade800,
+                  CircleAvatar(
+                    radius: 16,
+                    backgroundColor: dot.status.color,
+                    child: Icon(dot.status.icon, size: 18, color: Colors.white),
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 10),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          isOwnerSame
-                              ? '🏠 Rumah Tempat Tinggal WP'
-                              : '🌾 Objek Terpisah (Sawah/Kebun/Tanah)',
-                          style: TextStyle(
-                            fontSize: 11,
+                          dot.namaWajibPajak,
+                          style: const TextStyle(
+                            fontSize: 14,
                             fontWeight: FontWeight.bold,
-                            color:
-                                isOwnerSame ? Colors.green : Colors.amber.shade800,
                           ),
-                        ),
-                        Text(
-                          isOwnerSame
-                              ? 'Alamat Objek: ${dot.alamatObjek.isNotEmpty ? dot.alamatObjek : 'Desa Bobojong'}'
-                              : 'Alamat Pemilik: ${dot.alamatWp.isNotEmpty ? dot.alamatWp : 'Luar Wilayah Objek'}',
-                          style: const TextStyle(fontSize: 10),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
+                        ),
+                        Text(
+                          hasMultiNop
+                              ? '${dot.spptList.length} NOP • ${dot.coordinate.latitude.toStringAsFixed(5)}, ${dot.coordinate.longitude.toStringAsFixed(5)}'
+                              : 'NOP: ${dot.nop}',
+                          style: const TextStyle(
+                            fontFamily: 'monospace',
+                            fontSize: 11,
+                            color: Colors.blueGrey,
+                          ),
                         ),
                       ],
                     ),
                   ),
-                  if (!isOwnerSame && dot.ownerCoordinate != null)
-                    FilledButton.tonalIcon(
-                      style: FilledButton.styleFrom(
-                        visualDensity: VisualDensity.compact,
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                      ),
-                      icon: const Icon(Icons.my_location_rounded, size: 14),
-                      label: const Text('Sorot Pemilik',
-                          style: TextStyle(fontSize: 10)),
-                      onPressed: () => _sorotRumahPemilik(dot),
-                    ),
+                  IconButton(
+                    icon: const Icon(Icons.close, size: 18),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    onPressed: () => setState(() => _selectedDot = null),
+                  ),
                 ],
               ),
-            ),
-          ],
+              const Divider(height: 14),
+
+              // Baris Rincian PBB & Status
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildStatItem(
+                      label: 'STATUS BAYAR',
+                      value: statusLabelText,
+                      valueColor: dot.status.color,
+                    ),
+                  ),
+                  Expanded(
+                    child: _buildStatItem(
+                      label: hasMultiNop ? 'TOTAL PBB' : 'POKOK PBB',
+                      value: dot.jumlahPbb.isNotEmpty ? dot.jumlahPbb : '-',
+                    ),
+                  ),
+                  Expanded(
+                    child: _buildStatItem(
+                      label: 'BLOK / NO URUT',
+                      value: 'Blok ${dot.blok} (#${dot.nomorUrut})',
+                    ),
+                  ),
+                ],
+              ),
+
+              if (hasMultiNop) ...[
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.04)
+                        : Colors.blueGrey.withValues(alpha: 0.06),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: Colors.blueGrey.withValues(alpha: 0.22),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Daftar ${dot.spptList.length} NOP pada Koordinat Ini:',
+                        style: const TextStyle(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.blueGrey,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      ...dot.spptList.map((rec) {
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 2),
+                          child: Row(
+                            children: [
+                              Icon(
+                                rec.isPaid
+                                    ? Icons.check_circle_rounded
+                                    : Icons.schedule_rounded,
+                                size: 14,
+                                color: rec.isPaid
+                                    ? Colors.green.shade600
+                                    : Colors.orange.shade700,
+                              ),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      rec.namaWajibPajak,
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    Text(
+                                      '${rec.nop} • ${rec.jumlahPbb.isNotEmpty ? rec.jumlahPbb : '-'}',
+                                      style: const TextStyle(
+                                        fontFamily: 'monospace',
+                                        fontSize: 9.5,
+                                        color: Colors.blueGrey,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              IconButton(
+                                visualDensity: VisualDensity.compact,
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(),
+                                tooltip: 'Hapus NOP ini dari koordinat',
+                                icon: const Icon(
+                                  Icons.delete_outline_rounded,
+                                  size: 16,
+                                  color: Colors.redAccent,
+                                ),
+                                onPressed: () =>
+                                    _removeSingleNopFromDot(dot, rec),
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
+                    ],
+                  ),
+                ),
+              ],
+              const SizedBox(height: 10),
+
+              // Relasi Alamat WP
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: isOwnerSame
+                      ? Colors.green.withValues(alpha: 0.1)
+                      : Colors.amber.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: isOwnerSame
+                        ? Colors.green.withValues(alpha: 0.3)
+                        : Colors.amber.withValues(alpha: 0.4),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      isOwnerSame
+                          ? Icons.home_rounded
+                          : Icons.landscape_rounded,
+                      size: 20,
+                      color:
+                          isOwnerSame ? Colors.green : Colors.amber.shade800,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            isOwnerSame
+                                ? '🏠 Rumah Tempat Tinggal WP'
+                                : '🌾 Objek Terpisah (Sawah/Kebun/Tanah)',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: isOwnerSame
+                                  ? Colors.green
+                                  : Colors.amber.shade800,
+                            ),
+                          ),
+                          Text(
+                            isOwnerSame
+                                ? 'Alamat Objek: ${dot.alamatObjek.isNotEmpty ? dot.alamatObjek : 'Desa Bobojong'}'
+                                : 'Alamat Pemilik: ${dot.alamatWp.isNotEmpty ? dot.alamatWp : 'Luar Wilayah Objek'}',
+                            style: const TextStyle(fontSize: 10),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (!isOwnerSame && dot.ownerCoordinate != null)
+                      FilledButton.tonalIcon(
+                        style: FilledButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                        ),
+                        icon: const Icon(Icons.my_location_rounded, size: 14),
+                        label: const Text('Sorot Pemilik',
+                            style: TextStyle(fontSize: 10)),
+                        onPressed: () => _sorotRumahPemilik(dot),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
+
+              // Aksi Pengelolaan Pin & Multi-NOP pada Titik Ini
+              Row(
+                children: [
+                  Expanded(
+                    child: FilledButton.tonalIcon(
+                      key: const ValueKey('btn_add_nop_at_dot'),
+                      style: FilledButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      icon: const Icon(Icons.add_location_alt_rounded, size: 15),
+                      label: const Text(
+                        'Tambah NOP di Titik Ini',
+                        style: TextStyle(fontSize: 11),
+                      ),
+                      onPressed: () => _pinAtCoordinate(
+                        dot.coordinate.toLatLng(),
+                        source: 'manual',
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  OutlinedButton.icon(
+                    key: const ValueKey('btn_remove_pin_dot'),
+                    style: OutlinedButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                      foregroundColor: Colors.redAccent,
+                      side: BorderSide(
+                        color: Colors.redAccent.withValues(alpha: 0.45),
+                      ),
+                    ),
+                    icon: const Icon(Icons.delete_outline_rounded, size: 15),
+                    label: Text(
+                      hasMultiNop ? 'Hapus Titik' : 'Hapus Pin',
+                      style: const TextStyle(fontSize: 11),
+                    ),
+                    onPressed: () {
+                      if (!hasMultiNop && dot.spptList.length == 1) {
+                        _removeSingleNopFromDot(dot, dot.spptList.first);
+                      } else {
+                        _removeWholeDot(dot);
+                      }
+                    },
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );

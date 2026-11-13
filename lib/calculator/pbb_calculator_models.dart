@@ -447,36 +447,88 @@ class PbbTabunganMutasi {
 }
 
 /// Model data tabungan / cicilan warga untuk satu objek pajak (NOP).
+/// Alokasi kelebihan saldo celengan warga ketika setoran melebihi target pokok PBB.
+enum PbbKelebihanAlokasi {
+  kembalianKeWp('kembalian_wp', 'Dikembalikan ke WP'),
+  tipPetugas('tip_petugas', 'Tip Petugas');
+
+  final String code;
+  final String label;
+  const PbbKelebihanAlokasi(this.code, this.label);
+
+  static PbbKelebihanAlokasi? fromCode(String? code) {
+    if (code == null || code.isEmpty) return null;
+    for (final value in PbbKelebihanAlokasi.values) {
+      if (value.code == code) return value;
+    }
+    return null;
+  }
+}
+
 class PbbTabunganModel {
   final int saldo;
   final int target; // Pokok PBB yang harus dikumpulkan
   final String catatan; // Catatan khusus cicilan / kesepakatan warga
   final List<PbbTabunganMutasi> riwayat;
+  final PbbKelebihanAlokasi? kelebihanAlokasi;
+
+  /// Garis tanda tangan digital WP dalam koordinat ternormalisasi (0..1000)
+  /// per stroke: `[x0, y0, x1, y1, ...]`.
+  final List<List<int>> tandaTanganStrokes;
+  final String tandaTanganWaktu;
 
   const PbbTabunganModel({
     this.saldo = 0,
     this.target = 0,
     this.catatan = '',
     this.riwayat = const [],
+    this.kelebihanAlokasi,
+    this.tandaTanganStrokes = const [],
+    this.tandaTanganWaktu = '',
   });
 
-  bool get hasTabungan => saldo > 0 || catatan.isNotEmpty || riwayat.isNotEmpty;
+  bool get hasTandaTangan =>
+      tandaTanganStrokes.any((stroke) => stroke.length >= 2);
+
+  bool get hasTabungan =>
+      saldo > 0 ||
+      catatan.isNotEmpty ||
+      riwayat.isNotEmpty ||
+      hasTandaTangan;
+
   bool get isLunas => target > 0 && saldo >= target;
   int get sisaKekurangan => (target - saldo).clamp(0, target);
+  int get kelebihanSaldo =>
+      (target > 0 && saldo > target) ? (saldo - target) : 0;
+  bool get hasKelebihan => kelebihanSaldo > 0;
   double get persentase =>
-      target > 0 ? ((saldo / target) * 100).clamp(0.0, 100.0) : 0.0;
+      target > 0 ? math.max(0.0, (saldo / target) * 100) : 0.0;
 
   PbbTabunganModel copyWith({
     int? saldo,
     int? target,
     String? catatan,
     List<PbbTabunganMutasi>? riwayat,
+    PbbKelebihanAlokasi? kelebihanAlokasi,
+    bool clearKelebihanAlokasi = false,
+    List<List<int>>? tandaTanganStrokes,
+    String? tandaTanganWaktu,
+    bool clearTandaTangan = false,
   }) {
     return PbbTabunganModel(
       saldo: saldo ?? this.saldo,
       target: target ?? this.target,
       catatan: catatan ?? this.catatan,
       riwayat: riwayat ?? this.riwayat,
+      kelebihanAlokasi: clearKelebihanAlokasi
+          ? null
+          : (kelebihanAlokasi ?? this.kelebihanAlokasi),
+      tandaTanganStrokes: clearTandaTangan
+          ? const []
+          : (tandaTanganStrokes ?? this.tandaTanganStrokes),
+      tandaTanganWaktu: clearTandaTangan
+          ? ''
+          : (tandaTanganWaktu ?? this.tandaTanganWaktu),
     );
   }
 
@@ -495,26 +547,68 @@ class PbbTabunganModel {
     if (mutasi != null) {
       newRiwayat.add(mutasi);
     }
-    return copyWith(saldo: newSaldo, riwayat: newRiwayat);
+    final shouldClearAlokasi = target <= 0 || newSaldo <= target;
+    return copyWith(
+      saldo: newSaldo,
+      riwayat: newRiwayat,
+      clearKelebihanAlokasi: shouldClearAlokasi,
+    );
   }
 
-  Map<String, dynamic> toJson() => {
-        'saldo': saldo,
-        'target': target,
-        'catatan': catatan,
-        'riwayat': riwayat.map((e) => e.toJson()).toList(),
-      };
+  Map<String, dynamic> toJson() {
+    final map = <String, dynamic>{
+      'saldo': saldo,
+      'target': target,
+      'catatan': catatan,
+      'riwayat': riwayat.map((e) => e.toJson()).toList(),
+    };
+    if (hasKelebihan && kelebihanAlokasi != null) {
+      map['kelebihan_alokasi'] = kelebihanAlokasi!.code;
+    }
+    if (hasTandaTangan) {
+      map['ttd'] = tandaTanganStrokes;
+      if (tandaTanganWaktu.isNotEmpty) {
+        map['ttd_waktu'] = tandaTanganWaktu;
+      }
+    }
+    return map;
+  }
 
   factory PbbTabunganModel.fromJson(Map<String, dynamic> json) {
+    final saldo = json['saldo'] as int? ?? 0;
+    final target = json['target'] as int? ?? 0;
+    final parsedAlokasi = (target > 0 && saldo > target)
+        ? PbbKelebihanAlokasi.fromCode(json['kelebihan_alokasi'] as String?)
+        : null;
+
+    final rawTtd = json['ttd'] as List<dynamic>?;
+    final parsedStrokes = <List<int>>[];
+    if (rawTtd != null) {
+      for (final stroke in rawTtd) {
+        if (stroke is List) {
+          final pts = stroke
+              .whereType<num>()
+              .map((e) => e.toInt().clamp(0, 1000))
+              .toList();
+          if (pts.length >= 2) {
+            parsedStrokes.add(pts);
+          }
+        }
+      }
+    }
+
     return PbbTabunganModel(
-      saldo: json['saldo'] as int? ?? 0,
-      target: json['target'] as int? ?? 0,
+      saldo: saldo,
+      target: target,
       catatan: json['catatan'] as String? ?? '',
       riwayat: (json['riwayat'] as List<dynamic>?)
               ?.map((e) =>
                   PbbTabunganMutasi.fromJson(e as Map<String, dynamic>))
               .toList() ??
           const [],
+      kelebihanAlokasi: parsedAlokasi,
+      tandaTanganStrokes: parsedStrokes,
+      tandaTanganWaktu: json['ttd_waktu'] as String? ?? '',
     );
   }
 }
@@ -595,8 +689,20 @@ class PbbTabunganHelper {
     buffer.writeln('• *Saldo Terkumpul:* ${formatRupiah(tabungan.saldo)} (${tabungan.persentase.toStringAsFixed(0)}%)');
     if (tabungan.isLunas) {
       buffer.writeln('• *Status:* ✅ *LUNAS / SIAP BAYAR*');
+      if (tabungan.hasKelebihan) {
+        buffer.writeln('• *Kelebihan / Sisa Dana:* ${formatRupiah(tabungan.kelebihanSaldo)}');
+        buffer.writeln(
+          '• *Alokasi Kelebihan:* ${tabungan.kelebihanAlokasi?.label ?? 'Belum ditentukan'}',
+        );
+      }
     } else {
       buffer.writeln('• *Sisa Kekurangan:* ${formatRupiah(tabungan.sisaKekurangan)}');
+    }
+    if (tabungan.hasTandaTangan) {
+      final waktu = tabungan.tandaTanganWaktu.isNotEmpty
+          ? ' (${tabungan.tandaTanganWaktu})'
+          : '';
+      buffer.writeln('• *Tanda Tangan WP:* ✍️ Disetujui secara digital$waktu');
     }
     if (tabungan.catatan.isNotEmpty) {
       buffer.writeln('• *Catatan Warga:* ${tabungan.catatan}');

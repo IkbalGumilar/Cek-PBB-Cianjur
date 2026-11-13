@@ -14,6 +14,8 @@ import 'blok_record.dart';
 import 'dhkp/blok_csv_codec.dart';
 import 'dhkp/dhkp_crypto.dart';
 import 'dusun_data.dart';
+import 'map/kml_parser.dart';
+import 'map/map_pin_store.dart';
 import 'nop_helper.dart';
 
 export 'dhkp/dhkp_crypto.dart';
@@ -334,6 +336,8 @@ class DhkpPackageHelper {
 
     ArchiveFile? manifestFile;
     ArchiveFile? dataFile;
+    ArchiveFile? mapPinsJsonFile;
+    ArchiveFile? mapPinsKmlFile;
     final photoFiles = <ArchiveFile>[];
 
     for (final entry in archive.files) {
@@ -341,6 +345,10 @@ class DhkpPackageHelper {
       final nameLower = entry.name.toLowerCase();
       if (nameLower.endsWith('manifest.json')) {
         manifestFile = entry;
+      } else if (nameLower.endsWith('map_pins.json')) {
+        mapPinsJsonFile = entry;
+      } else if (nameLower.endsWith('.kml')) {
+        mapPinsKmlFile = entry;
       } else if (nameLower.endsWith('.csv') || nameLower.endsWith('.json')) {
         dataFile = entry;
       } else if (nameLower.endsWith('.jpg') ||
@@ -542,6 +550,25 @@ class DhkpPackageHelper {
       await BlokDataStore.instance.upsertAll(mergedRecords);
     }
 
+    // Gabungkan data koordinat/pin peta bila tersedia di arsip backup (.dat / .dkhp)
+    if (mapPinsJsonFile != null) {
+      try {
+        final pinsJsonStr = utf8.decode(mapPinsJsonFile.content as List<int>);
+        final importedPins = MapPinStore.decodePinsJson(pinsJsonStr);
+        await MapPinStore.instance.mergeImportedPins(importedPins);
+      } catch (_) {}
+    } else if (mapPinsKmlFile != null) {
+      try {
+        final kmlStr = utf8.decode(mapPinsKmlFile.content as List<int>);
+        final parsed = KmlParser.parse(kmlStr, dhkpRecords: mergedRecords);
+        final importedPins = MapPinStore.entriesFromDots(
+          parsed.dots,
+          source: 'kml_backup',
+        );
+        await MapPinStore.instance.mergeImportedPins(importedPins);
+      } catch (_) {}
+    }
+
     return mergedRecords;
   }
 
@@ -723,6 +750,7 @@ class DhkpPackageHelper {
     String? password,
     List<Dusun>? dusuns,
     DusunScope? scope,
+    List<MapPinEntry>? mapPins,
   }) async {
     final archive = Archive();
     final isDatReport = outputPath.toLowerCase().endsWith('.dat');
@@ -824,6 +852,29 @@ class DhkpPackageHelper {
             }
           }
         }
+      }
+    }
+
+    // 4. Sertakan koordinat pin peta petugas (map_pins.json & map_pins.kml) bila ada
+    final pins = mapPins ?? await MapPinStore.instance.loadAll();
+    if (pins.isNotEmpty) {
+      final pinsBytes = utf8.encode(MapPinStore.encodePinsJson(pins));
+      archive.addFile(ArchiveFile('map_pins.json', pinsBytes.length, pinsBytes));
+
+      final groupedDots = MapPinStore.buildGroupedDots(
+        pins: pins,
+        dhkpRecords: records,
+      );
+      if (groupedDots.isNotEmpty) {
+        final kmlBytes = utf8.encode(
+          KmlParser.exportToKml(
+            villageName: activeDesaName,
+            dots: groupedDots,
+          ),
+        );
+        archive.addFile(
+          ArchiveFile('map_pins.kml', kmlBytes.length, kmlBytes),
+        );
       }
     }
 

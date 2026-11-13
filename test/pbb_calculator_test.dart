@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:cek_pbb_app/blok_record.dart';
 import 'package:cek_pbb_app/calculator/pbb_calculator_models.dart';
+import 'package:cek_pbb_app/dhkp/blok_catatan_widgets.dart';
 import 'package:cek_pbb_app/dhkp/dhkp_nop_kalkulator_dialog.dart';
 import 'package:cek_pbb_app/dhkp/dhkp_target_pacing_dialog.dart';
 
@@ -332,6 +333,80 @@ void main() {
       expect(wa, contains('Pak Asep'));
       expect(wa, contains('50%'));
     });
+
+    test('PbbTabunganModel supports >100%, surplus allocation, and clears allocation when tarik <= target', () {
+      const initial = PbbTabunganModel(target: 50000);
+      final overpaid = initial.setor(60000).copyWith(
+            kelebihanAlokasi: PbbKelebihanAlokasi.tipPetugas,
+          );
+
+      expect(overpaid.isLunas, isTrue);
+      expect(overpaid.persentase, equals(120.0));
+      expect(overpaid.hasKelebihan, isTrue);
+      expect(overpaid.kelebihanSaldo, equals(10000));
+      expect(overpaid.kelebihanAlokasi, equals(PbbKelebihanAlokasi.tipPetugas));
+
+      // Encode & extract roundtrip
+      final encoded = PbbTabunganHelper.encodeCatatanWithTabungan('', overpaid);
+      final extracted = PbbTabunganHelper.extractTabungan(encoded);
+      expect(extracted.persentase, equals(120.0));
+      expect(extracted.kelebihanSaldo, equals(10000));
+      expect(extracted.kelebihanAlokasi, equals(PbbKelebihanAlokasi.tipPetugas));
+
+      final wa = PbbTabunganHelper.formatWhatsAppTabungan(
+        nop: '32.03.010.001.001-0001.0',
+        namaWp: 'Bu Siti',
+        tabungan: extracted,
+      );
+      expect(wa, contains('120%'));
+      expect(wa, contains('Rp. 10.000'));
+      expect(wa, contains('Tip Petugas'));
+
+      // Tarik kelebihan sehingga saldo <= target -> alokasi otomatis terhapus
+      final withdrawn = extracted.tarik(10000);
+      expect(withdrawn.saldo, equals(50000));
+      expect(withdrawn.persentase, equals(100.0));
+      expect(withdrawn.hasKelebihan, isFalse);
+      expect(withdrawn.kelebihanSaldo, equals(0));
+      expect(withdrawn.kelebihanAlokasi, isNull);
+    });
+
+    test('PbbTabunganModel persists WP digital signature strokes & timestamp in catatan roundtrip', () {
+      const signed = PbbTabunganModel(
+        saldo: 50000,
+        target: 50000,
+        tandaTanganStrokes: [
+          [100, 200, 350, 420, 600, 380],
+          [700, 500, 850, 550],
+        ],
+        tandaTanganWaktu: '13/11/2026 16:30',
+      );
+      expect(signed.hasTandaTangan, isTrue);
+
+      final encoded = PbbTabunganHelper.encodeCatatanWithTabungan(
+        'Rumah cat hijau',
+        signed,
+      );
+      expect(PbbTabunganHelper.cleanCatatan(encoded), equals('Rumah cat hijau'));
+
+      final extracted = PbbTabunganHelper.extractTabungan(encoded);
+      expect(extracted.hasTandaTangan, isTrue);
+      expect(extracted.tandaTanganStrokes, hasLength(2));
+      expect(extracted.tandaTanganStrokes[0], equals([100, 200, 350, 420, 600, 380]));
+      expect(extracted.tandaTanganWaktu, equals('13/11/2026 16:30'));
+
+      final wa = PbbTabunganHelper.formatWhatsAppTabungan(
+        nop: '32.03.010.001.001-0002.0',
+        namaWp: 'Pak Dedi',
+        tabungan: extracted,
+      );
+      expect(wa, contains('Disetujui secara digital (13/11/2026 16:30)'));
+
+      final cleared = extracted.copyWith(clearTandaTangan: true);
+      expect(cleared.hasTandaTangan, isFalse);
+      expect(cleared.tandaTanganStrokes, isEmpty);
+      expect(cleared.tandaTanganWaktu, isEmpty);
+    });
   });
 
   group('Target & Pacing Dialog Widget Tests', () {
@@ -576,6 +651,233 @@ void main() {
       await tester.tap(find.byIcon(Icons.close));
       await tester.pumpAndSettle();
       expect(find.text('KALKULATOR AJB & SIMULASI NJOP'), findsNothing);
+    });
+  });
+
+  group('Celengan Refinement Widget Tests', () {
+    testWidgets('DhkpRowCelenganButton hides initially Sudah Bayar rows and keeps green icon for celengan-paid rows', (tester) async {
+      final paidAwal = const BlokRecord(
+        nop: '320301000100100010',
+        namaWajibPajak: 'Sudah Bayar Awal',
+        tahunBayar: '2026',
+        tanggalBayar: '01/05/2026',
+        jumlahPbb: '50.000',
+        statusBayar: 'Sudah Bayar',
+        catatan: '',
+      );
+
+      final lunasViaCelengan = BlokRecord(
+        nop: '320301000100100020',
+        namaWajibPajak: 'Lunas Celengan',
+        tahunBayar: '2026',
+        tanggalBayar: '13/11/2026',
+        jumlahPbb: '50.000',
+        statusBayar: 'Sudah Bayar',
+        catatan: PbbTabunganHelper.encodeCatatanWithTabungan(
+          '',
+          const PbbTabunganModel(saldo: 50000, target: 50000),
+        ),
+      );
+
+      final belumBayarKosong = const BlokRecord(
+        nop: '320301000100100030',
+        namaWajibPajak: 'Belum Bayar Kosong',
+        tahunBayar: '2026',
+        tanggalBayar: '-',
+        jumlahPbb: '50.000',
+        statusBayar: 'Belum Bayar',
+        catatan: '',
+      );
+
+      final belumBayarCicil = BlokRecord(
+        nop: '320301000100100040',
+        namaWajibPajak: 'Belum Bayar Cicil',
+        tahunBayar: '2026',
+        tanggalBayar: '-',
+        jumlahPbb: '50.000',
+        statusBayar: 'Belum Bayar',
+        catatan: PbbTabunganHelper.encodeCatatanWithTabungan(
+          '',
+          const PbbTabunganModel(saldo: 20000, target: 50000),
+        ),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Column(
+              children: [
+                DhkpRowCelenganButton(
+                  key: const Key('celengan_paid_awal'),
+                  record: paidAwal,
+                  onPressed: () {},
+                ),
+                DhkpRowCelenganButton(
+                  key: const Key('celengan_lunas'),
+                  record: lunasViaCelengan,
+                  onPressed: () {},
+                ),
+                DhkpRowCelenganButton(
+                  key: const Key('celengan_belum_kosong'),
+                  record: belumBayarKosong,
+                  onPressed: () {},
+                ),
+                DhkpRowCelenganButton(
+                  key: const Key('celengan_belum_cicil'),
+                  record: belumBayarCicil,
+                  onPressed: () {},
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      // Baris yang sejak awal Sudah Bayar tidak memiliki IconButton/ikon celengan
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('celengan_paid_awal')),
+          matching: find.byType(IconButton),
+        ),
+        findsNothing,
+      );
+
+      // Baris yang lunas lewat celengan tetap hijau (Icons.savings_rounded)
+      final lunasIcon = tester.widget<Icon>(
+        find.descendant(
+          of: find.byKey(const Key('celengan_lunas')),
+          matching: find.byIcon(Icons.savings_rounded),
+        ),
+      );
+      expect(lunasIcon.color, equals(Colors.green.shade700));
+
+      // Baris Belum Bayar tanpa celengan menampilkan outline abu-abu
+      final belumKosongIcon = tester.widget<Icon>(
+        find.descendant(
+          of: find.byKey(const Key('celengan_belum_kosong')),
+          matching: find.byIcon(Icons.savings_outlined),
+        ),
+      );
+      expect(belumKosongIcon.color, equals(Colors.grey.shade500));
+
+      // Baris Belum Bayar dengan cicilan menampilkan ikon pink
+      final belumCicilIcon = tester.widget<Icon>(
+        find.descendant(
+          of: find.byKey(const Key('celengan_belum_cicil')),
+          matching: find.byIcon(Icons.savings_rounded),
+        ),
+      );
+      expect(belumCicilIcon.color, equals(Colors.pink.shade600));
+    });
+
+    testWidgets('celengan >100% surplus allocation (kembalian vs tip) and WP digital signature workflow', (tester) async {
+      tester.view.physicalSize = const Size(1080, 1920);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      BlokRecord? updatedRecord;
+      const initialRecord = BlokRecord(
+        nop: '320301000100100090',
+        namaWajibPajak: 'Haji Eman',
+        tahunBayar: '2026',
+        tanggalBayar: '-',
+        jumlahPbb: '50.000',
+        statusBayar: 'Belum Bayar',
+        catatan: '',
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (ctx) => ElevatedButton(
+                onPressed: () => showNopKalkulatorDialog(
+                  ctx,
+                  record: initialRecord,
+                  initialTab: 1,
+                  onRecordUpdated: (r) => updatedRecord = r,
+                ),
+                child: const Text('Buka Celengan'),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Buka Celengan'));
+      await tester.pumpAndSettle();
+
+      // Uji chip +100 rb (menghasilkan 200.0% terhadap tagihan 50.000)
+      await tester.tap(find.text('+100 rb'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Setor (+)'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('LUNAS + LEBIH Rp. 50.000'), findsOneWidget);
+      expect(find.text('200.0%'), findsOneWidget);
+      expect(find.byKey(const Key('kelebihan_alokasi_card')), findsOneWidget);
+
+      // Pilih alokasi "Tip Petugas"
+      await tester.tap(find.text('Tip Petugas'));
+      await tester.pumpAndSettle();
+
+      var extracted = PbbTabunganHelper.extractTabungan(updatedRecord!.catatan);
+      expect(extracted.persentase, equals(200.0));
+      expect(extracted.kelebihanAlokasi, equals(PbbKelebihanAlokasi.tipPetugas));
+      expect(find.text('Tercatat: Tip Petugas'), findsOneWidget);
+
+      // Ganti ke "Dikembalikan ke WP"
+      await tester.tap(find.text('Dikembalikan ke WP'));
+      await tester.pumpAndSettle();
+
+      extracted = PbbTabunganHelper.extractTabungan(updatedRecord!.catatan);
+      expect(
+        extracted.kelebihanAlokasi,
+        equals(PbbKelebihanAlokasi.kembalianKeWp),
+      );
+      expect(find.text('Tercatat: Dikembalikan ke WP'), findsOneWidget);
+
+      // Scroll ke kanvas tanda tangan WP dan goreskan tanda tangan
+      final verticalScrollable = find.byWidgetPredicate(
+        (w) =>
+            w is Scrollable &&
+            w.axisDirection == AxisDirection.down &&
+            w.restorationId != 'editable',
+      );
+      final canvasFinder = find.byKey(const Key('ttd_wp_canvas'));
+      await tester.scrollUntilVisible(
+        canvasFinder,
+        200,
+        scrollable: verticalScrollable,
+      );
+      await tester.pumpAndSettle();
+
+      await tester.drag(canvasFinder, const Offset(110, 35));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Belum disimpan'), findsOneWidget);
+
+      final saveBtn = find.byKey(const Key('btn_simpan_ttd_wp'));
+      await tester.ensureVisible(saveBtn);
+      await tester.tap(saveBtn);
+      await tester.pumpAndSettle();
+
+      extracted = PbbTabunganHelper.extractTabungan(updatedRecord!.catatan);
+      expect(extracted.hasTandaTangan, isTrue);
+      expect(extracted.tandaTanganStrokes, isNotEmpty);
+      expect(extracted.tandaTanganWaktu, isNotEmpty);
+      expect(find.textContaining('Tersimpan •'), findsOneWidget);
+
+      // Hapus TTD dan pastikan terhapus dari state tersimpan
+      final clearBtn = find.byKey(const Key('btn_hapus_ttd_wp'));
+      await tester.ensureVisible(clearBtn);
+      await tester.tap(clearBtn);
+      await tester.pumpAndSettle();
+
+      extracted = PbbTabunganHelper.extractTabungan(updatedRecord!.catatan);
+      expect(extracted.hasTandaTangan, isFalse);
+      expect(find.text('Belum ada TTD'), findsOneWidget);
     });
   });
 }

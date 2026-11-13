@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../blok_record.dart';
+import '../calculator/pbb_calculator_models.dart';
 import '../tagihan_result.dart' show formatRupiah;
 import '../unity_lerp_widgets.dart';
 import 'blok_catatan_models.dart';
@@ -439,6 +440,52 @@ class DhkpSummaryFooterCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Tombol aksi Celengan / Tabungan PBB per baris DHKP.
+///
+/// Baris yang sejak awal berstatus Sudah Bayar tanpa data celengan disembunyikan,
+/// sedangkan baris yang memiliki atau dilunasi lewat celengan tetap ditampilkan
+/// (ikon hijau saat lunas).
+class DhkpRowCelenganButton extends StatelessWidget {
+  final BlokRecord record;
+  final VoidCallback onPressed;
+
+  const DhkpRowCelenganButton({
+    super.key,
+    required this.record,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final tabungan = PbbTabunganHelper.extractTabungan(
+      record.catatan,
+      defaultTarget: record.jumlahPbbValue > 0 ? record.jumlahPbbValue : 50000,
+    );
+    final hasTabungan = tabungan.saldo > 0;
+    final isLunas = tabungan.isLunas;
+    if (record.isPaid && !hasTabungan) {
+      return const SizedBox.shrink();
+    }
+
+    return IconButton(
+      onPressed: onPressed,
+      icon: Icon(
+        hasTabungan ? Icons.savings_rounded : Icons.savings_outlined,
+        color: isLunas
+            ? Colors.green.shade700
+            : (hasTabungan ? Colors.pink.shade600 : Colors.grey.shade500),
+      ),
+      tooltip: isLunas
+          ? (tabungan.hasKelebihan
+              ? 'Celengan Warga: LUNAS (${tabungan.persentase.toStringAsFixed(0)}% • Lebih ${formatRupiah(tabungan.kelebihanSaldo)}${tabungan.kelebihanAlokasi != null ? ' • ${tabungan.kelebihanAlokasi!.label}' : ''})'
+              : 'Celengan Warga: LUNAS (${formatRupiah(tabungan.saldo)})')
+          : (hasTabungan
+              ? 'Celengan Warga: ${formatRupiah(tabungan.saldo)} / ${formatRupiah(tabungan.target)} (${tabungan.persentase.toStringAsFixed(0)}%)'
+              : 'Mulai Tabungan / Cicilan PBB Warga'),
     );
   }
 }

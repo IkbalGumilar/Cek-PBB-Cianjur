@@ -17,7 +17,6 @@ import 'dhkp/dhkp_nop_kalkulator_dialog.dart';
 import 'dhkp/dhkp_target_pacing_dialog.dart';
 import 'calculator/pbb_calculator_models.dart';
 import 'check_mode.dart';
-import 'currency_format.dart';
 import 'dhkp/blok_catatan_dialogs.dart';
 import 'dhkp/blok_catatan_models.dart';
 import 'dhkp/blok_catatan_widgets.dart';
@@ -2469,20 +2468,8 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
                                                                   PbbTabunganHelper.cleanCatatan(
                                                                 r.catatan,
                                                               );
-                                                              final tabungan =
-                                                                  PbbTabunganHelper.extractTabungan(
-                                                                r.catatan,
-                                                                defaultTarget:
-                                                                    r.jumlahPbbValue > 0
-                                                                        ? r.jumlahPbbValue
-                                                                        : 50000,
-                                                              );
                                                               final hasCatatan =
                                                                   cleanCatatan.isNotEmpty;
-                                                              final hasTabungan =
-                                                                  tabungan.saldo > 0;
-                                                              final isLunas =
-                                                                  tabungan.isLunas;
 
                                                               return Row(
                                                                 mainAxisSize:
@@ -2505,27 +2492,13 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
                                                                         ? 'Catatan: $cleanCatatan'
                                                                         : 'Tambah Catatan Petugas',
                                                                   ),
-                                                                  IconButton(
+                                                                  DhkpRowCelenganButton(
+                                                                    record: r,
                                                                     onPressed: () =>
                                                                         _bukaKalkulatorNop(
                                                                       r,
                                                                       initialTab: 1,
                                                                     ),
-                                                                    icon: Icon(
-                                                                      hasTabungan
-                                                                          ? Icons.savings_rounded
-                                                                          : Icons.savings_outlined,
-                                                                      color: isLunas
-                                                                          ? Colors.green.shade700
-                                                                          : (hasTabungan
-                                                                              ? Colors.pink.shade600
-                                                                              : Colors.grey.shade500),
-                                                                    ),
-                                                                    tooltip: isLunas
-                                                                        ? 'Celengan Warga: LUNAS (${formatRupiah(tabungan.saldo)})'
-                                                                        : (hasTabungan
-                                                                            ? 'Celengan Warga: ${formatRupiah(tabungan.saldo)} / ${formatRupiah(tabungan.target)} (${tabungan.persentase.toStringAsFixed(0)}%)'
-                                                                            : 'Mulai Tabungan / Cicilan PBB Warga'),
                                                                   ),
                                                                 ],
                                                               );

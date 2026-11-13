@@ -45,6 +45,23 @@ class WilayahDetectionResult {
   });
 }
 
+/// Hasil pembacaan koordinat GPS lapangan beserta estimasi akurasi.
+class FieldLocationResult {
+  final double latitude;
+  final double longitude;
+  final double? accuracyMeters;
+  final bool isFallbackIp;
+  final String sourceDescription;
+
+  const FieldLocationResult({
+    required this.latitude,
+    required this.longitude,
+    this.accuracyMeters,
+    this.isFallbackIp = false,
+    required this.sourceDescription,
+  });
+}
+
 /// Titik koordinat acuan perkiraan pusat masing-masing 32 Kecamatan di Kabupaten Cianjur.
 const Map<String, ({double lat, double lng})> kecamatanCentroids = {
   '010': (lat: -7.3486, lng: 106.9142), // AGRABINTA
@@ -182,23 +199,116 @@ class LocationService {
     );
   }
 
+  Future<bool> _ensureMobileLocationPermission() async {
+    if (!(Platform.isAndroid || Platform.isIOS)) return true;
+    try {
+      LocationPermission locPerm = await Geolocator.checkPermission();
+      if (locPerm == LocationPermission.denied) {
+        locPerm = await Geolocator.requestPermission();
+      }
+      return locPerm == LocationPermission.whileInUse ||
+          locPerm == LocationPermission.always;
+    } catch (e) {
+      debugPrint('Geolocator mobile permission error: $e');
+      return false;
+    }
+  }
+
+  Future<({double lat, double lng})?> _fetchIpFallbackLocation() async {
+    try {
+      final ipRes = await http
+          .get(Uri.parse('http://ip-api.com/json'))
+          .timeout(const Duration(seconds: 4));
+      if (ipRes.statusCode == 200) {
+        final data = jsonDecode(ipRes.body) as Map<String, dynamic>;
+        if (data['status'] == 'success') {
+          final lat = (data['lat'] as num?)?.toDouble();
+          final lng = (data['lon'] as num?)?.toDouble();
+          if (lat != null && lng != null) return (lat: lat, lng: lng);
+        }
+      }
+    } catch (e) {
+      debugPrint('Fallback ip-api error: $e');
+    }
+
+    try {
+      final ipRes = await http
+          .get(Uri.parse('https://ipwho.is/'))
+          .timeout(const Duration(seconds: 4));
+      if (ipRes.statusCode == 200) {
+        final data = jsonDecode(ipRes.body) as Map<String, dynamic>;
+        if (data['success'] == true) {
+          final lat = (data['latitude'] as num?)?.toDouble();
+          final lng = (data['longitude'] as num?)?.toDouble();
+          if (lat != null && lng != null) return (lat: lat, lng: lng);
+        }
+      }
+    } catch (e) {
+      debugPrint('Fallback ipwho.is error: $e');
+    }
+    return null;
+  }
+
+  /// Membaca koordinat GPS lapangan akurat untuk penandaan objek pajak di peta.
+  /// Mengembalikan koordinat + akurasi meter (atau fallback jaringan jika sensor GPS tidak tersedia).
+  Future<FieldLocationResult?> getCurrentFieldLocation() async {
+    final permOk = await _ensureMobileLocationPermission();
+    if (permOk) {
+      try {
+        final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+        if (serviceEnabled || !(Platform.isAndroid || Platform.isIOS)) {
+          final pos = await Geolocator.getCurrentPosition(
+            locationSettings: const LocationSettings(
+              accuracy: LocationAccuracy.best,
+              timeLimit: Duration(seconds: 10),
+            ),
+          );
+          return FieldLocationResult(
+            latitude: pos.latitude,
+            longitude: pos.longitude,
+            accuracyMeters: pos.accuracy > 0 ? pos.accuracy : null,
+            isFallbackIp: false,
+            sourceDescription: (Platform.isAndroid || Platform.isIOS)
+                ? 'GPS Perangkat'
+                : 'Sensor Lokasi OS',
+          );
+        }
+      } catch (e) {
+        debugPrint('Geolocator best accuracy timeout/error: $e');
+        try {
+          final lastPos = await Geolocator.getLastKnownPosition();
+          if (lastPos != null) {
+            return FieldLocationResult(
+              latitude: lastPos.latitude,
+              longitude: lastPos.longitude,
+              accuracyMeters: lastPos.accuracy > 0 ? lastPos.accuracy : null,
+              isFallbackIp: false,
+              sourceDescription: 'GPS Terakhir Perangkat',
+            );
+          }
+        } catch (_) {}
+      }
+    }
+
+    final ipLoc = await _fetchIpFallbackLocation();
+    if (ipLoc != null) {
+      return FieldLocationResult(
+        latitude: ipLoc.lat,
+        longitude: ipLoc.lng,
+        isFallbackIp: true,
+        sourceDescription: 'Perkiraan Jaringan Internet (IP)',
+      );
+    }
+    return null;
+  }
+
   /// Mendeteksi posisi GPS/Jaringan saat ini dan mencocokkannya ke Kecamatan & Desa di Cianjur.
   /// Bekerja optimal di Android (GPS perangkat) maupun Desktop Windows/Linux (IP Geolocation & Reverse Geocoding).
   Future<WilayahDetectionResult?> detectCurrentWilayah() async {
     // 1. Cek & Minta Izin Lokasi jika pada platform mobile (Android / iOS)
-    if (Platform.isAndroid || Platform.isIOS) {
-      try {
-        LocationPermission locPerm = await Geolocator.checkPermission();
-        if (locPerm == LocationPermission.denied) {
-          locPerm = await Geolocator.requestPermission();
-        }
-        if (locPerm == LocationPermission.denied ||
-            locPerm == LocationPermission.deniedForever) {
-          debugPrint('Izin GPS mobile ditolak, mencoba deteksi berbasis IP...');
-        }
-      } catch (e) {
-        debugPrint('Geolocator mobile permission error: $e');
-      }
+    final permOk = await _ensureMobileLocationPermission();
+    if (!permOk) {
+      debugPrint('Izin GPS mobile ditolak, mencoba deteksi berbasis IP...');
     }
 
     double? lat;
@@ -224,39 +334,11 @@ class LocationService {
 
     // 3. Fallback IP Geolocation jika GPS tidak tersedia (misal di PC Linux/Windows tanpa sensor GPS)
     if (lat == null || lng == null) {
-      try {
-        final ipRes = await http
-            .get(Uri.parse('http://ip-api.com/json'))
-            .timeout(const Duration(seconds: 4));
-        if (ipRes.statusCode == 200) {
-          final data = jsonDecode(ipRes.body) as Map<String, dynamic>;
-          if (data['status'] == 'success') {
-            lat = (data['lat'] as num?)?.toDouble();
-            lng = (data['lon'] as num?)?.toDouble();
-            source = 'Jaringan Internet (IP)';
-          }
-        }
-      } catch (e) {
-        debugPrint('Fallback ip-api error: $e');
-      }
-
-      // Cadangan kedua jika provider pertama gagal
-      if (lat == null || lng == null) {
-        try {
-          final ipRes = await http
-              .get(Uri.parse('https://ipwho.is/'))
-              .timeout(const Duration(seconds: 4));
-          if (ipRes.statusCode == 200) {
-            final data = jsonDecode(ipRes.body) as Map<String, dynamic>;
-            if (data['success'] == true) {
-              lat = (data['latitude'] as num?)?.toDouble();
-              lng = (data['longitude'] as num?)?.toDouble();
-              source = 'Jaringan Internet (IP)';
-            }
-          }
-        } catch (e) {
-          debugPrint('Fallback ipwho.is error: $e');
-        }
+      final ipLoc = await _fetchIpFallbackLocation();
+      if (ipLoc != null) {
+        lat = ipLoc.lat;
+        lng = ipLoc.lng;
+        source = 'Jaringan Internet (IP)';
       }
     }
 

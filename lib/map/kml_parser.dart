@@ -1,12 +1,14 @@
 import '../blok_record.dart';
 import '../dusun_data.dart';
+import '../nop_helper.dart';
 import 'map_models.dart';
+import 'map_pin_store.dart';
 
 /// Utilitas Parser dan Generator KML (Keyhole Markup Language) Google.
 class KmlParser {
   /// Mengekstrak titik dan polygon dari teks XML KML.
   static KmlParseResult parse(String kmlString, {List<BlokRecord>? dhkpRecords}) {
-    final dots = <MapTaxDot>[];
+    final rawDots = <MapTaxDot>[];
     final dusunZones = <MapDusunZone>[];
 
     // Regex untuk Placemark
@@ -24,12 +26,7 @@ class KmlParser {
     final descRegex = RegExp(r'<description>(.*?)</description>', caseSensitive: false, dotAll: true);
     final isPolygonRegex = RegExp(r'<Polygon\b', caseSensitive: false);
 
-    final dhkpMap = <String, BlokRecord>{};
-    if (dhkpRecords != null) {
-      for (final r in dhkpRecords) {
-        dhkpMap[r.nop.trim()] = r;
-      }
-    }
+    final dhkpMap = MapPinStore.buildLatestRecordByNop(dhkpRecords);
 
     final matches = placemarkRegex.allMatches(kmlString);
     int dotIndex = 0;
@@ -62,10 +59,11 @@ class KmlParser {
         // Ini adalah titik objek pajak (Point)
         dotIndex++;
         final pointCoord = coords.first;
-        final nop = _extractExtendedData(content, 'NOP') ??
+        final rawNop = _extractExtendedData(content, 'NOP') ??
             _extractFromText(desc, r'NOP\s*[:=]\s*([0-9]{18})') ??
             _extractFromText(name, r'([0-9]{18})') ??
             '';
+        final nop = MapPinEntry.normalizePinNop(rawNop);
 
         final dhkpMatch = nop.isNotEmpty ? dhkpMap[nop] : null;
         final wpName = dhkpMatch?.namaWajibPajak ??
@@ -88,8 +86,8 @@ class KmlParser {
             (statusStr.toLowerCase().contains('lunas') ||
                 statusStr.toLowerCase().contains('sudah'));
         final isFasum = dhkpMatch?.isTargetPemda ??
-            desc.toLowerCase().contains('fasum') ||
-            desc.toLowerCase().contains('pemda');
+            (desc.toLowerCase().contains('fasum') ||
+                desc.toLowerCase().contains('pemda'));
 
         final dusunNum = dhkpMatch != null
             ? (DusunData.instance.byBlok(dhkpMatch.blok)?.number ?? 1)
@@ -98,6 +96,7 @@ class KmlParser {
         // Relasi Alamat WP
         final alamatObj = dhkpMatch?.alamatObjek ?? _extractExtendedData(content, 'ALAMAT_OBJ') ?? '';
         final alamatWp = dhkpMatch?.alamatWp ?? _extractExtendedData(content, 'ALAMAT_WP') ?? '';
+        final jumlahPbb = dhkpMatch?.jumlahPbb ?? _extractExtendedData(content, 'PBB') ?? '';
 
         MapCoordinate? ownerCoord;
         final ownerCoordStr = _extractExtendedData(content, 'OWNER_COORD');
@@ -110,7 +109,22 @@ class KmlParser {
             ? MapDotStatus.fasum
             : (isPaid ? MapDotStatus.lunas : MapDotStatus.belumLunas);
 
-        dots.add(MapTaxDot(
+        final effectiveRecord = dhkpMatch ??
+            (nop.isNotEmpty
+                ? BlokRecord(
+                    nop: nop,
+                    namaWajibPajak: wpName,
+                    tahunBayar: '${DateTime.now().year}',
+                    tanggalBayar: '',
+                    jumlahPbb: jumlahPbb,
+                    statusBayar: statusStr,
+                    isTargetPemda: isFasum,
+                    alamatObjek: alamatObj,
+                    alamatWp: alamatWp,
+                  )
+                : null);
+
+        rawDots.add(MapTaxDot(
           id: 'dot_$dotIndex',
           nop: nop,
           namaWajibPajak: wpName,
@@ -121,20 +135,69 @@ class KmlParser {
           ownerCoordinate: ownerCoord,
           alamatObjek: alamatObj,
           alamatWp: alamatWp,
-          jumlahPbb: dhkpMatch?.jumlahPbb ?? '',
+          jumlahPbb: jumlahPbb,
           statusBayar: statusStr,
           isTargetPemda: isFasum,
           status: dotStatus,
-          spptList: dhkpMatch != null ? [dhkpMatch] : const [],
+          spptList: effectiveRecord != null ? [effectiveRecord] : const [],
         ));
       }
     }
+
+    // Kelompokkan Point Placemark yang menempati koordinat yang sama agar multi-NOP tergabung
+    final dots = _groupParsedDotsByCoordinate(rawDots);
 
     return KmlParseResult(
       dots: dots,
       dusunZones: dusunZones,
       rawKml: kmlString,
     );
+  }
+
+  static List<MapTaxDot> _groupParsedDotsByCoordinate(List<MapTaxDot> rawDots) {
+    if (rawDots.length <= 1) return rawDots;
+
+    final grouped = <String, List<MapTaxDot>>{};
+    for (final d in rawDots) {
+      final key = MapPinEntry.coordinateKey(
+        d.coordinate.latitude,
+        d.coordinate.longitude,
+      );
+      grouped.putIfAbsent(key, () => []).add(d);
+    }
+
+    final result = <MapTaxDot>[];
+    for (final entry in grouped.entries) {
+      if (entry.value.length == 1) {
+        result.add(entry.value.first);
+        continue;
+      }
+      final combinedRecords = <BlokRecord>[];
+      final seenNop = <String>{};
+      MapCoordinate? ownerCoord;
+      for (final d in entry.value) {
+        ownerCoord ??= d.ownerCoordinate;
+        for (final rec in d.spptList) {
+          final norm = MapPinEntry.normalizePinNop(rec.nop);
+          if (norm.isNotEmpty && seenNop.add(norm)) {
+            combinedRecords.add(rec);
+          }
+        }
+      }
+      if (combinedRecords.isEmpty) {
+        result.addAll(entry.value);
+      } else {
+        result.add(
+          MapPinStore.composeDotFromRecords(
+            id: 'pin_${entry.key}',
+            coordinate: entry.value.first.coordinate,
+            ownerCoordinate: ownerCoord,
+            spptList: combinedRecords,
+          ),
+        );
+      }
+    }
+    return result;
   }
 
   /// Mengekspor daftar titik objek pajak ke format standar Google KML.
@@ -147,18 +210,21 @@ class KmlParser {
     sb.writeln('<?xml version="1.0" encoding="UTF-8"?>');
     sb.writeln('<kml xmlns="http://www.opengis.net/kml/2.2">');
     sb.writeln('  <Document>');
-    sb.writeln('    <name>Peta PBB Desa $villageName</name>');
+    sb.writeln('    <name>Peta PBB Desa ${_escapeXml(villageName)}</name>');
     sb.writeln('    <description>Pemetaan Objek Pajak KML - Aplikasi Cek PBB Cianjur</description>');
 
     // Styles untuk titik warna
     sb.writeln('    <Style id="dot_lunas">');
-    sb.writeln('      <IconStyle><color>ff00ff00</color><scale>1.1</scale></IconStyle>');
+    sb.writeln('      <IconStyle><color>ff71cc2e</color><scale>1.1</scale></IconStyle>');
     sb.writeln('    </Style>');
     sb.writeln('    <Style id="dot_belum">');
-    sb.writeln('      <IconStyle><color>ff0000ff</color><scale>1.1</scale></IconStyle>');
+    sb.writeln('      <IconStyle><color>ff3c4ce7</color><scale>1.1</scale></IconStyle>');
+    sb.writeln('    </Style>');
+    sb.writeln('    <Style id="dot_sebagian">');
+    sb.writeln('      <IconStyle><color>ff0fc4f1</color><scale>1.1</scale></IconStyle>');
     sb.writeln('    </Style>');
     sb.writeln('    <Style id="dot_fasum">');
-    sb.writeln('      <IconStyle><color>ff000000</color><scale>1.1</scale></IconStyle>');
+    sb.writeln('      <IconStyle><color>ff5e4934</color><scale>1.1</scale></IconStyle>');
     sb.writeln('    </Style>');
 
     // Kelompokkan per Dusun
@@ -172,38 +238,73 @@ class KmlParser {
       sb.writeln('      <name>Dusun ${entry.key}</name>');
 
       for (final dot in entry.value) {
-        final style = dot.status == MapDotStatus.lunas
-            ? '#dot_lunas'
-            : (dot.status == MapDotStatus.fasum ? '#dot_fasum' : '#dot_belum');
+        final items = dot.spptList.isNotEmpty
+            ? dot.spptList
+            : [
+                BlokRecord(
+                  nop: dot.nop,
+                  namaWajibPajak: dot.namaWajibPajak,
+                  tahunBayar: '${DateTime.now().year}',
+                  tanggalBayar: '',
+                  jumlahPbb: dot.jumlahPbb,
+                  statusBayar: dot.statusBayar,
+                  isTargetPemda: dot.isTargetPemda,
+                  alamatObjek: dot.alamatObjek,
+                  alamatWp: dot.alamatWp,
+                ),
+              ];
 
-        sb.writeln('      <Placemark>');
-        sb.writeln('        <name>${_escapeXml(dot.namaWajibPajak)} (${dot.nomorUrut})</name>');
-        sb.writeln('        <description>');
-        sb.writeln('          <![CDATA[');
-        sb.writeln('            <b>NOP:</b> ${dot.nop}<br/>');
-        sb.writeln('            <b>Nama:</b> ${dot.namaWajibPajak}<br/>');
-        sb.writeln('            <b>Blok:</b> ${dot.blok} | <b>Urut:</b> ${dot.nomorUrut}<br/>');
-        sb.writeln('            <b>Status:</b> ${dot.status.label}<br/>');
-        sb.writeln('            <b>PBB:</b> ${dot.jumlahPbb}<br/>');
-        sb.writeln('            <b>Alamat Objek:</b> ${dot.alamatObjek}<br/>');
-        sb.writeln('            <b>Alamat WP:</b> ${dot.alamatWp}');
-        sb.writeln('          ]]>');
-        sb.writeln('        </description>');
-        sb.writeln('        <styleUrl>$style</styleUrl>');
-        sb.writeln('        <ExtendedData>');
-        sb.writeln('          <Data name="NOP"><value>${dot.nop}</value></Data>');
-        sb.writeln('          <Data name="BLOK"><value>${dot.blok}</value></Data>');
-        sb.writeln('          <Data name="STATUS"><value>${dot.statusBayar}</value></Data>');
-        sb.writeln('          <Data name="ALAMAT_OBJ"><value>${_escapeXml(dot.alamatObjek)}</value></Data>');
-        sb.writeln('          <Data name="ALAMAT_WP"><value>${_escapeXml(dot.alamatWp)}</value></Data>');
-        if (dot.ownerCoordinate != null) {
-          sb.writeln('          <Data name="OWNER_COORD"><value>${dot.ownerCoordinate!.longitude},${dot.ownerCoordinate!.latitude},0</value></Data>');
+        for (final rec in items) {
+          final urut = nopWilayah(rec.nop).isNotEmpty
+              ? nopWilayah(rec.nop)
+              : dot.nomorUrut;
+          final blok =
+              nopBlok(rec.nop).isNotEmpty ? nopBlok(rec.nop) : dot.blok;
+          final style = dot.status == MapDotStatus.sebagian
+              ? '#dot_sebagian'
+              : (rec.isTargetPemda || dot.status == MapDotStatus.fasum)
+                  ? '#dot_fasum'
+                  : (rec.isPaid || dot.status == MapDotStatus.lunas)
+                      ? '#dot_lunas'
+                      : '#dot_belum';
+
+          sb.writeln('      <Placemark>');
+          sb.writeln(
+              '        <name>${_escapeXml(rec.namaWajibPajak)} ($urut)</name>');
+          sb.writeln('        <description>');
+          sb.writeln('          <![CDATA[');
+          sb.writeln('            <b>NOP:</b> ${rec.nop}<br/>');
+          sb.writeln(
+              '            <b>Nama:</b> ${_escapeXml(rec.namaWajibPajak)}<br/>');
+          sb.writeln('            <b>Blok:</b> $blok | <b>Urut:</b> $urut<br/>');
+          sb.writeln('            <b>Status:</b> ${rec.statusBayar}<br/>');
+          sb.writeln('            <b>PBB:</b> ${rec.jumlahPbb}<br/>');
+          sb.writeln(
+              '            <b>Alamat Objek:</b> ${_escapeXml(rec.alamatObjek)}<br/>');
+          sb.writeln(
+              '            <b>Alamat WP:</b> ${_escapeXml(rec.alamatWp)}');
+          sb.writeln('          ]]>');
+          sb.writeln('        </description>');
+          sb.writeln('        <styleUrl>$style</styleUrl>');
+          sb.writeln('        <ExtendedData>');
+          sb.writeln('          <Data name="NOP"><value>${rec.nop}</value></Data>');
+          sb.writeln('          <Data name="NAMA_WP"><value>${_escapeXml(rec.namaWajibPajak)}</value></Data>');
+          sb.writeln('          <Data name="BLOK"><value>$blok</value></Data>');
+          sb.writeln('          <Data name="STATUS"><value>${_escapeXml(rec.statusBayar)}</value></Data>');
+          if (rec.jumlahPbb.isNotEmpty) {
+            sb.writeln('          <Data name="PBB"><value>${_escapeXml(rec.jumlahPbb)}</value></Data>');
+          }
+          sb.writeln('          <Data name="ALAMAT_OBJ"><value>${_escapeXml(rec.alamatObjek)}</value></Data>');
+          sb.writeln('          <Data name="ALAMAT_WP"><value>${_escapeXml(rec.alamatWp)}</value></Data>');
+          if (dot.ownerCoordinate != null) {
+            sb.writeln('          <Data name="OWNER_COORD"><value>${dot.ownerCoordinate!.longitude},${dot.ownerCoordinate!.latitude},0</value></Data>');
+          }
+          sb.writeln('        </ExtendedData>');
+          sb.writeln('        <Point>');
+          sb.writeln('          <coordinates>${dot.coordinate.longitude},${dot.coordinate.latitude},0</coordinates>');
+          sb.writeln('        </Point>');
+          sb.writeln('      </Placemark>');
         }
-        sb.writeln('        </ExtendedData>');
-        sb.writeln('        <Point>');
-        sb.writeln('          <coordinates>${dot.coordinate.longitude},${dot.coordinate.latitude},0</coordinates>');
-        sb.writeln('        </Point>');
-        sb.writeln('      </Placemark>');
       }
       sb.writeln('    </Folder>');
     }
