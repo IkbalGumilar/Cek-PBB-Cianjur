@@ -120,44 +120,76 @@ class SharedStorageLinkService {
     return buffer.toString();
   }
 
+  /// Memvalidasi apakah parameter `folder` merupakan ID folder Google Drive
+  /// yang sah atau tautan resmi `https://drive.google.com/drive/folders/...`.
+  static bool isValidFolderParameter(String? folder) {
+    if (folder == null) return false;
+    final trimmed = folder.trim();
+    if (trimmed.isEmpty || trimmed.length > 512) return false;
+    if (trimmed.contains('..') ||
+        trimmed.contains('\\') ||
+        RegExp(r'[\x00-\x1F\x7F]').hasMatch(trimmed)) {
+      return false;
+    }
+    return GoogleDriveBackupPolicy.extractFolderId(trimmed) != null;
+  }
+
+  static String? _sanitizeLabel(String? raw) {
+    if (raw == null) return null;
+    final cleaned = raw.replaceAll(RegExp(r'[\x00-\x1F\x7F]'), '').trim();
+    if (cleaned.isEmpty) return null;
+    return cleaned.length > 120 ? cleaned.substring(0, 120) : cleaned;
+  }
+
   /// Mem-parsing raw string URI menjadi [StorageLinkPayload].
   /// Mendukung format `cekpbb://storage`, Web URL `ikbalgumilar.github.io/Cek-PBB-Cianjur/connect`,
   /// atau langsung link Google Drive `drive.google.com/drive/folders/...`.
   static StorageLinkPayload? parseString(String? raw) {
     if (raw == null) return null;
     final trimmed = raw.trim();
-    if (trimmed.isEmpty) return null;
+    if (trimmed.isEmpty ||
+        trimmed.length > 2048 ||
+        RegExp(r'[\x00-\x1F\x7F]').hasMatch(trimmed)) {
+      return null;
+    }
 
     final uri = Uri.tryParse(trimmed);
-    if (uri != null) {
+    if (uri != null && uri.userInfo.isEmpty) {
       // 1. Format custom scheme cekpbb://storage?folder=...
       if (uri.scheme == deepLinkScheme && uri.host == deepLinkHost) {
         final folder = uri.queryParameters['folder'];
-        if (folder != null && folder.trim().isNotEmpty) {
+        if (isValidFolderParameter(folder)) {
           return StorageLinkPayload(
-            folder: folder.trim(),
-            name: uri.queryParameters['name'],
-            sender: uri.queryParameters['sender'],
+            folder: folder!.trim(),
+            name: _sanitizeLabel(uri.queryParameters['name']),
+            sender: _sanitizeLabel(uri.queryParameters['sender']),
           );
         }
+        return null;
       }
 
       // 2. Format Web Universal Link https://ikbalgumilar.github.io/Cek-PBB-Cianjur/connect?folder=...
-      if (uri.host == webHost && uri.path.startsWith(webPath)) {
+      if ((uri.scheme == 'https' || uri.scheme == 'http') &&
+          uri.host == webHost &&
+          uri.path.startsWith(webPath)) {
         final folder = uri.queryParameters['folder'];
-        if (folder != null && folder.trim().isNotEmpty) {
+        if (isValidFolderParameter(folder)) {
           return StorageLinkPayload(
-            folder: folder.trim(),
-            name: uri.queryParameters['name'],
-            sender: uri.queryParameters['sender'],
+            folder: folder!.trim(),
+            name: _sanitizeLabel(uri.queryParameters['name']),
+            sender: _sanitizeLabel(uri.queryParameters['sender']),
           );
         }
+        return null;
       }
 
       // 3. Format link murni Google Drive folders
-      final driveFolderId = GoogleDriveBackupPolicy.extractFolderId(trimmed);
-      if (driveFolderId != null) {
-        return StorageLinkPayload(folder: trimmed);
+      if (uri.scheme == 'https' &&
+          uri.host.toLowerCase() == 'drive.google.com') {
+        final driveFolderId = GoogleDriveBackupPolicy.extractFolderId(trimmed);
+        if (driveFolderId != null) {
+          return StorageLinkPayload(folder: trimmed);
+        }
       }
     }
 
@@ -210,8 +242,9 @@ class SharedStorageLinkService {
           final link = call.arguments as String?;
           if (link != null && link.isNotEmpty) {
             final payload = parseString(link);
-            if (payload != null && _activeContext != null) {
-              await handlePayload(_activeContext!, payload);
+            final ctx = _activeContext;
+            if (payload != null && ctx != null && ctx.mounted) {
+              await handlePayload(ctx, payload);
             }
           }
         }
@@ -223,10 +256,11 @@ class SharedStorageLinkService {
       );
       if (initialLink != null && initialLink.isNotEmpty) {
         final payload = parseString(initialLink);
-        if (payload != null && _activeContext != null) {
+        if (payload != null) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (_activeContext != null) {
-              handlePayload(_activeContext!, payload);
+            final ctx = _activeContext;
+            if (ctx != null && ctx.mounted) {
+              handlePayload(ctx, payload);
             }
           });
         }

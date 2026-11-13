@@ -18,17 +18,20 @@ void main() {
       expect(activeNopPrefix, '3205200004');
     });
 
-    test('activeNopPrefix setter updates prefix and resetNopPrefix restores default', () {
-      activeNopPrefix = '3205200001'; // Mekarjaya
-      expect(nopPrefix, '3205200001');
+    test(
+      'activeNopPrefix setter updates prefix and resetNopPrefix restores default',
+      () {
+        activeNopPrefix = '3205200001'; // Mekarjaya
+        expect(nopPrefix, '3205200001');
 
-      // Invalid length ignored
-      activeNopPrefix = '123';
-      expect(nopPrefix, '3205200001');
+        // Invalid length ignored
+        activeNopPrefix = '123';
+        expect(nopPrefix, '3205200001');
 
-      resetNopPrefix();
-      expect(nopPrefix, '3205200004');
-    });
+        resetNopPrefix();
+        expect(nopPrefix, '3205200004');
+      },
+    );
 
     test('expandNop uses active prefix and optional custom prefix', () {
       // Shorthand 5 digit: 2 digit blok (17 -> 017), 3 digit wilayah (154 -> 0154)
@@ -71,18 +74,21 @@ void main() {
       expect(lookupKecamatanName('010'), 'Kecamatan 010');
     });
 
-    test('NopScanParser extracts NOPs across different villages in Cianjur', () {
-      const text = '''
+    test(
+      'NopScanParser extracts NOPs across different villages in Cianjur',
+      () {
+        const text = '''
       Pajak Bumi dan Bangunan
       NOP: 32.05.200.001.005-0012.0
       Atau desa lain: 320520000901701540
       NOP Singkat: 17154
       ''';
-      final results = NopScanParser.extract(text);
-      expect(results.contains('320520000100500120'), isTrue);
-      expect(results.contains('320520000901701540'), isTrue);
-      expect(results.contains('320520000401701540'), isTrue);
-    });
+        final results = NopScanParser.extract(text);
+        expect(results.contains('320520000100500120'), isTrue);
+        expect(results.contains('320520000901701540'), isTrue);
+        expect(results.contains('320520000401701540'), isTrue);
+      },
+    );
 
     test('StaffPortalClient setCustomWilayah updates active parameters', () {
       final client = StaffPortalClient();

@@ -16,6 +16,7 @@ import 'nop_scanner.dart';
 import 'pbb/check_result_cards.dart';
 import 'pbb_client.dart';
 import 'tagihan_result.dart';
+import 'ui/app_design_system.dart';
 
 class CheckFormView extends StatefulWidget {
   final CheckMode mode;
@@ -61,6 +62,9 @@ class _CheckFormViewState extends State<CheckFormView> {
   final _wilayahController = TextEditingController();
   final _tahunController = TextEditingController(text: '2026');
   final _captchaController = TextEditingController();
+  final _blokFocusNode = FocusNode();
+  final _wilayahFocusNode = FocusNode();
+  final _tahunFocusNode = FocusNode();
   final _captchaFocusNode = FocusNode();
   late final ScrollController _scrollController =
       widget.scrollController ?? ScrollController();
@@ -81,6 +85,10 @@ class _CheckFormViewState extends State<CheckFormView> {
   PbbResult? _statusBayarResult;
   TagihanResult? _tagihanResult;
   String? _errorText;
+  String? _blokError;
+  String? _wilayahError;
+  String? _tahunError;
+  String? _captchaError;
 
   @override
   void initState() {
@@ -112,7 +120,8 @@ class _CheckFormViewState extends State<CheckFormView> {
         setActiveWilayah(
           kecCode: kec,
           kelCode: kel,
-          desaName: desa ?? (kecObj != null ? lookupCatalogDesaName(kec, kel) : null),
+          desaName:
+              desa ?? (kecObj != null ? lookupCatalogDesaName(kec, kel) : null),
           kecName: kecObj?.name,
         );
       }
@@ -133,6 +142,10 @@ class _CheckFormViewState extends State<CheckFormView> {
         _statusBayarResult = null;
         _tagihanResult = null;
         _errorText = null;
+        _blokError = null;
+        _wilayahError = null;
+        _tahunError = null;
+        _captchaError = null;
       });
       _loadCaptcha();
     } else if (!oldWidget.isActive && widget.isActive && _ready) {
@@ -147,6 +160,9 @@ class _CheckFormViewState extends State<CheckFormView> {
     _wilayahController.dispose();
     _tahunController.dispose();
     _captchaController.dispose();
+    _blokFocusNode.dispose();
+    _wilayahFocusNode.dispose();
+    _tahunFocusNode.dispose();
     _captchaFocusNode.dispose();
     if (widget.scrollController == null) {
       _scrollController.dispose();
@@ -479,8 +495,7 @@ class _CheckFormViewState extends State<CheckFormView> {
           description:
               'Isi tahun pajak yang ingin Anda periksa bukti pembayarannya (secara bawaan terisi tahun berjalan). '
               'Ubah angkanya jika warga ingin mengecek bukti lunas tahun-tahun sebelumnya.',
-          actionHint:
-              'Pastikan tahun diisi 4 angka, misalnya 2026 atau 2025.',
+          actionHint: 'Pastikan tahun diisi 4 angka, misalnya 2026 atau 2025.',
           icon: Icons.calendar_today_outlined,
         ),
       );
@@ -572,24 +587,115 @@ class _CheckFormViewState extends State<CheckFormView> {
     });
   }
 
+  void _handleBlokSubmitted() {
+    final blokDigits = _blokController.text.replaceAll(RegExp(r'[^0-9]'), '');
+    if (blokDigits.isEmpty) {
+      setState(() => _blokError = 'Data belum diisi');
+      _blokFocusNode.requestFocus();
+      return;
+    }
+    if (_blokError != null || _errorText != null) {
+      setState(() {
+        _blokError = null;
+        _errorText = null;
+      });
+    }
+    _wilayahFocusNode.requestFocus();
+  }
+
+  void _handleWilayahSubmitted() {
+    final wilayahDigits = _wilayahController.text.replaceAll(
+      RegExp(r'[^0-9]'),
+      '',
+    );
+    if (wilayahDigits.isEmpty) {
+      setState(() => _wilayahError = 'Data belum diisi');
+      _wilayahFocusNode.requestFocus();
+      return;
+    }
+    if (_wilayahError != null || _errorText != null) {
+      setState(() {
+        _wilayahError = null;
+        _errorText = null;
+      });
+    }
+    if (widget.mode == CheckMode.statusBayar) {
+      _tahunFocusNode.requestFocus();
+    } else {
+      _captchaFocusNode.requestFocus();
+    }
+  }
+
+  void _handleTahunSubmitted() {
+    final tahunDigits = _tahunController.text.replaceAll(RegExp(r'[^0-9]'), '');
+    if (tahunDigits.isEmpty) {
+      setState(() => _tahunError = 'Data belum diisi');
+      _tahunFocusNode.requestFocus();
+      return;
+    }
+    if (_tahunError != null || _errorText != null) {
+      setState(() {
+        _tahunError = null;
+        _errorText = null;
+      });
+    }
+    _captchaFocusNode.requestFocus();
+  }
+
   Future<void> _submit() async {
-    FocusScope.of(context).unfocus(); // Singkirkan keyboard saat mulai cek
+    final blokDigits = _blokController.text.replaceAll(RegExp(r'[^0-9]'), '');
+    final wilayahDigits = _wilayahController.text.replaceAll(
+      RegExp(r'[^0-9]'),
+      '',
+    );
+    final tahun = _tahunController.text.trim();
+    final tahunDigits = tahun.replaceAll(RegExp(r'[^0-9]'), '');
+    final manualCaptcha = _captchaController.text.trim();
+
+    final blokError = blokDigits.isEmpty ? 'Data belum diisi' : null;
+    final wilayahError = wilayahDigits.isEmpty ? 'Data belum diisi' : null;
+    final tahunError =
+        (widget.mode == CheckMode.statusBayar && tahunDigits.isEmpty)
+        ? 'Data belum diisi'
+        : null;
+    final captchaError = manualCaptcha.isEmpty ? 'Data belum diisi' : null;
 
     final nop = buildNop(
       blok: _blokController.text,
       wilayah: _wilayahController.text,
     );
-    final tahun = _tahunController.text.trim();
-    final manualCaptcha = _captchaController.text.trim();
 
-    if (nop.isEmpty ||
-        (widget.mode == CheckMode.statusBayar && tahun.isEmpty) ||
-        manualCaptcha.isEmpty) {
-      setState(
-        () => _errorText = 'Lengkapi dulu semua kolom yang wajib diisi.',
-      );
+    if (blokError != null ||
+        wilayahError != null ||
+        tahunError != null ||
+        captchaError != null ||
+        nop.isEmpty) {
+      setState(() {
+        _blokError = blokError;
+        _wilayahError = wilayahError;
+        _tahunError = tahunError;
+        _captchaError = captchaError;
+        _errorText = 'Lengkapi dulu semua kolom yang wajib diisi.';
+      });
+      if (blokError != null) {
+        _blokFocusNode.requestFocus();
+      } else if (wilayahError != null) {
+        _wilayahFocusNode.requestFocus();
+      } else if (tahunError != null) {
+        _tahunFocusNode.requestFocus();
+      } else if (captchaError != null) {
+        _captchaFocusNode.requestFocus();
+      }
       return;
     }
+
+    FocusScope.of(context).unfocus(); // Singkirkan keyboard saat mulai cek
+    setState(() {
+      _blokError = null;
+      _wilayahError = null;
+      _tahunError = null;
+      _captchaError = null;
+    });
 
     await _submitManual(nop: nop, tahun: tahun, captcha: manualCaptcha);
   }
@@ -778,75 +884,159 @@ class _CheckFormViewState extends State<CheckFormView> {
                       const SizedBox(height: 14),
                       _buildQuickWilayahSelector(context),
                       const SizedBox(height: 14),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            flex: 2,
-                            child: Row(
-                              key: _blokWilayahInputKey,
+                      LayoutBuilder(
+                        builder: (context, inputConstraints) {
+                          final isCompactInput =
+                              inputConstraints.maxWidth < 460;
+                          final fieldsRow = Row(
+                            key: _blokWilayahInputKey,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                flex: 2,
+                                child: TextField(
+                                  controller: _blokController,
+                                  focusNode: _blokFocusNode,
+                                  textInputAction: TextInputAction.next,
+                                  onEditingComplete: () {},
+                                  decoration: InputDecoration(
+                                    labelText: 'Blok',
+                                    hintText: 'Contoh: 17',
+                                    border: const OutlineInputBorder(),
+                                    counterText: '',
+                                    errorText: _blokError,
+                                    errorMaxLines: 2,
+                                  ),
+                                  keyboardType: TextInputType.number,
+                                  maxLength: 3,
+                                  onChanged: (val) {
+                                    if (_blokError != null &&
+                                        val
+                                            .replaceAll(RegExp(r'[^0-9]'), '')
+                                            .isNotEmpty) {
+                                      setState(() => _blokError = null);
+                                    }
+                                  },
+                                  onSubmitted: (_) => _handleBlokSubmitted(),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                flex: 3,
+                                child: TextField(
+                                  controller: _wilayahController,
+                                  focusNode: _wilayahFocusNode,
+                                  textInputAction: TextInputAction.next,
+                                  onEditingComplete: () {},
+                                  decoration: InputDecoration(
+                                    labelText: 'Nomor Wilayah',
+                                    hintText: 'Contoh: 154',
+                                    border: const OutlineInputBorder(),
+                                    counterText: '',
+                                    errorText: _wilayahError,
+                                    errorMaxLines: 2,
+                                  ),
+                                  keyboardType: TextInputType.number,
+                                  maxLength: 4,
+                                  onChanged: (val) {
+                                    if (_wilayahError != null &&
+                                        val
+                                            .replaceAll(RegExp(r'[^0-9]'), '')
+                                            .isNotEmpty) {
+                                      setState(() => _wilayahError = null);
+                                    }
+                                  },
+                                  onSubmitted: (_) => _handleWilayahSubmitted(),
+                                ),
+                              ),
+                            ],
+                          );
+
+                          if (!isCompactInput) {
+                            return Row(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Expanded(
-                                  child: TextField(
-                                    controller: _blokController,
-                                    decoration: const InputDecoration(
-                                      labelText: 'Blok',
-                                      hintText: 'Contoh: 17',
-                                      border: OutlineInputBorder(),
-                                      counterText: '',
-                                    ),
-                                    keyboardType: TextInputType.number,
-                                    maxLength: 3,
-                                  ),
-                                ),
+                                Expanded(child: fieldsRow),
                                 const SizedBox(width: 8),
-                                Expanded(
-                                  child: TextField(
-                                    controller: _wilayahController,
-                                    decoration: const InputDecoration(
-                                      labelText: 'Nomor Wilayah',
-                                      hintText: 'Contoh: 154',
-                                      border: OutlineInputBorder(),
-                                      counterText: '',
-                                    ),
-                                    keyboardType: TextInputType.number,
-                                    maxLength: 4,
+                                _scanningOcr
+                                    ? const Padding(
+                                        padding: EdgeInsets.all(12),
+                                        child: SizedBox(
+                                          width: 24,
+                                          height: 24,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                          ),
+                                        ),
+                                      )
+                                    : IconButton.filledTonal(
+                                        key: _scanButtonKey,
+                                        onPressed: _scanAndFill,
+                                        icon: const Icon(
+                                          Icons.document_scanner_outlined,
+                                        ),
+                                        tooltip: 'Pindai Nomor dari Foto SPPT',
+                                      ),
+                                if (!isTagihan) ...[
+                                  const SizedBox(width: 8),
+                                  IconButton.filledTonal(
+                                    key: _importButtonKey,
+                                    onPressed: widget.onImportPressed,
+                                    icon: const Icon(Icons.upload_file),
+                                    tooltip: 'Periksa Banyak Data dari File',
                                   ),
-                                ),
+                                ],
                               ],
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          _scanningOcr
-                              ? const Padding(
-                                  padding: EdgeInsets.all(12),
-                                  child: SizedBox(
-                                    width: 24,
-                                    height: 24,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
+                            );
+                          }
+
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              fieldsRow,
+                              const SizedBox(height: 10),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: FilledButton.tonalIcon(
+                                      key: _scanButtonKey,
+                                      onPressed: _scanningOcr
+                                          ? null
+                                          : _scanAndFill,
+                                      icon: _scanningOcr
+                                          ? const SizedBox(
+                                              width: 18,
+                                              height: 18,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                              ),
+                                            )
+                                          : const Icon(
+                                              Icons.document_scanner_outlined,
+                                              size: 18,
+                                            ),
+                                      label: const Text('Pindai SPPT'),
                                     ),
                                   ),
-                                )
-                              : IconButton.filledTonal(
-                                  key: _scanButtonKey,
-                                  onPressed: _scanAndFill,
-                                  icon: const Icon(
-                                    Icons.document_scanner_outlined,
-                                  ),
-                                  tooltip: 'Pindai Nomor dari Foto SPPT',
-                                ),
-                          if (!isTagihan) ...[
-                            const SizedBox(width: 8),
-                            IconButton.filledTonal(
-                              key: _importButtonKey,
-                              onPressed: widget.onImportPressed,
-                              icon: const Icon(Icons.upload_file),
-                              tooltip: 'Periksa Banyak Data dari File',
-                            ),
-                          ],
-                        ],
+                                  if (!isTagihan) ...[
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: FilledButton.tonalIcon(
+                                        key: _importButtonKey,
+                                        onPressed: widget.onImportPressed,
+                                        icon: const Icon(
+                                          Icons.upload_file,
+                                          size: 18,
+                                        ),
+                                        label: const Text('Impor Berkas'),
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ],
+                          );
+                        },
                       ),
                       const SizedBox(height: 6),
                       Text(
@@ -860,11 +1050,25 @@ class _CheckFormViewState extends State<CheckFormView> {
                         TextField(
                           key: _tahunInputKey,
                           controller: _tahunController,
-                          decoration: const InputDecoration(
+                          focusNode: _tahunFocusNode,
+                          textInputAction: TextInputAction.next,
+                          onEditingComplete: () {},
+                          decoration: InputDecoration(
                             labelText: 'Tahun Pajak',
-                            border: OutlineInputBorder(),
+                            border: const OutlineInputBorder(),
+                            errorText: _tahunError,
+                            errorMaxLines: 2,
                           ),
                           keyboardType: TextInputType.number,
+                          onChanged: (val) {
+                            if (_tahunError != null &&
+                                val
+                                    .replaceAll(RegExp(r'[^0-9]'), '')
+                                    .isNotEmpty) {
+                              setState(() => _tahunError = null);
+                            }
+                          },
+                          onSubmitted: (_) => _handleTahunSubmitted(),
                         ),
                       ],
                       const SizedBox(height: 18),
@@ -914,6 +1118,7 @@ class _CheckFormViewState extends State<CheckFormView> {
                             controller: _captchaController,
                             focusNode: _captchaFocusNode,
                             textInputAction: TextInputAction.go,
+                            onEditingComplete: () {},
                             textCapitalization: TextCapitalization.none,
                             autocorrect: false,
                             enableSuggestions: false,
@@ -921,6 +1126,8 @@ class _CheckFormViewState extends State<CheckFormView> {
                               labelText: 'Kode Verifikasi',
                               hintText: 'Ketik huruf pada gambar di atas',
                               border: const OutlineInputBorder(),
+                              errorText: _captchaError,
+                              errorMaxLines: 2,
                               suffixIcon: value.text.isNotEmpty
                                   ? IconButton(
                                       icon: const Icon(Icons.clear, size: 20),
@@ -932,37 +1139,21 @@ class _CheckFormViewState extends State<CheckFormView> {
                                     )
                                   : null,
                             ),
+                            onChanged: (val) {
+                              if (_captchaError != null &&
+                                  val.trim().isNotEmpty) {
+                                setState(() => _captchaError = null);
+                              }
+                            },
                             onSubmitted: (_) => _submitting ? null : _submit(),
                           );
                         },
                       ),
                       if (_errorText != null) ...[
                         const SizedBox(height: 14),
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: scheme.errorContainer,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(
-                                Icons.error_outline,
-                                size: 18,
-                                color: scheme.onErrorContainer,
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  _errorText!,
-                                  style: TextStyle(
-                                    color: scheme.onErrorContainer,
-                                    fontSize: 13,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
+                        AppAlertBanner(
+                          message: _errorText!,
+                          tone: AppBadgeTone.error,
                         ),
                       ],
                       const SizedBox(height: 18),
@@ -990,26 +1181,30 @@ class _CheckFormViewState extends State<CheckFormView> {
               ),
               if (_statusBayarResult != null) ...[
                 const SizedBox(height: 16),
-                StatusBayarResultCard(
-                  result: _statusBayarResult!,
-                  nop: buildNop(
-                    blok: _blokController.text,
-                    wilayah: _wilayahController.text,
+                AppAnimatedReveal(
+                  child: StatusBayarResultCard(
+                    result: _statusBayarResult!,
+                    nop: buildNop(
+                      blok: _blokController.text,
+                      wilayah: _wilayahController.text,
+                    ),
+                    tahun: _tahunController.text.trim(),
+                    client: _client,
                   ),
-                  tahun: _tahunController.text.trim(),
-                  client: _client,
                 ),
               ],
               if (_tagihanResult != null) ...[
                 const SizedBox(height: 16),
-                TagihanResultCard(
-                  result: _tagihanResult!,
-                  nop: buildNop(
-                    blok: _blokController.text,
-                    wilayah: _wilayahController.text,
+                AppAnimatedReveal(
+                  child: TagihanResultCard(
+                    result: _tagihanResult!,
+                    nop: buildNop(
+                      blok: _blokController.text,
+                      wilayah: _wilayahController.text,
+                    ),
+                    client: _client,
+                    onOpenStatusBayar: widget.onOpenStatusBayar,
                   ),
-                  client: _client,
-                  onOpenStatusBayar: widget.onOpenStatusBayar,
                 ),
               ],
             ],
@@ -1028,20 +1223,15 @@ class _CheckFormViewState extends State<CheckFormView> {
       decoration: BoxDecoration(
         color: scheme.surfaceContainerHighest.withValues(alpha: 0.6),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: scheme.outlineVariant.withValues(alpha: 0.6),
-        ),
+        border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.6)),
       ),
       child: Row(
         children: [
-          Icon(
-            Icons.location_on_rounded,
-            size: 18,
-            color: scheme.primary,
-          ),
+          Icon(Icons.location_on_rounded, size: 18, color: scheme.primary),
           const SizedBox(width: 8),
           Expanded(
             child: Text.rich(
+              maxLines: 2,
               overflow: TextOverflow.ellipsis,
               TextSpan(
                 style: theme.textTheme.bodySmall?.copyWith(
@@ -1151,15 +1341,14 @@ class _CheckFormViewState extends State<CheckFormView> {
                         children: [
                           Text(
                             'Pilih Desa untuk Cek Pajak',
-                            style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                ),
+                            style: Theme.of(ctx).textTheme.titleMedium
+                                ?.copyWith(fontWeight: FontWeight.bold),
                           ),
                           Text(
                             'Kecamatan: $activeKecamatanName ($activeKecamatanCode)',
                             style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
-                                  color: scheme.onSurfaceVariant,
-                                ),
+                              color: scheme.onSurfaceVariant,
+                            ),
                           ),
                         ],
                       ),
@@ -1193,14 +1382,18 @@ class _CheckFormViewState extends State<CheckFormView> {
                         title: Text(
                           'Desa ${d.name} (${d.code})',
                           style: TextStyle(
-                            fontWeight:
-                                isSelected ? FontWeight.bold : FontWeight.normal,
+                            fontWeight: isSelected
+                                ? FontWeight.bold
+                                : FontWeight.normal,
                             color: isSelected ? scheme.primary : null,
                           ),
                         ),
                         subtitle: Text(
                           'Prefix NOP: 3205$activeKecamatanCode${d.code}',
-                          style: const TextStyle(fontSize: 11, fontFamily: 'monospace'),
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontFamily: 'monospace',
+                          ),
                         ),
                         trailing: isSelected
                             ? Container(
@@ -1261,15 +1454,19 @@ class _CheckFormViewState extends State<CheckFormView> {
                   ),
                   child: Row(
                     children: [
-                      Icon(Icons.info_outline_rounded, size: 18, color: scheme.outline),
+                      Icon(
+                        Icons.info_outline_rounded,
+                        size: 18,
+                        color: scheme.outline,
+                      ),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
                           'Ingin mengganti Kecamatan ($activeKecamatanName)? Silakan buka menu Pengaturan Wilayah.',
                           style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
-                                fontSize: 11,
-                                color: scheme.onSurfaceVariant,
-                              ),
+                            fontSize: 11,
+                            color: scheme.onSurfaceVariant,
+                          ),
                         ),
                       ),
                     ],

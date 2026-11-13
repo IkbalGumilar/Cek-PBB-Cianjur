@@ -382,9 +382,7 @@ class DhkpPackageHelper {
         final parsedDusuns = <Dusun>[];
         for (final item in rawList) {
           if (item is Map) {
-            parsedDusuns.add(
-              Dusun.fromJson(Map<String, dynamic>.from(item)),
-            );
+            parsedDusuns.add(Dusun.fromJson(Map<String, dynamic>.from(item)));
           }
         }
         if (parsedDusuns.isNotEmpty) {
@@ -392,9 +390,7 @@ class DhkpPackageHelper {
         }
       }
       if (manifest['scope'] is Map) {
-        final scopeMap = Map<String, dynamic>.from(
-          manifest['scope'] as Map,
-        );
+        final scopeMap = Map<String, dynamic>.from(manifest['scope'] as Map);
         await DusunData.instance.setScope(DusunScope.fromJson(scopeMap));
       }
 
@@ -417,8 +413,14 @@ class DhkpPackageHelper {
 
       // Sinkronisasi koordinat kantor desa dari manifest
       if (manifest['geospasial'] is Map || manifest['desa'] is Map) {
-        final geo = manifest['geospasial'] is Map ? manifest['geospasial'] as Map : null;
-        final kantor = geo?['kantor_desa'] as Map? ?? (manifest['desa'] is Map ? (manifest['desa'] as Map)['kantor_desa'] as Map? : null);
+        final geo = manifest['geospasial'] is Map
+            ? manifest['geospasial'] as Map
+            : null;
+        final kantor =
+            geo?['kantor_desa'] as Map? ??
+            (manifest['desa'] is Map
+                ? (manifest['desa'] as Map)['kantor_desa'] as Map?
+                : null);
         if (kantor != null) {
           final lat = (kantor['lat'] as num?)?.toDouble();
           final lng = (kantor['lng'] as num?)?.toDouble();
@@ -507,8 +509,11 @@ class DhkpPackageHelper {
 
     // Ekstrak semua foto dokumentasi ke folder lokal setelah validasi lulus
     for (final p in photoFiles) {
-      final baseName =
-          p.name.split(RegExp(r'[\\/]')).last.replaceAll('..', '').trim();
+      final baseName = p.name
+          .split(RegExp(r'[\\/]'))
+          .last
+          .replaceAll('..', '')
+          .trim();
       if (baseName.isEmpty) continue;
       final targetFile = File('${photosDir.path}/$baseName');
       await targetFile.writeAsBytes(p.content as List<int>);
@@ -859,7 +864,9 @@ class DhkpPackageHelper {
     final pins = mapPins ?? await MapPinStore.instance.loadAll();
     if (pins.isNotEmpty) {
       final pinsBytes = utf8.encode(MapPinStore.encodePinsJson(pins));
-      archive.addFile(ArchiveFile('map_pins.json', pinsBytes.length, pinsBytes));
+      archive.addFile(
+        ArchiveFile('map_pins.json', pinsBytes.length, pinsBytes),
+      );
 
       final groupedDots = MapPinStore.buildGroupedDots(
         pins: pins,
@@ -867,14 +874,9 @@ class DhkpPackageHelper {
       );
       if (groupedDots.isNotEmpty) {
         final kmlBytes = utf8.encode(
-          KmlParser.exportToKml(
-            villageName: activeDesaName,
-            dots: groupedDots,
-          ),
+          KmlParser.exportToKml(villageName: activeDesaName, dots: groupedDots),
         );
-        archive.addFile(
-          ArchiveFile('map_pins.kml', kmlBytes.length, kmlBytes),
-        );
+        archive.addFile(ArchiveFile('map_pins.kml', kmlBytes.length, kmlBytes));
       }
     }
 

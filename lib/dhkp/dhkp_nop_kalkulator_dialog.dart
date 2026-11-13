@@ -159,7 +159,11 @@ class _NopKalkulatorDialogContentState
       SnackBar(
         content: Row(
           children: [
-            const Icon(Icons.check_circle_outline, color: Colors.white, size: 20),
+            const Icon(
+              Icons.check_circle_outline,
+              color: Colors.white,
+              size: 20,
+            ),
             const SizedBox(width: 8),
             Expanded(child: Text('$label berhasil disalin ke papan klip!')),
           ],
@@ -191,7 +195,11 @@ class _NopKalkulatorDialogContentState
         SnackBar(
           content: Row(
             children: [
-              const Icon(Icons.warning_amber_rounded, color: Colors.white, size: 20),
+              const Icon(
+                Icons.warning_amber_rounded,
+                color: Colors.white,
+                size: 20,
+              ),
               const SizedBox(width: 8),
               Expanded(child: Text(errorMessage)),
             ],
@@ -223,7 +231,11 @@ class _NopKalkulatorDialogContentState
         SnackBar(
           content: Row(
             children: [
-              const Icon(Icons.check_circle_outline, color: Colors.white, size: 20),
+              const Icon(
+                Icons.check_circle_outline,
+                color: Colors.white,
+                size: 20,
+              ),
               const SizedBox(width: 8),
               Expanded(child: Text(successMessage)),
             ],
@@ -256,7 +268,8 @@ class _NopKalkulatorDialogContentState
     _nominalMutasiCtrl.clear();
     _updateTabunganState(
       updatedTabungan,
-      successMessage: 'Berhasil setor ${formatRupiah(nominal)} ke celengan warga!',
+      successMessage:
+          'Berhasil setor ${formatRupiah(nominal)} ke celengan warga!',
     );
   }
 
@@ -284,8 +297,8 @@ class _NopKalkulatorDialogContentState
     final ket = keterangan.trim().isNotEmpty
         ? keterangan.trim()
         : (tarikSemua
-            ? 'Tarik seluruh sisa tabungan'
-            : 'Penarikan tabungan warga');
+              ? 'Tarik seluruh sisa tabungan'
+              : 'Penarikan tabungan warga');
     final mutasi = PbbTabunganMutasi(
       nominal: -nominalTarik,
       tanggal: _formatNow(),
@@ -319,7 +332,10 @@ class _NopKalkulatorDialogContentState
 
   List<int> _toNormalizedPoint(Offset localPos, Size canvasSize) {
     final nx = ((localPos.dx / canvasSize.width) * 1000).round().clamp(0, 1000);
-    final ny = ((localPos.dy / canvasSize.height) * 1000).round().clamp(0, 1000);
+    final ny = ((localPos.dy / canvasSize.height) * 1000).round().clamp(
+      0,
+      1000,
+    );
     return [nx, ny];
   }
 
@@ -364,7 +380,8 @@ class _NopKalkulatorDialogContentState
     if (_draftTtdStrokes.isEmpty) {
       _updateTabunganState(
         _tabungan,
-        errorMessage: 'Silakan buat tanda tangan WP pada area kanvas terlebih dahulu.',
+        errorMessage:
+            'Silakan buat tanda tangan WP pada area kanvas terlebih dahulu.',
       );
       return;
     }
@@ -411,6 +428,7 @@ class _NopKalkulatorDialogContentState
       confirmText: 'Pilih',
       cancelText: 'Batal',
     );
+    if (!mounted) return;
     if (picked != null) {
       setState(() => onSelected(picked));
     }
@@ -459,7 +477,9 @@ class _NopKalkulatorDialogContentState
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            color: theme.colorScheme.onPrimary.withValues(alpha: 0.85),
+                            color: theme.colorScheme.onPrimary.withValues(
+                              alpha: 0.85,
+                            ),
                             fontSize: 12,
                           ),
                         ),
@@ -480,11 +500,23 @@ class _NopKalkulatorDialogContentState
               indicatorColor: theme.colorScheme.primary,
               labelColor: theme.colorScheme.primary,
               unselectedLabelColor: isDark ? Colors.white70 : Colors.black87,
-              labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+              labelStyle: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 13,
+              ),
               tabs: const [
-                Tab(icon: Icon(Icons.hourglass_bottom_rounded, size: 18), text: 'Denda Pajak'),
-                Tab(icon: Icon(Icons.savings_outlined, size: 18), text: 'Cicilan Warga'),
-                Tab(icon: Icon(Icons.gavel_outlined, size: 18), text: 'Kalkulator AJB'),
+                Tab(
+                  icon: Icon(Icons.hourglass_bottom_rounded, size: 18),
+                  text: 'Denda Pajak',
+                ),
+                Tab(
+                  icon: Icon(Icons.savings_outlined, size: 18),
+                  text: 'Cicilan Warga',
+                ),
+                Tab(
+                  icon: Icon(Icons.gavel_outlined, size: 18),
+                  text: 'Kalkulator AJB',
+                ),
               ],
             ),
 
@@ -555,7 +587,10 @@ class _NopKalkulatorDialogContentState
                   ),
                   child: Text(
                     '${_jatuhTempo.day}/${_jatuhTempo.month}/${_jatuhTempo.year}',
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                    ),
                   ),
                 ),
               ),
@@ -577,7 +612,10 @@ class _NopKalkulatorDialogContentState
                   ),
                   child: Text(
                     '${_rencanaBayar.day}/${_rencanaBayar.month}/${_rencanaBayar.year}',
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                    ),
                   ),
                 ),
               ),
@@ -589,15 +627,22 @@ class _NopKalkulatorDialogContentState
           segments: const [
             ButtonSegment(
               value: 1.0,
-              label: Text('1.0% / bln (UU HKPD)', style: TextStyle(fontSize: 11)),
+              label: Text(
+                '1.0% / bln (UU HKPD)',
+                style: TextStyle(fontSize: 11),
+              ),
             ),
             ButtonSegment(
               value: 2.0,
-              label: Text('2.0% / bln (Perda Lama)', style: TextStyle(fontSize: 11)),
+              label: Text(
+                '2.0% / bln (Perda Lama)',
+                style: TextStyle(fontSize: 11),
+              ),
             ),
           ],
           selected: {_tarifBungaBulanan},
-          onSelectionChanged: (set) => setState(() => _tarifBungaBulanan = set.first),
+          onSelectionChanged: (set) =>
+              setState(() => _tarifBungaBulanan = set.first),
         ),
         const SizedBox(height: 14),
 
@@ -610,7 +655,9 @@ class _NopKalkulatorDialogContentState
                 : (isDark ? const Color(0xFF3B1E1E) : const Color(0xFFFFEBEE)),
             borderRadius: BorderRadius.circular(10),
             border: Border.all(
-              color: dendaResult.tepatWaktu ? Colors.green.shade600 : Colors.red.shade700,
+              color: dendaResult.tepatWaktu
+                  ? Colors.green.shade600
+                  : Colors.red.shade700,
             ),
           ),
           child: Column(
@@ -627,14 +674,21 @@ class _NopKalkulatorDialogContentState
                       fontWeight: FontWeight.bold,
                       fontSize: 12,
                       color: dendaResult.tepatWaktu
-                          ? (isDark ? Colors.green.shade300 : Colors.green.shade900)
-                          : (isDark ? Colors.red.shade300 : Colors.red.shade900),
+                          ? (isDark
+                                ? Colors.green.shade300
+                                : Colors.green.shade900)
+                          : (isDark
+                                ? Colors.red.shade300
+                                : Colors.red.shade900),
                     ),
                   ),
                   if (!dendaResult.tepatWaktu)
                     Text(
                       '+${dendaResult.totalPersenDenda.toStringAsFixed(1)}%',
-                      style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.red),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.red,
+                      ),
                     ),
                 ],
               ),
@@ -653,15 +707,30 @@ class _NopKalkulatorDialogContentState
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text('Pokok Ketetapan:', style: TextStyle(fontSize: 12)),
-                  Text(formatRupiah(dendaResult.pokokPbb), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                  const Text(
+                    'Pokok Ketetapan:',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                  Text(
+                    formatRupiah(dendaResult.pokokPbb),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 4),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('Sanksi Bunga/Denda:', style: TextStyle(fontSize: 12, color: dendaResult.nominalDenda > 0 ? Colors.red : null)),
+                  Text(
+                    'Sanksi Bunga/Denda:',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: dendaResult.nominalDenda > 0 ? Colors.red : null,
+                    ),
+                  ),
                   Text(
                     formatRupiah(dendaResult.nominalDenda),
                     style: TextStyle(
@@ -702,7 +771,10 @@ class _NopKalkulatorDialogContentState
                   namaWp: widget.record.namaWajibPajak,
                   dendaResult: dendaResult,
                 );
-                NativeFileHelper.shareText(text: text, title: 'Rincian Denda PBB');
+                NativeFileHelper.shareText(
+                  text: text,
+                  title: 'Rincian Denda PBB',
+                );
               },
               icon: const Icon(Icons.share_rounded, size: 18),
               tooltip: 'Bagikan',
@@ -739,11 +811,11 @@ class _NopKalkulatorDialogContentState
             gradient: LinearGradient(
               colors: isLunas
                   ? (isDark
-                      ? [const Color(0xFF1B4332), const Color(0xFF081C15)]
-                      : [const Color(0xFFE8F5E9), const Color(0xFFC8E6C9)])
+                        ? [const Color(0xFF1B4332), const Color(0xFF081C15)]
+                        : [const Color(0xFFE8F5E9), const Color(0xFFC8E6C9)])
                   : (isDark
-                      ? [const Color(0xFF3E1F2A), const Color(0xFF1F1218)]
-                      : [const Color(0xFFFCE4EC), const Color(0xFFF8BBD0)]),
+                        ? [const Color(0xFF3E1F2A), const Color(0xFF1F1218)]
+                        : [const Color(0xFFFCE4EC), const Color(0xFFF8BBD0)]),
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
@@ -756,8 +828,9 @@ class _NopKalkulatorDialogContentState
             ),
             boxShadow: [
               BoxShadow(
-                color: (isLunas ? Colors.green : Colors.pink)
-                    .withValues(alpha: isDark ? 0.2 : 0.15),
+                color: (isLunas ? Colors.green : Colors.pink).withValues(
+                  alpha: isDark ? 0.2 : 0.15,
+                ),
                 blurRadius: 8,
                 offset: const Offset(0, 3),
               ),
@@ -777,7 +850,9 @@ class _NopKalkulatorDialogContentState
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
-                      isLunas ? Icons.check_circle_rounded : Icons.savings_rounded,
+                      isLunas
+                          ? Icons.check_circle_rounded
+                          : Icons.savings_rounded,
                       color: Colors.white,
                       size: 24,
                     ),
@@ -794,16 +869,20 @@ class _NopKalkulatorDialogContentState
                             fontWeight: FontWeight.bold,
                             letterSpacing: 0.5,
                             color: isLunas
-                                ? (isDark ? Colors.green.shade300 : Colors.green.shade900)
-                                : (isDark ? Colors.pink.shade200 : Colors.pink.shade900),
+                                ? (isDark
+                                      ? Colors.green.shade300
+                                      : Colors.green.shade900)
+                                : (isDark
+                                      ? Colors.pink.shade200
+                                      : Colors.pink.shade900),
                           ),
                         ),
                         Text(
                           _tabungan.hasKelebihan
                               ? 'Lunas + lebih ${formatRupiah(_tabungan.kelebihanSaldo)} — tentukan alokasi sisa'
                               : (isLunas
-                                  ? 'Alhamdulillah! Saldo Tabungan Sudah Lunas'
-                                  : 'Kumpulkan cicilan warga hingga cukup untuk bayar PBB'),
+                                    ? 'Alhamdulillah! Saldo Tabungan Sudah Lunas'
+                                    : 'Kumpulkan cicilan warga hingga cukup untuk bayar PBB'),
                           style: TextStyle(
                             fontSize: 11,
                             color: isDark ? Colors.white70 : Colors.black87,
@@ -814,7 +893,8 @@ class _NopKalkulatorDialogContentState
                   ),
                   if (_tabungan.target != pokok && pokok > 0)
                     IconButton(
-                      tooltip: 'Samakan target dengan tagihan pokok (${formatRupiah(pokok)})',
+                      tooltip:
+                          'Samakan target dengan tagihan pokok (${formatRupiah(pokok)})',
                       icon: const Icon(Icons.sync_rounded, size: 20),
                       onPressed: () {
                         final updated = _tabungan.copyWith(
@@ -823,7 +903,8 @@ class _NopKalkulatorDialogContentState
                         );
                         _updateTabunganState(
                           updated,
-                          successMessage: 'Target disesuaikan ke ${formatRupiah(pokok)}',
+                          successMessage:
+                              'Target disesuaikan ke ${formatRupiah(pokok)}',
                         );
                       },
                     ),
@@ -842,7 +923,9 @@ class _NopKalkulatorDialogContentState
                           'Target Tagihan:',
                           style: TextStyle(
                             fontSize: 11,
-                            color: isDark ? Colors.grey.shade300 : Colors.grey.shade700,
+                            color: isDark
+                                ? Colors.grey.shade300
+                                : Colors.grey.shade700,
                           ),
                         ),
                         const SizedBox(height: 2),
@@ -870,7 +953,9 @@ class _NopKalkulatorDialogContentState
                           'Saldo Terkumpul:',
                           style: TextStyle(
                             fontSize: 11,
-                            color: isDark ? Colors.grey.shade300 : Colors.grey.shade700,
+                            color: isDark
+                                ? Colors.grey.shade300
+                                : Colors.grey.shade700,
                           ),
                         ),
                         const SizedBox(height: 2),
@@ -880,8 +965,12 @@ class _NopKalkulatorDialogContentState
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
                             color: isLunas
-                                ? (isDark ? Colors.green.shade400 : Colors.green.shade800)
-                                : (isDark ? Colors.pink.shade300 : Colors.pink.shade800),
+                                ? (isDark
+                                      ? Colors.green.shade400
+                                      : Colors.green.shade800)
+                                : (isDark
+                                      ? Colors.pink.shade300
+                                      : Colors.pink.shade800),
                           ),
                         ),
                       ],
@@ -912,14 +1001,18 @@ class _NopKalkulatorDialogContentState
                       _tabungan.hasKelebihan
                           ? 'LUNAS + LEBIH ${formatRupiah(_tabungan.kelebihanSaldo)}'
                           : (isLunas
-                              ? 'LUNAS (100%)'
-                              : 'Kurang: ${formatRupiah(_tabungan.sisaKekurangan)}'),
+                                ? 'LUNAS (100%)'
+                                : 'Kurang: ${formatRupiah(_tabungan.sisaKekurangan)}'),
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.bold,
                         color: isLunas
-                            ? (isDark ? Colors.green.shade300 : Colors.green.shade800)
-                            : (isDark ? Colors.orange.shade300 : Colors.orange.shade900),
+                            ? (isDark
+                                  ? Colors.green.shade300
+                                  : Colors.green.shade800)
+                            : (isDark
+                                  ? Colors.orange.shade300
+                                  : Colors.orange.shade900),
                       ),
                     ),
                   ),
@@ -942,7 +1035,9 @@ class _NopKalkulatorDialogContentState
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
                         color: _tabungan.hasKelebihan
-                            ? (isDark ? Colors.teal.shade200 : Colors.teal.shade900)
+                            ? (isDark
+                                  ? Colors.teal.shade200
+                                  : Colors.teal.shade900)
                             : (isDark ? Colors.white70 : Colors.black87),
                       ),
                     ),
@@ -975,14 +1070,21 @@ class _NopKalkulatorDialogContentState
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.green.shade700,
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                padding: const EdgeInsets.symmetric(
+                  vertical: 14,
+                  horizontal: 16,
+                ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                   side: const BorderSide(color: Colors.white70, width: 1.5),
                 ),
                 elevation: 4,
               ),
-              icon: const Icon(Icons.verified_rounded, size: 22, color: Colors.white),
+              icon: const Icon(
+                Icons.verified_rounded,
+                size: 22,
+                color: Colors.white,
+              ),
               label: const Text(
                 'BAYAR PBB SEKARANG (CEK TAGIHAN)',
                 style: TextStyle(
@@ -1001,7 +1103,9 @@ class _NopKalkulatorDialogContentState
           OutlinedButton.icon(
             style: OutlinedButton.styleFrom(
               padding: const EdgeInsets.symmetric(vertical: 11),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
             icon: const Icon(Icons.open_in_new_rounded, size: 18),
             label: const Text('Buka Cek Tagihan PBB'),
@@ -1087,7 +1191,9 @@ class _NopKalkulatorDialogContentState
             if (_tabungan.sisaKekurangan > 0)
               ActionChip(
                 visualDensity: VisualDensity.compact,
-                backgroundColor: isDark ? Colors.teal.shade900 : Colors.teal.shade50,
+                backgroundColor: isDark
+                    ? Colors.teal.shade900
+                    : Colors.teal.shade50,
                 label: Text(
                   'Paskan Target (${formatRupiah(_tabungan.sisaKekurangan)})',
                   style: TextStyle(
@@ -1142,7 +1248,9 @@ class _NopKalkulatorDialogContentState
             IconButton.filledTonal(
               tooltip: 'Tarik Seluruh Sisa Tabungan',
               style: IconButton.styleFrom(
-                backgroundColor: isDark ? Colors.red.shade900.withValues(alpha: 0.5) : Colors.red.shade50,
+                backgroundColor: isDark
+                    ? Colors.red.shade900.withValues(alpha: 0.5)
+                    : Colors.red.shade50,
                 foregroundColor: Colors.red.shade700,
               ),
               icon: const Icon(Icons.money_off_rounded, size: 18),
@@ -1162,9 +1270,7 @@ class _NopKalkulatorDialogContentState
           decoration: BoxDecoration(
             color: isDark ? const Color(0xFF1E242B) : const Color(0xFFF1F5F9),
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-              color: isDark ? Colors.white12 : Colors.black12,
-            ),
+            border: Border.all(color: isDark ? Colors.white12 : Colors.black12),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1176,11 +1282,16 @@ class _NopKalkulatorDialogContentState
                   const Expanded(
                     child: Text(
                       'Catatan Khusus Tabungan / Cicilan:',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
                     ),
                   ),
                   TextButton.icon(
-                    style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+                    style: TextButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                    ),
                     icon: const Icon(Icons.save_rounded, size: 16),
                     label: const Text('Simpan'),
                     onPressed: _simpanCatatanTabunganSaja,
@@ -1192,7 +1303,8 @@ class _NopKalkulatorDialogContentState
                 controller: _catatanTabunganCtrl,
                 maxLines: 2,
                 decoration: const InputDecoration(
-                  hintText: 'Misal: Titip tiap panen / Target sebelum jatuh tempo...',
+                  hintText:
+                      'Misal: Titip tiap panen / Target sebelum jatuh tempo...',
                   border: OutlineInputBorder(),
                   isDense: true,
                 ),
@@ -1233,11 +1345,15 @@ class _NopKalkulatorDialogContentState
                 separatorBuilder: (context, index) => const Divider(height: 1),
                 itemBuilder: (context, index) {
                   // Tampilkan transaksi terbaru di atas
-                  final item = _tabungan.riwayat[_tabungan.riwayat.length - 1 - index];
+                  final item =
+                      _tabungan.riwayat[_tabungan.riwayat.length - 1 - index];
                   final isSetor = item.nominal > 0;
                   return ListTile(
                     dense: true,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 4,
+                      vertical: 2,
+                    ),
                     leading: CircleAvatar(
                       radius: 14,
                       backgroundColor: isSetor
@@ -1246,22 +1362,36 @@ class _NopKalkulatorDialogContentState
                       child: Icon(
                         isSetor ? Icons.arrow_downward : Icons.arrow_upward,
                         size: 14,
-                        color: isSetor ? Colors.green.shade900 : Colors.red.shade900,
+                        color: isSetor
+                            ? Colors.green.shade900
+                            : Colors.red.shade900,
                       ),
                     ),
                     title: Text(
-                      item.keterangan.isNotEmpty ? item.keterangan : (isSetor ? 'Setoran Tabungan' : 'Penarikan Dana'),
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                      item.keterangan.isNotEmpty
+                          ? item.keterangan
+                          : (isSetor ? 'Setoran Tabungan' : 'Penarikan Dana'),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                    subtitle: Text(item.tanggal, style: const TextStyle(fontSize: 10)),
+                    subtitle: Text(
+                      item.tanggal,
+                      style: const TextStyle(fontSize: 10),
+                    ),
                     trailing: Text(
                       '${isSetor ? '+' : ''}${formatRupiah(item.nominal)}',
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.bold,
                         color: isSetor
-                            ? (isDark ? Colors.green.shade400 : Colors.green.shade800)
-                            : (isDark ? Colors.red.shade400 : Colors.red.shade800),
+                            ? (isDark
+                                  ? Colors.green.shade400
+                                  : Colors.green.shade800)
+                            : (isDark
+                                  ? Colors.red.shade400
+                                  : Colors.red.shade800),
                       ),
                     ),
                   );
@@ -1294,9 +1424,18 @@ class _NopKalkulatorDialogContentState
                       isDense: true,
                     ),
                     items: const [
-                      DropdownMenuItem(value: 'Mingguan', child: Text('Mingguan (4x/bln)')),
-                      DropdownMenuItem(value: 'Bulanan', child: Text('Bulanan (1x/bln)')),
-                      DropdownMenuItem(value: 'Harian', child: Text('Harian (30x/bln)')),
+                      DropdownMenuItem(
+                        value: 'Mingguan',
+                        child: Text('Mingguan (4x/bln)'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'Bulanan',
+                        child: Text('Bulanan (1x/bln)'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'Harian',
+                        child: Text('Harian (30x/bln)'),
+                      ),
                     ],
                     onChanged: (val) {
                       if (val != null) setState(() => _cicilanFrekuensi = val);
@@ -1314,10 +1453,15 @@ class _NopKalkulatorDialogContentState
                       isDense: true,
                     ),
                     items: [1, 2, 3, 4, 6, 8, 10, 12].map((m) {
-                      return DropdownMenuItem(value: m, child: Text('$m Bulan'));
+                      return DropdownMenuItem(
+                        value: m,
+                        child: Text('$m Bulan'),
+                      );
                     }).toList(),
                     onChanged: (val) {
-                      if (val != null) setState(() => _cicilanDurasiBulan = val);
+                      if (val != null) {
+                        setState(() => _cicilanDurasiBulan = val);
+                      }
                     },
                   ),
                 ),
@@ -1327,7 +1471,9 @@ class _NopKalkulatorDialogContentState
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF162A28) : const Color(0xFFE0F2F1),
+                color: isDark
+                    ? const Color(0xFF162A28)
+                    : const Color(0xFFE0F2F1),
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(color: Colors.teal.shade300),
               ),
@@ -1347,7 +1493,9 @@ class _NopKalkulatorDialogContentState
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
-                            color: isDark ? Colors.teal.shade300 : Colors.teal.shade900,
+                            color: isDark
+                                ? Colors.teal.shade300
+                                : Colors.teal.shade900,
                           ),
                         ),
                       ],
@@ -1358,7 +1506,9 @@ class _NopKalkulatorDialogContentState
                     textAlign: TextAlign.right,
                     style: TextStyle(
                       fontSize: 11,
-                      color: isDark ? Colors.grey.shade300 : Colors.grey.shade700,
+                      color: isDark
+                          ? Colors.grey.shade300
+                          : Colors.grey.shade700,
                     ),
                   ),
                 ],
@@ -1402,7 +1552,10 @@ class _NopKalkulatorDialogContentState
                   namaWp: widget.record.namaWajibPajak,
                   tabungan: _tabungan,
                 );
-                NativeFileHelper.shareText(text: text, title: 'Tabungan PBB Warga');
+                NativeFileHelper.shareText(
+                  text: text,
+                  title: 'Tabungan PBB Warga',
+                );
               },
               icon: const Icon(Icons.share_rounded, size: 18),
               tooltip: 'Bagikan ke WhatsApp',
@@ -1495,7 +1648,9 @@ class _NopKalkulatorDialogContentState
                 : 'Belum dipilih — silakan pilih Dikembalikan ke WP atau Tip Petugas.',
             style: TextStyle(
               fontSize: 11,
-              fontWeight: selected != null ? FontWeight.w600 : FontWeight.normal,
+              fontWeight: selected != null
+                  ? FontWeight.w600
+                  : FontWeight.normal,
               color: selected != null
                   ? (isDark ? Colors.green.shade300 : Colors.teal.shade900)
                   : (isDark ? Colors.amber.shade200 : Colors.orange.shade900),
@@ -1507,9 +1662,10 @@ class _NopKalkulatorDialogContentState
   }
 
   Widget _buildTandaTanganWpSection(bool isDark) {
-    final hasAnyStrokes = _draftTtdStrokes.isNotEmpty || _activeTtdStroke != null;
-    final canSave = _draftTtdStrokes.isNotEmpty &&
-        (_ttdDirty || !_tabungan.hasTandaTangan);
+    final hasAnyStrokes =
+        _draftTtdStrokes.isNotEmpty || _activeTtdStroke != null;
+    final canSave =
+        _draftTtdStrokes.isNotEmpty && (_ttdDirty || !_tabungan.hasTandaTangan);
 
     final String statusLabel;
     final Color statusBg;
@@ -1535,9 +1691,7 @@ class _NopKalkulatorDialogContentState
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF1E242B) : const Color(0xFFF8FAFC),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isDark ? Colors.white12 : Colors.black12,
-        ),
+        border: Border.all(color: isDark ? Colors.white12 : Colors.black12),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1600,10 +1754,8 @@ class _NopKalkulatorDialogContentState
                     gestures: <Type, GestureRecognizerFactory>{
                       EagerGestureRecognizer:
                           GestureRecognizerFactoryWithHandlers<
-                              EagerGestureRecognizer>(
-                        EagerGestureRecognizer.new,
-                        (_) {},
-                      ),
+                            EagerGestureRecognizer
+                          >(EagerGestureRecognizer.new, (_) {}),
                     },
                     child: Listener(
                       key: const Key('ttd_wp_canvas'),
@@ -1693,7 +1845,9 @@ class _NopKalkulatorDialogContentState
             Expanded(
               child: TextField(
                 controller: _luasTanahCtrl,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
                 decoration: const InputDecoration(
                   labelText: 'Luas Tanah (m²)',
                   border: OutlineInputBorder(),
@@ -1734,12 +1888,18 @@ class _NopKalkulatorDialogContentState
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Expanded(
-                    child: Text('Total Nilai Transaksi / NJOP:', style: TextStyle(fontSize: 12)),
+                    child: Text(
+                      'Total Nilai Transaksi / NJOP:',
+                      style: TextStyle(fontSize: 12),
+                    ),
                   ),
                   const SizedBox(width: 8),
                   Text(
                     formatRupiah(ajbResult.totalNilai),
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                    ),
                   ),
                 ],
               ),
@@ -1748,7 +1908,13 @@ class _NopKalkulatorDialogContentState
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text('PPh (2.5%):', style: TextStyle(fontSize: 12)),
-                  Text(formatRupiah(ajbResult.pph), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                  Text(
+                    formatRupiah(ajbResult.pph),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 4),
@@ -1756,7 +1922,13 @@ class _NopKalkulatorDialogContentState
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text('PPN (2.5%):', style: TextStyle(fontSize: 12)),
-                  Text(formatRupiah(ajbResult.ppn), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                  Text(
+                    formatRupiah(ajbResult.ppn),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 4),
@@ -1770,7 +1942,9 @@ class _NopKalkulatorDialogContentState
                           : 'BPHTB (Bebas / < 80 Jt):',
                       style: TextStyle(
                         fontSize: 12,
-                        color: ajbResult.kenaBphtb ? Colors.indigo : Colors.grey.shade600,
+                        color: ajbResult.kenaBphtb
+                            ? Colors.indigo
+                            : Colors.grey.shade600,
                       ),
                     ),
                   ),
@@ -1780,7 +1954,9 @@ class _NopKalkulatorDialogContentState
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 12,
-                      color: ajbResult.kenaBphtb ? Colors.indigo : Colors.grey.shade600,
+                      color: ajbResult.kenaBphtb
+                          ? Colors.indigo
+                          : Colors.grey.shade600,
                     ),
                   ),
                 ],
@@ -1792,7 +1968,10 @@ class _NopKalkulatorDialogContentState
                   const Expanded(
                     child: Text(
                       'TOTAL ESTIMASI PAJAK AJB:',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -1801,7 +1980,9 @@ class _NopKalkulatorDialogContentState
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w900,
-                      color: isDark ? Colors.indigo.shade200 : Colors.indigo.shade900,
+                      color: isDark
+                          ? Colors.indigo.shade200
+                          : Colors.indigo.shade900,
                     ),
                   ),
                 ],
@@ -1836,7 +2017,10 @@ class _NopKalkulatorDialogContentState
                   namaWp: widget.record.namaWajibPajak,
                   ajbResult: ajbResult,
                 );
-                NativeFileHelper.shareText(text: text, title: 'Estimasi AJB & Pajak');
+                NativeFileHelper.shareText(
+                  text: text,
+                  title: 'Estimasi AJB & Pajak',
+                );
               },
               icon: const Icon(Icons.share_rounded, size: 18),
               tooltip: 'Bagikan',
@@ -1871,7 +2055,9 @@ class _StandaloneAjbDialogContentState
   @override
   void initState() {
     super.initState();
-    _luasTanahCtrl = TextEditingController(text: widget.initialLuas.toStringAsFixed(0));
+    _luasTanahCtrl = TextEditingController(
+      text: widget.initialLuas.toStringAsFixed(0),
+    );
     _njopPerM2Ctrl = TextEditingController(text: widget.initialNjop.toString());
   }
 
@@ -1898,7 +2084,11 @@ class _StandaloneAjbDialogContentState
       SnackBar(
         content: Row(
           children: [
-            const Icon(Icons.check_circle_outline, color: Colors.white, size: 20),
+            const Icon(
+              Icons.check_circle_outline,
+              color: Colors.white,
+              size: 20,
+            ),
             const SizedBox(width: 8),
             Expanded(child: Text('$label berhasil disalin ke papan klip!')),
           ],
@@ -1917,7 +2107,10 @@ class _StandaloneAjbDialogContentState
 
     final luas = _parseDouble(_luasTanahCtrl, 100);
     final njop = _parseNumeric(_njopPerM2Ctrl, 100000);
-    final ajbResult = PbbCalculatorHelper.calculateAjb(luas: luas, njopPerM2: njop);
+    final ajbResult = PbbCalculatorHelper.calculateAjb(
+      luas: luas,
+      njopPerM2: njop,
+    );
 
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -1933,7 +2126,10 @@ class _StandaloneAjbDialogContentState
               color: theme.colorScheme.primary,
               child: Row(
                 children: [
-                  Icon(Icons.gavel_outlined, color: theme.colorScheme.onPrimary),
+                  Icon(
+                    Icons.gavel_outlined,
+                    color: theme.colorScheme.onPrimary,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -1963,7 +2159,9 @@ class _StandaloneAjbDialogContentState
                         Expanded(
                           child: TextField(
                             controller: _luasTanahCtrl,
-                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
                             decoration: const InputDecoration(
                               labelText: 'Luas Tanah (m²)',
                               border: OutlineInputBorder(),
@@ -1991,12 +2189,16 @@ class _StandaloneAjbDialogContentState
                     SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
                       child: Row(
-                        children: [50000, 100000, 200000, 500000, 1000000].map((nominal) {
+                        children: [50000, 100000, 200000, 500000, 1000000].map((
+                          nominal,
+                        ) {
                           return Padding(
                             padding: const EdgeInsets.only(right: 6),
                             child: ActionChip(
                               label: Text(formatRupiah(nominal)),
-                              onPressed: () => setState(() => _njopPerM2Ctrl.text = nominal.toString()),
+                              onPressed: () => setState(
+                                () => _njopPerM2Ctrl.text = nominal.toString(),
+                              ),
                             ),
                           );
                         }).toList(),
@@ -2006,7 +2208,9 @@ class _StandaloneAjbDialogContentState
                     Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: isDark ? const Color(0xFF1E2638) : const Color(0xFFE8EAF6),
+                        color: isDark
+                            ? const Color(0xFF1E2638)
+                            : const Color(0xFFE8EAF6),
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(color: Colors.indigo.shade400),
                       ),
@@ -2017,12 +2221,18 @@ class _StandaloneAjbDialogContentState
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               const Expanded(
-                                child: Text('Total Nilai Transaksi / NJOP:', style: TextStyle(fontSize: 12)),
+                                child: Text(
+                                  'Total Nilai Transaksi / NJOP:',
+                                  style: TextStyle(fontSize: 12),
+                                ),
                               ),
                               const SizedBox(width: 8),
                               Text(
                                 formatRupiah(ajbResult.totalNilai),
-                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                ),
                               ),
                             ],
                           ),
@@ -2030,16 +2240,34 @@ class _StandaloneAjbDialogContentState
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              const Text('PPh (2.5%):', style: TextStyle(fontSize: 12)),
-                              Text(formatRupiah(ajbResult.pph), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                              const Text(
+                                'PPh (2.5%):',
+                                style: TextStyle(fontSize: 12),
+                              ),
+                              Text(
+                                formatRupiah(ajbResult.pph),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                ),
+                              ),
                             ],
                           ),
                           const SizedBox(height: 4),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              const Text('PPN (2.5%):', style: TextStyle(fontSize: 12)),
-                              Text(formatRupiah(ajbResult.ppn), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                              const Text(
+                                'PPN (2.5%):',
+                                style: TextStyle(fontSize: 12),
+                              ),
+                              Text(
+                                formatRupiah(ajbResult.ppn),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                ),
+                              ),
                             ],
                           ),
                           const SizedBox(height: 4),
@@ -2053,7 +2281,9 @@ class _StandaloneAjbDialogContentState
                                       : 'BPHTB (Bebas / < 80 Jt):',
                                   style: TextStyle(
                                     fontSize: 12,
-                                    color: ajbResult.kenaBphtb ? Colors.indigo : Colors.grey.shade600,
+                                    color: ajbResult.kenaBphtb
+                                        ? Colors.indigo
+                                        : Colors.grey.shade600,
                                   ),
                                 ),
                               ),
@@ -2063,7 +2293,9 @@ class _StandaloneAjbDialogContentState
                                 style: TextStyle(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 12,
-                                  color: ajbResult.kenaBphtb ? Colors.indigo : Colors.grey.shade600,
+                                  color: ajbResult.kenaBphtb
+                                      ? Colors.indigo
+                                      : Colors.grey.shade600,
                                 ),
                               ),
                             ],
@@ -2075,7 +2307,10 @@ class _StandaloneAjbDialogContentState
                               const Expanded(
                                 child: Text(
                                   'TOTAL ESTIMASI PAJAK AJB:',
-                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                  ),
                                 ),
                               ),
                               const SizedBox(width: 8),
@@ -2084,7 +2319,9 @@ class _StandaloneAjbDialogContentState
                                 style: TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w900,
-                                  color: isDark ? Colors.indigo.shade200 : Colors.indigo.shade900,
+                                  color: isDark
+                                      ? Colors.indigo.shade200
+                                      : Colors.indigo.shade900,
                                 ),
                               ),
                             ],
@@ -2098,9 +2335,10 @@ class _StandaloneAjbDialogContentState
                         Expanded(
                           child: FilledButton.icon(
                             onPressed: () {
-                              final text = PbbCalculatorHelper.formatWhatsAppAjb(
-                                ajbResult: ajbResult,
-                              );
+                              final text =
+                                  PbbCalculatorHelper.formatWhatsAppAjb(
+                                    ajbResult: ajbResult,
+                                  );
                               _copyToClipboard(text, 'Rincian Biaya AJB');
                             },
                             icon: const Icon(Icons.copy_rounded, size: 16),
@@ -2113,7 +2351,10 @@ class _StandaloneAjbDialogContentState
                             final text = PbbCalculatorHelper.formatWhatsAppAjb(
                               ajbResult: ajbResult,
                             );
-                            NativeFileHelper.shareText(text: text, title: 'Estimasi AJB & Pajak');
+                            NativeFileHelper.shareText(
+                              text: text,
+                              title: 'Estimasi AJB & Pajak',
+                            );
                           },
                           icon: const Icon(Icons.share_rounded, size: 18),
                           tooltip: 'Bagikan',
@@ -2164,10 +2405,7 @@ class _TandaTanganWpPainter extends CustomPainter {
       ..color = const Color(0xFF0F172A)
       ..style = PaintingStyle.fill;
 
-    final allStrokes = <List<int>>[
-      ...strokes,
-      ?activeStroke,
-    ];
+    final allStrokes = <List<int>>[...strokes, ?activeStroke];
 
     for (final pts in allStrokes) {
       if (pts.length < 2) continue;

@@ -34,104 +34,120 @@ void main() {
       store = StaffAuthenticatorStore();
     });
 
-    testWidgets('Tampilan awal saat belum terhubung: tampil kartu promosi & dialog', (tester) async {
-      await store.setAutoVerifyEnabled(false);
-      await tester.pumpWidget(
-        MaterialApp(
-          home: StaffMfaScreen(
-            client: fakeClient,
-            themeController: themeController,
-            authenticatorStore: store,
-            enablePeriodicTimer: false,
+    testWidgets(
+      'Tampilan awal saat belum terhubung: tampil kartu promosi & dialog',
+      (tester) async {
+        await store.setAutoVerifyEnabled(false);
+        await tester.pumpWidget(
+          MaterialApp(
+            home: StaffMfaScreen(
+              client: fakeClient,
+              themeController: themeController,
+              authenticatorStore: store,
+              enablePeriodicTimer: false,
+            ),
           ),
-        ),
-      );
-      await tester.pumpAndSettle();
+        );
+        await tester.pumpAndSettle();
 
-      // Memastikan kartu promosi tampil
-      expect(find.text('Hubungkan Google Authenticator'), findsOneWidget);
-      expect(find.text('Hubungkan Kunci (Copas)'), findsOneWidget);
-      expect(find.text('Impor Gambar QR'), findsOneWidget);
+        // Memastikan kartu promosi tampil
+        expect(find.text('Hubungkan Google Authenticator'), findsOneWidget);
+        expect(find.text('Hubungkan Kunci (Copas)'), findsOneWidget);
+        expect(find.text('Impor Gambar QR'), findsOneWidget);
 
-      // Memastikan field kode verifikasi & tombol submit tampil
-      expect(find.byType(TextField), findsOneWidget);
-      expect(find.text('Verifikasi & Masuk'), findsOneWidget);
+        // Memastikan field kode verifikasi & tombol submit tampil
+        expect(find.byType(TextField), findsOneWidget);
+        expect(find.text('Verifikasi & Masuk'), findsOneWidget);
 
-      // Buka dialog hubungkan kunci
-      await tester.tap(find.text('Hubungkan Kunci (Copas)'));
-      await tester.pumpAndSettle();
+        // Buka dialog hubungkan kunci
+        await tester.tap(find.text('Hubungkan Kunci (Copas)'));
+        await tester.pumpAndSettle();
 
-      expect(find.text('Hubungkan Authenticator'), findsOneWidget);
-      expect(find.text('Simpan Kunci'), findsOneWidget);
+        expect(find.text('Hubungkan Authenticator'), findsOneWidget);
+        expect(find.text('Simpan Kunci'), findsOneWidget);
 
-      final dialogKeyField = find.descendant(
-        of: find.byType(AlertDialog),
-        matching: find.byType(TextField),
-      ).first;
+        final dialogKeyField = find
+            .descendant(
+              of: find.byType(AlertDialog),
+              matching: find.byType(TextField),
+            )
+            .first;
 
-      // Input secret key tidak valid
-      await tester.enterText(dialogKeyField, '12345');
-      await tester.pumpAndSettle();
+        // Input secret key tidak valid
+        await tester.enterText(dialogKeyField, '12345');
+        await tester.pumpAndSettle();
 
-      // Tombol simpan nonaktif untuk kunci invalid
-      final saveBtn = tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Simpan Kunci'));
-      expect(saveBtn.onPressed, isNull);
+        // Tombol simpan nonaktif untuk kunci invalid
+        final saveBtn = tester.widget<FilledButton>(
+          find.widgetWithText(FilledButton, 'Simpan Kunci'),
+        );
+        expect(saveBtn.onPressed, isNull);
 
-      // Input secret key valid (Base32)
-      await tester.enterText(dialogKeyField, 'JBSWY3DPEHPK3PXP');
-      await tester.pumpAndSettle();
+        // Input secret key valid (Base32)
+        await tester.enterText(dialogKeyField, 'JBSWY3DPEHPK3PXP');
+        await tester.pumpAndSettle();
 
-      // Muncul pratinjau kunci valid
-      expect(find.textContaining('Kunci Valid'), findsOneWidget);
+        // Muncul pratinjau kunci valid
+        expect(find.textContaining('Kunci Valid'), findsOneWidget);
 
-      // Klik Simpan Kunci
-      await tester.tap(find.widgetWithText(FilledButton, 'Simpan Kunci'));
-      await tester.pumpAndSettle();
+        // Klik Simpan Kunci
+        await tester.tap(find.widgetWithText(FilledButton, 'Simpan Kunci'));
+        await tester.pumpAndSettle();
 
-      // Dialog tertutup, status berubah menjadi terhubung
-      expect(find.text('Google Authenticator Terhubung'), findsOneWidget);
-      expect(await store.hasSecret(), isTrue);
-    });
+        // Dialog tertutup, status berubah menjadi terhubung
+        expect(find.text('Google Authenticator Terhubung'), findsOneWidget);
+        expect(await store.hasSecret(), isTrue);
+      },
+    );
 
-    testWidgets('Tampilan saat sudah terhubung: kartu token aktif, countdown, dan isi ke kolom', (tester) async {
-      // Setup secret key terlebih dahulu (auto-verify false agar tidak langsung auto-login di test ini)
-      await store.saveSecret('JBSWY3DPEHPK3PXP', accountName: 'petugas_bobojong', issuer: 'BAPENDA');
-      await store.setAutoVerifyEnabled(false);
+    testWidgets(
+      'Tampilan saat sudah terhubung: kartu token aktif, countdown, dan isi ke kolom',
+      (tester) async {
+        // Setup secret key terlebih dahulu (auto-verify false agar tidak langsung auto-login di test ini)
+        await store.saveSecret(
+          'JBSWY3DPEHPK3PXP',
+          accountName: 'petugas_bobojong',
+          issuer: 'BAPENDA',
+        );
+        await store.setAutoVerifyEnabled(false);
 
-      await tester.pumpWidget(
-        MaterialApp(
-          home: StaffMfaScreen(
-            client: fakeClient,
-            themeController: themeController,
-            authenticatorStore: store,
-            enablePeriodicTimer: false,
+        await tester.pumpWidget(
+          MaterialApp(
+            home: StaffMfaScreen(
+              client: fakeClient,
+              themeController: themeController,
+              authenticatorStore: store,
+              enablePeriodicTimer: false,
+            ),
           ),
-        ),
-      );
-      await tester.pumpAndSettle();
+        );
+        await tester.pumpAndSettle();
 
-      // Memastikan kartu token terhubung muncul dengan nama akun
-      expect(find.text('Google Authenticator Terhubung'), findsOneWidget);
-      expect(find.text('BAPENDA (petugas_bobojong)'), findsOneWidget);
-      expect(find.text('KODE 2FA AKTIF'), findsOneWidget);
+        // Memastikan kartu token terhubung muncul dengan nama akun
+        expect(find.text('Google Authenticator Terhubung'), findsOneWidget);
+        expect(find.text('BAPENDA (petugas_bobojong)'), findsOneWidget);
+        expect(find.text('KODE 2FA AKTIF'), findsOneWidget);
 
-      // Cek tombol 'Isi ke Kolom'
-      expect(find.text('Isi ke Kolom'), findsOneWidget);
-      await tester.tap(find.text('Isi ke Kolom'));
-      await tester.pumpAndSettle();
+        // Cek tombol 'Isi ke Kolom'
+        expect(find.text('Isi ke Kolom'), findsOneWidget);
+        await tester.tap(find.text('Isi ke Kolom'));
+        await tester.pumpAndSettle();
 
-      // Textfield terisi 6 digit
-      final tf = tester.widget<TextField>(find.byType(TextField).first);
-      expect(tf.controller?.text.length, equals(6));
+        // Textfield terisi 6 digit
+        final tf = tester.widget<TextField>(find.byType(TextField).first);
+        expect(tf.controller?.text.length, equals(6));
 
-      // Toggle auto-login switch
-      expect(find.byType(Switch), findsOneWidget);
-      await tester.tap(find.byType(Switch));
-      await tester.pumpAndSettle();
-      expect(await store.isAutoVerifyEnabled(), isTrue);
-    });
+        // Toggle auto-login switch
+        expect(find.byType(Switch), findsOneWidget);
+        await tester.tap(find.byType(Switch));
+        await tester.pumpAndSettle();
+        expect(await store.isAutoVerifyEnabled(), isTrue);
+      },
+    );
 
-    testWidgets('Auto-Fill & Auto-Verify otomatis memicu login jika aktif', (tester) async {
+    testWidgets('Auto-Fill & Auto-Verify otomatis memicu login jika aktif', (
+      tester,
+    ) async {
       await store.saveSecret('JBSWY3DPEHPK3PXP');
       await store.setAutoVerifyEnabled(true);
 
@@ -163,35 +179,43 @@ void main() {
       await tester.pump(const Duration(milliseconds: 200));
     });
 
-    testWidgets('Menampilkan error saat kode verifikasi salah dan tidak looping', (tester) async {
-      fakeClient.nextResult = const StaffMfaResult(
-        success: false,
-        errorMessage: 'Kode MFA tidak valid atau kedaluwarsa.',
-      );
+    testWidgets(
+      'Menampilkan error saat kode verifikasi salah dan tidak looping',
+      (tester) async {
+        fakeClient.nextResult = const StaffMfaResult(
+          success: false,
+          errorMessage: 'Kode MFA tidak valid atau kedaluwarsa.',
+        );
 
-      await store.saveSecret('JBSWY3DPEHPK3PXP');
-      await store.setAutoVerifyEnabled(false);
+        await store.saveSecret('JBSWY3DPEHPK3PXP');
+        await store.setAutoVerifyEnabled(false);
 
-      await tester.pumpWidget(
-        MaterialApp(
-          home: StaffMfaScreen(
-            client: fakeClient,
-            themeController: themeController,
-            authenticatorStore: store,
-            enablePeriodicTimer: false,
+        await tester.pumpWidget(
+          MaterialApp(
+            home: StaffMfaScreen(
+              client: fakeClient,
+              themeController: themeController,
+              authenticatorStore: store,
+              enablePeriodicTimer: false,
+            ),
           ),
-        ),
-      );
-      await tester.pumpAndSettle();
+        );
+        await tester.pumpAndSettle();
 
-      // Isi manual kode yang salah
-      await tester.enterText(find.byType(TextField).first, '111222');
-      await tester.tap(find.widgetWithText(FilledButton, 'Verifikasi & Masuk'));
-      await tester.pumpAndSettle();
+        // Isi manual kode yang salah
+        await tester.enterText(find.byType(TextField).first, '111222');
+        await tester.tap(
+          find.widgetWithText(FilledButton, 'Verifikasi & Masuk'),
+        );
+        await tester.pumpAndSettle();
 
-      // Muncul pesan error
-      expect(find.text('Kode MFA tidak valid atau kedaluwarsa.'), findsOneWidget);
-      expect(fakeClient.lastSubmittedOtp, equals('111222'));
-    });
+        // Muncul pesan error
+        expect(
+          find.text('Kode MFA tidak valid atau kedaluwarsa.'),
+          findsOneWidget,
+        );
+        expect(fakeClient.lastSubmittedOtp, equals('111222'));
+      },
+    );
   });
 }

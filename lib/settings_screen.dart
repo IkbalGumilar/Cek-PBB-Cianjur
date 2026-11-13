@@ -110,7 +110,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         description:
             'Simpan salinan buku catatan DHKP Anda ke memori perangkat atau sambungkan ke Google Drive agar data tetap aman meski ganti HP.',
         icon: Icons.cloud_sync_outlined,
-        actionHint: 'Aktifkan cadangan otomatis agar tidak perlu repot menyimpan manual',
+        actionHint:
+            'Aktifkan cadangan otomatis agar tidak perlu repot menyimpan manual',
       ),
       FeatureTourStep(
         targetKey: _tourGuideCardKey,

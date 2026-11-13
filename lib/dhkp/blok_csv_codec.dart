@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:csv/csv.dart';
 
+import '../base_table_exporter.dart';
 import '../blok_record.dart';
 import '../nop_helper.dart';
 
@@ -39,6 +40,8 @@ class BlokCsvCodec {
     'RT Objek',
   ];
 
+  /// Serialisasi internal untuk `blok_data.csv` dan `data.csv` paket `.dkhp`.
+  /// Format penyimpanan internal tidak dimodifikasi agar pembacaan ulang tetap presisi.
   static String encodeRecords(Iterable<BlokRecord> records) {
     final rows = <List<String>>[
       fullCsvHeader,
@@ -67,18 +70,19 @@ class BlokCsvCodec {
     return Csv().encode(rows);
   }
 
+  /// Serialisasi CSV laporan yang dibuka pengguna di aplikasi spreadsheet (disanitasi dari formula injection).
   static String encodeReportCsv(Iterable<BlokRecord> records) {
     final rows = <List<String>>[
       ['Blok', 'Nomor Wilayah', ...baseCsvHeader],
       for (final r in records)
         [
-          r.blok,
-          r.wilayah,
-          r.namaWajibPajak,
-          r.nop,
-          r.tahunBayar,
-          r.tanggalBayar,
-          r.jumlahPbb,
+          BaseTableExporter.sanitizeSpreadsheetCell(r.blok),
+          BaseTableExporter.sanitizeSpreadsheetCell(r.wilayah),
+          BaseTableExporter.sanitizeSpreadsheetCell(r.namaWajibPajak),
+          BaseTableExporter.sanitizeSpreadsheetCell(r.nop),
+          BaseTableExporter.sanitizeSpreadsheetCell(r.tahunBayar),
+          BaseTableExporter.sanitizeSpreadsheetCell(r.tanggalBayar),
+          BaseTableExporter.sanitizeSpreadsheetCell(r.jumlahPbb),
         ],
     ];
     return Csv().encode(rows);
@@ -124,8 +128,8 @@ class BlokCsvCodec {
           luasBangunan: _cell(row, 10),
           njopBumi: _cell(row, 11),
           njopBangunan: _cell(row, 12),
-          kecamatan: _cellOrDefault(row, 13, 'MANDE'),
-          kelurahan: _cellOrDefault(row, 14, 'BOBOJONG'),
+          kecamatan: _cell(row, 13),
+          kelurahan: _cell(row, 14),
           alamatObjek: _cell(row, 15),
           alamatWp: _cell(row, 16),
           rtObjek: _cell(row, 17),
@@ -189,8 +193,8 @@ class BlokCsvCodec {
           luasBangunan: _cell(row, 10),
           njopBumi: _cell(row, 11),
           njopBangunan: _cell(row, 12),
-          kecamatan: _cellOrDefault(row, 13, 'MANDE'),
-          kelurahan: _cellOrDefault(row, 14, 'BOBOJONG'),
+          kecamatan: _cell(row, 13),
+          kelurahan: _cell(row, 14),
           alamatObjek: _cell(row, 15),
           alamatWp: _cell(row, 16),
           rtObjek: _cell(row, 17),
@@ -222,14 +226,5 @@ class BlokCsvCodec {
 
   static String _cell(List<dynamic> row, int index) {
     return row.length > index ? row[index].toString().trim() : '';
-  }
-
-  static String _cellOrDefault(
-    List<dynamic> row,
-    int index,
-    String defaultValue,
-  ) {
-    final val = _cell(row, index);
-    return val.isNotEmpty ? val : defaultValue;
   }
 }

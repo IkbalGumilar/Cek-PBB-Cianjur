@@ -8,6 +8,7 @@ import 'settings_screen.dart';
 import 'staff_portal/kolektif_group_dialogs.dart';
 import 'staff_portal_client.dart';
 import 'theme_controller.dart';
+import 'ui/app_design_system.dart';
 
 /// Menu "Pembayaran Kolektif" — daftar & filter grup kolektif (meniru tabel
 /// dan filter halaman asli `m179`/`reloadDataGroup`), ditambah dua aksi yang
@@ -129,7 +130,8 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
         description:
             'Ketuk tombol ini untuk membuat grup rombongan bayar baru. Anda cukup mengisi nama grup, keterangan, nama petugas kolektor, dan nomor HP.',
         icon: Icons.group_add_outlined,
-        actionHint: 'Grup baru akan berstatus Draft sehingga masih bisa ditambah/dikurangi anggotanya',
+        actionHint:
+            'Grup baru akan berstatus Draft sehingga masih bisa ditambah/dikurangi anggotanya',
       ),
       FeatureTourStep(
         targetKey: _filterAreaKey,
@@ -383,10 +385,7 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
             else
               const ListTile(
                 leading: Icon(Icons.delete_outline, color: Colors.grey),
-                title: Text(
-                  'Hapus Grup',
-                  style: TextStyle(color: Colors.grey),
-                ),
+                title: Text('Hapus Grup', style: TextStyle(color: Colors.grey)),
                 subtitle: Text(
                   'Tidak tersedia — grup sudah dikunci, dibayar, atau tidak boleh dihapus',
                 ),
@@ -681,147 +680,185 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text(
-                'Kelola daftar grup pembayaran rombongan (kolektif). Anda dapat membuat grup baru, '
-                'mengatur daftar anggota (tambah/keluarkan NOP warga) selama grup berstatus Draft, '
-                'mencetak surat pengantar, atau mengunci daftar grup dari menu Kelola Anggota.',
-                style: TextStyle(fontStyle: FontStyle.italic),
-              ),
-              const SizedBox(height: 16),
-              WilayahBadge(client: widget.client),
-              const SizedBox(height: 12),
-              OutlinedButton.icon(
-                key: _tambahGroupButtonKey,
-                onPressed: sibuk || !opsiSiap ? null : _tambahGroup,
-                icon: const Icon(Icons.group_add_outlined),
-                label: const Text('Buat Grup Rombongan Baru'),
-              ),
-              if (opsi?.errorMessage != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Text(
-                    opsi!.errorMessage!,
-                    style: const TextStyle(color: Colors.red),
-                  ),
-                )
-              else if (peringatanToken != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Text(
-                    peringatanToken,
-                    style: const TextStyle(color: Colors.orange),
-                  ),
-                ),
-              const SizedBox(height: 16),
-              Column(
-                key: _filterAreaKey,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: DropdownButtonFormField<String>(
-                          isExpanded: true,
-                          initialValue: _bulan,
-                          decoration: const InputDecoration(
-                            labelText: 'Bulan',
-                            border: OutlineInputBorder(),
-                          ),
-                          items: [
-                            for (final o in _bulanOptions)
-                              DropdownMenuItem(value: o.$1, child: Text(o.$2)),
-                          ],
-                          onChanged: (v) => setState(() => _bulan = v ?? '0'),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: DropdownButtonFormField<String>(
-                          isExpanded: true,
-                          initialValue: _status,
-                          decoration: const InputDecoration(
-                            labelText: 'Status',
-                            border: OutlineInputBorder(),
-                          ),
-                          items: [
-                            for (final o in _statusOptions)
-                              DropdownMenuItem(value: o.$1, child: Text(o.$2)),
-                          ],
-                          onChanged: (v) => setState(() => _status = v ?? ''),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _tahun,
-                    keyboardType: TextInputType.number,
-                    maxLength: 4,
-                    decoration: const InputDecoration(
-                      labelText: 'Tahun (opsional)',
-                      border: OutlineInputBorder(),
-                      counterText: '',
+          child: ResponsivePageContainer(
+            padding: EdgeInsets.zero,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Card(
+                  margin: EdgeInsets.zero,
+                  elevation: 0,
+                  color: Theme.of(context).colorScheme.surfaceContainerLow,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    side: BorderSide(
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.outlineVariant.withValues(alpha: 0.5),
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: MonitoringDateField(
-                          label: 'Tanggal Awal',
-                          controller: _tglAwal,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                          'Kelola daftar grup pembayaran rombongan (kolektif). Anda dapat membuat grup baru, '
+                          'mengatur daftar anggota (tambah/keluarkan NOP warga) selama grup berstatus Draft, '
+                          'mencetak surat pengantar, atau mengunci daftar grup dari menu Kelola Anggota.',
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurfaceVariant,
+                              ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: MonitoringDateField(
-                          label: 'Tanggal Akhir',
-                          controller: _tglAkhir,
+                        const SizedBox(height: 14),
+                        WilayahBadge(client: widget.client),
+                        const SizedBox(height: 12),
+                        FilledButton.tonalIcon(
+                          key: _tambahGroupButtonKey,
+                          onPressed: sibuk || !opsiSiap ? null : _tambahGroup,
+                          icon: const Icon(Icons.group_add_outlined),
+                          label: const Text('Buat Grup Rombongan Baru'),
                         ),
-                      ),
-                    ],
+                        if (opsi?.errorMessage != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 10),
+                            child: AppAlertBanner(
+                              message: opsi!.errorMessage!,
+                              tone: AppBadgeTone.error,
+                            ),
+                          )
+                        else if (peringatanToken != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 10),
+                            child: AppAlertBanner(
+                              message: peringatanToken,
+                              tone: AppBadgeTone.warning,
+                            ),
+                          ),
+                        const Divider(height: 28),
+                        Column(
+                          key: _filterAreaKey,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: DropdownButtonFormField<String>(
+                                    isExpanded: true,
+                                    initialValue: _bulan,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Bulan',
+                                      border: OutlineInputBorder(),
+                                    ),
+                                    items: [
+                                      for (final o in _bulanOptions)
+                                        DropdownMenuItem(
+                                          value: o.$1,
+                                          child: Text(o.$2),
+                                        ),
+                                    ],
+                                    onChanged: (v) =>
+                                        setState(() => _bulan = v ?? '0'),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: DropdownButtonFormField<String>(
+                                    isExpanded: true,
+                                    initialValue: _status,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Status',
+                                      border: OutlineInputBorder(),
+                                    ),
+                                    items: [
+                                      for (final o in _statusOptions)
+                                        DropdownMenuItem(
+                                          value: o.$1,
+                                          child: Text(o.$2),
+                                        ),
+                                    ],
+                                    onChanged: (v) =>
+                                        setState(() => _status = v ?? ''),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            TextField(
+                              controller: _tahun,
+                              keyboardType: TextInputType.number,
+                              maxLength: 4,
+                              decoration: const InputDecoration(
+                                labelText: 'Tahun (opsional)',
+                                border: OutlineInputBorder(),
+                                counterText: '',
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: MonitoringDateField(
+                                    label: 'Tanggal Awal',
+                                    controller: _tglAwal,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: MonitoringDateField(
+                                    label: 'Tanggal Akhir',
+                                    controller: _tglAkhir,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        FilledButton.icon(
+                          key: _tampilkanButtonKey,
+                          onPressed: sibuk ? null : _muat,
+                          icon: _loading
+                              ? SizedBox(
+                                  height: 18,
+                                  width: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: onPrimary,
+                                  ),
+                                )
+                              : const Icon(Icons.search),
+                          label: const Text('Tampilkan'),
+                        ),
+                      ],
+                    ),
                   ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              FilledButton(
-                key: _tampilkanButtonKey,
-                onPressed: sibuk ? null : _muat,
-                child: _loading
-                    ? SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: onPrimary,
-                        ),
-                      )
-                    : const Text('Tampilkan'),
-              ),
-              const SizedBox(height: 16),
-              Container(
-                key: _resultAreaKey,
-                child: _loading
-                    ? const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 24),
-                        child: Center(child: CircularProgressIndicator()),
-                      )
-                    : (_result != null
-                          ? KolektifResultView(
-                              result: _result!,
-                              onAksi: _aksiBerjalan ? null : _aksiGrup,
-                            )
-                          : const SizedBox.shrink()),
-              ),
-              if (_aksiBerjalan)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 24),
-                  child: Center(child: CircularProgressIndicator()),
                 ),
-            ],
+                const SizedBox(height: 16),
+                Container(
+                  key: _resultAreaKey,
+                  child: _loading
+                      ? const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 24),
+                          child: Center(child: CircularProgressIndicator()),
+                        )
+                      : (_result != null
+                            ? KolektifResultView(
+                                result: _result!,
+                                onAksi: _aksiBerjalan ? null : _aksiGrup,
+                              )
+                            : const SizedBox.shrink()),
+                ),
+                if (_aksiBerjalan)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 24),
+                    child: Center(child: CircularProgressIndicator()),
+                  ),
+              ],
+            ),
           ),
         ),
       ),

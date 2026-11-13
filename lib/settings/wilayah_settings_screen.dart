@@ -33,8 +33,12 @@ class _WilayahSettingsScreenState extends State<WilayahSettingsScreen> {
     super.initState();
     _desaNameController = TextEditingController(text: activeDesaName);
     _kelCodeController = TextEditingController(text: activeKelurahanCode);
-    _selectedKecCode = activeKecamatanCode.isNotEmpty ? activeKecamatanCode : null;
-    _selectedDesaCode = activeKelurahanCode.isNotEmpty ? activeKelurahanCode : null;
+    _selectedKecCode = activeKecamatanCode.isNotEmpty
+        ? activeKecamatanCode
+        : null;
+    _selectedDesaCode = activeKelurahanCode.isNotEmpty
+        ? activeKelurahanCode
+        : null;
     _syncDesaSelection();
   }
 
@@ -56,8 +60,9 @@ class _WilayahSettingsScreenState extends State<WilayahSettingsScreen> {
 
     if (_selectedDesaCode == null) return;
 
-    final hasMatchingDesa =
-        kec.desaList.any((d) => d.code == _selectedDesaCode);
+    final hasMatchingDesa = kec.desaList.any(
+      (d) => d.code == _selectedDesaCode,
+    );
     if (!hasMatchingDesa) {
       _selectedDesaCode = null;
       _desaNameController.text = '';
@@ -131,9 +136,7 @@ class _WilayahSettingsScreenState extends State<WilayahSettingsScreen> {
         : null;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Wilayah Kerja & Profil Desa'),
-      ),
+      appBar: AppBar(title: const Text('Wilayah Kerja & Profil Desa')),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(16),
@@ -144,9 +147,7 @@ class _WilayahSettingsScreenState extends State<WilayahSettingsScreen> {
               color: scheme.primaryContainer.withValues(alpha: 0.35),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
-                side: BorderSide(
-                  color: scheme.primary.withValues(alpha: 0.3),
-                ),
+                side: BorderSide(color: scheme.primary.withValues(alpha: 0.3)),
               ),
               child: Padding(
                 padding: const EdgeInsets.all(16),
@@ -265,9 +266,13 @@ class _WilayahSettingsScreenState extends State<WilayahSettingsScreen> {
                     const SizedBox(height: 14),
 
                     // Dropdown Desa / Kelurahan
-                    if (currentKec != null && currentKec.desaList.isNotEmpty && !_isManualDesa) ...[
+                    if (currentKec != null &&
+                        currentKec.desaList.isNotEmpty &&
+                        !_isManualDesa) ...[
                       DropdownButtonFormField<String>(
-                        key: ValueKey('settings_dropdown_desa_$_selectedKecCode'),
+                        key: ValueKey(
+                          'settings_dropdown_desa_$_selectedKecCode',
+                        ),
                         initialValue: _selectedDesaCode,
                         hint: const Text('Pilih Desa / Kelurahan...'),
                         isExpanded: true,
@@ -339,7 +344,8 @@ class _WilayahSettingsScreenState extends State<WilayahSettingsScreen> {
                           ),
                         ],
                       ),
-                      if (currentKec != null && currentKec.desaList.isNotEmpty) ...[
+                      if (currentKec != null &&
+                          currentKec.desaList.isNotEmpty) ...[
                         const SizedBox(height: 6),
                         Align(
                           alignment: Alignment.centerRight,
@@ -441,7 +447,8 @@ class _WilayahSettingsScreenState extends State<WilayahSettingsScreen> {
 
             Builder(
               builder: (context) {
-                final bool isWilayahValid = _selectedKecCode != null &&
+                final bool isWilayahValid =
+                    _selectedKecCode != null &&
                     ((!_isManualDesa &&
                             _selectedDesaCode != null &&
                             _selectedDesaCode != 'custom') ||
@@ -453,7 +460,9 @@ class _WilayahSettingsScreenState extends State<WilayahSettingsScreen> {
                   height: 48,
                   child: FilledButton.icon(
                     key: const ValueKey('btn_simpan_wilayah_settings'),
-                    onPressed: (_saving || !isWilayahValid) ? null : _saveWilayah,
+                    onPressed: (_saving || !isWilayahValid)
+                        ? null
+                        : _saveWilayah,
                     icon: _saving
                         ? const SizedBox(
                             width: 18,

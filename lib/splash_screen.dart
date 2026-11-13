@@ -182,7 +182,9 @@ class _SplashScreenState extends State<SplashScreen>
                               const SizedBox(height: 12),
                               // Bagian Tengah: Logo & Identitas Aplikasi (Responsif Desktop & Mobile)
                               ConstrainedBox(
-                                constraints: const BoxConstraints(maxWidth: 580),
+                                constraints: const BoxConstraints(
+                                  maxWidth: 580,
+                                ),
                                 child: Column(
                                   mainAxisSize: MainAxisSize.min,
                                   crossAxisAlignment: CrossAxisAlignment.center,
@@ -204,9 +206,15 @@ class _SplashScreenState extends State<SplashScreen>
                                                 boxShadow: [
                                                   BoxShadow(
                                                     color: colorScheme.primary
-                                                        .withValues(alpha: 0.22),
-                                                    blurRadius: isWide ? 48 : 36,
-                                                    spreadRadius: isWide ? 12 : 8,
+                                                        .withValues(
+                                                          alpha: 0.22,
+                                                        ),
+                                                    blurRadius: isWide
+                                                        ? 48
+                                                        : 36,
+                                                    spreadRadius: isWide
+                                                        ? 12
+                                                        : 8,
                                                   ),
                                                 ],
                                               ),
@@ -217,12 +225,16 @@ class _SplashScreenState extends State<SplashScreen>
                                               height: logoSize,
                                               fit: BoxFit.contain,
                                               errorBuilder:
-                                                  (context, error, stackTrace) =>
-                                                      Icon(
-                                                Icons.account_balance_rounded,
-                                                size: logoSize * 0.75,
-                                                color: colorScheme.primary,
-                                              ),
+                                                  (
+                                                    context,
+                                                    error,
+                                                    stackTrace,
+                                                  ) => Icon(
+                                                    Icons
+                                                        .account_balance_rounded,
+                                                    size: logoSize * 0.75,
+                                                    color: colorScheme.primary,
+                                                  ),
                                             ),
                                           ],
                                         ),
@@ -238,26 +250,40 @@ class _SplashScreenState extends State<SplashScreen>
                                           Text(
                                             'Cek PBB Cianjur',
                                             textAlign: TextAlign.center,
-                                            style: (isWide
-                                                    ? theme.textTheme.headlineLarge
-                                                    : theme.textTheme.headlineMedium)
-                                                ?.copyWith(
-                                              fontWeight: FontWeight.bold,
-                                              color: colorScheme.onSurface,
-                                              letterSpacing: 0.5,
-                                            ),
+                                            style:
+                                                (isWide
+                                                        ? theme
+                                                              .textTheme
+                                                              .headlineLarge
+                                                        : theme
+                                                              .textTheme
+                                                              .headlineMedium)
+                                                    ?.copyWith(
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      color:
+                                                          colorScheme.onSurface,
+                                                      letterSpacing: 0.5,
+                                                    ),
                                           ),
                                           const SizedBox(height: 10),
                                           Text(
                                             'Layanan Informasi & Pemantauan PBB-P2',
                                             textAlign: TextAlign.center,
-                                            style: (isWide
-                                                    ? theme.textTheme.titleMedium
-                                                    : theme.textTheme.bodyMedium)
-                                                ?.copyWith(
-                                              color: colorScheme.onSurfaceVariant,
-                                              fontWeight: FontWeight.w500,
-                                            ),
+                                            style:
+                                                (isWide
+                                                        ? theme
+                                                              .textTheme
+                                                              .titleMedium
+                                                        : theme
+                                                              .textTheme
+                                                              .bodyMedium)
+                                                    ?.copyWith(
+                                                      color: colorScheme
+                                                          .onSurfaceVariant,
+                                                      fontWeight:
+                                                          FontWeight.w500,
+                                                    ),
                                           ),
                                           const SizedBox(height: 16),
                                           Container(
@@ -266,7 +292,8 @@ class _SplashScreenState extends State<SplashScreen>
                                               vertical: isWide ? 8 : 6,
                                             ),
                                             decoration: BoxDecoration(
-                                              color: colorScheme.primaryContainer
+                                              color: colorScheme
+                                                  .primaryContainer
                                                   .withValues(alpha: 0.65),
                                               borderRadius:
                                                   BorderRadius.circular(24),
@@ -306,7 +333,9 @@ class _SplashScreenState extends State<SplashScreen>
                               FadeTransition(
                                 opacity: _textFadeAnimation,
                                 child: ConstrainedBox(
-                                  constraints: const BoxConstraints(maxWidth: 580),
+                                  constraints: const BoxConstraints(
+                                    maxWidth: 580,
+                                  ),
                                   child: Column(
                                     mainAxisSize: MainAxisSize.min,
                                     crossAxisAlignment:
@@ -315,7 +344,9 @@ class _SplashScreenState extends State<SplashScreen>
                                       SizedBox(
                                         width: isWide ? 64 : 48,
                                         child: LinearProgressIndicator(
-                                          borderRadius: BorderRadius.circular(4),
+                                          borderRadius: BorderRadius.circular(
+                                            4,
+                                          ),
                                           backgroundColor: colorScheme
                                               .surfaceContainerHighest,
                                           color: colorScheme.primary,
@@ -326,13 +357,17 @@ class _SplashScreenState extends State<SplashScreen>
                                       Text(
                                         'Badan Pendapatan Daerah Kabupaten Cianjur',
                                         textAlign: TextAlign.center,
-                                        style: (isWide
-                                                ? theme.textTheme.titleSmall
-                                                : theme.textTheme.labelMedium)
-                                            ?.copyWith(
-                                          fontWeight: FontWeight.w600,
-                                          color: colorScheme.onSurfaceVariant,
-                                        ),
+                                        style:
+                                            (isWide
+                                                    ? theme.textTheme.titleSmall
+                                                    : theme
+                                                          .textTheme
+                                                          .labelMedium)
+                                                ?.copyWith(
+                                                  fontWeight: FontWeight.w600,
+                                                  color: colorScheme
+                                                      .onSurfaceVariant,
+                                                ),
                                       ),
                                       const SizedBox(height: 4),
                                       Text(
@@ -341,8 +376,8 @@ class _SplashScreenState extends State<SplashScreen>
                                             : 'Versi 2.0.0',
                                         style: theme.textTheme.labelSmall
                                             ?.copyWith(
-                                          color: colorScheme.outline,
-                                        ),
+                                              color: colorScheme.outline,
+                                            ),
                                       ),
                                     ],
                                   ),

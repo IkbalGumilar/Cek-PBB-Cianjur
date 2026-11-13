@@ -5,15 +5,18 @@ import 'package:cek_pbb_app/dhkp/blok_csv_codec.dart';
 
 void main() {
   group('parseNominalRupiah & cleanNominalRupiah tests', () {
-    test('parseNominalRupiah handles Indonesian decimal comma and dot correctly', () {
-      expect(parseNominalRupiah('51.245,00'), 51245);
-      expect(parseNominalRupiah('51.245.00'), 51245);
-      expect(parseNominalRupiah('52.453,00'), 52453);
-      expect(parseNominalRupiah('Rp 51.245,00'), 51245);
-      expect(parseNominalRupiah('Rp. 52.453,00'), 52453);
-      expect(parseNominalRupiah('51245.00'), 51245);
-      expect(parseNominalRupiah('51245,00'), 51245);
-    });
+    test(
+      'parseNominalRupiah handles Indonesian decimal comma and dot correctly',
+      () {
+        expect(parseNominalRupiah('51.245,00'), 51245);
+        expect(parseNominalRupiah('51.245.00'), 51245);
+        expect(parseNominalRupiah('52.453,00'), 52453);
+        expect(parseNominalRupiah('Rp 51.245,00'), 51245);
+        expect(parseNominalRupiah('Rp. 52.453,00'), 52453);
+        expect(parseNominalRupiah('51245.00'), 51245);
+        expect(parseNominalRupiah('51245,00'), 51245);
+      },
+    );
 
     test('parseNominalRupiah preserves regular rupiah without decimals', () {
       expect(parseNominalRupiah('52.453'), 52453);
@@ -31,16 +34,19 @@ void main() {
       expect(parseNominalRupiah(null), 0);
     });
 
-    test('cleanNominalRupiah strips decimal sen and standardizes to Rp XX.XXX', () {
-      expect(cleanNominalRupiah('51.245,00'), 'Rp 51.245');
-      expect(cleanNominalRupiah('51.245.00'), 'Rp 51.245');
-      expect(cleanNominalRupiah('52.453,00'), 'Rp 52.453');
-      expect(cleanNominalRupiah('Rp 51.425'), 'Rp 51.425');
-      expect(cleanNominalRupiah('150000'), '150000');
-      expect(cleanNominalRupiah('0'), '0');
-      expect(cleanNominalRupiah(''), '');
-      expect(cleanNominalRupiah(null), '');
-    });
+    test(
+      'cleanNominalRupiah strips decimal sen and standardizes to Rp XX.XXX',
+      () {
+        expect(cleanNominalRupiah('51.245,00'), 'Rp 51.245');
+        expect(cleanNominalRupiah('51.245.00'), 'Rp 51.245');
+        expect(cleanNominalRupiah('52.453,00'), 'Rp 52.453');
+        expect(cleanNominalRupiah('Rp 51.425'), 'Rp 51.425');
+        expect(cleanNominalRupiah('150000'), '150000');
+        expect(cleanNominalRupiah('0'), '0');
+        expect(cleanNominalRupiah(''), '');
+        expect(cleanNominalRupiah(null), '');
+      },
+    );
 
     test('formatRupiah handles decimal sen without inflating value', () {
       expect(formatRupiah('51.245,00'), 'Rp. 51.245');
@@ -85,7 +91,8 @@ void main() {
     });
 
     test('BlokCsvCodec sanitizes decimal sen upon decoding', () {
-      const csv = '''Nama WP,NOP,Tahun Bayar,Tanggal Bayar,Jumlah PBB,Status Bayar,Nama Foto,Target Pemda,Catatan
+      const csv =
+          '''Nama WP,NOP,Tahun Bayar,Tanggal Bayar,Jumlah PBB,Status Bayar,Nama Foto,Target Pemda,Catatan
 HAWIGYO,320520000401701610,2026,2026-11-06 10:00:13,"52.453,00",Sudah Bayar,,0,Sudah bayar''';
 
       final records = BlokCsvCodec.decodeDatabaseCsv(csv);

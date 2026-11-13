@@ -17,11 +17,7 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
-      await tester.pumpWidget(
-        const MaterialApp(
-          home: UserGuideScreen(),
-        ),
-      );
+      await tester.pumpWidget(const MaterialApp(home: UserGuideScreen()));
       await tester.pump();
 
       expect(find.text('Buku Panduan & Bantuan'), findsOneWidget);

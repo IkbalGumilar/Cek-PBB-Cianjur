@@ -222,8 +222,10 @@ class GoogleDriveService {
           : await ensureDedicatedFolder();
       if (parentId == null || parentId.isEmpty) return null;
 
-      final existingBackupId =
-          await findFolder('backup', parentFolderId: parentId);
+      final existingBackupId = await findFolder(
+        'backup',
+        parentFolderId: parentId,
+      );
       if (existingBackupId != null && existingBackupId.isNotEmpty) {
         return existingBackupId;
       }

@@ -21,6 +21,7 @@ class _UpdateScreenState extends State<UpdateScreen> {
   double _progress = 0;
   File? _downloadedFile;
   String? _error;
+  bool _isInstalling = false;
 
   // Android: unduh lalu langsung buka installer sistem (pasang sendiri).
   // Windows: jika berkas .exe, langsung jalankan installer. Jika .zip, buka di explorer.
@@ -30,15 +31,24 @@ class _UpdateScreenState extends State<UpdateScreen> {
       (Platform.isWindows && _downloadFileName.toLowerCase().endsWith('.exe'));
 
   String get _downloadFileName {
+    final explicitAsset = widget.info.assetName;
+    if (explicitAsset != null && explicitAsset.trim().isNotEmpty) {
+      return ApkInstaller.sanitizeFileName(
+        explicitAsset,
+        fallback: 'CekPBBCianjur-${widget.info.version}.apk',
+      );
+    }
     final url = widget.info.apkDownloadUrl;
     final urlName =
         Uri.tryParse(url)?.pathSegments.lastOrNull ?? url.split('/').last;
-    return urlName.contains('.')
-        ? urlName
-        : 'CekPBBCianjur-${widget.info.version}.apk';
+    return ApkInstaller.sanitizeFileName(
+      urlName,
+      fallback: 'CekPBBCianjur-${widget.info.version}.apk',
+    );
   }
 
   Future<void> _downloadAndInstall() async {
+    if (_isInstalling) return;
     setState(() {
       _stage = _Stage.downloading;
       _progress = 0;
@@ -46,22 +56,34 @@ class _UpdateScreenState extends State<UpdateScreen> {
     });
     try {
       final existing = _downloadedFile;
-      final file = (existing != null && await existing.exists())
-          ? existing
-          : await ApkInstaller.download(
-              widget.info.apkDownloadUrl,
-              fileName: _downloadFileName,
-              onProgress: (received, total) {
-                if (total <= 0 || !mounted) return;
-                setState(() => _progress = received / total);
-              },
-            );
+      File file;
+      if (existing != null && await existing.exists()) {
+        await ApkInstaller.verifyDownloadedFile(
+          existing,
+          fileName: _downloadFileName,
+          expectedSize: widget.info.apkSize > 0 ? widget.info.apkSize : null,
+          expectedSha256: widget.info.sha256Checksum,
+        );
+        file = existing;
+      } else {
+        file = await ApkInstaller.download(
+          widget.info.apkDownloadUrl,
+          fileName: _downloadFileName,
+          expectedSize: widget.info.apkSize > 0 ? widget.info.apkSize : null,
+          expectedSha256: widget.info.sha256Checksum,
+          onProgress: (received, total) {
+            if (total <= 0 || !mounted) return;
+            setState(() => _progress = received / total);
+          },
+        );
+      }
       _downloadedFile = file;
       if (!mounted) return;
       setState(() => _stage = _Stage.downloaded);
 
       if (!_canSelfInstall) return;
 
+      setState(() => _isInstalling = true);
       final status = await ApkInstaller.install(file.path);
       if (!mounted) return;
       if (status == 'NEED_PERMISSION') {
@@ -73,15 +95,44 @@ class _UpdateScreenState extends State<UpdateScreen> {
         _stage = _Stage.idle;
         _error = e.toString();
       });
+    } finally {
+      if (mounted && _isInstalling) {
+        setState(() => _isInstalling = false);
+      }
     }
   }
 
   Future<void> _retryInstallAfterPermission() async {
     final file = _downloadedFile;
-    if (file == null) return;
-    final status = await ApkInstaller.install(file.path);
-    if (!mounted || status == 'NEED_PERMISSION') return;
-    setState(() => _stage = _Stage.downloaded);
+    if (file == null || _isInstalling) return;
+
+    setState(() {
+      _isInstalling = true;
+      _error = null;
+    });
+
+    try {
+      final status = await ApkInstaller.install(file.path);
+      if (!mounted) return;
+      if (status == 'NEED_PERMISSION') {
+        setState(() {
+          _stage = _Stage.needPermission;
+          _error =
+              'Izin "Instal aplikasi tidak dikenal" masih belum aktif. Silakan aktifkan terlebih dahulu di Pengaturan.';
+        });
+        return;
+      }
+      setState(() => _stage = _Stage.downloaded);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString();
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _isInstalling = false);
+      }
+    }
   }
 
   String _formatSize(int bytes) =>
@@ -173,7 +224,9 @@ class _UpdateScreenState extends State<UpdateScreen> {
                         ),
                         const SizedBox(height: 12),
                         OutlinedButton(
-                          onPressed: ApkInstaller.openInstallPermissionSettings,
+                          onPressed: _isInstalling
+                              ? null
+                              : ApkInstaller.openInstallPermissionSettings,
                           child: const Text('Buka Pengaturan Izin'),
                         ),
                       ],
@@ -182,8 +235,16 @@ class _UpdateScreenState extends State<UpdateScreen> {
                 ),
                 const SizedBox(height: 12),
                 FilledButton.icon(
-                  onPressed: _retryInstallAfterPermission,
-                  icon: const Icon(Icons.install_mobile),
+                  onPressed: _isInstalling
+                      ? null
+                      : _retryInstallAfterPermission,
+                  icon: _isInstalling
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.install_mobile),
                   label: const Text('Pasang Sekarang'),
                 ),
               ] else if (_stage == _Stage.downloading) ...[
@@ -203,8 +264,16 @@ class _UpdateScreenState extends State<UpdateScreen> {
                   ),
                   const SizedBox(height: 12),
                   FilledButton.icon(
-                    onPressed: _retryInstallAfterPermission,
-                    icon: const Icon(Icons.install_mobile),
+                    onPressed: _isInstalling
+                        ? null
+                        : _retryInstallAfterPermission,
+                    icon: _isInstalling
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.install_mobile),
                     label: const Text('Pasang Sekarang'),
                   ),
                 ] else
@@ -227,10 +296,13 @@ class _UpdateScreenState extends State<UpdateScreen> {
                                 ? 'Tekan tombol di bawah untuk membuka/memasang pembaruan:'
                                 : 'Jalankan/ekstrak berkas ini sendiri untuk memasang pembaruan.',
                           ),
-                          if (Platform.isWindows && _downloadedFile != null) ...[
+                          if (Platform.isWindows &&
+                              _downloadedFile != null) ...[
                             const SizedBox(height: 12),
                             FilledButton.icon(
-                              onPressed: () => ApkInstaller.install(_downloadedFile!.path),
+                              onPressed: _isInstalling
+                                  ? null
+                                  : _retryInstallAfterPermission,
                               icon: Icon(
                                 _downloadFileName.toLowerCase().endsWith('.exe')
                                     ? Icons.install_desktop
@@ -249,7 +321,7 @@ class _UpdateScreenState extends State<UpdateScreen> {
                   ),
               ] else ...[
                 FilledButton.icon(
-                  onPressed: _downloadAndInstall,
+                  onPressed: _isInstalling ? null : _downloadAndInstall,
                   icon: const Icon(Icons.download),
                   label: Text(
                     _canSelfInstall ? 'Unduh & Pasang' : 'Unduh Pembaruan',

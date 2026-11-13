@@ -138,8 +138,7 @@ class ImportViewState extends State<ImportView> {
         title: 'Kolom Tahun Pajak Pemeriksaan',
         description:
             'Tentukan tahun pajak yang akan diperiksa untuk seluruh daftar nomor di atas sekaligus.',
-        actionHint:
-            'Secara bawaan terisi tahun berjalan (misalnya 2026).',
+        actionHint: 'Secara bawaan terisi tahun berjalan (misalnya 2026).',
         icon: Icons.calendar_month_outlined,
       ),
       FeatureTourStep(

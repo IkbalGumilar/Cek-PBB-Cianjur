@@ -118,7 +118,8 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
 
   // Batas Wilayah Resmi Badan Informasi Geospasial (BIG)
   bool _showDesaBoundary = true;
-  bool _showNeighborMask = true; // Layer putih desa lain di Kec. Mande & Karangtengah (aktif default)
+  bool _showNeighborMask =
+      true; // Layer putih desa lain di Kec. Mande & Karangtengah (aktif default)
   List<LatLng> _desaBoundaryPoints = [];
   List<NeighborDesaInfo> _neighborDesas = [];
   MapBounds? _desaBounds;
@@ -170,7 +171,9 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
   /// Mengembalikan titik fokus dusun dinamis dari manifest DHKP bila tersedia
   LatLng? _getDusunFocus(int dNum) {
     try {
-      final d = DusunData.instance.allDusuns.firstWhere((d) => d.number == dNum);
+      final d = DusunData.instance.allDusuns.firstWhere(
+        (d) => d.number == dNum,
+      );
       if (d.focusLat != null && d.focusLng != null) {
         return LatLng(d.focusLat!, d.focusLng!);
       }
@@ -228,10 +231,7 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
       return;
     }
 
-    await Future.wait([
-      _loadSpatialAssets(),
-      _loadSavedPinsAndDhkp(),
-    ]);
+    await Future.wait([_loadSpatialAssets(), _loadSavedPinsAndDhkp()]);
 
     if (_allDots.isNotEmpty && mounted) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -243,9 +243,9 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
   Future<void> _loadSavedPinsAndDhkp() async {
     final rawRecords =
         widget.initialRecords ?? await BlokDataStore.instance.loadAll();
-    final uniqueRecords =
-        MapPinStore.buildLatestRecordByNop(rawRecords).values.toList()
-          ..sort((a, b) => a.nop.compareTo(b.nop));
+    final uniqueRecords = MapPinStore.buildLatestRecordByNop(
+      rawRecords,
+    ).values.toList()..sort((a, b) => a.nop.compareTo(b.nop));
 
     final pins = await MapPinStore.instance.loadAll();
     if (!mounted) return;
@@ -266,12 +266,15 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
     List<LatLng> boundaryPts = [];
     MapBounds? bounds;
     try {
-      final jsonStr = await rootBundle.loadString('assets/data/bobojong_batas_big.geojson');
+      final jsonStr = await rootBundle.loadString(
+        'assets/data/bobojong_batas_big.geojson',
+      );
       final data = json.decode(jsonStr) as Map<String, dynamic>;
       final features = data['features'] as List? ?? [];
       if (features.isNotEmpty) {
         final geom = features.first['geometry'] as Map<String, dynamic>? ?? {};
-        final coords = (geom['coordinates'] as List? ?? []).firstOrNull as List? ?? [];
+        final coords =
+            (geom['coordinates'] as List? ?? []).firstOrNull as List? ?? [];
         double minLat = 90, maxLat = -90, minLng = 180, maxLng = -180;
         for (final pt in coords) {
           if (pt is List && pt.length >= 2) {
@@ -285,7 +288,12 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
           }
         }
         if (boundaryPts.isNotEmpty) {
-          bounds = MapBounds(minLat: minLat, maxLat: maxLat, minLng: minLng, maxLng: maxLng);
+          bounds = MapBounds(
+            minLat: minLat,
+            maxLat: maxLat,
+            minLng: minLng,
+            maxLng: maxLng,
+          );
         }
       }
     } catch (e) {
@@ -295,7 +303,9 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
     // 2. Muat batas desa-desa tetangga se-Kecamatan Mande (1 Kecamatan saja) untuk layer putih
     final neighbors = <NeighborDesaInfo>[];
     try {
-      final jsonStr = await rootBundle.loadString('assets/data/kecamatan_mande_desa_big.geojson');
+      final jsonStr = await rootBundle.loadString(
+        'assets/data/kecamatan_mande_desa_big.geojson',
+      );
       final data = json.decode(jsonStr) as Map<String, dynamic>;
       final features = data['features'] as List? ?? [];
       for (final f in features) {
@@ -304,7 +314,8 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
         final kec = props['WADMKC'] as String? ?? 'Mande';
         if (name.toLowerCase() == 'bobojong' || name.isEmpty) continue;
         final geom = f['geometry'] as Map<String, dynamic>? ?? {};
-        final coords = (geom['coordinates'] as List? ?? []).firstOrNull as List? ?? [];
+        final coords =
+            (geom['coordinates'] as List? ?? []).firstOrNull as List? ?? [];
         final pts = <LatLng>[];
         double sumLat = 0, sumLng = 0;
         for (final pt in coords) {
@@ -342,7 +353,9 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
 
   Future<void> _loadOsmBuildings() async {
     try {
-      final jsonStr = await rootBundle.loadString('assets/data/bobojong_buildings_osm.geojson');
+      final jsonStr = await rootBundle.loadString(
+        'assets/data/bobojong_buildings_osm.geojson',
+      );
       final data = json.decode(jsonStr) as Map<String, dynamic>;
       final features = data['features'] as List? ?? [];
       final osmBuildings = <Polygon>[];
@@ -354,7 +367,9 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
         final pts = <LatLng>[];
         for (final pt in ring) {
           if (pt is List && pt.length >= 2) {
-            pts.add(LatLng((pt[1] as num).toDouble(), (pt[0] as num).toDouble()));
+            pts.add(
+              LatLng((pt[1] as num).toDouble(), (pt[0] as num).toDouble()),
+            );
           }
         }
         if (pts.length >= 3) {
@@ -378,7 +393,9 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
 
   Future<void> _loadOsmRoads() async {
     try {
-      final jsonStr = await rootBundle.loadString('assets/data/bobojong_roads_osm.geojson');
+      final jsonStr = await rootBundle.loadString(
+        'assets/data/bobojong_roads_osm.geojson',
+      );
       final data = json.decode(jsonStr) as Map<String, dynamic>;
       final features = data['features'] as List? ?? [];
       final osmRoads = <Polyline>[];
@@ -388,7 +405,9 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
         final pts = <LatLng>[];
         for (final pt in coordsList) {
           if (pt is List && pt.length >= 2) {
-            pts.add(LatLng((pt[1] as num).toDouble(), (pt[0] as num).toDouble()));
+            pts.add(
+              LatLng((pt[1] as num).toDouble(), (pt[0] as num).toDouble()),
+            );
           }
         }
         if (pts.length >= 2) {
@@ -411,7 +430,9 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
 
   Future<void> _loadOsmWaterways() async {
     try {
-      final jsonStr = await rootBundle.loadString('assets/data/bobojong_waterways_osm.geojson');
+      final jsonStr = await rootBundle.loadString(
+        'assets/data/bobojong_waterways_osm.geojson',
+      );
       final data = json.decode(jsonStr) as Map<String, dynamic>;
       final features = data['features'] as List? ?? [];
       final osmWaterways = <Polyline>[];
@@ -421,7 +442,9 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
         final pts = <LatLng>[];
         for (final pt in coordsList) {
           if (pt is List && pt.length >= 2) {
-            pts.add(LatLng((pt[1] as num).toDouble(), (pt[0] as num).toDouble()));
+            pts.add(
+              LatLng((pt[1] as num).toDouble(), (pt[0] as num).toDouble()),
+            );
           }
         }
         if (pts.length >= 2) {
@@ -441,7 +464,6 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
       debugPrint('Info: Gagal membaca sungai OSM: $e');
     }
   }
-
 
   MapDusunZone? get _currentZone {
     if (_selectedDusun == null) return null;
@@ -480,9 +502,9 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
     final raw = widget.initialRecords ?? await BlokDataStore.instance.loadAll();
     if (!mounted) return;
     setState(() {
-      _uniqueDhkpRecords =
-          MapPinStore.buildLatestRecordByNop(raw).values.toList()
-            ..sort((a, b) => a.nop.compareTo(b.nop));
+      _uniqueDhkpRecords = MapPinStore.buildLatestRecordByNop(
+        raw,
+      ).values.toList()..sort((a, b) => a.nop.compareTo(b.nop));
     });
   }
 
@@ -511,7 +533,8 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
       dhkpRecords: _uniqueDhkpRecords,
     );
 
-    final targetSelectKey = selectCoordinateKey ??
+    final targetSelectKey =
+        selectCoordinateKey ??
         (_selectedDot != null
             ? MapPinEntry.coordinateKey(
                 _selectedDot!.coordinate.latitude,
@@ -554,9 +577,9 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
     try {
       final currentRecords =
           widget.initialRecords ?? await BlokDataStore.instance.loadAll();
-      final uniqueRecords =
-          MapPinStore.buildLatestRecordByNop(currentRecords).values.toList()
-            ..sort((a, b) => a.nop.compareTo(b.nop));
+      final uniqueRecords = MapPinStore.buildLatestRecordByNop(
+        currentRecords,
+      ).values.toList()..sort((a, b) => a.nop.compareTo(b.nop));
       final files = await FilePicker.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['kml', 'xml'],
@@ -564,8 +587,7 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
       if (files.isNotEmpty && files.first.path != null) {
         final file = File(files.first.path!);
         final text = await file.readAsString();
-        final parseResult =
-            KmlParser.parse(text, dhkpRecords: uniqueRecords);
+        final parseResult = KmlParser.parse(text, dhkpRecords: uniqueRecords);
         if (parseResult.dots.isNotEmpty) {
           final entries = MapPinStore.entriesFromDots(
             parseResult.dots,
@@ -573,8 +595,10 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
           );
           var updatedPins = _savedPins;
           if (entries.isNotEmpty) {
-            await MapPinStore.instance
-                .mergeImportedPins(entries, onlyIfNewer: false);
+            await MapPinStore.instance.mergeImportedPins(
+              entries,
+              onlyIfNewer: false,
+            );
             updatedPins = await MapPinStore.instance.loadAll();
             BlokBackupScheduler.instance.markDirty();
           }
@@ -614,7 +638,8 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
                 content: Text(
-                    'Berkas KML tidak memuat koordinat objek pajak yang valid.'),
+                  'Berkas KML tidak memuat koordinat objek pajak yang valid.',
+                ),
                 backgroundColor: Colors.orange,
               ),
             );
@@ -623,9 +648,9 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal memuat KML: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Gagal memuat KML: $e')));
       }
     }
   }
@@ -668,8 +693,9 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
               ? 'Posisi perkiraan (${result.sourceDescription}). Gunakan Pin Manual di peta agar presisi.'
               : 'Lokasi GPS terkunci (${result.sourceDescription}). Tekan "Tandai NOP di GPS" untuk menyematkan pin.',
         ),
-        backgroundColor:
-            result.isFallbackIp ? Colors.orange.shade800 : Colors.blue.shade700,
+        backgroundColor: result.isFallbackIp
+            ? Colors.orange.shade800
+            : Colors.blue.shade700,
         action: SnackBarAction(
           label: 'Tandai NOP',
           textColor: Colors.white,
@@ -692,8 +718,10 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
     if (!mounted) return;
 
     final targetCoord = MapCoordinate(point.latitude, point.longitude);
-    final targetKey =
-        MapPinEntry.coordinateKey(point.latitude, point.longitude);
+    final targetKey = MapPinEntry.coordinateKey(
+      point.latitude,
+      point.longitude,
+    );
 
     final existingNopsAtCoordinate = <String>{};
     final existingPinCoordByNop = <String, MapCoordinate>{};
@@ -759,10 +787,7 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
     );
   }
 
-  Future<void> _removeSingleNopFromDot(
-    MapTaxDot dot,
-    BlokRecord entry,
-  ) async {
+  Future<void> _removeSingleNopFromDot(MapTaxDot dot, BlokRecord entry) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -832,8 +857,9 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
     if (confirmed != true || !mounted) return;
 
     await _ensureUniqueDhkpLoaded();
-    final updatedPins =
-        await MapPinStore.instance.removeByCoordinate(dot.coordinate);
+    final updatedPins = await MapPinStore.instance.removeByCoordinate(
+      dot.coordinate,
+    );
     if (!mounted) return;
 
     _applyUpdatedPins(updatedPins);
@@ -881,7 +907,9 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
       _draftPinLatLng = null;
     });
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Semua penandaan koordinat di peta telah dihapus.')),
+      const SnackBar(
+        content: Text('Semua penandaan koordinat di peta telah dihapus.'),
+      ),
     );
   }
 
@@ -932,9 +960,9 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal mengekspor KML: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Gagal mengekspor KML: $e')));
       }
     }
   }
@@ -971,11 +999,11 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
           _animatedMapMove(zone.bounds.center.toLatLng(), 15.5);
         }
       } else {
-        final dots =
-            _allDots.where((d) => d.dusunNumber == dusunNum).toList();
+        final dots = _allDots.where((d) => d.dusunNumber == dusunNum).toList();
         if (dots.isNotEmpty) {
           final b = MapBounds.fromCoordinates(
-              dots.map((d) => d.coordinate).toList());
+            dots.map((d) => d.coordinate).toList(),
+          );
           _animatedMapMove(b.center.toLatLng(), 16.0);
         }
       }
@@ -989,8 +1017,7 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
     });
 
     if (blok != null) {
-      final matching =
-          _visibleDots.where((d) => d.blok == blok).toList();
+      final matching = _visibleDots.where((d) => d.blok == blok).toList();
       if (matching.isNotEmpty) {
         final coords = matching.map((d) => d.coordinate).toList();
         final bBounds = MapBounds.fromCoordinates(coords);
@@ -1096,14 +1123,8 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
       begin: camera.center.longitude,
       end: destLocation.longitude,
     );
-    final zoomTween = Tween<double>(
-      begin: camera.zoom,
-      end: destZoom,
-    );
-    final rotateTween = Tween<double>(
-      begin: camera.rotation,
-      end: 0.0,
-    );
+    final zoomTween = Tween<double>(begin: camera.zoom, end: destZoom);
+    final rotateTween = Tween<double>(begin: camera.rotation, end: 0.0);
 
     final controller = AnimationController(
       duration: const Duration(milliseconds: 950),
@@ -1164,8 +1185,11 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
       SnackBar(
         content: Row(
           children: [
-            const Icon(Icons.account_balance_rounded,
-                color: Color(0xFFF1C40F), size: 18),
+            const Icon(
+              Icons.account_balance_rounded,
+              color: Color(0xFFF1C40F),
+              size: 18,
+            ),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
@@ -1194,7 +1218,9 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
             final theme = Theme.of(context);
             final isDarkSheet = theme.brightness == Brightness.dark;
             final bgCard = isDarkSheet ? const Color(0xFF1E293B) : Colors.white;
-            final txtPrimary = isDarkSheet ? Colors.white : const Color(0xFF1E293B);
+            final txtPrimary = isDarkSheet
+                ? Colors.white
+                : const Color(0xFF1E293B);
             final txtSecondary = isDarkSheet ? Colors.white70 : Colors.blueGrey;
 
             return Container(
@@ -1203,9 +1229,15 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
               ),
               decoration: BoxDecoration(
                 color: bgCard,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(20),
+                ),
                 boxShadow: const [
-                  BoxShadow(color: Colors.black26, blurRadius: 10, offset: Offset(0, -2)),
+                  BoxShadow(
+                    color: Colors.black26,
+                    blurRadius: 10,
+                    offset: Offset(0, -2),
+                  ),
                 ],
               ),
               padding: EdgeInsets.only(
@@ -1223,7 +1255,9 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                         height: 4,
                         margin: const EdgeInsets.only(top: 10, bottom: 4),
                         decoration: BoxDecoration(
-                          color: isDarkSheet ? Colors.white24 : Colors.grey.withValues(alpha: 0.4),
+                          color: isDarkSheet
+                              ? Colors.white24
+                              : Colors.grey.withValues(alpha: 0.4),
                           borderRadius: BorderRadius.circular(2),
                         ),
                       ),
@@ -1233,7 +1267,11 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                       padding: const EdgeInsets.fromLTRB(18, 4, 10, 8),
                       child: Row(
                         children: [
-                          const Icon(Icons.layers_rounded, color: Color(0xFF3498DB), size: 22),
+                          const Icon(
+                            Icons.layers_rounded,
+                            color: Color(0xFF3498DB),
+                            size: 22,
+                          ),
                           const SizedBox(width: 10),
                           Expanded(
                             child: Column(
@@ -1252,10 +1290,13 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                                     const SizedBox(width: 8),
                                     Container(
                                       padding: const EdgeInsets.symmetric(
-                                          horizontal: 6, vertical: 1.5),
+                                        horizontal: 6,
+                                        vertical: 1.5,
+                                      ),
                                       decoration: BoxDecoration(
-                                        color: const Color(0xFFE67E22)
-                                            .withValues(alpha: 0.18),
+                                        color: const Color(
+                                          0xFFE67E22,
+                                        ).withValues(alpha: 0.18),
                                         borderRadius: BorderRadius.circular(4),
                                         border: Border.all(
                                           color: const Color(0xFFE67E22),
@@ -1276,7 +1317,10 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                                 ),
                                 Text(
                                   'Pilih layer sesuai kebutuhan, ketuk tutup jika selesai',
-                                  style: TextStyle(fontSize: 11, color: txtSecondary),
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: txtSecondary,
+                                  ),
                                 ),
                               ],
                             ),
@@ -1297,7 +1341,10 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                         children: [
                           // SECTION: PILIHAN PETA DASAR
                           Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 18,
+                              vertical: 6,
+                            ),
                             child: Text(
                               'PILIHAN PETA DASAR',
                               style: TextStyle(
@@ -1316,13 +1363,18 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                                 setSheetState(() {});
                               },
                               child: Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 8,
+                                ),
                                 child: Row(
                                   children: [
                                     Icon(
                                       p.icon,
                                       size: 20,
-                                      color: isSel ? const Color(0xFF2E86DE) : txtSecondary,
+                                      color: isSel
+                                          ? const Color(0xFF2E86DE)
+                                          : txtSecondary,
                                     ),
                                     const SizedBox(width: 12),
                                     Expanded(
@@ -1330,8 +1382,12 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                                         p.label,
                                         style: TextStyle(
                                           fontSize: 13.5,
-                                          fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
-                                          color: isSel ? const Color(0xFF2E86DE) : txtPrimary,
+                                          fontWeight: isSel
+                                              ? FontWeight.bold
+                                              : FontWeight.normal,
+                                          color: isSel
+                                              ? const Color(0xFF2E86DE)
+                                              : txtPrimary,
                                         ),
                                       ),
                                     ),
@@ -1340,7 +1396,9 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                                           ? Icons.radio_button_checked_rounded
                                           : Icons.radio_button_off_rounded,
                                       size: 19,
-                                      color: isSel ? const Color(0xFF2E86DE) : Colors.grey.shade400,
+                                      color: isSel
+                                          ? const Color(0xFF2E86DE)
+                                          : Colors.grey.shade400,
                                     ),
                                   ],
                                 ),
@@ -1348,12 +1406,18 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                             );
                           }),
                           const Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                            padding: EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 6,
+                            ),
                             child: Divider(height: 1),
                           ),
                           // SECTION: GARIS BATAS & FITUR WILAYAH
                           Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 18,
+                              vertical: 6,
+                            ),
                             child: Text(
                               'GARIS BATAS & FITUR WILAYAH',
                               style: TextStyle(
@@ -1367,11 +1431,16 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                           // 1. Batas Desa Bobojong (BIG)
                           InkWell(
                             onTap: () {
-                              setState(() => _showDesaBoundary = !_showDesaBoundary);
+                              setState(
+                                () => _showDesaBoundary = !_showDesaBoundary,
+                              );
                               setSheetState(() {});
                             },
                             child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 8,
+                              ),
                               child: Row(
                                 children: [
                                   Icon(
@@ -1379,12 +1448,15 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                                         ? Icons.check_box_rounded
                                         : Icons.check_box_outline_blank_rounded,
                                     size: 20,
-                                    color: _showDesaBoundary ? const Color(0xFFE74C3C) : Colors.grey,
+                                    color: _showDesaBoundary
+                                        ? const Color(0xFFE74C3C)
+                                        : Colors.grey,
                                   ),
                                   const SizedBox(width: 12),
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         Text(
                                           'Batas Desa Bobojong (BIG)',
@@ -1396,7 +1468,10 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                                         ),
                                         Text(
                                           'Garis merah putus-putus batas resmi BIG',
-                                          style: TextStyle(fontSize: 11, color: txtSecondary),
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: txtSecondary,
+                                          ),
                                         ),
                                       ],
                                     ),
@@ -1408,11 +1483,16 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                           // 2. Layer Putih Wilayah Sekitar
                           InkWell(
                             onTap: () {
-                              setState(() => _showNeighborMask = !_showNeighborMask);
+                              setState(
+                                () => _showNeighborMask = !_showNeighborMask,
+                              );
                               setSheetState(() {});
                             },
                             child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 8,
+                              ),
                               child: Row(
                                 children: [
                                   Icon(
@@ -1420,12 +1500,15 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                                         ? Icons.check_box_rounded
                                         : Icons.check_box_outline_blank_rounded,
                                     size: 20,
-                                    color: _showNeighborMask ? const Color(0xFF3498DB) : Colors.grey,
+                                    color: _showNeighborMask
+                                        ? const Color(0xFF3498DB)
+                                        : Colors.grey,
                                   ),
                                   const SizedBox(width: 12),
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         Text(
                                           'Layer Putih Wilayah Sekitar (Mande & Karangtengah)',
@@ -1437,7 +1520,10 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                                         ),
                                         Text(
                                           'Masking desa tetangga agar Bobojong kontras',
-                                          style: TextStyle(fontSize: 11, color: txtSecondary),
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: txtSecondary,
+                                          ),
                                         ),
                                       ],
                                     ),
@@ -1449,14 +1535,20 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                           // 3. Bangunan & Rumah Warga (OSM)
                           InkWell(
                             onTap: () {
-                              setState(() => _showOsmBuildings = !_showOsmBuildings);
-                              if (_showOsmBuildings && _osmBuildingPolygons.isEmpty) {
+                              setState(
+                                () => _showOsmBuildings = !_showOsmBuildings,
+                              );
+                              if (_showOsmBuildings &&
+                                  _osmBuildingPolygons.isEmpty) {
                                 _loadOsmBuildings();
                               }
                               setSheetState(() {});
                             },
                             child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 8,
+                              ),
                               child: Row(
                                 children: [
                                   Icon(
@@ -1464,12 +1556,15 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                                         ? Icons.check_box_rounded
                                         : Icons.check_box_outline_blank_rounded,
                                     size: 20,
-                                    color: _showOsmBuildings ? const Color(0xFFE67E22) : Colors.grey,
+                                    color: _showOsmBuildings
+                                        ? const Color(0xFFE67E22)
+                                        : Colors.grey,
                                   ),
                                   const SizedBox(width: 12),
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         Text(
                                           'Bangunan & Rumah Warga (OSM)',
@@ -1483,7 +1578,10 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                                           _osmBuildingPolygons.isNotEmpty
                                               ? '${_osmBuildingPolygons.length} poligon atap rumah Desa Bobojong'
                                               : '5.313 poligon atap rumah Desa Bobojong',
-                                          style: TextStyle(fontSize: 11, color: txtSecondary),
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: txtSecondary,
+                                          ),
                                         ),
                                       ],
                                     ),
@@ -1502,7 +1600,10 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                               setSheetState(() {});
                             },
                             child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 8,
+                              ),
                               child: Row(
                                 children: [
                                   Icon(
@@ -1510,12 +1611,15 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                                         ? Icons.check_box_rounded
                                         : Icons.check_box_outline_blank_rounded,
                                     size: 20,
-                                    color: _showOsmRoads ? const Color(0xFFF39C12) : Colors.grey,
+                                    color: _showOsmRoads
+                                        ? const Color(0xFFF39C12)
+                                        : Colors.grey,
                                   ),
                                   const SizedBox(width: 12),
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         Text(
                                           'Jalan & Gang Desa (OSM)',
@@ -1529,7 +1633,10 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                                           _osmRoadPolylines.isNotEmpty
                                               ? '${_osmRoadPolylines.length} ruas jalan & gang lingkungan'
                                               : '161 ruas jalan & gang lingkungan',
-                                          style: TextStyle(fontSize: 11, color: txtSecondary),
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: txtSecondary,
+                                          ),
                                         ),
                                       ],
                                     ),
@@ -1541,14 +1648,20 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                           // 5. Sungai & Perairan (OSM)
                           InkWell(
                             onTap: () {
-                              setState(() => _showOsmWaterways = !_showOsmWaterways);
-                              if (_showOsmWaterways && _osmWaterPolylines.isEmpty) {
+                              setState(
+                                () => _showOsmWaterways = !_showOsmWaterways,
+                              );
+                              if (_showOsmWaterways &&
+                                  _osmWaterPolylines.isEmpty) {
                                 _loadOsmWaterways();
                               }
                               setSheetState(() {});
                             },
                             child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 8,
+                              ),
                               child: Row(
                                 children: [
                                   Icon(
@@ -1556,12 +1669,15 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                                         ? Icons.check_box_rounded
                                         : Icons.check_box_outline_blank_rounded,
                                     size: 20,
-                                    color: _showOsmWaterways ? const Color(0xFF2980B9) : Colors.grey,
+                                    color: _showOsmWaterways
+                                        ? const Color(0xFF2980B9)
+                                        : Colors.grey,
                                   ),
                                   const SizedBox(width: 12),
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         Text(
                                           'Sungai & Perairan (OSM)',
@@ -1573,7 +1689,10 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                                         ),
                                         Text(
                                           'Sungai Cibalagung, Citarum & Waduk Cirata',
-                                          style: TextStyle(fontSize: 11, color: txtSecondary),
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: txtSecondary,
+                                          ),
                                         ),
                                       ],
                                     ),
@@ -1593,11 +1712,16 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                         height: 40,
                         child: ElevatedButton.icon(
                           icon: const Icon(Icons.check_rounded, size: 18),
-                          label: const Text('Tutup Panel Layer', style: TextStyle(fontWeight: FontWeight.bold)),
+                          label: const Text(
+                            'Tutup Panel Layer',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF2C3E50),
                             foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
                           ),
                           onPressed: () => Navigator.of(ctx).pop(),
                         ),
@@ -1618,8 +1742,9 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final desaName = activeDesaName.isNotEmpty ? activeDesaName : 'BOBOJONG';
-    final kecName =
-        activeKecamatanName.isNotEmpty ? activeKecamatanName : 'MANDE';
+    final kecName = activeKecamatanName.isNotEmpty
+        ? activeKecamatanName
+        : 'MANDE';
 
     // Filter dots sesuai blok dan status
     final filteredDots = _visibleDots.where((dot) {
@@ -1629,7 +1754,9 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
     }).toList();
 
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF0F141C) : const Color(0xFFE2E8F0),
+      backgroundColor: isDark
+          ? const Color(0xFF0F141C)
+          : const Color(0xFFE2E8F0),
       appBar: AppBar(
         title: _isSearching
             ? TextField(
@@ -1644,21 +1771,18 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                 onChanged: (query) {
                   if (query.trim().isEmpty) return;
                   final q = query.trim().toLowerCase();
-                  final match = _visibleDots.cast<MapTaxDot?>().firstWhere(
-                    (d) {
-                      if (d == null) return false;
-                      if (d.namaWajibPajak.toLowerCase().contains(q) ||
-                          d.nop.toLowerCase().contains(q)) {
-                        return true;
-                      }
-                      return d.spptList.any(
-                        (r) =>
-                            r.nop.toLowerCase().contains(q) ||
-                            r.namaWajibPajak.toLowerCase().contains(q),
-                      );
-                    },
-                    orElse: () => null,
-                  );
+                  final match = _visibleDots.cast<MapTaxDot?>().firstWhere((d) {
+                    if (d == null) return false;
+                    if (d.namaWajibPajak.toLowerCase().contains(q) ||
+                        d.nop.toLowerCase().contains(q)) {
+                      return true;
+                    }
+                    return d.spptList.any(
+                      (r) =>
+                          r.nop.toLowerCase().contains(q) ||
+                          r.namaWajibPajak.toLowerCase().contains(q),
+                    );
+                  }, orElse: () => null);
                   if (match != null) {
                     _selectDot(match);
                   }
@@ -1669,25 +1793,34 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.satellite_alt_rounded,
-                          size: 18, color: Color(0xFFF1C40F)),
+                      const Icon(
+                        Icons.satellite_alt_rounded,
+                        size: 18,
+                        color: Color(0xFFF1C40F),
+                      ),
                       const SizedBox(width: 6),
                       Text(
                         (_zones.isNotEmpty || _allDots.isNotEmpty) &&
                                 _selectedDusun != null
                             ? 'Peta Objek Pajak: Dusun $_selectedDusun'
                             : ((_zones.isEmpty && _allDots.isEmpty)
-                                ? 'Peta Wilayah'
-                                : 'Peta Objek Pajak'),
+                                  ? 'Peta Wilayah'
+                                  : 'Peta Objek Pajak'),
                         style: const TextStyle(
-                            fontSize: 16, fontWeight: FontWeight.bold),
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                       const SizedBox(width: 8),
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 1.5),
+                          horizontal: 6,
+                          vertical: 1.5,
+                        ),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFE67E22).withValues(alpha: 0.22),
+                          color: const Color(
+                            0xFFE67E22,
+                          ).withValues(alpha: 0.22),
                           borderRadius: BorderRadius.circular(4),
                           border: Border.all(
                             color: const Color(0xFFE67E22),
@@ -1778,8 +1911,11 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                   value: 'clear_pins',
                   child: Row(
                     children: [
-                      Icon(Icons.delete_sweep_outlined,
-                          size: 18, color: Colors.red),
+                      Icon(
+                        Icons.delete_sweep_outlined,
+                        size: 18,
+                        color: Colors.red,
+                      ),
                       SizedBox(width: 10),
                       Text(
                         'Hapus Semua Pin Peta',
@@ -1834,8 +1970,9 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                           (n) => Polygon(
                             points: n.polygon,
                             color: Colors.white.withValues(alpha: 0.65),
-                            borderColor:
-                                Colors.blueGrey.withValues(alpha: 0.45),
+                            borderColor: Colors.blueGrey.withValues(
+                              alpha: 0.45,
+                            ),
                             borderStrokeWidth: 1.2,
                           ),
                         )
@@ -1854,13 +1991,16 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                             child: Center(
                               child: Container(
                                 padding: const EdgeInsets.symmetric(
-                                    horizontal: 6, vertical: 2),
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
                                 decoration: BoxDecoration(
                                   color: Colors.white.withValues(alpha: 0.90),
                                   borderRadius: BorderRadius.circular(6),
                                   border: Border.all(
-                                    color:
-                                        Colors.blueGrey.withValues(alpha: 0.35),
+                                    color: Colors.blueGrey.withValues(
+                                      alpha: 0.35,
+                                    ),
                                     width: 0.8,
                                   ),
                                   boxShadow: const [
@@ -1884,7 +2024,8 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                     ),
-                                    if (n.kecamatan != null && n.kecamatan!.isNotEmpty)
+                                    if (n.kecamatan != null &&
+                                        n.kecamatan!.isNotEmpty)
                                       Text(
                                         'Kec. ${n.kecamatan}',
                                         style: TextStyle(
@@ -1906,21 +2047,15 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
 
                 // 1.4 Layer Bangunan & Rumah Warga Desa Bobojong (OpenStreetMap)
                 if (_showOsmBuildings && _osmBuildingPolygons.isNotEmpty)
-                  PolygonLayer(
-                    polygons: _osmBuildingPolygons,
-                  ),
+                  PolygonLayer(polygons: _osmBuildingPolygons),
 
                 // 1.5 Layer Sungai & Perairan (OpenStreetMap)
                 if (_showOsmWaterways && _osmWaterPolylines.isNotEmpty)
-                  PolylineLayer(
-                    polylines: _osmWaterPolylines,
-                  ),
+                  PolylineLayer(polylines: _osmWaterPolylines),
 
                 // 1.6 Layer Jalan & Gang Desa (OpenStreetMap)
                 if (_showOsmRoads && _osmRoadPolylines.isNotEmpty)
-                  PolylineLayer(
-                    polylines: _osmRoadPolylines,
-                  ),
+                  PolylineLayer(polylines: _osmRoadPolylines),
 
                 // 1.7 Garis Batas Wilayah Resmi Desa Bobojong (BIG)
                 if (_showDesaBoundary && _desaBoundaryPoints.isNotEmpty)
@@ -1928,16 +2063,16 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                     polylines: [
                       Polyline(
                         points: _desaBoundaryPoints,
-                        color: const Color(0xFFE74C3C), // Merah Elegan Batas Resmi
+                        color: const Color(
+                          0xFFE74C3C,
+                        ), // Merah Elegan Batas Resmi
                         strokeWidth: 2.8,
                         borderColor: Colors.white,
                         borderStrokeWidth: 1.2,
-                        pattern:
-                            StrokePattern.dashed(segments: const [10, 5]),
+                        pattern: StrokePattern.dashed(segments: const [10, 5]),
                       ),
                     ],
                   ),
-
 
                 // 1.3 Garis Trajektori ke Rumah Pemilik (jika terpisah)
                 if (_selectedDot != null &&
@@ -1968,12 +2103,16 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                           children: [
                             Container(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 6, vertical: 2),
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
                               decoration: BoxDecoration(
                                 color: const Color(0xE6000000),
                                 borderRadius: BorderRadius.circular(6),
                                 border: Border.all(
-                                    color: const Color(0xFFF59E0B), width: 1),
+                                  color: const Color(0xFFF59E0B),
+                                  width: 1,
+                                ),
                               ),
                               child: Text(
                                 '🏠 ${_selectedDot!.namaWajibPajak}',
@@ -1986,8 +2125,11 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
-                            const Icon(Icons.location_on_rounded,
-                                color: Color(0xFFF59E0B), size: 22),
+                            const Icon(
+                              Icons.location_on_rounded,
+                              color: Color(0xFFF59E0B),
+                              size: 22,
+                            ),
                           ],
                         ),
                       ),
@@ -2001,102 +2143,108 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                       // Landmark Presisi: Kantor Desa
                       Marker(
                         point: _effectiveKantorDesa!,
-                      width: 170,
-                      height: 95,
-                      child: GestureDetector(
-                        onTap: _focusKantorDesa,
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 3),
-                              decoration: BoxDecoration(
-                                color: const Color(0xE61E293B),
-                                borderRadius: BorderRadius.circular(6),
-                                border: Border.all(
-                                    color: const Color(0xFFF1C40F), width: 1.2),
-                                boxShadow: const [
-                                  BoxShadow(
-                                    color: Colors.black45,
-                                    blurRadius: 4,
-                                    offset: Offset(0, 1),
+                        width: 170,
+                        height: 95,
+                        child: GestureDetector(
+                          onTap: _focusKantorDesa,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 3,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xE61E293B),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(
+                                    color: const Color(0xFFF1C40F),
+                                    width: 1.2,
                                   ),
-                                ],
-                              ),
-                              child: Text(
-                                '🏛️ Kantor Desa $activeDesaName',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
+                                  boxShadow: const [
+                                    BoxShadow(
+                                      color: Colors.black45,
+                                      blurRadius: 4,
+                                      offset: Offset(0, 1),
+                                    ),
+                                  ],
+                                ),
+                                child: Text(
+                                  '🏛️ Kantor Desa $activeDesaName',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
                               ),
-                            ),
-                            const SizedBox(height: 3),
-                            AnimatedBuilder(
-                              animation: _pulseController,
-                              builder: (context, _) {
-                                final pulse = _pulseController.value;
-                                return SizedBox(
-                                  width: 44,
-                                  height: 44,
-                                  child: Stack(
-                                    alignment: Alignment.center,
-                                    children: [
-                                      // Lingkaran gelombang radar (pulse wave ripple ala Google Maps GPS)
-                                      Container(
-                                        width: 22 + (pulse * 20),
-                                        height: 22 + (pulse * 20),
-                                        decoration: BoxDecoration(
-                                          shape: BoxShape.circle,
-                                          color: const Color(0xFFF1C40F)
-                                              .withValues(
-                                                  alpha: 0.35 * (1.0 - pulse)),
-                                          border: Border.all(
+                              const SizedBox(height: 3),
+                              AnimatedBuilder(
+                                animation: _pulseController,
+                                builder: (context, _) {
+                                  final pulse = _pulseController.value;
+                                  return SizedBox(
+                                    width: 44,
+                                    height: 44,
+                                    child: Stack(
+                                      alignment: Alignment.center,
+                                      children: [
+                                        // Lingkaran gelombang radar (pulse wave ripple ala Google Maps GPS)
+                                        Container(
+                                          width: 22 + (pulse * 20),
+                                          height: 22 + (pulse * 20),
+                                          decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
                                             color: const Color(0xFFF1C40F)
                                                 .withValues(
-                                                    alpha: 0.70 * (1.0 - pulse)),
-                                            width: 1.5,
-                                          ),
-                                        ),
-                                      ),
-                                      // Lingkaran tengah ikon instansi pemerintahan
-                                      Container(
-                                        width: 28,
-                                        height: 28,
-                                        decoration: BoxDecoration(
-                                          shape: BoxShape.circle,
-                                          color: const Color(0xFF2C3E50),
-                                          border: Border.all(
-                                            color: const Color(0xFFF1C40F),
-                                            width: 2.0,
-                                          ),
-                                          boxShadow: const [
-                                            BoxShadow(
-                                              color: Colors.black45,
-                                              blurRadius: 4,
-                                              offset: Offset(0, 2),
+                                                  alpha: 0.35 * (1.0 - pulse),
+                                                ),
+                                            border: Border.all(
+                                              color: const Color(0xFFF1C40F)
+                                                  .withValues(
+                                                    alpha: 0.70 * (1.0 - pulse),
+                                                  ),
+                                              width: 1.5,
                                             ),
-                                          ],
-                                        ),
-                                        child: const Center(
-                                          child: Icon(
-                                            Icons.account_balance_rounded,
-                                            color: Color(0xFFF1C40F),
-                                            size: 15,
                                           ),
                                         ),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              },
-                            ),
-                          ],
+                                        // Lingkaran tengah ikon instansi pemerintahan
+                                        Container(
+                                          width: 28,
+                                          height: 28,
+                                          decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            color: const Color(0xFF2C3E50),
+                                            border: Border.all(
+                                              color: const Color(0xFFF1C40F),
+                                              width: 2.0,
+                                            ),
+                                            boxShadow: const [
+                                              BoxShadow(
+                                                color: Colors.black45,
+                                                blurRadius: 4,
+                                                offset: Offset(0, 2),
+                                              ),
+                                            ],
+                                          ),
+                                          child: const Center(
+                                            child: Icon(
+                                              Icons.account_balance_rounded,
+                                              color: Color(0xFFF1C40F),
+                                              size: 15,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                    ),
                     ],
                   ),
 
@@ -2104,110 +2252,114 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                 MarkerLayer(
                   markers: [
                     ...filteredDots.map((dot) {
-                    final isSelected = _selectedDot?.id == dot.id;
-                    final dotColor = dot.status.color;
-                    final size = isSelected ? 34.0 : 26.0;
-                    final nopCount = dot.spptList.length;
+                      final isSelected = _selectedDot?.id == dot.id;
+                      final dotColor = dot.status.color;
+                      final size = isSelected ? 34.0 : 26.0;
+                      final nopCount = dot.spptList.length;
 
-                    return Marker(
-                      point: dot.coordinate.toLatLng(),
-                      width: size,
-                      height: size,
-                      child: GestureDetector(
-                        key: ValueKey('map_dot_${dot.id}'),
-                        onTap: () {
-                          if (_isPinPlacementMode) {
-                            _pinAtCoordinate(
-                              dot.coordinate.toLatLng(),
-                              source: 'manual',
-                            );
-                            return;
-                          }
-                          _selectDot(dot);
-                        },
-                        child: Stack(
-                          clipBehavior: Clip.none,
-                          children: [
-                            AnimatedBuilder(
-                              animation: _pulseController,
-                              builder: (context, _) {
-                                final pulse =
-                                    isSelected ? _pulseController.value : 0.0;
-                                return Container(
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: dotColor,
-                                    border: Border.all(
-                                      color: isSelected
-                                          ? const Color(0xFFF1C40F)
-                                          : Colors.white,
-                                      width: isSelected ? 2.5 : 1.5,
-                                    ),
-                                    boxShadow: [
-                                      BoxShadow(
+                      return Marker(
+                        point: dot.coordinate.toLatLng(),
+                        width: size,
+                        height: size,
+                        child: GestureDetector(
+                          key: ValueKey('map_dot_${dot.id}'),
+                          onTap: () {
+                            if (_isPinPlacementMode) {
+                              _pinAtCoordinate(
+                                dot.coordinate.toLatLng(),
+                                source: 'manual',
+                              );
+                              return;
+                            }
+                            _selectDot(dot);
+                          },
+                          child: Stack(
+                            clipBehavior: Clip.none,
+                            children: [
+                              AnimatedBuilder(
+                                animation: _pulseController,
+                                builder: (context, _) {
+                                  final pulse = isSelected
+                                      ? _pulseController.value
+                                      : 0.0;
+                                  return Container(
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: dotColor,
+                                      border: Border.all(
                                         color: isSelected
                                             ? const Color(0xFFF1C40F)
-                                                .withValues(
-                                                    alpha: 0.6 + pulse * 0.3)
-                                            : dotColor.withValues(alpha: 0.5),
-                                        blurRadius: isSelected ? 12 : 5,
-                                        spreadRadius: isSelected ? 3 : 1,
+                                            : Colors.white,
+                                        width: isSelected ? 2.5 : 1.5,
                                       ),
-                                    ],
-                                  ),
-                                  alignment: Alignment.center,
-                                  child: dot.status == MapDotStatus.fasum
-                                      ? const Icon(
-                                          Icons.account_balance_rounded,
-                                          size: 12,
-                                          color: Colors.white,
-                                        )
-                                      : Text(
-                                          dot.nomorUrut.length >= 2
-                                              ? dot.nomorUrut.substring(
-                                                  dot.nomorUrut.length - 2)
-                                              : dot.nomorUrut,
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 9,
-                                            fontWeight: FontWeight.w900,
-                                          ),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: isSelected
+                                              ? const Color(
+                                                  0xFFF1C40F,
+                                                ).withValues(
+                                                  alpha: 0.6 + pulse * 0.3,
+                                                )
+                                              : dotColor.withValues(alpha: 0.5),
+                                          blurRadius: isSelected ? 12 : 5,
+                                          spreadRadius: isSelected ? 3 : 1,
                                         ),
-                                );
-                              },
-                            ),
-                            if (nopCount > 1)
-                              Positioned(
-                                right: -6,
-                                top: -6,
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 4,
-                                    vertical: 1,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF0F766E),
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(
-                                      color: Colors.white,
-                                      width: 1,
+                                      ],
                                     ),
-                                  ),
-                                  child: Text(
-                                    '$nopCount',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 8.5,
-                                      fontWeight: FontWeight.w900,
+                                    alignment: Alignment.center,
+                                    child: dot.status == MapDotStatus.fasum
+                                        ? const Icon(
+                                            Icons.account_balance_rounded,
+                                            size: 12,
+                                            color: Colors.white,
+                                          )
+                                        : Text(
+                                            dot.nomorUrut.length >= 2
+                                                ? dot.nomorUrut.substring(
+                                                    dot.nomorUrut.length - 2,
+                                                  )
+                                                : dot.nomorUrut,
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 9,
+                                              fontWeight: FontWeight.w900,
+                                            ),
+                                          ),
+                                  );
+                                },
+                              ),
+                              if (nopCount > 1)
+                                Positioned(
+                                  right: -6,
+                                  top: -6,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 4,
+                                      vertical: 1,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF0F766E),
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                        color: Colors.white,
+                                        width: 1,
+                                      ),
+                                    ),
+                                    child: Text(
+                                      '$nopCount',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 8.5,
+                                        fontWeight: FontWeight.w900,
+                                      ),
                                     ),
                                   ),
                                 ),
-                              ),
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
-                    );
-                  }),
+                      );
+                    }),
                     if (_currentGpsLocation != null)
                       Marker(
                         point: LatLng(
@@ -2262,8 +2414,8 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                           size: 38,
                         ),
                       ),
-                ],
-              ),
+                  ],
+                ),
               ],
             ),
           ),
@@ -2275,7 +2427,10 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
             right: 12,
             child: (_allDots.isEmpty && _zones.isEmpty)
                 ? Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 10,
+                    ),
                     decoration: BoxDecoration(
                       color: isDark
                           ? const Color(0xE61A2232)
@@ -2326,8 +2481,14 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                         const SizedBox(width: 8),
                         FilledButton.tonalIcon(
                           onPressed: _pickKmlFile,
-                          icon: const Icon(Icons.file_upload_outlined, size: 16),
-                          label: const Text('Unggah KML', style: TextStyle(fontSize: 11)),
+                          icon: const Icon(
+                            Icons.file_upload_outlined,
+                            size: 16,
+                          ),
+                          label: const Text(
+                            'Unggah KML',
+                            style: TextStyle(fontSize: 11),
+                          ),
                         ),
                       ],
                     ),
@@ -2337,14 +2498,19 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                     children: [
                       // Selector Dusun
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
                         decoration: BoxDecoration(
                           color: isDark
                               ? const Color(0xE61A2232)
                               : Colors.white.withValues(alpha: 0.94),
                           borderRadius: BorderRadius.circular(14),
                           border: Border.all(
-                            color: const Color(0xFFF1C40F).withValues(alpha: 0.4),
+                            color: const Color(
+                              0xFFF1C40F,
+                            ).withValues(alpha: 0.4),
                           ),
                           boxShadow: const [
                             BoxShadow(
@@ -2392,35 +2558,51 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                                           fontWeight: _selectedDusun == null
                                               ? FontWeight.bold
                                               : FontWeight.normal,
-                                          color: _selectedDusun == null ? Colors.black : null,
+                                          color: _selectedDusun == null
+                                              ? Colors.black
+                                              : null,
                                         ),
                                       ),
                                     ),
                                     ...() {
-                                      final currentDusuns = DusunData.instance.currentDusuns;
+                                      final currentDusuns =
+                                          DusunData.instance.currentDusuns;
                                       if (currentDusuns.isNotEmpty) {
                                         return currentDusuns.map((d) {
                                           final dNum = d.number;
-                                          final aliasName = d.alias ?? (d.name.startsWith('Dusun ') ? d.name.substring(6) : d.name);
-                                          final label = aliasName.isNotEmpty && aliasName != '$dNum'
+                                          final aliasName =
+                                              d.alias ??
+                                              (d.name.startsWith('Dusun ')
+                                                  ? d.name.substring(6)
+                                                  : d.name);
+                                          final label =
+                                              aliasName.isNotEmpty &&
+                                                  aliasName != '$dNum'
                                               ? 'Dusun $dNum ($aliasName)'
                                               : 'Dusun $dNum';
-                                          final isCurrent = _selectedDusun == dNum;
+                                          final isCurrent =
+                                              _selectedDusun == dNum;
                                           return Padding(
-                                            padding: const EdgeInsets.only(right: 6),
+                                            padding: const EdgeInsets.only(
+                                              right: 6,
+                                            ),
                                             child: ChoiceChip(
                                               label: Text(label),
                                               selected: isCurrent,
                                               onSelected: (val) {
                                                 if (val) _selectDusun(dNum);
                                               },
-                                              selectedColor: const Color(0xFFF1C40F),
+                                              selectedColor: const Color(
+                                                0xFFF1C40F,
+                                              ),
                                               labelStyle: TextStyle(
                                                 fontSize: 11,
                                                 fontWeight: isCurrent
                                                     ? FontWeight.bold
                                                     : FontWeight.normal,
-                                                color: isCurrent ? Colors.black : null,
+                                                color: isCurrent
+                                                    ? Colors.black
+                                                    : null,
                                               ),
                                             ),
                                           );
@@ -2429,55 +2611,75 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                                       if (_zones.isNotEmpty) {
                                         return _zones.map((z) {
                                           final dNum = z.dusunNumber;
-                                          final aliasName = z.name.startsWith('Dusun ') ? z.name.substring(6) : z.name;
-                                          final label = aliasName.isNotEmpty && aliasName != '$dNum'
+                                          final aliasName =
+                                              z.name.startsWith('Dusun ')
+                                              ? z.name.substring(6)
+                                              : z.name;
+                                          final label =
+                                              aliasName.isNotEmpty &&
+                                                  aliasName != '$dNum'
                                               ? 'Dusun $dNum ($aliasName)'
                                               : 'Dusun $dNum';
-                                          final isCurrent = _selectedDusun == dNum;
+                                          final isCurrent =
+                                              _selectedDusun == dNum;
                                           return Padding(
-                                            padding: const EdgeInsets.only(right: 6),
+                                            padding: const EdgeInsets.only(
+                                              right: 6,
+                                            ),
                                             child: ChoiceChip(
                                               label: Text(label),
                                               selected: isCurrent,
                                               onSelected: (val) {
                                                 if (val) _selectDusun(dNum);
                                               },
-                                              selectedColor: const Color(0xFFF1C40F),
+                                              selectedColor: const Color(
+                                                0xFFF1C40F,
+                                              ),
                                               labelStyle: TextStyle(
                                                 fontSize: 11,
                                                 fontWeight: isCurrent
                                                     ? FontWeight.bold
                                                     : FontWeight.normal,
-                                                color: isCurrent ? Colors.black : null,
+                                                color: isCurrent
+                                                    ? Colors.black
+                                                    : null,
                                               ),
                                             ),
                                           );
                                         }).toList();
                                       }
-                                      final dotDusunNums = _allDots
-                                          .map((d) => d.dusunNumber)
-                                          .where((n) => n > 0)
-                                          .toSet()
-                                          .toList()
-                                        ..sort();
+                                      final dotDusunNums =
+                                          _allDots
+                                              .map((d) => d.dusunNumber)
+                                              .where((n) => n > 0)
+                                              .toSet()
+                                              .toList()
+                                            ..sort();
                                       if (dotDusunNums.isNotEmpty) {
                                         return dotDusunNums.map((dNum) {
-                                          final isCurrent = _selectedDusun == dNum;
+                                          final isCurrent =
+                                              _selectedDusun == dNum;
                                           return Padding(
-                                            padding: const EdgeInsets.only(right: 6),
+                                            padding: const EdgeInsets.only(
+                                              right: 6,
+                                            ),
                                             child: ChoiceChip(
                                               label: Text('Dusun $dNum'),
                                               selected: isCurrent,
                                               onSelected: (val) {
                                                 if (val) _selectDusun(dNum);
                                               },
-                                              selectedColor: const Color(0xFFF1C40F),
+                                              selectedColor: const Color(
+                                                0xFFF1C40F,
+                                              ),
                                               labelStyle: TextStyle(
                                                 fontSize: 11,
                                                 fontWeight: isCurrent
                                                     ? FontWeight.bold
                                                     : FontWeight.normal,
-                                                color: isCurrent ? Colors.black : null,
+                                                color: isCurrent
+                                                    ? Colors.black
+                                                    : null,
                                               ),
                                             ),
                                           );
@@ -2512,7 +2714,8 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                                 child: FilterChip(
                                   label: Text('Blok $b'),
                                   selected: isSel,
-                                  onSelected: (val) => _selectBlok(val ? b : null),
+                                  onSelected: (val) =>
+                                      _selectBlok(val ? b : null),
                                 ),
                               );
                             }),
@@ -2531,14 +2734,16 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                   ? (_selectedDot!.spptList.length > 1 ? 310 : 250)
                   : (_allDots.isNotEmpty ? 54 : 16),
               child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: _isPinPlacementMode
                       ? const Color(0xEE0F766E)
                       : (isDark
-                          ? const Color(0xEE1E293B)
-                          : Colors.white.withValues(alpha: 0.96)),
+                            ? const Color(0xEE1E293B)
+                            : Colors.white.withValues(alpha: 0.96)),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
                     color: _isPinPlacementMode
@@ -2635,8 +2840,8 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                   backgroundColor: _currentGpsLocation != null
                       ? Colors.blue.shade700
                       : (isDark
-                          ? const Color(0xEE1A2234)
-                          : Colors.white.withValues(alpha: 0.94)),
+                            ? const Color(0xEE1A2234)
+                            : Colors.white.withValues(alpha: 0.94)),
                   tooltip: 'Gunakan Koordinat GPS Sekarang',
                   onPressed: _isFetchingGps ? null : _activateGpsLocation,
                   child: _isFetchingGps
@@ -2659,8 +2864,8 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                   backgroundColor: _isPinPlacementMode
                       ? const Color(0xFF0F766E)
                       : (isDark
-                          ? const Color(0xEE1A2234)
-                          : Colors.white.withValues(alpha: 0.94)),
+                            ? const Color(0xEE1A2234)
+                            : Colors.white.withValues(alpha: 0.94)),
                   tooltip: _isPinPlacementMode
                       ? 'Batalkan Mode Pasang Pin'
                       : 'Pasang Pin Manual (Ketuk / Tahan Peta)',
@@ -2691,8 +2896,10 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                         : Colors.white.withValues(alpha: 0.94),
                     tooltip: 'Fokus ke Seluruh Batas Wilayah',
                     onPressed: _fitDesaBounds,
-                    child: const Icon(Icons.crop_free_rounded,
-                        color: Color(0xFFE74C3C)),
+                    child: const Icon(
+                      Icons.crop_free_rounded,
+                      color: Color(0xFFE74C3C),
+                    ),
                   ),
                   const SizedBox(height: 8),
                 ],
@@ -2705,8 +2912,10 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                         : Colors.white.withValues(alpha: 0.94),
                     tooltip: 'Fokuskan ke Kantor Desa',
                     onPressed: _focusKantorDesa,
-                    child: const Icon(Icons.account_balance_rounded,
-                        color: Color(0xFFF1C40F)),
+                    child: const Icon(
+                      Icons.account_balance_rounded,
+                      color: Color(0xFFF1C40F),
+                    ),
                   ),
                   const SizedBox(height: 8),
                 ],
@@ -2718,7 +2927,10 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                   tooltip: 'Perbesar Peta (+)',
                   onPressed: () {
                     final currentZ = _mapController.camera.zoom;
-                    _animatedMapMove(_mapController.camera.center, currentZ + 1);
+                    _animatedMapMove(
+                      _mapController.camera.center,
+                      currentZ + 1,
+                    );
                   },
                   child: const Icon(Icons.add_rounded),
                 ),
@@ -2731,7 +2943,10 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                   tooltip: 'Perkecil Peta (-)',
                   onPressed: () {
                     final currentZ = _mapController.camera.zoom;
-                    _animatedMapMove(_mapController.camera.center, currentZ - 1);
+                    _animatedMapMove(
+                      _mapController.camera.center,
+                      currentZ - 1,
+                    );
                   },
                   child: const Icon(Icons.remove_rounded),
                 ),
@@ -2747,41 +2962,45 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                   ? (_selectedDot!.spptList.length > 1 ? 310 : 250)
                   : 16,
               child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: isDark
-                    ? const Color(0xDD0D131D)
-                    : Colors.white.withValues(alpha: 0.94),
-                borderRadius: BorderRadius.circular(10),
-                border:
-                    Border.all(color: Colors.blueGrey.withValues(alpha: 0.3)),
-                boxShadow: const [
-                  BoxShadow(color: Colors.black26, blurRadius: 6),
-                ],
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'TOTAL: $_countTotal',
-                    style: const TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w900,
-                      color: Colors.blueGrey,
-                    ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? const Color(0xDD0D131D)
+                      : Colors.white.withValues(alpha: 0.94),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: Colors.blueGrey.withValues(alpha: 0.3),
                   ),
-                  const SizedBox(width: 8),
-                  _buildStatusPill(MapDotStatus.lunas, _countLunas),
-                  const SizedBox(width: 8),
-                  _buildStatusPill(MapDotStatus.belumLunas, _countBelum),
-                  const SizedBox(width: 8),
-                  _buildStatusPill(MapDotStatus.sebagian, _countSebagian),
-                  const SizedBox(width: 8),
-                  _buildStatusPill(MapDotStatus.fasum, _countFasum),
-                ],
+                  boxShadow: const [
+                    BoxShadow(color: Colors.black26, blurRadius: 6),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'TOTAL: $_countTotal',
+                      style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.blueGrey,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    _buildStatusPill(MapDotStatus.lunas, _countLunas),
+                    const SizedBox(width: 8),
+                    _buildStatusPill(MapDotStatus.belumLunas, _countBelum),
+                    const SizedBox(width: 8),
+                    _buildStatusPill(MapDotStatus.sebagian, _countSebagian),
+                    const SizedBox(width: 8),
+                    _buildStatusPill(MapDotStatus.fasum, _countFasum),
+                  ],
+                ),
               ),
             ),
-          ),
 
           // 5. Panel Rincian Objek Pajak
           if (_selectedDot != null)
@@ -2812,8 +3031,9 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
               ? status.color.withValues(alpha: 0.25)
               : Colors.transparent,
           borderRadius: BorderRadius.circular(6),
-          border:
-              isSelected ? Border.all(color: status.color, width: 1.2) : null,
+          border: isSelected
+              ? Border.all(color: status.color, width: 1.2)
+              : null,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -3016,8 +3236,10 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
 
               // Relasi Alamat WP
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: isOwnerSame
                       ? Colors.green.withValues(alpha: 0.1)
@@ -3036,8 +3258,7 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                           ? Icons.home_rounded
                           : Icons.landscape_rounded,
                       size: 20,
-                      color:
-                          isOwnerSame ? Colors.green : Colors.amber.shade800,
+                      color: isOwnerSame ? Colors.green : Colors.amber.shade800,
                     ),
                     const SizedBox(width: 8),
                     Expanded(
@@ -3074,8 +3295,10 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                           padding: const EdgeInsets.symmetric(horizontal: 8),
                         ),
                         icon: const Icon(Icons.my_location_rounded, size: 14),
-                        label: const Text('Sorot Pemilik',
-                            style: TextStyle(fontSize: 10)),
+                        label: const Text(
+                          'Sorot Pemilik',
+                          style: TextStyle(fontSize: 10),
+                        ),
                         onPressed: () => _sorotRumahPemilik(dot),
                       ),
                   ],
@@ -3092,7 +3315,10 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                       style: FilledButton.styleFrom(
                         visualDensity: VisualDensity.compact,
                       ),
-                      icon: const Icon(Icons.add_location_alt_rounded, size: 15),
+                      icon: const Icon(
+                        Icons.add_location_alt_rounded,
+                        size: 15,
+                      ),
                       label: const Text(
                         'Tambah NOP di Titik Ini',
                         style: TextStyle(fontSize: 11),

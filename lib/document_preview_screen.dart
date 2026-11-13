@@ -86,10 +86,8 @@ class DocumentPreviewScreen extends StatefulWidget {
     if (!context.mounted) return;
     await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => DocumentPreviewScreen(
-          pdfBytes: pdfBytes,
-          fileName: fileName,
-        ),
+        builder: (_) =>
+            DocumentPreviewScreen(pdfBytes: pdfBytes, fileName: fileName),
       ),
     );
   }
@@ -102,10 +100,9 @@ class DocumentPreviewScreen extends StatefulWidget {
     final doc = sf.PdfDocument(inputBytes: pdfBytes);
     try {
       final pSize = doc.pages[pageIndex].size;
-      final lines = sf.PdfTextExtractor(doc).extractTextLines(
-        startPageIndex: pageIndex,
-        endPageIndex: pageIndex,
-      );
+      final lines = sf.PdfTextExtractor(
+        doc,
+      ).extractTextLines(startPageIndex: pageIndex, endPageIndex: pageIndex);
       return _DocumentPreviewScreenState.buildTightSelectableSpans(
         lines,
         pSize,
@@ -300,8 +297,9 @@ class _DocumentPreviewScreenState extends State<DocumentPreviewScreen>
   final ValueNotifier<double> _scrollFractionNotifier = ValueNotifier<double>(
     0.0,
   );
-  final ValueNotifier<bool> _isDraggingScrollbarNotifier =
-      ValueNotifier<bool>(false);
+  final ValueNotifier<bool> _isDraggingScrollbarNotifier = ValueNotifier<bool>(
+    false,
+  );
   final ValueNotifier<bool> _isZoomedNotifier = ValueNotifier<bool>(false);
   final ValueNotifier<double> _currentZoomScaleNotifier = ValueNotifier<double>(
     1.0,
@@ -327,14 +325,15 @@ class _DocumentPreviewScreenState extends State<DocumentPreviewScreen>
   void initState() {
     super.initState();
     AppSecurityService.instance.enterSandboxedViewer();
-    _zoomAnimController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 220),
-    )..addListener(() {
-        if (_zoomAnimation != null) {
-          _transformationController.value = _zoomAnimation!.value;
-        }
-      });
+    _zoomAnimController =
+        AnimationController(
+          vsync: this,
+          duration: const Duration(milliseconds: 220),
+        )..addListener(() {
+          if (_zoomAnimation != null) {
+            _transformationController.value = _zoomAnimation!.value;
+          }
+        });
     _pageScrollController.addListener(_updateCurrentPageOnScroll);
     _transformationController.addListener(_onTransformationChanged);
     if (widget.pdfBytes != null) {
@@ -444,8 +443,10 @@ class _DocumentPreviewScreenState extends State<DocumentPreviewScreen>
     }
   }
 
-  static List<({String text, Rect normalizedBounds})>
-  buildTightSelectableSpans(List<sf.TextLine> lines, Size pSize) {
+  static List<({String text, Rect normalizedBounds})> buildTightSelectableSpans(
+    List<sf.TextLine> lines,
+    Size pSize,
+  ) {
     final mapped = <({String text, Rect normalizedBounds})>[];
 
     void addNormalizedSpan(String text, Rect bounds) {
@@ -540,12 +541,16 @@ class _DocumentPreviewScreenState extends State<DocumentPreviewScreen>
   }
 
   void _animateMatrixTo(Matrix4 target) {
-    _zoomAnimation = Matrix4Tween(
-      begin: _transformationController.value,
-      end: target,
-    ).animate(
-      CurvedAnimation(parent: _zoomAnimController, curve: Curves.easeOutCubic),
-    );
+    _zoomAnimation =
+        Matrix4Tween(
+          begin: _transformationController.value,
+          end: target,
+        ).animate(
+          CurvedAnimation(
+            parent: _zoomAnimController,
+            curve: Curves.easeOutCubic,
+          ),
+        );
     _zoomAnimController.forward(from: 0);
   }
 
@@ -681,7 +686,9 @@ class _DocumentPreviewScreenState extends State<DocumentPreviewScreen>
     if (_pageScrollController.hasClients) {
       final maxExtent = _pageScrollController.position.maxScrollExtent;
       final pixels = _pageScrollController.position.pixels;
-      final fraction = maxExtent > 0 ? (pixels / maxExtent).clamp(0.0, 1.0) : 0.0;
+      final fraction = maxExtent > 0
+          ? (pixels / maxExtent).clamp(0.0, 1.0)
+          : 0.0;
       _scrollFractionNotifier.value = fraction;
     }
 
@@ -756,40 +763,46 @@ class _DocumentPreviewScreenState extends State<DocumentPreviewScreen>
     final controller = TextEditingController(
       text: '${_currentPageNotifier.value}',
     );
-    final result = await showDialog<int>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Lompat ke Halaman'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          keyboardType: TextInputType.number,
-          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-          decoration: InputDecoration(
-            labelText: 'Nomor Halaman (1 - $total)',
-            hintText: 'Contoh: 1',
-            border: const OutlineInputBorder(),
-          ),
-          onSubmitted: (val) {
-            final p = int.tryParse(val);
-            Navigator.pop(ctx, p);
-          },
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Batal'),
-          ),
-          FilledButton(
-            onPressed: () {
-              final p = int.tryParse(controller.text);
+    int? result;
+    try {
+      result = await showDialog<int>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Lompat ke Halaman'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            decoration: InputDecoration(
+              labelText: 'Nomor Halaman (1 - $total)',
+              hintText: 'Contoh: 1',
+              border: const OutlineInputBorder(),
+            ),
+            onSubmitted: (val) {
+              final p = int.tryParse(val);
               Navigator.pop(ctx, p);
             },
-            child: const Text('Lompat'),
           ),
-        ],
-      ),
-    );
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Batal'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final p = int.tryParse(controller.text);
+                Navigator.pop(ctx, p);
+              },
+              child: const Text('Lompat'),
+            ),
+          ],
+        ),
+      );
+    } finally {
+      controller.dispose();
+    }
+    if (!mounted) return;
     if (result != null && result >= 1 && result <= total) {
       _jumpToPage(result - 1);
     }
@@ -1324,7 +1337,9 @@ class _DocumentPreviewScreenState extends State<DocumentPreviewScreen>
                       scrollViewDecoration: BoxDecoration(
                         color: isDark
                             ? const Color(0xFF16181A)
-                            : const Color(0xFF323639), // Warna kanvas Google PDF Viewer
+                            : const Color(
+                                0xFF323639,
+                              ), // Warna kanvas Google PDF Viewer
                       ),
                       pagesBuilder: (context, pages) {
                         if (_totalPagesNotifier.value != pages.length &&
@@ -1365,7 +1380,8 @@ class _DocumentPreviewScreenState extends State<DocumentPreviewScreen>
                                       ),
                                       child: SingleChildScrollView(
                                         controller: _pageScrollController,
-                                        physics: const DesktopPdfScrollPhysics(),
+                                        physics:
+                                            const DesktopPdfScrollPhysics(),
                                         padding: const EdgeInsets.only(
                                           top: 16,
                                           bottom: 96,
@@ -1373,7 +1389,11 @@ class _DocumentPreviewScreenState extends State<DocumentPreviewScreen>
                                         child: Column(
                                           mainAxisSize: MainAxisSize.min,
                                           children: [
-                                            for (int i = 0; i < pages.length; i++)
+                                            for (
+                                              int i = 0;
+                                              i < pages.length;
+                                              i++
+                                            )
                                               _buildPageItem(pages[i], i),
                                           ],
                                         ),
@@ -1469,7 +1489,9 @@ class _DocumentPreviewScreenState extends State<DocumentPreviewScreen>
                   ),
 
                 // Bilah Kontrol Melayang Bawah ala Google PDF Viewer / Camelot
-                if (_loadedBytes != null && _errorMessage == null && !_isLoading)
+                if (_loadedBytes != null &&
+                    _errorMessage == null &&
+                    !_isLoading)
                   _buildGooglePdfBottomDock(context),
 
                 // Tombol keluar dari mode layar penuh mengambang saat fullscreen aktif
@@ -1738,10 +1760,7 @@ class _DocumentPreviewScreenState extends State<DocumentPreviewScreen>
                       );
                     },
                   ),
-                  const SizedBox(
-                    height: 20,
-                    child: VerticalDivider(width: 12),
-                  ),
+                  const SizedBox(height: 20, child: VerticalDivider(width: 12)),
                   IconButton(
                     visualDensity: VisualDensity.compact,
                     icon: const Icon(Icons.remove_circle_outline, size: 19),

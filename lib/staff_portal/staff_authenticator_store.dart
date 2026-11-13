@@ -19,7 +19,7 @@ class StaffAuthenticatorStore extends BasePreferencesStore {
 
   /// Mengambil Secret Key Base32 yang tersimpan secara terenkripsi.
   Future<String?> getSecret() async {
-    final secret = await readSecureWithFallback(_keySecret);
+    final secret = await readSecureWithMigration(_keySecret);
     if (secret == null || secret.trim().isEmpty) return null;
     return TotpHelper.sanitizeBase32(secret);
   }
@@ -56,7 +56,7 @@ class StaffAuthenticatorStore extends BasePreferencesStore {
     if (!TotpHelper.isValidBase32(cleaned)) {
       throw const FormatException('Secret key bukan format Base32 yang valid.');
     }
-    await writeSecureWithFallback(_keySecret, cleaned);
+    await writeSecureOnly(_keySecret, cleaned);
     if (accountName != null && accountName.isNotEmpty) {
       await setString(_keyAccountName, accountName);
     }
@@ -67,7 +67,7 @@ class StaffAuthenticatorStore extends BasePreferencesStore {
 
   /// Menghapus Secret Key dan seluruh metadata Authenticator terkait.
   Future<void> clearSecret() async {
-    await deleteSecureWithFallback(_keySecret);
+    await deleteSecureOnly(_keySecret);
     await remove(_keyAccountName);
     await remove(_keyIssuer);
   }

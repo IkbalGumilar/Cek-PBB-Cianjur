@@ -21,7 +21,8 @@ class AppPermissionsStatus {
     required this.locationGranted,
   });
 
-  bool get allGranted => notificationGranted && storageGranted && locationGranted;
+  bool get allGranted =>
+      notificationGranted && storageGranted && locationGranted;
 }
 
 /// Hasil deteksi lokasi wilayah kerja (Kecamatan & Desa di Kabupaten Cianjur).
@@ -114,7 +115,8 @@ class LocationService {
       notifOk = status.isGranted;
     } catch (e) {
       debugPrint('Permission notification request error: $e');
-      notifOk = true; // Anggap diizinkan pada platform desktop jika tidak didukung
+      notifOk =
+          true; // Anggap diizinkan pada platform desktop jika tidak didukung
     }
 
     // 2. Izin Penyimpanan
@@ -138,7 +140,8 @@ class LocationService {
         if (locPerm == LocationPermission.denied) {
           locPerm = await Geolocator.requestPermission();
         }
-        locationOk = locPerm == LocationPermission.whileInUse ||
+        locationOk =
+            locPerm == LocationPermission.whileInUse ||
             locPerm == LocationPermission.always;
       } catch (e) {
         debugPrint('Geolocator permission request error: $e');
@@ -171,7 +174,8 @@ class LocationService {
 
     try {
       if (Platform.isAndroid) {
-        storageOk = await Permission.storage.isGranted ||
+        storageOk =
+            await Permission.storage.isGranted ||
             await Permission.photos.isGranted;
       } else {
         storageOk = true;
@@ -183,7 +187,8 @@ class LocationService {
     if (Platform.isAndroid || Platform.isIOS) {
       try {
         final locPerm = await Geolocator.checkPermission();
-        locationOk = locPerm == LocationPermission.whileInUse ||
+        locationOk =
+            locPerm == LocationPermission.whileInUse ||
             locPerm == LocationPermission.always;
       } catch (_) {
         locationOk = false;
@@ -217,22 +222,6 @@ class LocationService {
   Future<({double lat, double lng})?> _fetchIpFallbackLocation() async {
     try {
       final ipRes = await http
-          .get(Uri.parse('http://ip-api.com/json'))
-          .timeout(const Duration(seconds: 4));
-      if (ipRes.statusCode == 200) {
-        final data = jsonDecode(ipRes.body) as Map<String, dynamic>;
-        if (data['status'] == 'success') {
-          final lat = (data['lat'] as num?)?.toDouble();
-          final lng = (data['lon'] as num?)?.toDouble();
-          if (lat != null && lng != null) return (lat: lat, lng: lng);
-        }
-      }
-    } catch (e) {
-      debugPrint('Fallback ip-api error: $e');
-    }
-
-    try {
-      final ipRes = await http
           .get(Uri.parse('https://ipwho.is/'))
           .timeout(const Duration(seconds: 4));
       if (ipRes.statusCode == 200) {
@@ -245,6 +234,20 @@ class LocationService {
       }
     } catch (e) {
       debugPrint('Fallback ipwho.is error: $e');
+    }
+
+    try {
+      final ipRes = await http
+          .get(Uri.parse('https://ipapi.co/json/'))
+          .timeout(const Duration(seconds: 4));
+      if (ipRes.statusCode == 200) {
+        final data = jsonDecode(ipRes.body) as Map<String, dynamic>;
+        final lat = (data['latitude'] as num?)?.toDouble();
+        final lng = (data['longitude'] as num?)?.toDouble();
+        if (lat != null && lng != null) return (lat: lat, lng: lng);
+      }
+    } catch (e) {
+      debugPrint('Fallback ipapi.co error: $e');
     }
     return null;
   }
@@ -329,7 +332,9 @@ class LocationService {
           ? 'GPS Perangkat'
           : 'Sensor / OS Location';
     } catch (e) {
-      debugPrint('Geolocator GPS tidak tersedia/timeout: $e. Menggunakan IP Geolocation...');
+      debugPrint(
+        'Geolocator GPS tidak tersedia/timeout: $e. Menggunakan IP Geolocation...',
+      );
     }
 
     // 3. Fallback IP Geolocation jika GPS tidak tersedia (misal di PC Linux/Windows tanpa sensor GPS)
@@ -354,20 +359,24 @@ class LocationService {
       final osmUrl = Uri.parse(
         'https://nominatim.openstreetmap.org/reverse?format=json&lat=$lat&lon=$lng&zoom=14&addressdetails=1',
       );
-      final res = await http.get(
-        osmUrl,
-        headers: {'User-Agent': 'CekPBBApp/1.0 (id.cianjur.pbb)'},
-      ).timeout(const Duration(seconds: 4));
+      final res = await http
+          .get(
+            osmUrl,
+            headers: {'User-Agent': 'CekPBBApp/1.0 (id.cianjur.pbb)'},
+          )
+          .timeout(const Duration(seconds: 4));
 
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body) as Map<String, dynamic>;
         final address = data['address'] as Map<String, dynamic>? ?? {};
 
-        final village = address['village']?.toString() ??
+        final village =
+            address['village']?.toString() ??
             address['suburb']?.toString() ??
             address['neighbourhood']?.toString() ??
             address['hamlet']?.toString();
-        final district = address['city_district']?.toString() ??
+        final district =
+            address['city_district']?.toString() ??
             address['subdistrict']?.toString() ??
             address['municipality']?.toString();
 
@@ -389,7 +398,8 @@ class LocationService {
     // A. Cocokkan nama Kecamatan jika terdeteksi dari reverse geocoding
     if (matchedKecName != null) {
       for (final kec in cianjurWilayahCatalog) {
-        if (matchedKecName.contains(kec.name) || kec.name.contains(matchedKecName)) {
+        if (matchedKecName.contains(kec.name) ||
+            kec.name.contains(matchedKecName)) {
           targetKec = kec;
           break;
         }
@@ -400,10 +410,12 @@ class LocationService {
     if (targetKec == null && matchedDesaName != null) {
       final desaName = matchedDesaName;
       for (final kec in cianjurWilayahCatalog) {
-        final hasDesa = kec.desaList.any((d) =>
-            d.name == desaName ||
-            desaName.contains(d.name) ||
-            d.name.contains(desaName));
+        final hasDesa = kec.desaList.any(
+          (d) =>
+              d.name == desaName ||
+              desaName.contains(d.name) ||
+              d.name.contains(desaName),
+        );
         if (hasDesa) {
           targetKec = kec;
           break;
@@ -448,7 +460,9 @@ class LocationService {
         }
       }
       // Jika tidak ada nama desa yang cocok persis, pilih desa pertama di kecamatan
-      targetDesa ??= targetKec.desaList.isNotEmpty ? targetKec.desaList.first : null;
+      targetDesa ??= targetKec.desaList.isNotEmpty
+          ? targetKec.desaList.first
+          : null;
     }
 
     if (targetKec == null || targetDesa == null) {

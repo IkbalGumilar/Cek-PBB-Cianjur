@@ -135,8 +135,9 @@ String expandNop(String rawInput, [String? prefix]) {
   final blokLen = digits.length == 7 ? 3 : 2;
   final blok = digits.substring(0, blokLen).padLeft(3, '0');
   final wilayah = digits.substring(blokLen).padLeft(4, '0');
-  final effPrefix =
-      (prefix != null && prefix.length == 10) ? prefix : nopPrefix;
+  final effPrefix = (prefix != null && prefix.length == 10)
+      ? prefix
+      : nopPrefix;
   return '$effPrefix$blok${wilayah}0';
 }
 
@@ -153,8 +154,9 @@ String buildNop({
   final blokDigits = blok.replaceAll(RegExp(r'[^0-9]'), '');
   final wilayahDigits = wilayah.replaceAll(RegExp(r'[^0-9]'), '');
   if (blokDigits.isEmpty || wilayahDigits.isEmpty) return '';
-  final effPrefix =
-      (prefix != null && prefix.length == 10) ? prefix : nopPrefix;
+  final effPrefix = (prefix != null && prefix.length == 10)
+      ? prefix
+      : nopPrefix;
   return '$effPrefix${blokDigits.padLeft(3, '0')}${wilayahDigits.padLeft(4, '0')}0';
 }
 
@@ -199,8 +201,7 @@ String formatNop(String nop) {
 
 /// Nama desa bawaan untuk Kecamatan Mande berdasarkan 3 digit kode kelurahan (001-012).
 String lookupMandeKelurahanName(String kelurahanCode) {
-  final clean =
-      kelurahanCode.replaceAll(RegExp(r'[^0-9]'), '').padLeft(3, '0');
+  final clean = kelurahanCode.replaceAll(RegExp(r'[^0-9]'), '').padLeft(3, '0');
   return switch (clean) {
     '001' => 'MEKARJAYA',
     '002' => 'SUKAMANAH',
@@ -220,8 +221,7 @@ String lookupMandeKelurahanName(String kelurahanCode) {
 
 /// Nama kecamatan bawaan untuk Kabupaten Cianjur berdasarkan 3 digit kode kecamatan (misal 200 -> MANDE).
 String lookupKecamatanName(String kecamatanCode) {
-  final clean =
-      kecamatanCode.replaceAll(RegExp(r'[^0-9]'), '').padLeft(3, '0');
+  final clean = kecamatanCode.replaceAll(RegExp(r'[^0-9]'), '').padLeft(3, '0');
   return switch (clean) {
     '200' => 'MANDE',
     _ => 'Kecamatan $clean',

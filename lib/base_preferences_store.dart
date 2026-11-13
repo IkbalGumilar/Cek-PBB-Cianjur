@@ -1,14 +1,39 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+/// Eksepsi khusus ketika operasi pada penyimpanan aman ([FlutterSecureStorage]) gagal.
+class SecureStorageException implements Exception {
+  final String message;
+  final Object? cause;
+
+  const SecureStorageException(this.message, {this.cause});
+
+  @override
+  String toString() => 'SecureStorageException: $message';
+}
 
 /// Kelas dasar abstrak (inheritance) untuk penyimpanan data terenkripsi berbasis
 /// [FlutterSecureStorage].
 ///
-/// Menyediakan operasi aman (try-catch tersanitasi) untuk baca, tulis, dan hapus
-/// token / kredensial sensitif di Android Keystore / Linux libsecret / Windows DPAPI.
+/// Menyediakan operasi aman untuk baca, tulis, dan hapus token / kredensial
+/// sensitif di Android Keystore / Linux libsecret / Windows DPAPI tanpa pernah
+/// menyalin rahasia ke penyimpanan plaintext.
 abstract class BaseSecureStore {
   FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
+  static final Map<String, String> _testMemoryStore = <String, String>{};
+
+  static bool get _isFlutterTest =>
+      !kIsWeb && Platform.environment.containsKey('FLUTTER_TEST');
+
+  /// Membersihkan penyimpanan memori sementara saat pengujian unit/widget.
+  @visibleForTesting
+  static void clearTestMemoryStore() {
+    _testMemoryStore.clear();
+  }
 
   @protected
   @visibleForTesting
@@ -17,10 +42,32 @@ abstract class BaseSecureStore {
   }
 
   @protected
-  Future<String?> readSecure(String key) async {
+  Future<String?> readSecure(String key, {bool throwOnError = false}) async {
     try {
       return await _secureStorage.read(key: key);
-    } catch (_) {
+    } on MissingPluginException catch (e) {
+      if (_isFlutterTest) {
+        return _testMemoryStore[key];
+      }
+      if (throwOnError) {
+        throw SecureStorageException(
+          'Plugin penyimpanan aman tidak tersedia saat membaca "$key".',
+          cause: e,
+        );
+      }
+      debugPrint('BaseSecureStore: Gagal membaca key "$key": $e');
+      return null;
+    } catch (e) {
+      if (_isFlutterTest) {
+        return _testMemoryStore[key];
+      }
+      if (throwOnError) {
+        throw SecureStorageException(
+          'Gagal membaca data keamanan untuk "$key".',
+          cause: e,
+        );
+      }
+      debugPrint('BaseSecureStore: Gagal membaca key "$key": $e');
       return null;
     }
   }
@@ -29,14 +76,50 @@ abstract class BaseSecureStore {
   Future<void> writeSecure(String key, String value) async {
     try {
       await _secureStorage.write(key: key, value: value);
-    } catch (_) {}
+    } on MissingPluginException catch (e) {
+      if (_isFlutterTest) {
+        _testMemoryStore[key] = value;
+        return;
+      }
+      throw SecureStorageException(
+        'Plugin penyimpanan aman tidak tersedia saat menyimpan "$key".',
+        cause: e,
+      );
+    } catch (e) {
+      if (_isFlutterTest) {
+        _testMemoryStore[key] = value;
+        return;
+      }
+      throw SecureStorageException(
+        'Gagal menyimpan data keamanan untuk "$key".',
+        cause: e,
+      );
+    }
   }
 
   @protected
   Future<void> deleteSecure(String key) async {
     try {
       await _secureStorage.delete(key: key);
-    } catch (_) {}
+    } on MissingPluginException catch (e) {
+      if (_isFlutterTest) {
+        _testMemoryStore.remove(key);
+        return;
+      }
+      throw SecureStorageException(
+        'Plugin penyimpanan aman tidak tersedia saat menghapus "$key".',
+        cause: e,
+      );
+    } catch (e) {
+      if (_isFlutterTest) {
+        _testMemoryStore.remove(key);
+        return;
+      }
+      throw SecureStorageException(
+        'Gagal menghapus data keamanan untuk "$key".',
+        cause: e,
+      );
+    }
   }
 }
 
@@ -44,13 +127,12 @@ abstract class BaseSecureStore {
 /// dan [FlutterSecureStorage].
 ///
 /// Mewarisi [BaseSecureStore] agar kelas turunan memiliki akses terpusat ke operasi
-/// preferensi umum maupun penyimpanan terenkripsi lewat pewarisan tanpa duplikasi kode.
+/// preferensi umum maupun penyimpanan terenkripsi beserta migrasi satu arah dari
+/// data lama di [SharedPreferences] ke [FlutterSecureStorage].
 abstract class BasePreferencesStore extends BaseSecureStore {
-  SharedPreferences? _prefs;
-
   @protected
-  Future<SharedPreferences> getPrefs() async {
-    return _prefs ??= await SharedPreferences.getInstance();
+  Future<SharedPreferences> getPrefs() {
+    return SharedPreferences.getInstance();
   }
 
   @protected
@@ -103,32 +185,81 @@ abstract class BasePreferencesStore extends BaseSecureStore {
     await prefs.remove(key);
   }
 
-  /// Membaca dari secure storage; jika belum ada atau gagal, fallback membaca
-  /// dari [SharedPreferences].
+  /// Membaca nilai sensitif dari [FlutterSecureStorage].
+  ///
+  /// Jika nilai sudah ada di secure storage namun salinan lama masih tertinggal
+  /// di [SharedPreferences], salinan plaintext tersebut langsung dihapus.
+  /// Jika belum ada di secure storage tetapi ditemukan data lama di [SharedPreferences],
+  /// nilai tersebut dimigrasikan ke secure storage, diverifikasi hasil bacanya,
+  /// lalu dihapus dari [SharedPreferences] hanya setelah migrasi terbukti berhasil.
   @protected
-  Future<String?> readSecureWithFallback(String key) async {
-    final val = await readSecure(key);
-    if (val != null) return val;
-    return getString(key);
+  Future<String?> readSecureWithMigration(String key) async {
+    final prefs = await getPrefs();
+    final secureVal = await readSecure(key);
+    if (secureVal != null) {
+      if (prefs.containsKey(key)) {
+        await prefs.remove(key);
+      }
+      return secureVal;
+    }
+
+    if (!prefs.containsKey(key)) {
+      return null;
+    }
+
+    final rawLegacy = prefs.get(key);
+    final legacyVal = rawLegacy?.toString();
+    if (legacyVal == null) {
+      return null;
+    }
+
+    try {
+      await writeSecure(key, legacyVal);
+      final verified = await readSecure(key, throwOnError: true);
+      if (verified == legacyVal) {
+        await prefs.remove(key);
+        return verified;
+      }
+    } catch (e) {
+      debugPrint(
+        'BasePreferencesStore: Migrasi key "$key" ke secure storage belum berhasil: $e',
+      );
+    }
+
+    // Jangan hapus data lama jika migrasi ke secure storage belum berhasil
+    return legacyVal;
   }
 
-  /// Menulis ke secure storage dan menyinkronkan dengan [SharedPreferences].
+  /// Menulis data rahasia HANYA ke [FlutterSecureStorage] (tanpa menyalin ke
+  /// [SharedPreferences]), memverifikasi hasil penulisan, dan menghapus sisa data
+  /// plaintext lama di [SharedPreferences] apabila ada.
   @protected
-  Future<void> writeSecureWithFallback(String key, String value) async {
+  Future<void> writeSecureOnly(String key, String value) async {
     await writeSecure(key, value);
-    await setString(key, value);
+    final verified = await readSecure(key, throwOnError: true);
+    if (verified != value) {
+      throw SecureStorageException(
+        'Verifikasi penulisan ke penyimpanan aman gagal untuk "$key".',
+      );
+    }
+    final prefs = await getPrefs();
+    if (prefs.containsKey(key)) {
+      await prefs.remove(key);
+    }
   }
 
-  /// Menghapus key dari kedua penyimpanan (secure storage & [SharedPreferences]).
+  /// Menghapus data rahasia dari [FlutterSecureStorage] sekaligus membersihkan
+  /// sisa key lama di [SharedPreferences] apabila ada.
   @protected
-  Future<void> deleteSecureWithFallback(String key) async {
+  Future<void> deleteSecureOnly(String key) async {
     await deleteSecure(key);
-    await remove(key);
+    final prefs = await getPrefs();
+    if (prefs.containsKey(key)) {
+      await prefs.remove(key);
+    }
   }
 
   @protected
   @visibleForTesting
-  void resetPrefsForTesting() {
-    _prefs = null;
-  }
+  void resetPrefsForTesting() {}
 }

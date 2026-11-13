@@ -88,8 +88,8 @@ class BatchNotificationService {
         onDidReceiveNotificationResponse: _onNotificationTapped,
       );
 
-      final launchDetails =
-          await _notifications.getNotificationAppLaunchDetails();
+      final launchDetails = await _notifications
+          .getNotificationAppLaunchDetails();
       if (launchDetails != null && launchDetails.didNotificationLaunchApp) {
         final resp = launchDetails.notificationResponse;
         if (resp != null) {
@@ -417,7 +417,8 @@ class BatchNotificationService {
         ? ((currentBlok / totalBloks) * 100).toStringAsFixed(0)
         : '0';
 
-    final title = 'Mengecek Blok $currentBlok dari $totalBloks. $currentBlokName';
+    final title =
+        'Mengecek Blok $currentBlok dari $totalBloks. $currentBlokName';
     final content = '$percent% • $updatedPaid Lunas Baru, $newSppt SPPT Baru';
 
     if (Platform.isAndroid) {
@@ -613,7 +614,9 @@ class BatchNotificationService {
 
     final client = StaffDhkpSyncManager.instance.client ?? StaffPortalClient();
     final themeController = ThemeController.current;
-    final outcome = StaffDhkpSyncService.lastOutcome ?? StaffDhkpSyncManager.instance.outcome;
+    final outcome =
+        StaffDhkpSyncService.lastOutcome ??
+        StaffDhkpSyncManager.instance.outcome;
 
     if (!MonitoringWilayahScreen.isCurrentlyOpen) {
       nav.push(

@@ -120,30 +120,29 @@ void main() {
       expect(find.text('Open Splash Preview'), findsOneWidget);
     });
 
-    testWidgets('routes to StartupSetupScreen on first run when setup is not completed', (
-      tester,
-    ) async {
-      tester.view.physicalSize = const Size(1000, 1400);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(() => tester.view.resetPhysicalSize());
+    testWidgets(
+      'routes to StartupSetupScreen on first run when setup is not completed',
+      (tester) async {
+        tester.view.physicalSize = const Size(1000, 1400);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(() => tester.view.resetPhysicalSize());
 
-      await tester.pumpWidget(
-        const MaterialApp(
-          home: SplashScreen(
-            displayDuration: Duration(milliseconds: 100),
+        await tester.pumpWidget(
+          const MaterialApp(
+            home: SplashScreen(displayDuration: Duration(milliseconds: 100)),
           ),
-        ),
-      );
+        );
 
-      expect(find.text('Cek PBB Cianjur'), findsOneWidget);
+        expect(find.text('Cek PBB Cianjur'), findsOneWidget);
 
-      await tester.pump(const Duration(milliseconds: 200));
-      await tester.pump(const Duration(milliseconds: 600));
-      await tester.pumpAndSettle();
+        await tester.pump(const Duration(milliseconds: 200));
+        await tester.pump(const Duration(milliseconds: 600));
+        await tester.pumpAndSettle();
 
-      // Should land on StartupSetupScreen greeting
-      expect(find.text('Sampurasun!'), findsOneWidget);
-      expect(find.text('Selamat Datang di Cek PBB Cianjur'), findsOneWidget);
-    });
+        // Should land on StartupSetupScreen greeting
+        expect(find.text('Sampurasun!'), findsOneWidget);
+        expect(find.text('Selamat Datang di Cek PBB Cianjur'), findsOneWidget);
+      },
+    );
   });
 }

@@ -175,27 +175,30 @@ void main() {
       },
     );
 
-    test('Path Traversal & Zip Slip sanitization prevents escaping target directories', () {
-      // Test malicious filenames with ../ and Windows backslashes
-      final testCases = {
-        '../../evil.pdf': 'evil.pdf',
-        '..\\..\\malicious.png': 'malicious.png',
-        '/etc/passwd': 'passwd',
-        'C:\\Windows\\System32\\cmd.exe': 'cmd.exe',
-        'normal_report.xlsx': 'normal_report.xlsx',
-      };
+    test(
+      'Path Traversal & Zip Slip sanitization prevents escaping target directories',
+      () {
+        // Test malicious filenames with ../ and Windows backslashes
+        final testCases = {
+          '../../evil.pdf': 'evil.pdf',
+          '..\\..\\malicious.png': 'malicious.png',
+          '/etc/passwd': 'passwd',
+          'C:\\Windows\\System32\\cmd.exe': 'cmd.exe',
+          'normal_report.xlsx': 'normal_report.xlsx',
+        };
 
-      for (final entry in testCases.entries) {
-        final sanitized = entry.key
-            .split(RegExp(r'[\\/]'))
-            .last
-            .replaceAll('..', '')
-            .trim();
-        expect(sanitized, equals(entry.value));
-        expect(sanitized.contains('/'), isFalse);
-        expect(sanitized.contains('\\'), isFalse);
-        expect(sanitized.contains('..'), isFalse);
-      }
-    });
+        for (final entry in testCases.entries) {
+          final sanitized = entry.key
+              .split(RegExp(r'[\\/]'))
+              .last
+              .replaceAll('..', '')
+              .trim();
+          expect(sanitized, equals(entry.value));
+          expect(sanitized.contains('/'), isFalse);
+          expect(sanitized.contains('\\'), isFalse);
+          expect(sanitized.contains('..'), isFalse);
+        }
+      },
+    );
   });
 }

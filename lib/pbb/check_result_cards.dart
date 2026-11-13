@@ -8,6 +8,7 @@ import '../pbb_client.dart';
 import '../qris_result.dart';
 import '../qris_view_screen.dart';
 import '../tagihan_result.dart';
+import '../ui/app_design_system.dart';
 import '../va_result.dart';
 import '../va_view_screen.dart';
 
@@ -78,33 +79,53 @@ class StatusBayarResultCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bgColor = _isPaid
+        ? AppSemanticColors.successContainer(context)
+        : AppSemanticColors.warningContainer(context);
+    final fgColor = _isPaid
+        ? AppSemanticColors.onSuccessContainer(context)
+        : AppSemanticColors.onWarningContainer(context);
+    final borderColor = _isPaid
+        ? AppSemanticColors.successBorder(context)
+        : AppSemanticColors.warningBorder(context);
+
     return Card(
-      color: _isPaid
-          ? Colors.green.withValues(alpha: 0.12)
-          : Colors.orange.withValues(alpha: 0.12),
+      color: bgColor,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: borderColor),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Row(
           children: [
+            Icon(
+              _isPaid
+                  ? Icons.check_circle_rounded
+                  : Icons.pending_actions_rounded,
+              color: fgColor,
+              size: 24,
+            ),
+            const SizedBox(width: 12),
             Expanded(
               child: Text(
                 result.status,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
+                  color: fgColor,
                 ),
               ),
             ),
             if (_isPaid) ...[
               IconButton(
-                onPressed: () =>
-                    _previewBuktiBayar(context, directPrint: true),
-                icon: const Icon(Icons.print_outlined),
+                onPressed: () => _previewBuktiBayar(context, directPrint: true),
+                icon: Icon(Icons.print_outlined, color: fgColor),
                 tooltip: 'Cetak Bukti Bayar',
               ),
               IconButton(
                 onPressed: () => _previewBuktiBayar(context),
-                icon: const Icon(Icons.visibility),
+                icon: Icon(Icons.visibility, color: fgColor),
                 tooltip: 'Detail',
               ),
             ],
@@ -303,19 +324,33 @@ class TagihanResultCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (result.serverMessage != null) {
+      final fgColor = AppSemanticColors.onWarningContainer(context);
       return Card(
-        color: Colors.orange.withValues(alpha: 0.12),
+        color: AppSemanticColors.warningContainer(context),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: AppSemanticColors.warningBorder(context)),
+        ),
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                result.serverMessage!,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
+              Row(
+                children: [
+                  Icon(Icons.info_outline_rounded, color: fgColor),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      result.serverMessage!,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: fgColor,
+                      ),
+                    ),
+                  ),
+                ],
               ),
               if (result.inactiveUntilYear != null && onOpenStatusBayar != null)
                 TextButton(
@@ -335,13 +370,30 @@ class TagihanResultCard extends StatelessWidget {
     }
 
     if (result.notFound) {
+      final fgColor = AppSemanticColors.onSuccessContainer(context);
       return Card(
-        color: Colors.green.withValues(alpha: 0.12),
-        child: const Padding(
-          padding: EdgeInsets.all(16),
-          child: Text(
-            'Data Tidak Ditemukan (tidak ada tunggakan tercatat)',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        color: AppSemanticColors.successContainer(context),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: AppSemanticColors.successBorder(context)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Icon(Icons.check_circle_rounded, color: fgColor),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Data Tidak Ditemukan (tidak ada tunggakan tercatat)',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: fgColor,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       );
@@ -359,7 +411,9 @@ class TagihanResultCard extends StatelessWidget {
                   Expanded(
                     child: Text(
                       result.namaWajibPajak,
-                      style: Theme.of(context).textTheme.titleMedium,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 OutlinedButton.icon(
@@ -370,8 +424,7 @@ class TagihanResultCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 8),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
+            AppHorizontalTableScroll(
               child: DataTable(
                 // VA hanya lewat aplikasi bank di HP (butuh channel native
                 // Android) — di Windows/Linux pembayaran cuma lewat QRIS.
@@ -388,12 +441,37 @@ class TagihanResultCard extends StatelessWidget {
                     .map(
                       (r) => DataRow(
                         cells: [
-                          DataCell(Text(r.tahun)),
+                          DataCell(
+                            Text(
+                              r.tahun,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
                           DataCell(Text(formatRupiah(r.pbb))),
                           DataCell(Text(formatRupiah(r.denda))),
-                          DataCell(Text(formatRupiah(r.kurangBayar))),
                           DataCell(
-                            Text(r.statusBayar.isEmpty ? '-' : r.statusBayar),
+                            Text(
+                              formatRupiah(r.kurangBayar),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          DataCell(
+                            r.statusBayar.isEmpty
+                                ? const Text('-')
+                                : AppStatusBadge(
+                                    label: r.statusBayar,
+                                    tone:
+                                        r.statusBayar.toLowerCase().contains(
+                                          'sudah',
+                                        )
+                                        ? AppBadgeTone.success
+                                        : AppBadgeTone.warning,
+                                    compact: true,
+                                  ),
                           ),
                           DataCell(
                             FilledButton(

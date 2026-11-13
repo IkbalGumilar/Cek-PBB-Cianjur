@@ -327,6 +327,7 @@ class _MainShellState extends State<MainShell> {
           settingsButtonKey: _headerSettingsKey,
           desilSelected: _view == _ActiveView.desil,
           kendaraanSelected: _view == _ActiveView.kendaraan,
+          viewportWidth: MediaQuery.sizeOf(context).width,
         ),
         body: Column(
           children: [
@@ -374,10 +375,7 @@ class _MainShellState extends State<MainShell> {
           ],
         ),
         floatingActionButton: _view == _ActiveView.check
-            ? _BukuCatatanButton(
-                key: _dhkpFabKey,
-                onPressed: _openBukuCatatan,
-              )
+            ? _BukuCatatanButton(key: _dhkpFabKey, onPressed: _openBukuCatatan)
             : null,
       ),
     );

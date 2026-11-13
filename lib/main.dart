@@ -22,6 +22,7 @@ import 'nop_helper.dart';
 import 'spreadsheet_viewer_screen.dart';
 import 'splash_screen.dart';
 import 'theme_controller.dart';
+import 'ui/app_design_system.dart';
 
 Widget _buildExternalViewer(String filePath) {
   final file = File(filePath);
@@ -227,21 +228,104 @@ class _CekPbbAppState extends State<CekPbbApp> with WidgetsBindingObserver {
     required ColorScheme colorScheme,
     bool isAmoled = false,
   }) {
+    final effectiveScheme = isAmoled
+        ? colorScheme.copyWith(
+            surface: Colors.black,
+            surfaceContainerLowest: const Color(0xFF050505),
+            surfaceContainerLow: const Color(0xFF0D0D0D),
+            surfaceContainer: const Color(0xFF141414),
+            surfaceContainerHigh: const Color(0xFF1C1C1C),
+            surfaceContainerHighest: const Color(0xFF242424),
+            surfaceTint: Colors.transparent,
+          )
+        : colorScheme;
+
     final baseTheme = ThemeData(
-      colorScheme: colorScheme,
+      colorScheme: effectiveScheme,
       useMaterial3: true,
-      brightness: colorScheme.brightness,
+      brightness: effectiveScheme.brightness,
+      pageTransitionsTheme: const PageTransitionsTheme(
+        builders: <TargetPlatform, PageTransitionsBuilder>{
+          TargetPlatform.android: AppPageTransitionsBuilder(),
+          TargetPlatform.iOS: AppPageTransitionsBuilder(),
+          TargetPlatform.linux: AppPageTransitionsBuilder(),
+          TargetPlatform.windows: AppPageTransitionsBuilder(),
+          TargetPlatform.macOS: AppPageTransitionsBuilder(),
+        },
+      ),
       appBarTheme: AppBarTheme(
         surfaceTintColor: Colors.transparent,
-        backgroundColor: colorScheme.brightness == Brightness.light
-            ? colorScheme.surface
-            : (isAmoled ? Colors.black : colorScheme.surface),
+        centerTitle: false,
+        titleTextStyle: TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.w700,
+          color: effectiveScheme.onSurface,
+        ),
+        backgroundColor: effectiveScheme.brightness == Brightness.light
+            ? effectiveScheme.surface
+            : (isAmoled ? Colors.black : effectiveScheme.surface),
       ),
-      cardTheme: const CardThemeData(surfaceTintColor: Colors.transparent),
-      dialogTheme: const DialogThemeData(surfaceTintColor: Colors.transparent),
+      cardTheme: CardThemeData(
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        color: isAmoled
+            ? const Color(0xFF0D0D0D)
+            : effectiveScheme.surfaceContainerLow,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          side: BorderSide(
+            color: effectiveScheme.outlineVariant.withValues(
+              alpha: isAmoled ? 0.55 : 0.45,
+            ),
+          ),
+        ),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: isAmoled
+            ? const Color(0xFF080808)
+            : effectiveScheme.surface.withValues(alpha: 0.7),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 13,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          borderSide: BorderSide(color: effectiveScheme.outlineVariant),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          borderSide: BorderSide(color: effectiveScheme.outlineVariant),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          borderSide: BorderSide(color: effectiveScheme.primary, width: 1.8),
+        ),
+      ),
+      dialogTheme: DialogThemeData(
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.xl),
+        ),
+      ),
+      bottomSheetTheme: BottomSheetThemeData(
+        surfaceTintColor: Colors.transparent,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        backgroundColor: isAmoled
+            ? const Color(0xFF101010)
+            : effectiveScheme.surfaceContainerLow,
+      ),
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.md),
+        ),
+      ),
       floatingActionButtonTheme: FloatingActionButtonThemeData(
-        backgroundColor: colorScheme.primary,
-        foregroundColor: colorScheme.onPrimary,
+        backgroundColor: effectiveScheme.primary,
+        foregroundColor: effectiveScheme.onPrimary,
       ),
     );
 
@@ -249,11 +333,7 @@ class _CekPbbAppState extends State<CekPbbApp> with WidgetsBindingObserver {
       return baseTheme.copyWith(
         scaffoldBackgroundColor: Colors.black,
         canvasColor: Colors.black,
-        cardColor: const Color(0xFF0A0A0A),
-        colorScheme: colorScheme.copyWith(
-          surface: Colors.black,
-          surfaceTint: Colors.transparent,
-        ),
+        cardColor: const Color(0xFF0D0D0D),
       );
     }
     return baseTheme;
@@ -313,6 +393,7 @@ class _CekPbbAppState extends State<CekPbbApp> with WidgetsBindingObserver {
               navigatorKey: rootNavigatorKey,
               title: 'Cek PBB Cianjur',
               debugShowCheckedModeBanner: false,
+              scrollBehavior: const AppScrollBehavior(),
               theme: lightTheme,
               darkTheme: darkTheme,
               themeMode: _flutterThemeMode(themeState.mode),
@@ -322,9 +403,7 @@ class _CekPbbAppState extends State<CekPbbApp> with WidgetsBindingObserver {
                   widget.initialExternalFilePath != null &&
                       widget.initialExternalFilePath!.isNotEmpty
                   ? _buildExternalViewer(widget.initialExternalFilePath!)
-                  : SplashScreen(
-                      themeController: _themeController,
-                    ),
+                  : SplashScreen(themeController: _themeController),
               builder: (context, child) {
                 final content = Stack(
                   children: [
@@ -337,9 +416,7 @@ class _CekPbbAppState extends State<CekPbbApp> with WidgetsBindingObserver {
                     widget.initialExternalFilePath!.isNotEmpty) {
                   return content;
                 }
-                return AppLockGate(
-                  child: content,
-                );
+                return AppLockGate(child: content);
               },
             );
           },

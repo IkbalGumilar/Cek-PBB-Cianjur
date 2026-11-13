@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../staff_portal_client.dart';
+import '../ui/app_design_system.dart';
 import 'monitoring_form_fields.dart';
 import 'monitoring_tab_scaffold.dart';
 
@@ -22,6 +23,14 @@ class _TabSudahBayarKolektifState extends State<TabSudahBayarKolektif> {
   final _namaKolektor = TextEditingController();
   late String _kelurahan = widget.client.activeKelurahanCode;
   String get _kecamatan => widget.client.activeKecamatanCode;
+
+  int get _activeOptionalCount {
+    var count = 0;
+    for (final c in [_kodeBayarKolektif, _namaGrup, _namaKolektor]) {
+      if (c.text.trim().isNotEmpty) count++;
+    }
+    return count;
+  }
 
   @override
   void dispose() {
@@ -111,30 +120,38 @@ class _TabSudahBayarKolektifState extends State<TabSudahBayarKolektif> {
             ),
           ],
         ),
-        const MonitoringSectionTitle('Filter lainnya (opsional)'),
-        TextField(
-          controller: _kodeBayarKolektif,
-          keyboardType: TextInputType.number,
-          decoration: const InputDecoration(
-            labelText: 'Kode Bayar Kolektif',
-            border: OutlineInputBorder(),
-          ),
-        ),
         const SizedBox(height: 12),
-        TextField(
-          controller: _namaGrup,
-          decoration: const InputDecoration(
-            labelText: 'Nama Grup',
-            border: OutlineInputBorder(),
-          ),
-        ),
-        const SizedBox(height: 12),
-        TextField(
-          controller: _namaKolektor,
-          decoration: const InputDecoration(
-            labelText: 'Nama Kolektor',
-            border: OutlineInputBorder(),
-          ),
+        AppCollapsibleFilterSection(
+          title: 'Filter Tambahan (Opsional)',
+          subtitle: 'Kode Bayar Kolektif, Nama Grup, Nama Kolektor',
+          activeFilterCount: _activeOptionalCount,
+          children: [
+            const SizedBox(height: 8),
+            TextField(
+              controller: _kodeBayarKolektif,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Kode Bayar Kolektif',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _namaGrup,
+              decoration: const InputDecoration(
+                labelText: 'Nama Grup',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _namaKolektor,
+              decoration: const InputDecoration(
+                labelText: 'Nama Kolektor',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
         ),
       ],
     );

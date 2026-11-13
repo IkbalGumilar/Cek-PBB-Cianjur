@@ -35,6 +35,7 @@ import 'native_file_helper.dart';
 import 'nop_helper.dart';
 import 'operator_mode_store.dart';
 import 'tax_record.dart';
+import 'ui/app_design_system.dart';
 import 'unity_lerp_widgets.dart';
 
 export 'dhkp/blok_catatan_models.dart';
@@ -435,8 +436,6 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
     );
   }
 
-
-
   Future<void> _editCatatanDialog(BlokRecord record) async {
     final newCatatan = await showEditCatatanDialog(context, record);
     if (newCatatan != null) {
@@ -475,7 +474,10 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
   }
 
   /// Membuka kalkulator terpadu (Denda, Cicilan & Tabungan Warga, AJB)
-  Future<void> _bukaKalkulatorNop(BlokRecord record, {int initialTab = 0}) async {
+  Future<void> _bukaKalkulatorNop(
+    BlokRecord record, {
+    int initialTab = 0,
+  }) async {
     await showNopKalkulatorDialog(
       context,
       record: record,
@@ -587,9 +589,7 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
 
     final rawRecords = await BlokDataStore.instance.loadAll();
     final allRecords = rawRecords
-        .where(
-          (r) => r.tahunBayar.isEmpty || r.tahunBayar == _selectedTahun,
-        )
+        .where((r) => r.tahunBayar.isEmpty || r.tahunBayar == _selectedTahun)
         .toList();
     final Map<String, List<BlokRecord>> recordsByBlok = {};
     for (final r in allRecords) {
@@ -635,8 +635,9 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
 
       final blokStr = nopBlok(selectedRecords.first.nop);
       cleanBlok = blokStr.replaceAll(RegExp(r'[^0-9]'), '');
-      final blokFormatted =
-          cleanBlok.isNotEmpty ? cleanBlok.padLeft(3, '0') : blokStr;
+      final blokFormatted = cleanBlok.isNotEmpty
+          ? cleanBlok.padLeft(3, '0')
+          : blokStr;
       final now = DateTime.now();
       const namaHariList = [
         'Senin',
@@ -660,13 +661,15 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
     }
 
     final taxRecords = selectedRecords
-        .map((r) => TaxRecord(
-              nop: r.nop,
-              namaWajibPajak: r.namaWajibPajak,
-              status: r.isPaid ? 'Sudah Bayar' : 'Belum Bayar',
-              tanggalBayar: r.tanggalBayar,
-              jumlahPbb: r.jumlahPbb,
-            ))
+        .map(
+          (r) => TaxRecord(
+            nop: r.nop,
+            namaWajibPajak: r.namaWajibPajak,
+            status: r.isPaid ? 'Sudah Bayar' : 'Belum Bayar',
+            tanggalBayar: r.tanggalBayar,
+            jumlahPbb: r.jumlahPbb,
+          ),
+        )
         .toList();
     final tahun = _selectedTahun;
 
@@ -1334,56 +1337,105 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
     }
   }
 
-  Future<void> _cetakLaporan() async {
-    final opsi = await _pilihOpsiEkspor(
-      title: 'Cetak Laporan DHKP',
-      actionButtonLabel: DocumentPreviewScreen.isDesktop
-          ? 'Cetak Langsung'
-          : 'Buka Cetakan',
-      actionIcon: Icons.print_rounded,
-      fixedPdf: true,
-    );
-    if (opsi == null || !mounted) return;
+  Future<void> _cetakDariMenu() async {
+    if (_tampilkanGrafik && _printGrafikCallback != null) {
+      final pilihan = await showDialog<String>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Pilih Jenis Cetakan'),
+          content: const Text(
+            'Anda sedang membuka tampilan Grafik DHKP. Ingin mencetak grafik aktif atau laporan tabel DHKP?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Batal'),
+            ),
+            OutlinedButton.icon(
+              onPressed: () => Navigator.pop(ctx, 'grafik'),
+              icon: const Icon(Icons.bar_chart_rounded, size: 18),
+              label: const Text('Cetak Grafik'),
+            ),
+            FilledButton.icon(
+              onPressed: () => Navigator.pop(ctx, 'laporan'),
+              icon: const Icon(Icons.table_chart_outlined, size: 18),
+              label: const Text('Cetak Laporan'),
+            ),
+          ],
+        ),
+      );
+      if (!mounted || pilihan == null) return;
+      if (pilihan == 'grafik') {
+        await _printGrafikCallback?.call();
+        return;
+      }
+    }
+    await _cetakLaporan();
+  }
 
+  Future<void> _cetakPdfDenganBatal({
+    required Future<List<BlokRecord>> Function() loadRecords,
+    required String blokTitle,
+    required String emptyMessage,
+    required String initialMessage,
+  }) async {
+    final cancelToken = BlokPrintCancelToken();
+    var emptyRecords = false;
     setState(() {
       _busy = true;
-      _busyMessage = 'Menyiapkan dokumen cetak PDF...';
+      _busyMessage = initialMessage;
       _busyIcon = Icons.print_rounded;
     });
     try {
-      final records = await _scopedRecordsForExport(
-        opsi.blok,
-        !opsi.sertakanNihil,
-      );
-      if (records.isEmpty) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Belum ada data untuk dicetak.')),
-        );
-        return;
-      }
-      final blokTitle = opsi.blok == semuaBlokValue
-          ? 'Semua Blok'
-          : 'Blok ${opsi.blok}';
-      final bytes = await BlokReportExporter.build(
-        BlokExportFormat.pdf,
-        records,
-        tahun: _selectedTahun,
-        blokTitle: blokTitle,
-        kategoriFilter: _kategoriFilter,
-        onProgress: (current, total) async {
-          if (!mounted) return;
-          setState(() {
-            _busyMessage = 'Menyusun halaman $current dari $total...';
-          });
+      final bytes = await runCancellableDhkpPrint<Uint8List>(
+        context: context,
+        cancelToken: cancelToken,
+        title: 'Menyiapkan Cetakan DHKP',
+        initialMessage: initialMessage,
+        subtitle:
+            'Data DHKP berukuran besar memerlukan waktu. Tekan Batal Cetak jika ingin membatalkan proses cetak.',
+        task: (reportProgress) async {
+          final records = await loadRecords();
+          if (cancelToken.isCancelled) {
+            throw const BlokPrintCancelledException();
+          }
+          if (records.isEmpty) {
+            emptyRecords = true;
+            throw const BlokPrintCancelledException();
+          }
+          return BlokReportExporter.build(
+            BlokExportFormat.pdf,
+            records,
+            tahun: _selectedTahun,
+            blokTitle: blokTitle,
+            kategoriFilter: _kategoriFilter,
+            cancelToken: cancelToken,
+            onProgress: (current, total) async {
+              reportProgress(current, total);
+              if (mounted && !cancelToken.isCancelled) {
+                setState(() {
+                  _busyMessage = 'Menyusun halaman $current dari $total...';
+                });
+              }
+            },
+          );
         },
       );
       if (!mounted) return;
-      final fileName = '${buildReportJudul(
-        blokTitle: blokTitle,
-        kategoriFilter: _kategoriFilter,
-        tahun: _selectedTahun,
-      )}.pdf';
+      if (emptyRecords) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(emptyMessage)));
+        return;
+      }
+      if (bytes == null || cancelToken.isCancelled) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Proses cetak DHKP dibatalkan.')),
+        );
+        return;
+      }
+      final fileName =
+          '${buildReportJudul(blokTitle: blokTitle, kategoriFilter: _kategoriFilter, tahun: _selectedTahun)}.pdf';
       await DocumentPreviewScreen.printOrPreview(
         context,
         pdfBytes: bytes,
@@ -1399,12 +1451,34 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
     }
   }
 
-  /// Pintasan Cetak Cepat (`Ctrl + P` atau tombol Cetak Langsung di AppBar):
-  /// - Jika sedang di tab Grafik: langsung mencetak grafik/diagram aktif (atau 1 bulan
-  ///   yang dipilih pada Tren Pembayaran).
-  /// - Jika sedang di tampilan Tabel DHKP: langsung mencetak data `_records` yang sedang
-  ///   disaring di layar (mengikuti filter Dusun/Blok, Tahun, Kategori, Tanpa Rp 0,
-  ///   kata kunci pencarian, dan urutan aktif) ke driver printer tanpa dialog berulang.
+  Future<void> _cetakLaporan() async {
+    final opsi = await _pilihOpsiEkspor(
+      title: 'Cetak Laporan DHKP',
+      actionButtonLabel: DocumentPreviewScreen.isDesktop
+          ? 'Cetak Langsung'
+          : 'Buka Cetakan',
+      actionIcon: Icons.print_rounded,
+      fixedPdf: true,
+    );
+    if (opsi == null || !mounted) return;
+
+    final blokTitle = opsi.blok == semuaBlokValue
+        ? 'Semua Blok'
+        : 'Blok ${opsi.blok}';
+    await _cetakPdfDenganBatal(
+      loadRecords: () =>
+          _scopedRecordsForExport(opsi.blok, !opsi.sertakanNihil),
+      blokTitle: blokTitle,
+      emptyMessage: 'Belum ada data untuk dicetak.',
+      initialMessage: 'Menyiapkan dokumen cetak PDF...',
+    );
+  }
+
+  /// Pintasan Cetak Cepat (`Ctrl + P`):
+  /// - Jika sedang di tab Grafik: mencetak grafik/diagram aktif (atau 1 bulan
+  ///   yang dipilih pada Tren Pembayaran) dengan opsi Batal Cetak.
+  /// - Jika sedang di tampilan Tabel DHKP: mencetak data `_records` yang sedang
+  ///   disaring di layar dengan dialog progres serta tombol Batal Cetak.
   Future<void> _cetakLangsungShortcut() async {
     if (_loading || _busy) return;
     if (_tampilkanGrafik) {
@@ -1423,51 +1497,17 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
       return;
     }
 
-    setState(() {
-      _busy = true;
-      _busyMessage = 'Menyiapkan cetakan sesuai filter tampilan saat ini...';
-      _busyIcon = Icons.print_rounded;
-    });
-    try {
-      final blokTitle =
-          (_selectedBlok == null || _selectedBlok == semuaBlokValue)
-              ? (_selectedWilayah != null
-                  ? 'Dusun $_selectedWilayah'
-                  : 'Semua Blok')
-              : 'Blok $_selectedBlok';
-      final targetRecords = List<BlokRecord>.from(_records);
-      final bytes = await BlokReportExporter.build(
-        BlokExportFormat.pdf,
-        targetRecords,
-        tahun: _selectedTahun,
-        blokTitle: blokTitle,
-        kategoriFilter: _kategoriFilter,
-        onProgress: (current, total) async {
-          if (!mounted) return;
-          setState(() {
-            _busyMessage = 'Menyusun halaman $current dari $total...';
-          });
-        },
-      );
-      if (!mounted) return;
-      final fileName = '${buildReportJudul(
-        blokTitle: blokTitle,
-        kategoriFilter: _kategoriFilter,
-        tahun: _selectedTahun,
-      )}.pdf';
-      await DocumentPreviewScreen.printOrPreview(
-        context,
-        pdfBytes: bytes,
-        fileName: fileName,
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Gagal menyiapkan cetakan: $e')));
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
+    final blokTitle = (_selectedBlok == null || _selectedBlok == semuaBlokValue)
+        ? (_selectedWilayah != null ? 'Dusun $_selectedWilayah' : 'Semua Blok')
+        : 'Blok $_selectedBlok';
+    final targetRecords = List<BlokRecord>.from(_records);
+    await _cetakPdfDenganBatal(
+      loadRecords: () async => targetRecords,
+      blokTitle: blokTitle,
+      emptyMessage:
+          'Belum ada data pada tampilan filter saat ini untuk dicetak.',
+      initialMessage: 'Menyiapkan cetakan sesuai filter tampilan saat ini...',
+    );
   }
 
   void _bukaKolaseFoto() {
@@ -1498,8 +1538,8 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
   void _bukaTargetPacingDialog() {
     final blokTitle = _selectedBlok == null || _selectedBlok == semuaBlokValue
         ? (_selectedWilayah != null
-            ? 'Dusun $_selectedWilayah'
-            : 'Semua Wilayah (Desa)')
+              ? 'Dusun $_selectedWilayah'
+              : 'Semua Wilayah (Desa)')
         : 'Blok $_selectedBlok';
     showTargetPacingDialog(
       context,
@@ -1528,16 +1568,12 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
         autofocus: true,
         child: Scaffold(
           appBar: AppBar(
+            titleSpacing: 4,
             title: const Text('Data DHKP'),
             actions: [
               IconButton(
-                key: const ValueKey('dhkp_direct_print_btn'),
-                icon: const Icon(Icons.print_outlined),
-                tooltip: 'Cetak tampilan saat ini (Ctrl+P)',
-                onPressed: _cetakLangsungShortcut,
-              ),
-              IconButton(
                 key: _toggleGrafikButtonKey,
+                visualDensity: VisualDensity.compact,
                 onPressed: () {
                   FeatureTourController.dismissActiveTour();
                   setState(() {
@@ -1563,6 +1599,7 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
               ),
               IconButton(
                 key: const ValueKey('dhkp_target_pacing_btn'),
+                visualDensity: VisualDensity.compact,
                 icon: const Icon(Icons.speed_rounded),
                 tooltip: 'Target & Pacing Realisasi',
                 onPressed: _bukaTargetPacingDialog,
@@ -1571,977 +1608,1033 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
               PopupMenuButton<String>(
                 key: _moreMenuButtonKey,
                 icon: const Icon(Icons.more_vert_rounded),
-            tooltip: 'Menu & Aksi Lainnya',
-            onSelected: (val) {
-              switch (val) {
-                case 'unggah_dhkp':
-                  _uploadDataDialog();
-                  break;
-                case 'buat_laporan_dat':
-                  _buatLaporanDatDialog();
-                  break;
-                case 'peta_dhkp':
-                  _bukaPeta();
-                  break;
-                case 'cetak':
-                  _cetakLaporan();
-                  break;
-                case 'bagikan':
-                  _bagikanLaporan();
-                  break;
-                case 'unduh':
-                  _unduhLaporan();
-                  break;
-                case 'kolase':
-                  _bukaKolaseFoto();
-                  break;
-                case 'cek_massal':
-                  _cekStatusBayarMassal();
-                  break;
-                case 'kalkulator_ajb':
-                  _bukaKalkulatorAjb();
-                  break;
-              }
-            },
-            itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: 'unggah_dhkp',
-                child: ListTile(
-                  leading: Icon(Icons.upload_file_outlined),
-                  title: Text('Unggah Berkas DHKP / Laporan (.dat)'),
-                  contentPadding: EdgeInsets.zero,
-                  dense: true,
-                ),
-              ),
-              if (_bloks.isNotEmpty) ...[
-                const PopupMenuItem(
-                  value: 'buat_laporan_dat',
-                  child: ListTile(
-                    leading: Icon(Icons.download_rounded),
-                    title: Text('Buat Paket Laporan (.dat)'),
-                    contentPadding: EdgeInsets.zero,
-                    dense: true,
-                  ),
-                ),
-                const PopupMenuItem(
-                  value: 'peta_dhkp',
-                  child: ListTile(
-                    leading: Icon(Icons.explore_outlined),
-                    title: Row(
-                      children: [
-                        Text('Peta Objek Pajak'),
-                        SizedBox(width: 6),
-                        Text(
-                          '(Eksperimental)',
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: Color(0xFFE67E22),
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                    contentPadding: EdgeInsets.zero,
-                    dense: true,
-                  ),
-                ),
-                const PopupMenuDivider(),
-                const PopupMenuItem(
-                  value: 'cetak',
-                  child: ListTile(
-                    leading: Icon(Icons.print_outlined),
-                    title: Text('Cetak Laporan'),
-                    contentPadding: EdgeInsets.zero,
-                    dense: true,
-                  ),
-                ),
-                const PopupMenuItem(
-                  value: 'bagikan',
-                  child: ListTile(
-                    leading: Icon(Icons.share_outlined),
-                    title: Text('Bagikan Laporan'),
-                    contentPadding: EdgeInsets.zero,
-                    dense: true,
-                  ),
-                ),
-                const PopupMenuItem(
-                  value: 'unduh',
-                  child: ListTile(
-                    leading: Icon(Icons.download_outlined),
-                    title: Text('Unduh Berkas (PDF/Excel/CSV)'),
-                    contentPadding: EdgeInsets.zero,
-                    dense: true,
-                  ),
-                ),
-                const PopupMenuDivider(),
-                const PopupMenuItem(
-                  value: 'kolase',
-                  child: ListTile(
-                    leading: Icon(Icons.auto_awesome_mosaic_outlined),
-                    title: Text('Kolase Gambar Dokumentasi'),
-                    contentPadding: EdgeInsets.zero,
-                    dense: true,
-                  ),
-                ),
-                const PopupMenuItem(
-                  value: 'cek_massal',
-                  child: ListTile(
-                    leading: Icon(Icons.fact_check_outlined),
-                    title: Text('Cek Status Bayar Massal'),
-                    contentPadding: EdgeInsets.zero,
-                    dense: true,
-                  ),
-                ),
-                const PopupMenuItem(
-                  value: 'kalkulator_ajb',
-                  child: ListTile(
-                    leading: Icon(Icons.calculate_outlined),
-                    title: Text('Kalkulator AJB & Simulasi NJOP'),
-                    contentPadding: EdgeInsets.zero,
-                    dense: true,
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ],
-      ),
-      body: SafeArea(
-        child: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 380),
-          switchInCurve: Curves.easeOutCubic,
-          switchOutCurve: Curves.easeInCubic,
-          child: (_loading || (_busy && _allBloks.isEmpty))
-              ? BlokCatatanLoadingView(
-                  key: const ValueKey('loading-view'),
-                  title: _loading
-                      ? 'Memuat Data DHKP & Status Bayar'
-                      : _busyMessage,
-                )
-              : (_allBloks.isEmpty || (!_isOperator && _bloks.isEmpty))
-              ? const Center(
-                  key: ValueKey('empty-view'),
-                  child: Padding(
-                    padding: EdgeInsets.all(24),
-                    child: Text(
-                      'Belum ada data DHKP. Tekan menu tiga titik (⋮) di kanan atas lalu pilih Unggah Berkas DHKP '
-                      'untuk memuat berkas daftar pajak.',
-                      textAlign: TextAlign.center,
+                tooltip: 'Menu & Aksi Lainnya',
+                onSelected: (val) {
+                  switch (val) {
+                    case 'unggah_dhkp':
+                      _uploadDataDialog();
+                      break;
+                    case 'buat_laporan_dat':
+                      _buatLaporanDatDialog();
+                      break;
+                    case 'peta_dhkp':
+                      _bukaPeta();
+                      break;
+                    case 'cetak':
+                      _cetakDariMenu();
+                      break;
+                    case 'bagikan':
+                      _bagikanLaporan();
+                      break;
+                    case 'unduh':
+                      _unduhLaporan();
+                      break;
+                    case 'kolase':
+                      _bukaKolaseFoto();
+                      break;
+                    case 'cek_massal':
+                      _cekStatusBayarMassal();
+                      break;
+                    case 'kalkulator_ajb':
+                      _bukaKalkulatorAjb();
+                      break;
+                  }
+                },
+                itemBuilder: (context) => [
+                  const PopupMenuItem(
+                    value: 'unggah_dhkp',
+                    child: ListTile(
+                      leading: Icon(Icons.upload_file_outlined),
+                      title: Text('Unggah Berkas DHKP / Laporan (.dat)'),
+                      contentPadding: EdgeInsets.zero,
+                      dense: true,
                     ),
                   ),
-                )
-              : Padding(
-                  key: const ValueKey('content-view'),
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      if (DusunData.instance.isDusunLocked) ...[
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
-                          ),
-                          decoration: BoxDecoration(
-                            color: isDark
-                                ? Colors.blueGrey.shade900
-                                : Colors.blue.shade50,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              color: isDark
-                                  ? Colors.blueGrey.shade700
-                                  : Colors.blue.shade200,
-                            ),
-                          ),
-                          child: Row(
+                  if (_bloks.isNotEmpty) ...[
+                    const PopupMenuItem(
+                      value: 'buat_laporan_dat',
+                      child: ListTile(
+                        leading: Icon(Icons.download_rounded),
+                        title: Text('Buat Paket Laporan (.dat)'),
+                        contentPadding: EdgeInsets.zero,
+                        dense: true,
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'peta_dhkp',
+                      child: ListTile(
+                        leading: Icon(Icons.explore_outlined),
+                        title: Text.rich(
+                          TextSpan(
+                            text: 'Peta Objek Pajak ',
                             children: [
-                              Icon(
-                                Icons.lock_outline_rounded,
-                                size: 18,
-                                color: isDark
-                                    ? Colors.blue.shade200
-                                    : Colors.blue.shade700,
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  'Pembatas Wilayah: Dusun $_selectedWilayah (${_bloks.length} blok)',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 13,
-                                    color: isDark
-                                        ? Colors.blue.shade200
-                                        : Colors.blue.shade800,
-                                  ),
+                              TextSpan(
+                                text: '(Eksperimental)',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: Color(0xFFE67E22),
+                                  fontWeight: FontWeight.bold,
                                 ),
                               ),
                             ],
                           ),
                         ),
-                        const SizedBox(height: 8),
-                      ] else if (_isOperator || dusunList.length > 1) ...[
-                        DropdownButtonFormField<int?>(
-                          initialValue: _selectedWilayah,
-                          decoration: const InputDecoration(
-                            labelText: 'Wilayah (Dusun)',
-                            border: OutlineInputBorder(),
-                          ),
-                          items: [
-                            const DropdownMenuItem<int?>(
-                              value: null,
-                              child: Text('Semua Wilayah (Desa)'),
-                            ),
-                            for (final dusun in dusunList)
-                              DropdownMenuItem<int?>(
-                                value: dusun.number,
-                                child: Text(
-                                  '${dusun.label} (${dusun.bloks.length} blok)',
-                                ),
-                              ),
-                          ],
-                          onChanged: _pilihWilayah,
-                        ),
-                        const SizedBox(height: 8),
-                      ],
-                      Row(
-                        key: _filterBlokTahunKey,
-                        children: [
-                          Expanded(
-                            flex: 2,
-                            child: DropdownButtonFormField<String>(
-                              key: ValueKey(
-                                'blok-dropdown-$_selectedWilayah',
-                              ),
-                              initialValue: _selectedBlok,
-                              isExpanded: true,
-                              decoration: const InputDecoration(
-                                labelText: 'Blok',
-                                border: OutlineInputBorder(),
-                              ),
-                              items: [
-                                const DropdownMenuItem(
-                                  value: semuaBlokValue,
-                                  child: Text(
-                                    'Semua Blok',
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                for (final b in _bloks)
-                                  DropdownMenuItem(
-                                    value: b,
-                                    child: Text(
-                                      'Blok ${int.tryParse(b) ?? b}',
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                              ],
-                              onChanged: _pilihBlok,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: DropdownButtonFormField<String>(
-                              initialValue: _selectedTahun,
-                              isExpanded: true,
-                              decoration: const InputDecoration(
-                                labelText: 'Tahun',
-                                border: OutlineInputBorder(),
-                                isDense: true,
-                                contentPadding: EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 10,
-                                ),
-                              ),
-                              items: [
-                                for (final y in availableDhkpYears())
-                                  DropdownMenuItem(
-                                    value: '$y',
-                                    child: Text('$y'),
-                                  ),
-                              ],
-                              onChanged: (v) {
-                                if (v != null) _pilihTahun(v);
-                              },
-                            ),
-                          ),
-                        ],
+                        contentPadding: EdgeInsets.zero,
+                        dense: true,
                       ),
-                      if (!_tampilkanGrafik) ...[
-                        const SizedBox(height: 8),
-                        Row(
-                          key: _searchFilterSortKey,
-                          children: [
-                            Expanded(
-                              child: TextField(
-                                controller: _searchController,
-                                decoration: InputDecoration(
-                                  hintText:
-                                      'Cari Nama WP, NOP, atau Alamat Objek...',
-                                  prefixIcon: const Icon(
-                                    Icons.search,
-                                    size: 20,
-                                  ),
-                                  suffixIcon: _searchQuery.isNotEmpty
-                                      ? IconButton(
-                                          icon: const Icon(
-                                            Icons.clear,
-                                            size: 18,
-                                          ),
-                                          onPressed: () {
-                                            _searchController.clear();
-                                            setState(() {
-                                              _searchQuery = '';
-                                              _currentPage = 0;
-                                            });
-                                            _loadRecords();
-                                          },
-                                        )
-                                      : null,
-                                  border: const OutlineInputBorder(),
-                                  contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 10,
-                                  ),
-                                  isDense: true,
+                    ),
+                    const PopupMenuDivider(),
+                    const PopupMenuItem(
+                      value: 'cetak',
+                      child: ListTile(
+                        leading: Icon(Icons.print_outlined),
+                        title: Text('Cetak Laporan'),
+                        contentPadding: EdgeInsets.zero,
+                        dense: true,
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'bagikan',
+                      child: ListTile(
+                        leading: Icon(Icons.share_outlined),
+                        title: Text('Bagikan Laporan'),
+                        contentPadding: EdgeInsets.zero,
+                        dense: true,
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'unduh',
+                      child: ListTile(
+                        leading: Icon(Icons.download_outlined),
+                        title: Text('Unduh Berkas (PDF/Excel/CSV)'),
+                        contentPadding: EdgeInsets.zero,
+                        dense: true,
+                      ),
+                    ),
+                    const PopupMenuDivider(),
+                    const PopupMenuItem(
+                      value: 'kolase',
+                      child: ListTile(
+                        leading: Icon(Icons.auto_awesome_mosaic_outlined),
+                        title: Text('Kolase Gambar Dokumentasi'),
+                        contentPadding: EdgeInsets.zero,
+                        dense: true,
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'cek_massal',
+                      child: ListTile(
+                        leading: Icon(Icons.fact_check_outlined),
+                        title: Text('Cek Status Bayar Massal'),
+                        contentPadding: EdgeInsets.zero,
+                        dense: true,
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'kalkulator_ajb',
+                      child: ListTile(
+                        leading: Icon(Icons.calculate_outlined),
+                        title: Text('Kalkulator AJB & Simulasi NJOP'),
+                        contentPadding: EdgeInsets.zero,
+                        dense: true,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ],
+          ),
+          body: SafeArea(
+            child: AnimatedSwitcher(
+              duration: AppMotion.resolve(context, AppMotion.complex),
+              switchInCurve: AppMotion.enterCurve,
+              switchOutCurve: AppMotion.exitCurve,
+              child: (_loading || (_busy && _allBloks.isEmpty))
+                  ? BlokCatatanLoadingView(
+                      key: const ValueKey('loading-view'),
+                      title: _loading
+                          ? 'Memuat Data DHKP & Status Bayar'
+                          : _busyMessage,
+                    )
+                  : (_allBloks.isEmpty || (!_isOperator && _bloks.isEmpty))
+                  ? Center(
+                      key: const ValueKey('empty-view'),
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 480),
+                          child: AppEmptyStateCard(
+                            icon: Icons.folder_open_rounded,
+                            title: 'Belum Ada Data DHKP',
+                            subtitle:
+                                'Belum ada data DHKP. Tekan tombol di bawah atau menu tiga titik (⋮) di kanan atas lalu pilih Unggah Berkas DHKP '
+                                'untuk memuat berkas daftar pajak.',
+                            actionLabel: 'Unggah Berkas DHKP',
+                            actionIcon: Icons.upload_file_outlined,
+                            onAction: _uploadDataDialog,
+                          ),
+                        ),
+                      ),
+                    )
+                  : Padding(
+                      key: const ValueKey('content-view'),
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          if (DusunData.instance.isDusunLocked) ...[
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
+                              decoration: BoxDecoration(
+                                color: isDark
+                                    ? Colors.blueGrey.shade900
+                                    : Colors.blue.shade50,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: isDark
+                                      ? Colors.blueGrey.shade700
+                                      : Colors.blue.shade200,
                                 ),
-                                onChanged: (val) {
-                                  setState(() {
-                                    _searchQuery = val;
-                                    _currentPage = 0;
-                                  });
-                                  _loadRecords();
-                                },
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.lock_outline_rounded,
+                                    size: 18,
+                                    color: isDark
+                                        ? Colors.blue.shade200
+                                        : Colors.blue.shade700,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      'Pembatas Wilayah: Dusun $_selectedWilayah (${_bloks.length} blok)',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 13,
+                                        color: isDark
+                                            ? Colors.blue.shade200
+                                            : Colors.blue.shade800,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                            const SizedBox(width: 8),
-                            PopupMenuButton<DhkpKategoriFilter>(
-                              tooltip:
-                                  'Filter Kategori: ${_kategoriFilter.label}',
-                              initialValue: _kategoriFilter,
-                              onSelected: _pilihKategori,
-                              itemBuilder: (context) => [
-                                for (final k in DhkpKategoriFilter.values)
-                                  PopupMenuItem<DhkpKategoriFilter>(
-                                    value: k,
-                                    child: Row(
-                                      children: [
-                                        Icon(
-                                          _kategoriFilter == k
-                                              ? Icons
-                                                    .radio_button_checked_rounded
-                                              : Icons
-                                                    .radio_button_unchecked_rounded,
-                                          size: 18,
-                                          color: _kategoriFilter == k
-                                              ? Theme.of(
-                                                  context,
-                                                ).colorScheme.primary
-                                              : null,
-                                        ),
-                                        const SizedBox(width: 10),
-                                        Text(
-                                          k.label,
-                                          style: TextStyle(
-                                            fontWeight: _kategoriFilter == k
-                                                ? FontWeight.bold
-                                                : FontWeight.normal,
-                                          ),
-                                        ),
-                                      ],
+                            const SizedBox(height: 8),
+                          ] else if (_isOperator || dusunList.length > 1) ...[
+                            DropdownButtonFormField<int?>(
+                              initialValue: _selectedWilayah,
+                              decoration: const InputDecoration(
+                                labelText: 'Wilayah (Dusun)',
+                                border: OutlineInputBorder(),
+                              ),
+                              items: [
+                                const DropdownMenuItem<int?>(
+                                  value: null,
+                                  child: Text('Semua Wilayah (Desa)'),
+                                ),
+                                for (final dusun in dusunList)
+                                  DropdownMenuItem<int?>(
+                                    value: dusun.number,
+                                    child: Text(
+                                      '${dusun.label} (${dusun.bloks.length} blok)',
                                     ),
                                   ),
                               ],
-                              child: Container(
-                                height: 40,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                ),
-                                decoration: BoxDecoration(
-                                  color:
-                                      _kategoriFilter !=
-                                          DhkpKategoriFilter.semua
-                                      ? Theme.of(
-                                          context,
-                                        ).colorScheme.primaryContainer
-                                      : null,
-                                  border: Border.all(
-                                    color:
-                                        _kategoriFilter !=
-                                            DhkpKategoriFilter.semua
-                                        ? Theme.of(context).colorScheme.primary
-                                        : Theme.of(context).colorScheme.outline,
+                              onChanged: _pilihWilayah,
+                            ),
+                            const SizedBox(height: 8),
+                          ],
+                          Row(
+                            key: _filterBlokTahunKey,
+                            children: [
+                              Expanded(
+                                flex: 2,
+                                child: DropdownButtonFormField<String>(
+                                  key: ValueKey(
+                                    'blok-dropdown-$_selectedWilayah',
                                   ),
-                                  borderRadius: BorderRadius.circular(6),
+                                  initialValue: _selectedBlok,
+                                  isExpanded: true,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Blok',
+                                    border: OutlineInputBorder(),
+                                  ),
+                                  items: [
+                                    const DropdownMenuItem(
+                                      value: semuaBlokValue,
+                                      child: Text(
+                                        'Semua Blok',
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    for (final b in _bloks)
+                                      DropdownMenuItem(
+                                        value: b,
+                                        child: Text(
+                                          'Blok ${int.tryParse(b) ?? b}',
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                  ],
+                                  onChanged: _pilihBlok,
                                 ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      _kategoriFilter !=
-                                              DhkpKategoriFilter.semua
-                                          ? Icons.filter_alt_rounded
-                                          : Icons.filter_list_rounded,
-                                      size: 20,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: DropdownButtonFormField<String>(
+                                  initialValue: _selectedTahun,
+                                  isExpanded: true,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Tahun',
+                                    border: OutlineInputBorder(),
+                                    isDense: true,
+                                    contentPadding: EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 10,
+                                    ),
+                                  ),
+                                  items: [
+                                    for (final y in availableDhkpYears())
+                                      DropdownMenuItem(
+                                        value: '$y',
+                                        child: Text('$y'),
+                                      ),
+                                  ],
+                                  onChanged: (v) {
+                                    if (v != null) _pilihTahun(v);
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (!_tampilkanGrafik) ...[
+                            const SizedBox(height: 8),
+                            Row(
+                              key: _searchFilterSortKey,
+                              children: [
+                                Expanded(
+                                  child: TextField(
+                                    controller: _searchController,
+                                    decoration: InputDecoration(
+                                      hintText:
+                                          'Cari Nama WP, NOP, atau Alamat Objek...',
+                                      prefixIcon: const Icon(
+                                        Icons.search,
+                                        size: 20,
+                                      ),
+                                      suffixIcon: _searchQuery.isNotEmpty
+                                          ? IconButton(
+                                              icon: const Icon(
+                                                Icons.clear,
+                                                size: 18,
+                                              ),
+                                              onPressed: () {
+                                                _searchController.clear();
+                                                setState(() {
+                                                  _searchQuery = '';
+                                                  _currentPage = 0;
+                                                });
+                                                _loadRecords();
+                                              },
+                                            )
+                                          : null,
+                                      border: const OutlineInputBorder(),
+                                      contentPadding:
+                                          const EdgeInsets.symmetric(
+                                            horizontal: 12,
+                                            vertical: 10,
+                                          ),
+                                      isDense: true,
+                                    ),
+                                    onChanged: (val) {
+                                      setState(() {
+                                        _searchQuery = val;
+                                        _currentPage = 0;
+                                      });
+                                      _loadRecords();
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                PopupMenuButton<DhkpKategoriFilter>(
+                                  tooltip:
+                                      'Filter Kategori: ${_kategoriFilter.label}',
+                                  initialValue: _kategoriFilter,
+                                  onSelected: _pilihKategori,
+                                  itemBuilder: (context) => [
+                                    for (final k in DhkpKategoriFilter.values)
+                                      PopupMenuItem<DhkpKategoriFilter>(
+                                        value: k,
+                                        child: Row(
+                                          children: [
+                                            Icon(
+                                              _kategoriFilter == k
+                                                  ? Icons
+                                                        .radio_button_checked_rounded
+                                                  : Icons
+                                                        .radio_button_unchecked_rounded,
+                                              size: 18,
+                                              color: _kategoriFilter == k
+                                                  ? Theme.of(
+                                                      context,
+                                                    ).colorScheme.primary
+                                                  : null,
+                                            ),
+                                            const SizedBox(width: 10),
+                                            Text(
+                                              k.label,
+                                              style: TextStyle(
+                                                fontWeight: _kategoriFilter == k
+                                                    ? FontWeight.bold
+                                                    : FontWeight.normal,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                  ],
+                                  child: Container(
+                                    height: 40,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                    ),
+                                    decoration: BoxDecoration(
                                       color:
                                           _kategoriFilter !=
                                               DhkpKategoriFilter.semua
                                           ? Theme.of(
                                               context,
-                                            ).colorScheme.onPrimaryContainer
+                                            ).colorScheme.primaryContainer
                                           : null,
+                                      border: Border.all(
+                                        color:
+                                            _kategoriFilter !=
+                                                DhkpKategoriFilter.semua
+                                            ? Theme.of(
+                                                context,
+                                              ).colorScheme.primary
+                                            : Theme.of(
+                                                context,
+                                              ).colorScheme.outline,
+                                      ),
+                                      borderRadius: BorderRadius.circular(6),
                                     ),
-                                    if (_kategoriFilter !=
-                                        DhkpKategoriFilter.semua) ...[
-                                      const SizedBox(width: 6),
-                                      Text(
-                                        _kategoriFilter.label,
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w600,
-                                          color: Theme.of(
-                                            context,
-                                          ).colorScheme.onPrimaryContainer,
-                                        ),
-                                      ),
-                                    ],
-                                  ],
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            Tooltip(
-                              message: _sembunyikanNihil
-                                  ? 'SPPT Rp 0 (Nihil) sedang dikecualikan — ketuk untuk menampilkan kembali'
-                                  : 'Kecualikan SPPT Rp 0 (Nihil) dari tampilan dan cetakan',
-                              child: InkWell(
-                                key: const ValueKey('dhkp_exclude_nihil_btn'),
-                                borderRadius: BorderRadius.circular(6),
-                                onTap: _toggleSembunyikanNihil,
-                                child: Container(
-                                  height: 40,
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 10,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: _sembunyikanNihil
-                                        ? Theme.of(
-                                            context,
-                                          ).colorScheme.tertiaryContainer
-                                        : null,
-                                    border: Border.all(
-                                      color: _sembunyikanNihil
-                                          ? Theme.of(
-                                              context,
-                                            ).colorScheme.tertiary
-                                          : Theme.of(
-                                              context,
-                                            ).colorScheme.outline,
-                                    ),
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(
-                                        Icons.money_off_csred_outlined,
-                                        size: 18,
-                                        color: _sembunyikanNihil
-                                            ? Theme.of(context)
-                                                  .colorScheme
-                                                  .onTertiaryContainer
-                                            : null,
-                                      ),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        'Tanpa Rp 0',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          fontWeight: _sembunyikanNihil
-                                              ? FontWeight.w700
-                                              : FontWeight.w500,
-                                          color: _sembunyikanNihil
-                                              ? Theme.of(context)
-                                                    .colorScheme
-                                                    .onTertiaryContainer
-                                              : null,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            PopupMenuButton<BlokSortBy>(
-                              tooltip: 'Urutkan: ${_sortBy.label}',
-                              initialValue: _sortBy,
-                              onSelected: _pilihSort,
-                              itemBuilder: (context) => [
-                                for (final s in BlokSortBy.values)
-                                  PopupMenuItem<BlokSortBy>(
-                                    value: s,
                                     child: Row(
+                                      mainAxisSize: MainAxisSize.min,
                                       children: [
                                         Icon(
-                                          _sortBy == s
-                                              ? Icons.check_circle_rounded
-                                              : Icons.circle_outlined,
-                                          size: 18,
-                                          color: _sortBy == s
+                                          _kategoriFilter !=
+                                                  DhkpKategoriFilter.semua
+                                              ? Icons.filter_alt_rounded
+                                              : Icons.filter_list_rounded,
+                                          size: 20,
+                                          color:
+                                              _kategoriFilter !=
+                                                  DhkpKategoriFilter.semua
                                               ? Theme.of(
                                                   context,
-                                                ).colorScheme.primary
+                                                ).colorScheme.onPrimaryContainer
                                               : null,
                                         ),
-                                        const SizedBox(width: 10),
-                                        Text(
-                                          s.label,
-                                          style: TextStyle(
-                                            fontWeight: _sortBy == s
-                                                ? FontWeight.bold
-                                                : FontWeight.normal,
+                                        if (_kategoriFilter !=
+                                            DhkpKategoriFilter.semua) ...[
+                                          const SizedBox(width: 6),
+                                          Text(
+                                            _kategoriFilter.label,
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w600,
+                                              color: Theme.of(
+                                                context,
+                                              ).colorScheme.onPrimaryContainer,
+                                            ),
                                           ),
+                                        ],
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Tooltip(
+                                  message: _sembunyikanNihil
+                                      ? 'SPPT Rp 0 (Nihil) sedang dikecualikan — ketuk untuk menampilkan kembali'
+                                      : 'Kecualikan SPPT Rp 0 (Nihil) dari tampilan dan cetakan',
+                                  child: InkWell(
+                                    key: const ValueKey(
+                                      'dhkp_exclude_nihil_btn',
+                                    ),
+                                    borderRadius: BorderRadius.circular(6),
+                                    onTap: _toggleSembunyikanNihil,
+                                    child: Container(
+                                      height: 40,
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 10,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: _sembunyikanNihil
+                                            ? Theme.of(
+                                                context,
+                                              ).colorScheme.tertiaryContainer
+                                            : null,
+                                        border: Border.all(
+                                          color: _sembunyikanNihil
+                                              ? Theme.of(
+                                                  context,
+                                                ).colorScheme.tertiary
+                                              : Theme.of(
+                                                  context,
+                                                ).colorScheme.outline,
+                                        ),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            Icons.money_off_csred_outlined,
+                                            size: 18,
+                                            color: _sembunyikanNihil
+                                                ? Theme.of(context)
+                                                      .colorScheme
+                                                      .onTertiaryContainer
+                                                : null,
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            'Tanpa Rp 0',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: _sembunyikanNihil
+                                                  ? FontWeight.w700
+                                                  : FontWeight.w500,
+                                              color: _sembunyikanNihil
+                                                  ? Theme.of(context)
+                                                        .colorScheme
+                                                        .onTertiaryContainer
+                                                  : null,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                PopupMenuButton<BlokSortBy>(
+                                  tooltip: 'Urutkan: ${_sortBy.label}',
+                                  initialValue: _sortBy,
+                                  onSelected: _pilihSort,
+                                  itemBuilder: (context) => [
+                                    for (final s in BlokSortBy.values)
+                                      PopupMenuItem<BlokSortBy>(
+                                        value: s,
+                                        child: Row(
+                                          children: [
+                                            Icon(
+                                              _sortBy == s
+                                                  ? Icons.check_circle_rounded
+                                                  : Icons.circle_outlined,
+                                              size: 18,
+                                              color: _sortBy == s
+                                                  ? Theme.of(
+                                                      context,
+                                                    ).colorScheme.primary
+                                                  : null,
+                                            ),
+                                            const SizedBox(width: 10),
+                                            Text(
+                                              s.label,
+                                              style: TextStyle(
+                                                fontWeight: _sortBy == s
+                                                    ? FontWeight.bold
+                                                    : FontWeight.normal,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                  ],
+                                  child: Container(
+                                    height: 40,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: _sortBy != BlokSortBy.blokWilayah
+                                          ? Theme.of(
+                                              context,
+                                            ).colorScheme.secondaryContainer
+                                          : null,
+                                      border: Border.all(
+                                        color: _sortBy != BlokSortBy.blokWilayah
+                                            ? Theme.of(
+                                                context,
+                                              ).colorScheme.secondary
+                                            : Theme.of(
+                                                context,
+                                              ).colorScheme.outline,
+                                      ),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          Icons.sort_rounded,
+                                          size: 20,
+                                          color:
+                                              _sortBy != BlokSortBy.blokWilayah
+                                              ? Theme.of(context)
+                                                    .colorScheme
+                                                    .onSecondaryContainer
+                                              : null,
                                         ),
                                       ],
                                     ),
                                   ),
+                                ),
                               ],
-                              child: Container(
-                                height: 40,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: _sortBy != BlokSortBy.blokWilayah
-                                      ? Theme.of(
-                                          context,
-                                        ).colorScheme.secondaryContainer
-                                      : null,
-                                  border: Border.all(
-                                    color: _sortBy != BlokSortBy.blokWilayah
-                                        ? Theme.of(
-                                            context,
-                                          ).colorScheme.secondary
-                                        : Theme.of(context).colorScheme.outline,
-                                  ),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      Icons.sort_rounded,
-                                      size: 20,
-                                      color: _sortBy != BlokSortBy.blokWilayah
-                                          ? Theme.of(
-                                              context,
-                                            ).colorScheme.onSecondaryContainer
-                                          : null,
-                                    ),
-                                  ],
-                                ),
-                              ),
                             ),
                           ],
-                        ),
-                      ],
-                      SmoothActivityBanner(
-                        isActive: _busy,
-                        message: _busyMessage,
-                        icon: _busyIcon,
-                        margin: const EdgeInsets.symmetric(vertical: 6),
-                      ),
-                      if (!_busy) const SizedBox(height: 8),
-                      Expanded(
-                        child: _tampilkanGrafik
-                            ? DhkpGrafikView(
-                                key: ValueKey(
-                                  'dhkp_grafik_${_selectedBlok}_${_selectedWilayah}_$_selectedTahun',
-                                ),
-                                records: _allScopeRecords.isNotEmpty
-                                    ? _allScopeRecords
-                                    : _records,
-                                selectedBlok: _selectedBlok,
-                                selectedWilayah: _selectedWilayah,
-                                selectedTahun: _selectedTahun,
-                                onTahunChanged: _pilihTahun,
-                                onRegisterShowTour: (fn) =>
-                                    _showGrafikTour = fn,
-                                onRegisterPrintShortcut: (fn) =>
-                                    _printGrafikCallback = fn,
-                              )
-                            : _records.isEmpty
-                            ? const Center(
-                                child: Text('Tidak ada data untuk filter ini.'),
-                              )
-                            : () {
-                                final totalRecords = _records.length;
-                                final totalPages = _rowsPerPage > 0
-                                    ? (totalRecords == 0
-                                          ? 1
-                                          : ((totalRecords - 1) ~/
-                                                    _rowsPerPage) +
-                                                1)
-                                    : 1;
-                                final safePage = _currentPage.clamp(
-                                  0,
-                                  totalPages > 0 ? totalPages - 1 : 0,
-                                );
-                                final startIndex = _rowsPerPage > 0
-                                    ? safePage * _rowsPerPage
-                                    : 0;
-                                final endIndex = _rowsPerPage > 0
-                                    ? ((safePage + 1) * _rowsPerPage >
-                                              totalRecords
-                                          ? totalRecords
-                                          : (safePage + 1) * _rowsPerPage)
-                                    : totalRecords;
-                                final pagedRecords = totalRecords == 0
-                                    ? <BlokRecord>[]
-                                    : _records.sublist(startIndex, endIndex);
+                          SmoothActivityBanner(
+                            isActive: _busy,
+                            message: _busyMessage,
+                            icon: _busyIcon,
+                            margin: const EdgeInsets.symmetric(vertical: 6),
+                          ),
+                          if (!_busy) const SizedBox(height: 8),
+                          Expanded(
+                            child: _tampilkanGrafik
+                                ? DhkpGrafikView(
+                                    key: ValueKey(
+                                      'dhkp_grafik_${_selectedBlok}_${_selectedWilayah}_$_selectedTahun',
+                                    ),
+                                    records: _allScopeRecords.isNotEmpty
+                                        ? _allScopeRecords
+                                        : _records,
+                                    selectedBlok: _selectedBlok,
+                                    selectedWilayah: _selectedWilayah,
+                                    selectedTahun: _selectedTahun,
+                                    onTahunChanged: _pilihTahun,
+                                    onRegisterShowTour: (fn) =>
+                                        _showGrafikTour = fn,
+                                    onRegisterPrintShortcut: (fn) =>
+                                        _printGrafikCallback = fn,
+                                  )
+                                : _records.isEmpty
+                                ? const Center(
+                                    child: Text(
+                                      'Tidak ada data untuk filter ini.',
+                                    ),
+                                  )
+                                : () {
+                                    final totalRecords = _records.length;
+                                    final totalPages = _rowsPerPage > 0
+                                        ? (totalRecords == 0
+                                              ? 1
+                                              : ((totalRecords - 1) ~/
+                                                        _rowsPerPage) +
+                                                    1)
+                                        : 1;
+                                    final safePage = _currentPage.clamp(
+                                      0,
+                                      totalPages > 0 ? totalPages - 1 : 0,
+                                    );
+                                    final startIndex = _rowsPerPage > 0
+                                        ? safePage * _rowsPerPage
+                                        : 0;
+                                    final endIndex = _rowsPerPage > 0
+                                        ? ((safePage + 1) * _rowsPerPage >
+                                                  totalRecords
+                                              ? totalRecords
+                                              : (safePage + 1) * _rowsPerPage)
+                                        : totalRecords;
+                                    final pagedRecords = totalRecords == 0
+                                        ? <BlokRecord>[]
+                                        : _records.sublist(
+                                            startIndex,
+                                            endIndex,
+                                          );
 
-                                return Column(
-                                  key: _tableAreaKey,
-                                  children: [
-                                    Expanded(
-                                      child: Scrollbar(
-                                        controller: _verticalScrollController,
-                                        thumbVisibility: true,
-                                        notificationPredicate: (notif) =>
-                                            notif.metrics.axis == Axis.vertical,
-                                        child: Scrollbar(
-                                          controller:
-                                              _horizontalScrollController,
-                                          thumbVisibility: true,
-                                          notificationPredicate: (notif) =>
-                                              notif.metrics.axis ==
-                                              Axis.horizontal,
-                                          child: SingleChildScrollView(
+                                    return Column(
+                                      key: _tableAreaKey,
+                                      children: [
+                                        Expanded(
+                                          child: Scrollbar(
                                             controller:
-                                                _horizontalScrollController,
-                                            scrollDirection: Axis.horizontal,
-                                            physics:
-                                                const AlwaysScrollableScrollPhysics(),
-                                            child: SingleChildScrollView(
+                                                _verticalScrollController,
+                                            thumbVisibility: true,
+                                            interactive: true,
+                                            notificationPredicate: (notif) =>
+                                                notif.metrics.axis ==
+                                                Axis.vertical,
+                                            child: Scrollbar(
                                               controller:
-                                                  _verticalScrollController,
-                                              scrollDirection: Axis.vertical,
-                                              physics:
-                                                  const AlwaysScrollableScrollPhysics(),
-                                              child: DataTable(
-                                                columnSpacing: 18,
-                                                horizontalMargin: 12,
-                                                columns: const [
-                                                  DataColumn(label: Text('No')),
-                                                  DataColumn(
-                                                    label: Text('Nama WP'),
-                                                  ),
-                                                  DataColumn(
-                                                    label: Text('NOP / Blok'),
-                                                  ),
-                                                  DataColumn(
-                                                    label: Text('Tahun Pajak'),
-                                                  ),
-                                                  DataColumn(
-                                                    label: Text(
-                                                      'Pokok / Ketetapan',
-                                                    ),
-                                                  ),
-                                                  DataColumn(
-                                                    label: Text('Status Bayar'),
-                                                  ),
-                                                  DataColumn(
-                                                    label: Text('Gambar'),
-                                                  ),
-                                                  DataColumn(
-                                                    label: Text('Aksi'),
-                                                  ),
-                                                  DataColumn(
-                                                    label: Text('Catatan'),
-                                                  ),
-                                                ],
-                                                rows: [
-                                                  for (
-                                                    var i = 0;
-                                                    i < pagedRecords.length;
-                                                    i++
-                                                  ) ...[
-                                                    () {
-                                                      final r = pagedRecords[i];
-                                                      final isDark =
-                                                          Theme.of(
-                                                            context,
-                                                          ).brightness ==
-                                                          Brightness.dark;
+                                                  _horizontalScrollController,
+                                              thumbVisibility: true,
+                                              trackVisibility: true,
+                                              interactive: true,
+                                              scrollbarOrientation:
+                                                  ScrollbarOrientation.bottom,
+                                              notificationPredicate: (notif) =>
+                                                  notif.metrics.axis ==
+                                                  Axis.horizontal,
+                                              child: SingleChildScrollView(
+                                                controller:
+                                                    _horizontalScrollController,
+                                                scrollDirection:
+                                                    Axis.horizontal,
+                                                physics:
+                                                    const AlwaysScrollableScrollPhysics(),
+                                                child: SingleChildScrollView(
+                                                  controller:
+                                                      _verticalScrollController,
+                                                  scrollDirection:
+                                                      Axis.vertical,
+                                                  physics:
+                                                      const AlwaysScrollableScrollPhysics(),
+                                                  child: DataTable(
+                                                    columnSpacing: 18,
+                                                    horizontalMargin: 12,
+                                                    columns: const [
+                                                      DataColumn(
+                                                        label: Text('No'),
+                                                      ),
+                                                      DataColumn(
+                                                        label: Text('Nama WP'),
+                                                      ),
+                                                      DataColumn(
+                                                        label: Text(
+                                                          'NOP / Blok',
+                                                        ),
+                                                      ),
+                                                      DataColumn(
+                                                        label: Text(
+                                                          'Tahun Pajak',
+                                                        ),
+                                                      ),
+                                                      DataColumn(
+                                                        label: Text(
+                                                          'Pokok / Ketetapan',
+                                                        ),
+                                                      ),
+                                                      DataColumn(
+                                                        label: Text(
+                                                          'Status Bayar',
+                                                        ),
+                                                      ),
+                                                      DataColumn(
+                                                        label: Text('Gambar'),
+                                                      ),
+                                                      DataColumn(
+                                                        label: Text('Aksi'),
+                                                      ),
+                                                      DataColumn(
+                                                        label: Text('Catatan'),
+                                                      ),
+                                                    ],
+                                                    rows: [
+                                                      for (
+                                                        var i = 0;
+                                                        i < pagedRecords.length;
+                                                        i++
+                                                      ) ...[
+                                                        () {
+                                                          final r =
+                                                              pagedRecords[i];
+                                                          final isDark =
+                                                              Theme.of(
+                                                                context,
+                                                              ).brightness ==
+                                                              Brightness.dark;
 
-                                                      return DataRow(
-                                                        color: WidgetStateProperty.resolveWith<Color?>((
-                                                          states,
-                                                        ) {
-                                                          if (r.isTargetPemda) {
-                                                            return isDark
-                                                                ? Colors
-                                                                      .red
-                                                                      .shade900
-                                                                      .withValues(
-                                                                        alpha:
-                                                                            0.38,
-                                                                      )
-                                                                : Colors
-                                                                      .red
-                                                                      .shade100
-                                                                      .withValues(
-                                                                        alpha:
-                                                                            0.65,
-                                                                      );
-                                                          }
-                                                          return null;
-                                                        }),
-                                                        cells: [
-                                                          DataCell(
-                                                            Row(
-                                                              mainAxisSize:
-                                                                  MainAxisSize
-                                                                      .min,
-                                                              children: [
-                                                                Text(
-                                                                  '${startIndex + i + 1}',
-                                                                ),
-                                                                if (r
-                                                                    .isTargetPemda) ...[
-                                                                  const SizedBox(
-                                                                    width: 4,
-                                                                  ),
-                                                                  Container(
-                                                                    padding: const EdgeInsets.symmetric(
-                                                                      horizontal:
-                                                                          4,
-                                                                      vertical:
-                                                                          1,
-                                                                    ),
-                                                                    decoration: BoxDecoration(
-                                                                      color: Colors
+                                                          return DataRow(
+                                                            color: WidgetStateProperty.resolveWith<Color?>((
+                                                              states,
+                                                            ) {
+                                                              if (r
+                                                                  .isTargetPemda) {
+                                                                return isDark
+                                                                    ? Colors
                                                                           .red
-                                                                          .shade700,
-                                                                      borderRadius:
-                                                                          BorderRadius.circular(
+                                                                          .shade900
+                                                                          .withValues(
+                                                                            alpha:
+                                                                                0.38,
+                                                                          )
+                                                                    : Colors
+                                                                          .red
+                                                                          .shade100
+                                                                          .withValues(
+                                                                            alpha:
+                                                                                0.65,
+                                                                          );
+                                                              }
+                                                              return null;
+                                                            }),
+                                                            cells: [
+                                                              DataCell(
+                                                                Row(
+                                                                  mainAxisSize:
+                                                                      MainAxisSize
+                                                                          .min,
+                                                                  children: [
+                                                                    Text(
+                                                                      '${startIndex + i + 1}',
+                                                                    ),
+                                                                    if (r
+                                                                        .isTargetPemda) ...[
+                                                                      const SizedBox(
+                                                                        width:
                                                                             4,
-                                                                          ),
-                                                                    ),
-                                                                    child: const Text(
-                                                                      'PEMDA',
-                                                                      style: TextStyle(
-                                                                        color: Colors
-                                                                            .white,
-                                                                        fontSize:
-                                                                            9,
-                                                                        fontWeight:
-                                                                            FontWeight.bold,
                                                                       ),
-                                                                    ),
-                                                                  ),
-                                                                ],
-                                                              ],
-                                                            ),
-                                                          ),
-                                                          DataCell(
-                                                            Text(
-                                                              r.namaWajibPajak,
-                                                              style: const TextStyle(
-                                                                fontWeight:
-                                                                    FontWeight
-                                                                        .w600,
+                                                                      Container(
+                                                                        padding: const EdgeInsets.symmetric(
+                                                                          horizontal:
+                                                                              4,
+                                                                          vertical:
+                                                                              1,
+                                                                        ),
+                                                                        decoration: BoxDecoration(
+                                                                          color: Colors
+                                                                              .red
+                                                                              .shade700,
+                                                                          borderRadius:
+                                                                              BorderRadius.circular(
+                                                                                4,
+                                                                              ),
+                                                                        ),
+                                                                        child: const Text(
+                                                                          'PEMDA',
+                                                                          style: TextStyle(
+                                                                            color:
+                                                                                Colors.white,
+                                                                            fontSize:
+                                                                                9,
+                                                                            fontWeight:
+                                                                                FontWeight.bold,
+                                                                          ),
+                                                                        ),
+                                                                      ),
+                                                                    ],
+                                                                  ],
+                                                                ),
                                                               ),
-                                                            ),
-                                                          ),
-                                                          DataCell(
-                                                            Column(
-                                                              crossAxisAlignment:
-                                                                  CrossAxisAlignment
-                                                                      .start,
-                                                              mainAxisAlignment:
-                                                                  MainAxisAlignment
-                                                                      .center,
-                                                              children: [
+                                                              DataCell(
                                                                 Text(
-                                                                  r.nop,
+                                                                  r.namaWajibPajak,
                                                                   style: const TextStyle(
                                                                     fontWeight:
                                                                         FontWeight
-                                                                            .w500,
+                                                                            .w600,
                                                                   ),
                                                                 ),
-                                                                Text(
-                                                                  'Blok ${r.blok} No ${r.wilayah}',
-                                                                  style: const TextStyle(
-                                                                    fontSize:
-                                                                        11,
-                                                                    color: Colors
-                                                                        .grey,
-                                                                  ),
-                                                                ),
-                                                              ],
-                                                            ),
-                                                          ),
-                                                          DataCell(
-                                                            Text(r.tahunBayar),
-                                                          ),
-                                                          DataCell(
-                                                            Text(r.formattedJumlahPbb),
-                                                          ),
-                                                          DataCell(
-                                                            DhkpStatusBadge(
-                                                              record: r,
-                                                            ),
-                                                          ),
-                                                          DataCell(
-                                                            _buildGambarCell(r),
-                                                          ),
-                                                          DataCell(
-                                                            Row(
-                                                              mainAxisSize:
-                                                                  MainAxisSize
-                                                                      .min,
-                                                              children: [
-                                                                IconButton(
-                                                                  onPressed: () =>
-                                                                      _bukaRincianDialog(
-                                                                        r,
+                                                              ),
+                                                              DataCell(
+                                                                Column(
+                                                                  crossAxisAlignment:
+                                                                      CrossAxisAlignment
+                                                                          .start,
+                                                                  mainAxisAlignment:
+                                                                      MainAxisAlignment
+                                                                          .center,
+                                                                  children: [
+                                                                    Text(
+                                                                      r.nop,
+                                                                      style: const TextStyle(
+                                                                        fontWeight:
+                                                                            FontWeight.w500,
                                                                       ),
-                                                                  icon: const Icon(
-                                                                    Icons
-                                                                        .receipt_long,
-                                                                    color: Colors
-                                                                        .blue,
-                                                                  ),
-                                                                  tooltip:
-                                                                      'Rincian Objek & Pembayaran',
-                                                                ),
-                                                                if (r.isPaid)
-                                                                  IconButton(
-                                                                    onPressed: () =>
-                                                                        _cetakBuktiBayar(
-                                                                          r,
-                                                                        ),
-                                                                    icon: const Icon(
-                                                                      Icons
-                                                                          .picture_as_pdf,
-                                                                      color: Colors
-                                                                          .green,
                                                                     ),
-                                                                    tooltip:
-                                                                        'Cetak Bukti Bayar',
-                                                                  )
-                                                                else
-                                                                  IconButton(
-                                                                    onPressed: () =>
-                                                                        _bukaStatusBayar(
-                                                                          r,
-                                                                        ),
-                                                                    icon: const Icon(
-                                                                      Icons
-                                                                          .fact_check_outlined,
-                                                                      color: Colors
-                                                                          .teal,
+                                                                    Text(
+                                                                      'Blok ${r.blok} No ${r.wilayah}',
+                                                                      style: const TextStyle(
+                                                                        fontSize:
+                                                                            11,
+                                                                        color: Colors
+                                                                            .grey,
+                                                                      ),
                                                                     ),
-                                                                    tooltip:
-                                                                        'Cek Status Bayar (Update jika Lunas)',
-                                                                  ),
-                                                                IconButton(
-                                                                  onPressed: () =>
-                                                                      _bukaKalkulatorNop(r),
-                                                                  icon: const Icon(
-                                                                    Icons
-                                                                        .calculate_outlined,
-                                                                    color: Colors
-                                                                        .deepPurple,
-                                                                  ),
-                                                                  tooltip:
-                                                                      'Kalkulator Denda, Cicilan & AJB',
+                                                                  ],
                                                                 ),
-                                                              ],
-                                                            ),
-                                                          ),
-                                                          DataCell(
-                                                            () {
-                                                              final cleanCatatan =
-                                                                  PbbTabunganHelper.cleanCatatan(
-                                                                r.catatan,
-                                                              );
-                                                              final hasCatatan =
-                                                                  cleanCatatan.isNotEmpty;
+                                                              ),
+                                                              DataCell(
+                                                                Text(
+                                                                  r.tahunBayar,
+                                                                ),
+                                                              ),
+                                                              DataCell(
+                                                                Text(
+                                                                  r.formattedJumlahPbb,
+                                                                ),
+                                                              ),
+                                                              DataCell(
+                                                                DhkpStatusBadge(
+                                                                  record: r,
+                                                                ),
+                                                              ),
+                                                              DataCell(
+                                                                _buildGambarCell(
+                                                                  r,
+                                                                ),
+                                                              ),
+                                                              DataCell(
+                                                                Row(
+                                                                  mainAxisSize:
+                                                                      MainAxisSize
+                                                                          .min,
+                                                                  children: [
+                                                                    IconButton(
+                                                                      onPressed: () =>
+                                                                          _bukaRincianDialog(
+                                                                            r,
+                                                                          ),
+                                                                      icon: const Icon(
+                                                                        Icons
+                                                                            .receipt_long,
+                                                                        color: Colors
+                                                                            .blue,
+                                                                      ),
+                                                                      tooltip:
+                                                                          'Rincian Objek & Pembayaran',
+                                                                    ),
+                                                                    if (r
+                                                                        .isPaid)
+                                                                      IconButton(
+                                                                        onPressed: () =>
+                                                                            _cetakBuktiBayar(
+                                                                              r,
+                                                                            ),
+                                                                        icon: const Icon(
+                                                                          Icons
+                                                                              .picture_as_pdf,
+                                                                          color:
+                                                                              Colors.green,
+                                                                        ),
+                                                                        tooltip:
+                                                                            'Cetak Bukti Bayar',
+                                                                      )
+                                                                    else
+                                                                      IconButton(
+                                                                        onPressed: () =>
+                                                                            _bukaStatusBayar(
+                                                                              r,
+                                                                            ),
+                                                                        icon: const Icon(
+                                                                          Icons
+                                                                              .fact_check_outlined,
+                                                                          color:
+                                                                              Colors.teal,
+                                                                        ),
+                                                                        tooltip:
+                                                                            'Cek Status Bayar (Update jika Lunas)',
+                                                                      ),
+                                                                    IconButton(
+                                                                      onPressed: () =>
+                                                                          _bukaKalkulatorNop(
+                                                                            r,
+                                                                          ),
+                                                                      icon: const Icon(
+                                                                        Icons
+                                                                            .calculate_outlined,
+                                                                        color: Colors
+                                                                            .deepPurple,
+                                                                      ),
+                                                                      tooltip:
+                                                                          'Kalkulator Denda, Cicilan & AJB',
+                                                                    ),
+                                                                  ],
+                                                                ),
+                                                              ),
+                                                              DataCell(() {
+                                                                final cleanCatatan =
+                                                                    PbbTabunganHelper.cleanCatatan(
+                                                                      r.catatan,
+                                                                    );
+                                                                final hasCatatan =
+                                                                    cleanCatatan
+                                                                        .isNotEmpty;
 
-                                                              return Row(
-                                                                mainAxisSize:
-                                                                    MainAxisSize.min,
-                                                                children: [
-                                                                  IconButton(
-                                                                    onPressed: () =>
-                                                                        _editCatatanDialog(
-                                                                      r,
+                                                                return Row(
+                                                                  mainAxisSize:
+                                                                      MainAxisSize
+                                                                          .min,
+                                                                  children: [
+                                                                    IconButton(
+                                                                      onPressed: () =>
+                                                                          _editCatatanDialog(
+                                                                            r,
+                                                                          ),
+                                                                      icon: Icon(
+                                                                        hasCatatan
+                                                                            ? Icons.edit_note
+                                                                            : Icons.description_outlined,
+                                                                        color:
+                                                                            hasCatatan
+                                                                            ? Colors.amber.shade800
+                                                                            : Colors.grey.shade600,
+                                                                      ),
+                                                                      tooltip:
+                                                                          hasCatatan
+                                                                          ? 'Catatan: $cleanCatatan'
+                                                                          : 'Tambah Catatan Petugas',
                                                                     ),
-                                                                    icon: Icon(
-                                                                      hasCatatan
-                                                                          ? Icons.edit_note
-                                                                          : Icons.description_outlined,
-                                                                      color: hasCatatan
-                                                                          ? Colors.amber.shade800
-                                                                          : Colors.grey.shade600,
+                                                                    DhkpRowCelenganButton(
+                                                                      record: r,
+                                                                      onPressed: () =>
+                                                                          _bukaKalkulatorNop(
+                                                                            r,
+                                                                            initialTab:
+                                                                                1,
+                                                                          ),
                                                                     ),
-                                                                    tooltip: hasCatatan
-                                                                        ? 'Catatan: $cleanCatatan'
-                                                                        : 'Tambah Catatan Petugas',
-                                                                  ),
-                                                                  DhkpRowCelenganButton(
-                                                                    record: r,
-                                                                    onPressed: () =>
-                                                                        _bukaKalkulatorNop(
-                                                                      r,
-                                                                      initialTab: 1,
-                                                                    ),
-                                                                  ),
-                                                                ],
-                                                              );
-                                                            }(),
-                                                          ),
-                                                        ],
-                                                      );
-                                                    }(),
-                                                  ],
-                                                ],
+                                                                  ],
+                                                                );
+                                                              }()),
+                                                            ],
+                                                          );
+                                                        }(),
+                                                      ],
+                                                    ],
+                                                  ),
+                                                ),
                                               ),
                                             ),
                                           ),
                                         ),
-                                      ),
-                                    ),
-                                    BlokCatatanPaginationBar(
-                                      startIndex: startIndex,
-                                      endIndex: endIndex,
-                                      totalRecords: totalRecords,
-                                      safePage: safePage,
-                                      totalPages: totalPages,
-                                      rowsPerPage: _rowsPerPage,
-                                      onPageChanged: (page) =>
-                                          setState(() => _currentPage = page),
-                                      onRowsPerPageChanged: (rows) =>
-                                          setState(() {
-                                            _rowsPerPage = rows;
-                                            _currentPage = 0;
-                                          }),
-                                    ),
-                                  ],
-                                );
-                              }(),
+                                        BlokCatatanPaginationBar(
+                                          startIndex: startIndex,
+                                          endIndex: endIndex,
+                                          totalRecords: totalRecords,
+                                          safePage: safePage,
+                                          totalPages: totalPages,
+                                          rowsPerPage: _rowsPerPage,
+                                          onPageChanged: (page) => setState(
+                                            () => _currentPage = page,
+                                          ),
+                                          onRowsPerPageChanged: (rows) =>
+                                              setState(() {
+                                                _rowsPerPage = rows;
+                                                _currentPage = 0;
+                                              }),
+                                        ),
+                                      ],
+                                    );
+                                  }(),
+                          ),
+                          if (!_tampilkanGrafik)
+                            DhkpSummaryFooterCard(
+                              key: _summaryFooterKey,
+                              metrics: _summaryMetrics,
+                            ),
+                        ],
                       ),
-                      if (!_tampilkanGrafik)
-                        DhkpSummaryFooterCard(
-                          key: _summaryFooterKey,
-                          metrics: _summaryMetrics,
-                        ),
-                    ],
-                  ),
-                ),
+                    ),
             ),
           ),
         ),

@@ -141,10 +141,7 @@ class DhkpGrafikAnalytics {
   static DateTime? parsePaymentDate(String? raw) {
     if (raw == null) return null;
     final s = raw.trim();
-    if (s.isEmpty ||
-        RegExp(r'^\d{4}$').hasMatch(s) ||
-        s == '-' ||
-        s == '0') {
+    if (s.isEmpty || RegExp(r'^\d{4}$').hasMatch(s) || s == '-' || s == '0') {
       return null;
     }
     try {
@@ -356,8 +353,8 @@ class DhkpGrafikAnalytics {
         final lunasPct = (totalNominal > 0 && belumNominal > 0)
             ? (lunasNominal / totalNominal * 100)
             : (belumRecs.isEmpty
-                ? (dRecs.isNotEmpty ? 100.0 : 0.0)
-                : lunasNopPct);
+                  ? (dRecs.isNotEmpty ? 100.0 : 0.0)
+                  : lunasNopPct);
 
         list.add(
           DhkpGroupInfo(
@@ -407,8 +404,8 @@ class DhkpGrafikAnalytics {
         final lunasPct = (totalNominal > 0 && belumNominal > 0)
             ? (lunasNominal / totalNominal * 100)
             : (belumRecs.isEmpty
-                ? (bRecs.isNotEmpty ? 100.0 : 0.0)
-                : lunasNopPct);
+                  ? (bRecs.isNotEmpty ? 100.0 : 0.0)
+                  : lunasNopPct);
 
         list.add(
           DhkpGroupInfo(

@@ -120,8 +120,9 @@ class _StartupSetupScreenState extends State<StartupSetupScreen>
 
     if (_selectedDesaCode == null) return;
 
-    final hasMatchingDesa =
-        kec.desaList.any((d) => d.code == _selectedDesaCode);
+    final hasMatchingDesa = kec.desaList.any(
+      (d) => d.code == _selectedDesaCode,
+    );
     if (!hasMatchingDesa) {
       _isManualDesa = true;
       _selectedDesaCode = 'custom';
@@ -202,7 +203,10 @@ class _StartupSetupScreenState extends State<StartupSetupScreen>
           SnackBar(
             content: Row(
               children: [
-                const Icon(Icons.check_circle_rounded, color: Colors.greenAccent),
+                const Icon(
+                  Icons.check_circle_rounded,
+                  color: Colors.greenAccent,
+                ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
@@ -227,9 +231,9 @@ class _StartupSetupScreenState extends State<StartupSetupScreen>
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal mendeteksi lokasi: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Gagal mendeteksi lokasi: $e')));
     } finally {
       if (mounted) {
         setState(() {
@@ -245,6 +249,7 @@ class _StartupSetupScreenState extends State<StartupSetupScreen>
         type: FileType.custom,
         allowedExtensions: ['xlsx', 'xls', 'csv', 'dat', 'dkhp', 'txt'],
       );
+      if (!mounted) return;
       if (files.isNotEmpty && files.first.path != null) {
         final file = File(files.first.path!);
         setState(() {
@@ -253,9 +258,9 @@ class _StartupSetupScreenState extends State<StartupSetupScreen>
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal memilih berkas DHKP: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Gagal memilih berkas DHKP: $e')));
     }
   }
 
@@ -286,6 +291,8 @@ class _StartupSetupScreenState extends State<StartupSetupScreen>
       await prefs.setString(_prefKelCodeKey, kelCode);
       await prefs.setString(_prefKecNameKey, kecName);
       await prefs.setBool(_prefSetupKey, true);
+
+      if (!mounted) return;
 
       // Jika ada berkas DHKP yang dipilih, impor ke basis data lokal (opsional)
       if (_pickedDhkpFile != null) {
@@ -345,12 +352,12 @@ class _StartupSetupScreenState extends State<StartupSetupScreen>
         leading: widget.isStandaloneSettings
             ? const BackButton()
             : _currentStep > 0
-                ? IconButton(
-                    icon: const Icon(Icons.arrow_back_rounded),
-                    tooltip: 'Kembali ke langkah sebelumnya',
-                    onPressed: () => _goToStep(_currentStep - 1),
-                  )
-                : null,
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back_rounded),
+                tooltip: 'Kembali ke langkah sebelumnya',
+                onPressed: () => _goToStep(_currentStep - 1),
+              )
+            : null,
       ),
       body: SafeArea(
         child: Column(
@@ -362,7 +369,8 @@ class _StartupSetupScreenState extends State<StartupSetupScreen>
             Expanded(
               child: PageView(
                 controller: _pageController,
-                physics: const NeverScrollableScrollPhysics(), // Terpandu via tombol
+                physics:
+                    const NeverScrollableScrollPhysics(), // Terpandu via tombol
                 children: [
                   _buildStep1Greeting(context),
                   _buildStep2Wilayah(context),
@@ -411,8 +419,12 @@ class _StartupSetupScreenState extends State<StartupSetupScreen>
                           color: isCurrent
                               ? colorScheme.primaryContainer
                               : isPassed
-                                  ? colorScheme.secondaryContainer.withValues(alpha: 0.6)
-                                  : colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                              ? colorScheme.secondaryContainer.withValues(
+                                  alpha: 0.6,
+                                )
+                              : colorScheme.surfaceContainerHighest.withValues(
+                                  alpha: 0.5,
+                                ),
                           borderRadius: BorderRadius.circular(10),
                           border: Border.all(
                             color: isCurrent
@@ -432,8 +444,10 @@ class _StartupSetupScreenState extends State<StartupSetupScreen>
                                 color: isCurrent
                                     ? colorScheme.primary
                                     : isPassed
-                                        ? colorScheme.secondary
-                                        : colorScheme.outline.withValues(alpha: 0.3),
+                                    ? colorScheme.secondary
+                                    : colorScheme.outline.withValues(
+                                        alpha: 0.3,
+                                      ),
                               ),
                               child: Center(
                                 child: isPassed
@@ -616,8 +630,11 @@ class _StartupSetupScreenState extends State<StartupSetupScreen>
                   children: [
                     Row(
                       children: [
-                        Icon(Icons.shield_outlined,
-                            color: colorScheme.primary, size: 20),
+                        Icon(
+                          Icons.shield_outlined,
+                          color: colorScheme.primary,
+                          size: 20,
+                        ),
                         const SizedBox(width: 8),
                         const Text(
                           'Izin Akses Aplikasi',
@@ -633,20 +650,24 @@ class _StartupSetupScreenState extends State<StartupSetupScreen>
                       context,
                       icon: Icons.notifications_active_outlined,
                       title: 'Notifikasi',
-                      desc: 'Pengingat jatuh tempo PBB & info sinkronisasi data.',
+                      desc:
+                          'Pengingat jatuh tempo PBB & info sinkronisasi data.',
                     ),
                     const SizedBox(height: 8),
                     _buildPermissionInfoRow(
                       context,
                       icon: Icons.folder_open_rounded,
                       title: 'Penyimpanan',
-                      desc: 'Membaca paket DHKP (.dkhp/Excel) & ekspor laporan PDF.',
+                      desc:
+                          'Membaca paket DHKP (.dkhp/Excel) & ekspor laporan PDF.',
                     ),
                     const SizedBox(height: 8),
                     _buildPermissionInfoRow(
                       context,
                       icon: Icons.location_on_outlined,
-                      title: (Platform.isAndroid || Platform.isIOS) ? 'Lokasi GPS' : 'Lokasi Jaringan (IP)',
+                      title: (Platform.isAndroid || Platform.isIOS)
+                          ? 'Lokasi GPS'
+                          : 'Lokasi Jaringan (IP)',
                       desc: (Platform.isAndroid || Platform.isIOS)
                           ? 'Deteksi otomatis wilayah kerja & titik objek pajak di peta.'
                           : 'Deteksi otomatis wilayah kerja via jaringan internet (IP Geolocation).',
@@ -782,7 +803,9 @@ class _StartupSetupScreenState extends State<StartupSetupScreen>
   Widget _buildStep2Wilayah(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final kec = _selectedKecCode != null ? findKecamatanByCode(_selectedKecCode!) : null;
+    final kec = _selectedKecCode != null
+        ? findKecamatanByCode(_selectedKecCode!)
+        : null;
     final desaList = kec?.desaList ?? const <DesaOption>[];
 
     return SingleChildScrollView(
@@ -810,7 +833,9 @@ class _StartupSetupScreenState extends State<StartupSetupScreen>
                   gradient: LinearGradient(
                     colors: [
                       colorScheme.primaryContainer.withValues(alpha: 0.5),
-                      colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+                      colorScheme.surfaceContainerHighest.withValues(
+                        alpha: 0.35,
+                      ),
                     ],
                   ),
                   borderRadius: BorderRadius.circular(16),
@@ -862,7 +887,9 @@ class _StartupSetupScreenState extends State<StartupSetupScreen>
                     const SizedBox(height: 12),
                     FilledButton.tonalIcon(
                       key: const ValueKey('btn_auto_detect_location'),
-                      onPressed: _isDetectingLocation ? null : _handleAutoDetectLocation,
+                      onPressed: _isDetectingLocation
+                          ? null
+                          : _handleAutoDetectLocation,
                       icon: _isDetectingLocation
                           ? const SizedBox(
                               width: 16,
@@ -1129,12 +1156,15 @@ class _StartupSetupScreenState extends State<StartupSetupScreen>
                     flex: 2,
                     child: Builder(
                       builder: (context) {
-                        final bool isWilayahValid = _selectedKecCode != null &&
+                        final bool isWilayahValid =
+                            _selectedKecCode != null &&
                             ((!_isManualDesa &&
                                     _selectedDesaCode != null &&
                                     _selectedDesaCode != 'custom') ||
                                 (_isManualDesa &&
-                                    _desaNameController.text.trim().isNotEmpty &&
+                                    _desaNameController.text
+                                        .trim()
+                                        .isNotEmpty &&
                                     _kelCodeController.text.trim().isNotEmpty));
 
                         return FilledButton.icon(
@@ -1308,7 +1338,9 @@ class _StartupSetupScreenState extends State<StartupSetupScreen>
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                          color: colorScheme.surfaceContainerHighest.withValues(
+                            alpha: 0.5,
+                          ),
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Row(

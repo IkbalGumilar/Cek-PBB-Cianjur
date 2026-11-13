@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../ui/app_design_system.dart';
 import 'staff_portal_models.dart';
 
-class KolektifResultView extends StatelessWidget {
+class KolektifResultView extends StatefulWidget {
   final KolektifListResult result;
   final void Function(KolektifGroup group)? onAksi;
 
@@ -14,32 +15,158 @@ class KolektifResultView extends StatelessWidget {
   });
 
   @override
+  State<KolektifResultView> createState() => _KolektifResultViewState();
+}
+
+class _KolektifResultViewState extends State<KolektifResultView> {
+  bool? _forceTableMode;
+
+  static AppBadgeTone _toneForStatus(String status) {
+    final s = status.toLowerCase();
+    if (s.contains('sudah')) return AppBadgeTone.success;
+    if (s.contains('siap') || s.contains('final')) return AppBadgeTone.info;
+    if (s.contains('kedaluwarsa') || s.contains('kadaluarsa')) {
+      return AppBadgeTone.error;
+    }
+    return AppBadgeTone.warning;
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final result = widget.result;
     if (result.errorMessage != null) {
-      return Text(
-        result.errorMessage!,
-        style: const TextStyle(color: Colors.red),
+      return AppAlertBanner(
+        message: result.errorMessage!,
+        tone: AppBadgeTone.error,
       );
     }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Padding(
-          padding: EdgeInsets.only(bottom: 8),
-          child: Text(
-            'Ketuk baris grup untuk Kelola Anggota / Hapus Group.',
-            style: TextStyle(color: Colors.grey, fontSize: 12),
+    if (result.groups.isEmpty) {
+      return const AppEmptyStateCard(
+        icon: Icons.groups_2_outlined,
+        title: 'Belum Ada Grup Rombongan',
+        subtitle:
+            'Tidak ditemukan grup pembayaran kolektif untuk filter ini. Tekan "Buat Grup Rombongan Baru" di atas untuk memulai.',
+      );
+    }
+
+    final isMobile = AppBreakpoints.isMobileOf(context);
+    final useTableMode = _forceTableMode ?? !isMobile;
+    final scheme = Theme.of(context).colorScheme;
+
+    return AppAnimatedReveal(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Ketuk baris grup untuk Kelola Anggota / Hapus Group (${result.groups.length} grup).',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+              IconButton(
+                onPressed: () {
+                  setState(() => _forceTableMode = !useTableMode);
+                },
+                icon: Icon(
+                  useTableMode
+                      ? Icons.view_agenda_outlined
+                      : Icons.table_rows_outlined,
+                ),
+                tooltip: useTableMode
+                    ? 'Tampilkan sebagai Kartu Ringkas'
+                    : 'Tampilkan sebagai Tabel Lengkap',
+              ),
+            ],
           ),
-        ),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: _tabel(context),
-        ),
-      ],
+          const SizedBox(height: 6),
+          if (useTableMode)
+            Card(
+              margin: EdgeInsets.zero,
+              elevation: 0,
+              color: scheme.surfaceContainerLow,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+                side: BorderSide(
+                  color: scheme.outlineVariant.withValues(alpha: 0.5),
+                ),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: AppHorizontalTableScroll(child: _tabel(context)),
+            )
+          else
+            Column(
+              children: [
+                for (final g in result.groups)
+                  Card(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    elevation: 0,
+                    color: scheme.surfaceContainerLow,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      side: BorderSide(
+                        color: scheme.outlineVariant.withValues(alpha: 0.55),
+                      ),
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: InkWell(
+                      onTap: widget.onAksi == null
+                          ? null
+                          : () => widget.onAksi!(g),
+                      child: Padding(
+                        padding: const EdgeInsets.all(14),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    g.namaGroup,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleSmall
+                                        ?.copyWith(fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                AppStatusBadge(
+                                  label: g.status.isEmpty ? '-' : g.status,
+                                  tone: _toneForStatus(g.status),
+                                  compact: true,
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Kolektor: ${g.namaKolektor} (${g.hpKolektor}) • ${g.anggota} Anggota',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Wilayah: ${rapikanNamaWilayah(g.kelurahan)} • Kode Bayar: ${g.kodeBayar.isEmpty ? "-" : g.kodeBayar}',
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(color: scheme.onSurfaceVariant),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+        ],
+      ),
     );
   }
 
   Widget _tabel(BuildContext context) {
+    final result = widget.result;
+    final onAksi = widget.onAksi;
     return DataTable(
       showCheckboxColumn: false,
       columns: const [
@@ -58,7 +185,7 @@ class KolektifResultView extends StatelessWidget {
       rows: [
         for (final g in result.groups)
           DataRow(
-            onSelectChanged: onAksi == null ? null : (_) => onAksi!(g),
+            onSelectChanged: onAksi == null ? null : (_) => onAksi(g),
             cells: [
               DataCell(
                 Icon(
@@ -68,12 +195,23 @@ class KolektifResultView extends StatelessWidget {
                       : Colors.grey,
                 ),
               ),
-              DataCell(Text(g.namaGroup)),
+              DataCell(
+                Text(
+                  g.namaGroup,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
               DataCell(Text(g.namaKolektor)),
               DataCell(Text(g.hpKolektor)),
               DataCell(Text(g.anggota)),
               DataCell(Text(g.kodeBayar)),
-              DataCell(Text(g.status)),
+              DataCell(
+                AppStatusBadge(
+                  label: g.status.isEmpty ? '-' : g.status,
+                  tone: _toneForStatus(g.status),
+                  compact: true,
+                ),
+              ),
               DataCell(Text(g.kecamatan)),
               DataCell(Text(g.kelurahan)),
               DataCell(Text(g.keterangan)),

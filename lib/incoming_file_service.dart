@@ -211,8 +211,10 @@ class IncomingFileService {
             label: 'Lihat DHKP',
             textColor: Colors.amberAccent,
             onPressed: () {
-              Navigator.push(
-                context,
+              final nav =
+                  rootNavigatorKey.currentState ??
+                  (context.mounted ? Navigator.maybeOf(context) : null);
+              nav?.push(
                 MaterialPageRoute(builder: (_) => const BlokCatatanScreen()),
               );
             },
@@ -276,52 +278,57 @@ class IncomingFileService {
     final controller = TextEditingController();
     bool obscure = true;
 
-    final pwd = await showDialog<String>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setState) => AlertDialog(
-          icon: const Icon(Icons.lock_rounded, color: Colors.blue, size: 36),
-          title: const Text('Kata Sandi Diperlukan'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Berkas cadangan ini diproteksi dengan kata sandi. Masukkan kata sandi untuk membukanya:',
-                style: TextStyle(fontSize: 13),
-              ),
-              const SizedBox(height: 14),
-              TextField(
-                controller: controller,
-                obscureText: obscure,
-                autofocus: true,
-                decoration: InputDecoration(
-                  labelText: 'Kata Sandi',
-                  border: const OutlineInputBorder(),
-                  suffixIcon: IconButton(
-                    icon: Icon(
-                      obscure ? Icons.visibility : Icons.visibility_off,
+    String? pwd;
+    try {
+      pwd = await showDialog<String>(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => StatefulBuilder(
+          builder: (ctx, setState) => AlertDialog(
+            icon: const Icon(Icons.lock_rounded, color: Colors.blue, size: 36),
+            title: const Text('Kata Sandi Diperlukan'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Berkas cadangan ini diproteksi dengan kata sandi. Masukkan kata sandi untuk membukanya:',
+                  style: TextStyle(fontSize: 13),
+                ),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: controller,
+                  obscureText: obscure,
+                  autofocus: true,
+                  decoration: InputDecoration(
+                    labelText: 'Kata Sandi',
+                    border: const OutlineInputBorder(),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        obscure ? Icons.visibility : Icons.visibility_off,
+                      ),
+                      onPressed: () => setState(() => obscure = !obscure),
                     ),
-                    onPressed: () => setState(() => obscure = !obscure),
                   ),
                 ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Batal'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+                child: const Text('Buka Berkas'),
               ),
             ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Batal'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-              child: const Text('Buka Berkas'),
-            ),
-          ],
         ),
-      ),
-    );
+      );
+    } finally {
+      controller.dispose();
+    }
 
     if (pwd != null && pwd.isNotEmpty && context.mounted) {
       await _processImport(context, filePath, isDat, password: pwd);

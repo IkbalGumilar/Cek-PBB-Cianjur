@@ -164,7 +164,11 @@ void main() {
 
       // 2. Simulasikan perubahan manual kembali ke Belum Bayar, lalu buka KelolaAnggotaScreen ke-2 kali
       await BlokDataStore.instance.upsert(
-        rec1.copyWith(statusBayar: 'Belum Bayar', tanggalBayar: '', catatan: ''),
+        rec1.copyWith(
+          statusBayar: 'Belum Bayar',
+          tanggalBayar: '',
+          catatan: '',
+        ),
       );
 
       await tester.pumpWidget(const SizedBox.shrink());

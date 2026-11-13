@@ -151,55 +151,96 @@ class _SecuritySettingsSectionState extends State<SecuritySettingsSection> {
 
     final controller = TextEditingController();
     final isPin = _method == AppLockType.pin;
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(isPin ? 'Masukkan PIN Saat Ini' : 'Masukkan Kata Sandi'),
-        content: TextField(
-          controller: controller,
-          obscureText: true,
-          autofocus: true,
-          keyboardType: isPin ? TextInputType.number : TextInputType.text,
-          maxLength: isPin ? 6 : null,
-          inputFormatters: isPin
-              ? [FilteringTextInputFormatter.digitsOnly]
-              : null,
-          decoration: InputDecoration(
-            labelText: isPin ? 'PIN 6 Angka' : 'Kata Sandi',
-            border: const OutlineInputBorder(),
+    String? errorText;
+    bool isSubmitting = false;
+
+    bool? ok;
+    try {
+      ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => StatefulBuilder(
+          builder: (ctx, setDialogState) => AlertDialog(
+            title: Text(
+              isPin ? 'Masukkan PIN Saat Ini' : 'Masukkan Kata Sandi',
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  controller: controller,
+                  obscureText: true,
+                  autofocus: true,
+                  enabled: !isSubmitting,
+                  keyboardType: isPin
+                      ? TextInputType.number
+                      : TextInputType.text,
+                  maxLength: isPin ? 6 : null,
+                  inputFormatters: isPin
+                      ? [FilteringTextInputFormatter.digitsOnly]
+                      : null,
+                  decoration: InputDecoration(
+                    labelText: isPin ? 'PIN 6 Angka' : 'Kata Sandi',
+                    border: const OutlineInputBorder(),
+                    errorText: errorText,
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: isSubmitting
+                    ? null
+                    : () => Navigator.of(ctx).pop(false),
+                child: const Text('Batal'),
+              ),
+              FilledButton(
+                onPressed: isSubmitting
+                    ? null
+                    : () async {
+                        final val = controller.text.trim();
+                        setDialogState(() {
+                          isSubmitting = true;
+                          errorText = null;
+                        });
+                        try {
+                          final valid = isPin
+                              ? await service.verifyCustomPin(val)
+                              : await service.verifyCustomPassword(val);
+                          if (!ctx.mounted) return;
+                          if (valid) {
+                            Navigator.of(ctx).pop(true);
+                          } else {
+                            setDialogState(() {
+                              isSubmitting = false;
+                              errorText = isPin
+                                  ? 'PIN tidak sesuai.'
+                                  : 'Kata sandi salah.';
+                            });
+                          }
+                        } catch (e) {
+                          if (!ctx.mounted) return;
+                          setDialogState(() {
+                            isSubmitting = false;
+                            errorText = 'Gagal memverifikasi: $e';
+                          });
+                        }
+                      },
+                child: isSubmitting
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Konfirmasi'),
+              ),
+            ],
           ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Batal'),
-          ),
-          FilledButton(
-            onPressed: () async {
-              final val = controller.text.trim();
-              final valid = isPin
-                  ? await service.verifyCustomPin(val)
-                  : await service.verifyCustomPassword(val);
-              if (!ctx.mounted) return;
-              if (valid) {
-                Navigator.of(ctx).pop(true);
-              } else {
-                ScaffoldMessenger.of(ctx).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      isPin ? 'PIN tidak sesuai.' : 'Kata sandi salah.',
-                    ),
-                    backgroundColor: Colors.red,
-                  ),
-                );
-              }
-            },
-            child: const Text('Konfirmasi'),
-          ),
-        ],
-      ),
-    );
-    controller.dispose();
+      );
+    } finally {
+      controller.dispose();
+    }
     return ok == true;
   }
 
@@ -265,80 +306,109 @@ class _SecuritySettingsSectionState extends State<SecuritySettingsSection> {
     final pin1Controller = TextEditingController();
     final pin2Controller = TextEditingController();
     String? errorText;
+    bool isSubmitting = false;
 
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Buat PIN 6 Angka'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: pin1Controller,
-                obscureText: true,
-                keyboardType: TextInputType.number,
-                maxLength: 6,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                decoration: const InputDecoration(
-                  labelText: 'Masukkan 6 angka PIN baru',
-                  border: OutlineInputBorder(),
+    bool? result;
+    try {
+      result = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            title: const Text('Buat PIN 6 Angka'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: pin1Controller,
+                  obscureText: true,
+                  enabled: !isSubmitting,
+                  keyboardType: TextInputType.number,
+                  maxLength: 6,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  decoration: const InputDecoration(
+                    labelText: 'Masukkan 6 angka PIN baru',
+                    border: OutlineInputBorder(),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: pin2Controller,
-                obscureText: true,
-                keyboardType: TextInputType.number,
-                maxLength: 6,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                decoration: const InputDecoration(
-                  labelText: 'Ketik ulang 6 angka PIN',
-                  border: OutlineInputBorder(),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: pin2Controller,
+                  obscureText: true,
+                  enabled: !isSubmitting,
+                  keyboardType: TextInputType.number,
+                  maxLength: 6,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  decoration: const InputDecoration(
+                    labelText: 'Ketik ulang 6 angka PIN',
+                    border: OutlineInputBorder(),
+                  ),
                 ),
-              ),
-              if (errorText != null) ...[
-                const SizedBox(height: 8),
-                Text(
-                  errorText!,
-                  style: const TextStyle(color: Colors.red, fontSize: 12),
-                ),
+                if (errorText != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    errorText!,
+                    style: const TextStyle(color: Colors.red, fontSize: 12),
+                  ),
+                ],
               ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: isSubmitting
+                    ? null
+                    : () => Navigator.of(ctx).pop(false),
+                child: const Text('Batal'),
+              ),
+              FilledButton(
+                onPressed: isSubmitting
+                    ? null
+                    : () async {
+                        final p1 = pin1Controller.text.trim();
+                        final p2 = pin2Controller.text.trim();
+                        if (!RegExp(r'^\d{6}$').hasMatch(p1)) {
+                          setDialogState(
+                            () => errorText =
+                                'PIN harus terdiri dari tepat 6 angka.',
+                          );
+                          return;
+                        }
+                        if (p1 != p2) {
+                          setDialogState(
+                            () => errorText = 'Konfirmasi PIN tidak cocok.',
+                          );
+                          return;
+                        }
+                        setDialogState(() {
+                          isSubmitting = true;
+                          errorText = null;
+                        });
+                        try {
+                          await AppSecurityService.instance.setCustomPin(p1);
+                          if (ctx.mounted) Navigator.of(ctx).pop(true);
+                        } catch (e) {
+                          if (!ctx.mounted) return;
+                          setDialogState(() {
+                            isSubmitting = false;
+                            errorText = 'Gagal menyimpan PIN: $e';
+                          });
+                        }
+                      },
+                child: isSubmitting
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Simpan PIN'),
+              ),
             ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(false),
-              child: const Text('Batal'),
-            ),
-            FilledButton(
-              onPressed: () async {
-                final p1 = pin1Controller.text.trim();
-                final p2 = pin2Controller.text.trim();
-                if (!RegExp(r'^\d{6}$').hasMatch(p1)) {
-                  setDialogState(
-                    () => errorText = 'PIN harus terdiri dari tepat 6 angka.',
-                  );
-                  return;
-                }
-                if (p1 != p2) {
-                  setDialogState(
-                    () => errorText = 'Konfirmasi PIN tidak cocok.',
-                  );
-                  return;
-                }
-                await AppSecurityService.instance.setCustomPin(p1);
-                if (ctx.mounted) Navigator.of(ctx).pop(true);
-              },
-              child: const Text('Simpan PIN'),
-            ),
-          ],
         ),
-      ),
-    );
-
-    pin1Controller.dispose();
-    pin2Controller.dispose();
+      );
+    } finally {
+      pin1Controller.dispose();
+      pin2Controller.dispose();
+    }
     if (result == true && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('PIN 6 angka berhasil disimpan.')),
@@ -353,74 +423,105 @@ class _SecuritySettingsSectionState extends State<SecuritySettingsSection> {
     final pass1Controller = TextEditingController();
     final pass2Controller = TextEditingController();
     String? errorText;
+    bool isSubmitting = false;
 
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Buat Kata Sandi Kunci'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: pass1Controller,
-                obscureText: true,
-                decoration: const InputDecoration(
-                  labelText: 'Kata sandi baru (minimal 4 karakter)',
-                  border: OutlineInputBorder(),
+    bool? result;
+    try {
+      result = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            title: const Text('Buat Kata Sandi Kunci'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: pass1Controller,
+                  obscureText: true,
+                  enabled: !isSubmitting,
+                  decoration: const InputDecoration(
+                    labelText: 'Kata sandi baru (minimal 4 karakter)',
+                    border: OutlineInputBorder(),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: pass2Controller,
-                obscureText: true,
-                decoration: const InputDecoration(
-                  labelText: 'Ketik ulang kata sandi',
-                  border: OutlineInputBorder(),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: pass2Controller,
+                  obscureText: true,
+                  enabled: !isSubmitting,
+                  decoration: const InputDecoration(
+                    labelText: 'Ketik ulang kata sandi',
+                    border: OutlineInputBorder(),
+                  ),
                 ),
-              ),
-              if (errorText != null) ...[
-                const SizedBox(height: 8),
-                Text(
-                  errorText!,
-                  style: const TextStyle(color: Colors.red, fontSize: 12),
-                ),
+                if (errorText != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    errorText!,
+                    style: const TextStyle(color: Colors.red, fontSize: 12),
+                  ),
+                ],
               ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: isSubmitting
+                    ? null
+                    : () => Navigator.of(ctx).pop(false),
+                child: const Text('Batal'),
+              ),
+              FilledButton(
+                onPressed: isSubmitting
+                    ? null
+                    : () async {
+                        final p1 = pass1Controller.text.trim();
+                        final p2 = pass2Controller.text.trim();
+                        if (p1.length < 4) {
+                          setDialogState(
+                            () => errorText = 'Kata sandi minimal 4 karakter.',
+                          );
+                          return;
+                        }
+                        if (p1 != p2) {
+                          setDialogState(
+                            () => errorText =
+                                'Konfirmasi kata sandi tidak cocok.',
+                          );
+                          return;
+                        }
+                        setDialogState(() {
+                          isSubmitting = true;
+                          errorText = null;
+                        });
+                        try {
+                          await AppSecurityService.instance.setCustomPassword(
+                            p1,
+                          );
+                          if (ctx.mounted) Navigator.of(ctx).pop(true);
+                        } catch (e) {
+                          if (!ctx.mounted) return;
+                          setDialogState(() {
+                            isSubmitting = false;
+                            errorText = 'Gagal menyimpan kata sandi: $e';
+                          });
+                        }
+                      },
+                child: isSubmitting
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Simpan Sandi'),
+              ),
             ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(false),
-              child: const Text('Batal'),
-            ),
-            FilledButton(
-              onPressed: () async {
-                final p1 = pass1Controller.text.trim();
-                final p2 = pass2Controller.text.trim();
-                if (p1.length < 4) {
-                  setDialogState(
-                    () => errorText = 'Kata sandi minimal 4 karakter.',
-                  );
-                  return;
-                }
-                if (p1 != p2) {
-                  setDialogState(
-                    () => errorText = 'Konfirmasi kata sandi tidak cocok.',
-                  );
-                  return;
-                }
-                await AppSecurityService.instance.setCustomPassword(p1);
-                if (ctx.mounted) Navigator.of(ctx).pop(true);
-              },
-              child: const Text('Simpan Sandi'),
-            ),
-          ],
         ),
-      ),
-    );
-
-    pass1Controller.dispose();
-    pass2Controller.dispose();
+      );
+    } finally {
+      pass1Controller.dispose();
+      pass2Controller.dispose();
+    }
     if (result == true && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Kata sandi berhasil disimpan.')),

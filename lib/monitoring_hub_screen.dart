@@ -76,7 +76,8 @@ class _MonitoringHubScreenState extends State<MonitoringHubScreen> {
         description:
             'Ketuk kartu ini untuk mengelola rombongan bayar pajak warga: membuat grup baru, menambah atau mengeluarkan anggota (NOP), mengunci daftar bayar, dan mencetak surat pengantar.',
         icon: Icons.groups_outlined,
-        actionHint: 'Cocok untuk kolektor yang menyetor pembayaran warga sekaligus',
+        actionHint:
+            'Cocok untuk kolektor yang menyetor pembayaran warga sekaligus',
       ),
       FeatureTourStep(
         targetKey: _logoutButtonKey,

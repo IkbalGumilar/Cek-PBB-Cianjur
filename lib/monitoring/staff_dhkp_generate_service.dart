@@ -197,7 +197,9 @@ class StaffDhkpGenerateService {
           }
         }
 
-        notify('Belum Bayar: Hal $page dari $estimatedTotalPagesBb (${bbRows.length} SPPT)...');
+        notify(
+          'Belum Bayar: Hal $page dari $estimatedTotalPagesBb (${bbRows.length} SPPT)...',
+        );
 
         if (tableResult.hasNextPage && page < maxPages) {
           page++;
@@ -269,7 +271,9 @@ class StaffDhkpGenerateService {
           }
         }
 
-        notify('Sudah Bayar: Hal $page dari $estimatedTotalPagesSb (${sbRows.length} SPPT)...');
+        notify(
+          'Sudah Bayar: Hal $page dari $estimatedTotalPagesSb (${sbRows.length} SPPT)...',
+        );
 
         if (tableResult.hasNextPage && page < maxPages) {
           page++;
@@ -282,7 +286,10 @@ class StaffDhkpGenerateService {
       }
 
       if (bbRows.isEmpty && sbRows.isEmpty) {
-        final err = bbError ?? sbError ?? 'Tidak ada data SPPT yang ditemukan untuk tahun $effTahunLabel di portal staf.';
+        final err =
+            bbError ??
+            sbError ??
+            'Tidak ada data SPPT yang ditemukan untuk tahun $effTahunLabel di portal staf.';
         return StaffDhkpGenerateOutcome(
           success: false,
           tahun: effTahunLabel,
@@ -305,7 +312,9 @@ class StaffDhkpGenerateService {
         final pokokVal = parseNominalRupiah(parsed.jumlahPbb);
         final isTp = pokokVal >= targetPemdaThreshold;
         final isZeroNominal = pokokVal == 0;
-        final cleanNominal = pokokVal > 0 ? cleanNominalRupiah(pokokVal) : 'Rp 0';
+        final cleanNominal = pokokVal > 0
+            ? cleanNominalRupiah(pokokVal)
+            : 'Rp 0';
 
         recordsMap[key] = BlokRecord(
           nop: parsed.nop,
@@ -316,7 +325,9 @@ class StaffDhkpGenerateService {
           tanggalBayar: '',
           jumlahPbb: cleanNominal,
           statusBayar: isZeroNominal ? 'Sudah Bayar' : 'Belum Bayar',
-          alamatObjek: parsed.alamatOp.isNotEmpty ? parsed.alamatOp : 'Kp. Terdata Server',
+          alamatObjek: parsed.alamatOp.isNotEmpty
+              ? parsed.alamatOp
+              : 'Kp. Terdata Server',
           alamatWp: parsed.alamatWp,
           rtObjek: parsed.rtOp,
           luasBumi: parsed.luasBumi,
@@ -336,9 +347,15 @@ class StaffDhkpGenerateService {
         final key = '${parsed.nop}|$rowTahun';
         final pokokVal = parseNominalRupiah(parsed.jumlahPbb);
         final isTp = pokokVal >= targetPemdaThreshold;
-        final cleanNominal = pokokVal > 0 ? cleanNominalRupiah(pokokVal) : (parsed.jumlahPbb.isNotEmpty ? cleanNominalRupiah(parsed.jumlahPbb) : '-');
+        final cleanNominal = pokokVal > 0
+            ? cleanNominalRupiah(pokokVal)
+            : (parsed.jumlahPbb.isNotEmpty
+                  ? cleanNominalRupiah(parsed.jumlahPbb)
+                  : '-');
         final existing = recordsMap[key];
-        final effTgl = parsed.tanggalBayar.isNotEmpty ? parsed.tanggalBayar : (existing?.tanggalBayar ?? '');
+        final effTgl = parsed.tanggalBayar.isNotEmpty
+            ? parsed.tanggalBayar
+            : (existing?.tanggalBayar ?? '');
         final catatanBayar = formatCatatanSudahBayar(effTgl, rowTahun);
 
         if (existing != null) {
@@ -346,9 +363,15 @@ class StaffDhkpGenerateService {
             statusBayar: 'Sudah Bayar',
             tanggalBayar: effTgl,
             jumlahPbb: cleanNominal,
-            namaWajibPajak: parsed.namaWp.isNotEmpty ? parsed.namaWp : existing.namaWajibPajak,
-            alamatObjek: parsed.alamatOp.isNotEmpty ? parsed.alamatOp : existing.alamatObjek,
-            alamatWp: parsed.alamatWp.isNotEmpty ? parsed.alamatWp : existing.alamatWp,
+            namaWajibPajak: parsed.namaWp.isNotEmpty
+                ? parsed.namaWp
+                : existing.namaWajibPajak,
+            alamatObjek: parsed.alamatOp.isNotEmpty
+                ? parsed.alamatOp
+                : existing.alamatObjek,
+            alamatWp: parsed.alamatWp.isNotEmpty
+                ? parsed.alamatWp
+                : existing.alamatWp,
             isTargetPemda: isTp,
             catatan: catatanBayar,
           );
@@ -362,7 +385,9 @@ class StaffDhkpGenerateService {
             tanggalBayar: parsed.tanggalBayar,
             jumlahPbb: cleanNominal,
             statusBayar: 'Sudah Bayar',
-            alamatObjek: parsed.alamatOp.isNotEmpty ? parsed.alamatOp : 'Kp. Terdata Server',
+            alamatObjek: parsed.alamatOp.isNotEmpty
+                ? parsed.alamatOp
+                : 'Kp. Terdata Server',
             alamatWp: parsed.alamatWp,
             rtObjek: parsed.rtOp,
             luasBumi: parsed.luasBumi,
@@ -383,10 +408,14 @@ class StaffDhkpGenerateService {
         if (await currentFile.exists()) {
           final backupDir = await AppStorage.getBackupsDirectory();
           final ts = DateTime.now().millisecondsSinceEpoch;
-          await currentFile.copy('${backupDir.path}/cadangan_sebelum_generate_$ts.csv');
+          await currentFile.copy(
+            '${backupDir.path}/cadangan_sebelum_generate_$ts.csv',
+          );
         }
       } catch (e) {
-        debugPrint('Warning: gagal membuat file cadangan sebelum timpa DHKP: $e');
+        debugPrint(
+          'Warning: gagal membuat file cadangan sebelum timpa DHKP: $e',
+        );
       }
 
       // 5. TIMPA DATABASE LOKAL DENGAN DATA BARU
@@ -399,7 +428,10 @@ class StaffDhkpGenerateService {
         await DusunData.instance.setDusuns(dusuns);
       }
       if (kantorDesaLat != null && kantorDesaLng != null) {
-        await DusunData.instance.setKantorDesaLocation(kantorDesaLat, kantorDesaLng);
+        await DusunData.instance.setKantorDesaLocation(
+          kantorDesaLat,
+          kantorDesaLng,
+        );
       }
 
       // Sinkronisasi widget
@@ -407,8 +439,12 @@ class StaffDhkpGenerateService {
 
       // Hitung ringkasan
       final totalRecords = recordList.length;
-      final paidCount = recordList.where((r) => r.isPaid && !r.isTargetPemda).length;
-      final unpaidCount = recordList.where((r) => !r.isPaid && !r.isTargetPemda).length;
+      final paidCount = recordList
+          .where((r) => r.isPaid && !r.isTargetPemda)
+          .length;
+      final unpaidCount = recordList
+          .where((r) => !r.isPaid && !r.isTargetPemda)
+          .length;
       final tpCount = recordList.where((r) => r.isTargetPemda).length;
       final totalBloks = recordList.map((r) => r.blok).toSet().length;
 

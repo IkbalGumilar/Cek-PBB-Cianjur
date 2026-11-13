@@ -106,7 +106,8 @@ class _MonitoringWilayahScreenState extends State<MonitoringWilayahScreen> {
         description:
             'Geser ke kiri atau kanan untuk memilih laporan: Sudah Bayar, Belum Bayar, Realisasi, Tunggakan (Piutang), Kolektif, hingga Peringkat Realisasi Desa.',
         icon: Icons.tab_rounded,
-        actionHint: 'Ketuk salah satu judul tab di atas untuk berpindah laporan',
+        actionHint:
+            'Ketuk salah satu judul tab di atas untuk berpindah laporan',
       ),
       FeatureTourStep(
         targetKey: _tabContentKey,
@@ -147,18 +148,14 @@ class _MonitoringWilayahScreenState extends State<MonitoringWilayahScreen> {
             IconButton(
               icon: const Icon(Icons.auto_awesome_rounded),
               tooltip: 'Generate DHKP Baru (Timpa)',
-              onPressed: () => showStaffDhkpGenerateDialog(
-                context,
-                client: widget.client,
-              ),
+              onPressed: () =>
+                  showStaffDhkpGenerateDialog(context, client: widget.client),
             ),
             IconButton(
               icon: const Icon(Icons.cloud_sync_rounded),
               tooltip: 'Sinkronkan Status ke DHKP',
-              onPressed: () => showStaffDhkpSyncDialog(
-                context,
-                client: widget.client,
-              ),
+              onPressed: () =>
+                  showStaffDhkpSyncDialog(context, client: widget.client),
             ),
             FeatureTourHelpButton(
               onPressed: showTour,

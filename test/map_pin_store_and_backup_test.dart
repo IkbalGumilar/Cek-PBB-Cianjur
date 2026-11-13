@@ -72,8 +72,8 @@ void main() {
     mockPathDir = await Directory.systemTemp.createTemp('mock_path_provider_');
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(pathProviderChannel, (call) async {
-      return mockPathDir.path;
-    });
+          return mockPathDir.path;
+        });
     BlokDataStore.instance.resetForTesting();
     MapPinStore.instance.resetForTesting();
     await MapPinStore.instance.clearAll();
@@ -90,8 +90,7 @@ void main() {
   });
 
   group('MapPinStore multi-NOP & relocation logic', () {
-    test('groups multiple NOPs at 1 coordinate and merges on re-tagging',
-        () async {
+    test('groups multiple NOPs at 1 coordinate and merges on re-tagging', () async {
       const coord1 = MapCoordinate(-6.78900, 107.18500);
       const coord2 = MapCoordinate(-6.79100, 107.18700);
 
@@ -154,36 +153,41 @@ void main() {
         ),
         MapPinEntry.coordinateKey(coord2.latitude, coord2.longitude),
       );
-      expect(groupedMerged.first.spptList.map((e) => e.nop),
-          containsAll([nopA, nopB]));
+      expect(
+        groupedMerged.first.spptList.map((e) => e.nop),
+        containsAll([nopA, nopB]),
+      );
     });
 
-    test('removes a single erroneous NOP without dropping sibling NOPs',
-        () async {
-      const coord = MapCoordinate(-6.78950, 107.18550);
-      await MapPinStore.instance.assignNopsAtCoordinate(
-        coordinate: coord,
-        selectedRecords: const [recALatest, recB],
-        timestampMs: 1000,
-      );
+    test(
+      'removes a single erroneous NOP without dropping sibling NOPs',
+      () async {
+        const coord = MapCoordinate(-6.78950, 107.18550);
+        await MapPinStore.instance.assignNopsAtCoordinate(
+          coordinate: coord,
+          selectedRecords: const [recALatest, recB],
+          timestampMs: 1000,
+        );
 
-      final afterSingleDelete = await MapPinStore.instance.removeNop(nopA);
-      expect(afterSingleDelete.length, 1);
-      expect(afterSingleDelete.first.nop, nopB);
+        final afterSingleDelete = await MapPinStore.instance.removeNop(nopA);
+        expect(afterSingleDelete.length, 1);
+        expect(afterSingleDelete.first.nop, nopB);
 
-      final dots = MapPinStore.buildGroupedDots(
-        pins: afterSingleDelete,
-        dhkpRecords: const [recALatest, recB],
-      );
-      expect(dots.length, 1);
-      expect(dots.first.spptList.length, 1);
-      expect(dots.first.nop, nopB);
-      expect(dots.first.status, MapDotStatus.belumLunas);
+        final dots = MapPinStore.buildGroupedDots(
+          pins: afterSingleDelete,
+          dhkpRecords: const [recALatest, recB],
+        );
+        expect(dots.length, 1);
+        expect(dots.first.spptList.length, 1);
+        expect(dots.first.nop, nopB);
+        expect(dots.first.status, MapDotStatus.belumLunas);
 
-      final afterCoordDelete =
-          await MapPinStore.instance.removeByCoordinate(coord);
-      expect(afterCoordDelete, isEmpty);
-    });
+        final afterCoordDelete = await MapPinStore.instance.removeByCoordinate(
+          coord,
+        );
+        expect(afterCoordDelete, isEmpty);
+      },
+    );
 
     test('KML export and parse roundtrip preserves grouped multi-NOP dots', () {
       const coord = MapCoordinate(-6.78810, 107.18420);
@@ -193,10 +197,7 @@ void main() {
         spptList: const [recALatest, recB],
       );
 
-      final kml = KmlParser.exportToKml(
-        villageName: 'Bobojong',
-        dots: [dot],
-      );
+      final kml = KmlParser.exportToKml(villageName: 'Bobojong', dots: [dot]);
       expect(kml, contains('#dot_sebagian'));
       expect(kml, contains(nopA));
       expect(kml, contains(nopB));
@@ -212,160 +213,178 @@ void main() {
   });
 
   group('Backup .dat & .dkhp pin sync', () {
-    test('packDkhp embeds map_pins.json & map_pins.kml and unpackDkhp restores them',
-        () async {
-      const coord = MapCoordinate(-6.78750, 107.18350);
-      final initialPins = await MapPinStore.instance.assignNopsAtCoordinate(
-        coordinate: coord,
-        selectedRecords: const [recALatest, recB],
-        source: 'gps',
-        timestampMs: 5000,
-      );
-      expect(initialPins.length, 2);
-
-      final tmpDir =
-          await Directory.systemTemp.createTemp('pin_backup_roundtrip_');
-      try {
-        final outDat = '${tmpDir.path}/backup_with_pins.dat';
-        final packed = await DhkpPackageHelper.packDkhp(
-          outputPath: outDat,
-          records: const [recALatest, recB, recC],
-          encrypt: false,
-          includePhotos: false,
+    test(
+      'packDkhp embeds map_pins.json & map_pins.kml and unpackDkhp restores them',
+      () async {
+        const coord = MapCoordinate(-6.78750, 107.18350);
+        final initialPins = await MapPinStore.instance.assignNopsAtCoordinate(
+          coordinate: coord,
+          selectedRecords: const [recALatest, recB],
+          source: 'gps',
+          timestampMs: 5000,
         );
-        expect(await packed.exists(), isTrue);
+        expect(initialPins.length, 2);
 
-        final zip = ZipDecoder().decodeBytes(await packed.readAsBytes());
-        final fileNames = zip.files.map((f) => f.name).toSet();
-        expect(fileNames, contains('map_pins.json'));
-        expect(fileNames, contains('map_pins.kml'));
-
-        // Simulasikan perangkat baru / storage kosong
-        await MapPinStore.instance.clearAll();
-        MapPinStore.instance.resetForTesting();
-        expect(await MapPinStore.instance.loadAll(), isEmpty);
-
-        // Unpack .dat -> harus memulihkan koordinat pin ke MapPinStore
-        await DhkpPackageHelper.unpackDkhp(outDat);
-        final restored = await MapPinStore.instance.loadAll();
-        expect(restored.length, 2);
-        expect(restored.map((p) => p.nop), containsAll([nopA, nopB]));
-
-        // Uji proteksi konflik waktu: edit lokal yang lebih baru tidak tertimpa arsip lama
-        await MapPinStore.instance.assignNopsAtCoordinate(
-          coordinate: const MapCoordinate(-6.79999, 107.19999),
-          selectedRecords: const [recALatest],
-          source: 'manual',
-          timestampMs: 99999,
+        final tmpDir = await Directory.systemTemp.createTemp(
+          'pin_backup_roundtrip_',
         );
-        await DhkpPackageHelper.unpackDkhp(outDat);
-        final afterConflictCheck = await MapPinStore.instance.loadAll();
-        final pinA = afterConflictCheck.firstWhere((e) => e.nop == nopA);
-        expect(pinA.latitude, closeTo(-6.79999, 0.00001));
-      } finally {
-        if (tmpDir.existsSync()) {
-          tmpDir.deleteSync(recursive: true);
+        try {
+          final outDat = '${tmpDir.path}/backup_with_pins.dat';
+          final packed = await DhkpPackageHelper.packDkhp(
+            outputPath: outDat,
+            records: const [recALatest, recB, recC],
+            encrypt: false,
+            includePhotos: false,
+          );
+          expect(await packed.exists(), isTrue);
+
+          final zip = ZipDecoder().decodeBytes(await packed.readAsBytes());
+          final fileNames = zip.files.map((f) => f.name).toSet();
+          expect(fileNames, contains('map_pins.json'));
+          expect(fileNames, contains('map_pins.kml'));
+
+          // Simulasikan perangkat baru / storage kosong
+          await MapPinStore.instance.clearAll();
+          MapPinStore.instance.resetForTesting();
+          expect(await MapPinStore.instance.loadAll(), isEmpty);
+
+          // Unpack .dat -> harus memulihkan koordinat pin ke MapPinStore
+          await DhkpPackageHelper.unpackDkhp(outDat);
+          final restored = await MapPinStore.instance.loadAll();
+          expect(restored.length, 2);
+          expect(restored.map((p) => p.nop), containsAll([nopA, nopB]));
+
+          // Uji proteksi konflik waktu: edit lokal yang lebih baru tidak tertimpa arsip lama
+          await MapPinStore.instance.assignNopsAtCoordinate(
+            coordinate: const MapCoordinate(-6.79999, 107.19999),
+            selectedRecords: const [recALatest],
+            source: 'manual',
+            timestampMs: 99999,
+          );
+          await DhkpPackageHelper.unpackDkhp(outDat);
+          final afterConflictCheck = await MapPinStore.instance.loadAll();
+          final pinA = afterConflictCheck.firstWhere((e) => e.nop == nopA);
+          expect(pinA.latitude, closeTo(-6.79999, 0.00001));
+        } finally {
+          if (tmpDir.existsSync()) {
+            tmpDir.deleteSync(recursive: true);
+          }
         }
-      }
-    });
+      },
+    );
   });
 
   group('DhkpMapScreen pin UI interactions', () {
     testWidgets(
-        'renders GPS & Pin Mode controls and allows adding/removing NOP at pinned coordinate',
-        (tester) async {
-      // Koordinat berada di area Desa Bobojong agar otomatis masuk viewport
-      const coord = MapCoordinate(-6.76360, 107.23880);
-      await tester.runAsync(() async {
-        await MapPinStore.instance.assignNopsAtCoordinate(
-          coordinate: coord,
-          selectedRecords: const [recALatest, recB],
-          source: 'manual',
-          timestampMs: 1000,
-        );
-      });
-
-      await tester.pumpWidget(
-        const MaterialApp(
-          home: DhkpMapScreen(
-            initialRecords: [recAOld, recALatest, recB, recC],
-          ),
-        ),
-      );
-      Future<void> pumpUntilFound(Finder finder, {int maxTries = 30}) async {
-        for (var i = 0; i < maxTries; i++) {
-          await tester.runAsync(
-            () => Future<void>.delayed(const Duration(milliseconds: 80)),
+      'renders GPS & Pin Mode controls and allows adding/removing NOP at pinned coordinate',
+      (tester) async {
+        // Koordinat berada di area Desa Bobojong agar otomatis masuk viewport
+        const coord = MapCoordinate(-6.76360, 107.23880);
+        await tester.runAsync(() async {
+          await MapPinStore.instance.assignNopsAtCoordinate(
+            coordinate: coord,
+            selectedRecords: const [recALatest, recB],
+            source: 'manual',
+            timestampMs: 1000,
           );
-          await tester.pump();
-          await tester.pump(const Duration(milliseconds: 100));
-          if (finder.evaluate().isNotEmpty) return;
+        });
+
+        await tester.pumpWidget(
+          const MaterialApp(
+            home: DhkpMapScreen(
+              initialRecords: [recAOld, recALatest, recB, recC],
+            ),
+          ),
+        );
+        Future<void> pumpUntilFound(Finder finder, {int maxTries = 30}) async {
+          for (var i = 0; i < maxTries; i++) {
+            await tester.runAsync(
+              () => Future<void>.delayed(const Duration(milliseconds: 80)),
+            );
+            await tester.pump();
+            await tester.pump(const Duration(milliseconds: 100));
+            if (finder.evaluate().isNotEmpty) return;
+          }
         }
-      }
 
-      final coordKey =
-          MapPinEntry.coordinateKey(coord.latitude, coord.longitude);
-      final markerFinder = find.byKey(ValueKey('map_dot_pin_$coordKey'));
-      await pumpUntilFound(markerFinder);
+        final coordKey = MapPinEntry.coordinateKey(
+          coord.latitude,
+          coord.longitude,
+        );
+        final markerFinder = find.byKey(ValueKey('map_dot_pin_$coordKey'));
+        await pumpUntilFound(markerFinder);
 
-      // Tombol kontrol GPS, Pasang Pin Manual, dan Menu KML tampil
-      expect(find.byKey(const ValueKey('btn_gps_field_location')), findsOneWidget);
-      expect(find.byKey(const ValueKey('btn_toggle_pin_mode')), findsOneWidget);
-      expect(find.byKey(const ValueKey('btn_kml_menu')), findsOneWidget);
+        // Tombol kontrol GPS, Pasang Pin Manual, dan Menu KML tampil
+        expect(
+          find.byKey(const ValueKey('btn_gps_field_location')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const ValueKey('btn_toggle_pin_mode')),
+          findsOneWidget,
+        );
+        expect(find.byKey(const ValueKey('btn_kml_menu')), findsOneWidget);
 
-      // Uji toggle mode pasang pin & tombol Batal
-      await tester.tap(find.byKey(const ValueKey('btn_toggle_pin_mode')));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 200));
-      expect(find.textContaining('Mode Pasang Pin'), findsOneWidget);
-      await tester.tap(find.text('Batal'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 200));
-      expect(find.textContaining('Mode Pasang Pin'), findsNothing);
+        // Uji toggle mode pasang pin & tombol Batal
+        await tester.tap(find.byKey(const ValueKey('btn_toggle_pin_mode')));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 200));
+        expect(find.textContaining('Mode Pasang Pin'), findsOneWidget);
+        await tester.tap(find.text('Batal'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 200));
+        expect(find.textContaining('Mode Pasang Pin'), findsNothing);
 
-      // Pastikan HUD terbaca & ketuk titik marker multi-NOP pada peta
-      expect(find.text('TOTAL: 1'), findsOneWidget);
-      expect(markerFinder, findsOneWidget);
-      await tester.tap(markerFinder);
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 600));
+        // Pastikan HUD terbaca & ketuk titik marker multi-NOP pada peta
+        expect(find.text('TOTAL: 1'), findsOneWidget);
+        expect(markerFinder, findsOneWidget);
+        await tester.tap(markerFinder);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 600));
 
-      expect(find.text('Daftar 2 NOP pada Koordinat Ini:'), findsOneWidget);
-      expect(find.byKey(const ValueKey('btn_add_nop_at_dot')), findsOneWidget);
+        expect(find.text('Daftar 2 NOP pada Koordinat Ini:'), findsOneWidget);
+        expect(
+          find.byKey(const ValueKey('btn_add_nop_at_dot')),
+          findsOneWidget,
+        );
 
-      // Tambahkan NOP C (SITI AMINAH) ke koordinat yang sama
-      await tester.ensureVisible(find.byKey(const ValueKey('btn_add_nop_at_dot')));
-      await tester.tap(find.byKey(const ValueKey('btn_add_nop_at_dot')));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
+        // Tambahkan NOP C (SITI AMINAH) ke koordinat yang sama
+        await tester.ensureVisible(
+          find.byKey(const ValueKey('btn_add_nop_at_dot')),
+        );
+        await tester.tap(find.byKey(const ValueKey('btn_add_nop_at_dot')));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
 
-      expect(find.text('Tambah NOP ke Titik Peta'), findsOneWidget);
-      await tester.tap(find.text('SITI AMINAH'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 150));
-      await tester.tap(find.text('Simpan (1 NOP)'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 200));
+        expect(find.text('Tambah NOP ke Titik Peta'), findsOneWidget);
+        await tester.tap(find.text('SITI AMINAH'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 150));
+        await tester.tap(find.text('Simpan (1 NOP)'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 200));
 
-      final threeNopFinder = find.text('Daftar 3 NOP pada Koordinat Ini:');
-      await pumpUntilFound(threeNopFinder);
-      expect(threeNopFinder, findsOneWidget);
+        final threeNopFinder = find.text('Daftar 3 NOP pada Koordinat Ini:');
+        await pumpUntilFound(threeNopFinder);
+        expect(threeNopFinder, findsOneWidget);
 
-      // Hapus 1 NOP yang salah input (ikon hapus pada baris pertama daftar NOP)
-      final deleteNopBtn =
-          find.byTooltip('Hapus NOP ini dari koordinat').first;
-      await tester.ensureVisible(deleteNopBtn);
-      await tester.tap(deleteNopBtn);
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 250));
-      expect(find.text('Hapus NOP dari Titik Ini?'), findsOneWidget);
-      await tester.tap(find.text('Hapus NOP'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 200));
+        // Hapus 1 NOP yang salah input (ikon hapus pada baris pertama daftar NOP)
+        final deleteNopBtn = find
+            .byTooltip('Hapus NOP ini dari koordinat')
+            .first;
+        await tester.ensureVisible(deleteNopBtn);
+        await tester.tap(deleteNopBtn);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 250));
+        expect(find.text('Hapus NOP dari Titik Ini?'), findsOneWidget);
+        await tester.tap(find.text('Hapus NOP'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 200));
 
-      final twoNopFinder = find.text('Daftar 2 NOP pada Koordinat Ini:');
-      await pumpUntilFound(twoNopFinder);
-      expect(twoNopFinder, findsOneWidget);
-    });
+        final twoNopFinder = find.text('Daftar 2 NOP pada Koordinat Ini:');
+        await pumpUntilFound(twoNopFinder);
+        expect(twoNopFinder, findsOneWidget);
+      },
+    );
   });
 }

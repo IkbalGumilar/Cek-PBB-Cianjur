@@ -71,6 +71,8 @@ class _AppLockScreenState extends State<AppLockScreen> {
     if (persist) {
       _service.setLockoutUntil(until);
     }
+    _errorMessage =
+        'Terlalu banyak percobaan salah. Coba lagi dalam $seconds detik.';
     _countdownTimer?.cancel();
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!mounted) {
@@ -81,10 +83,9 @@ class _AppLockScreenState extends State<AppLockScreen> {
           _lockoutUntil?.difference(DateTime.now()).inSeconds ?? 0;
       if (remaining <= 0) {
         timer.cancel();
-        _service.resetFailedPinAttempts();
+        _service.clearExpiredLockout();
         setState(() {
           _lockoutUntil = null;
-          _failedAttempts = 0;
           _errorMessage = null;
         });
       } else {
@@ -128,7 +129,8 @@ class _AppLockScreenState extends State<AppLockScreen> {
     });
 
     if (_enteredPin.length == 6) {
-      final success = await _service.verifyCustomPin(_enteredPin);
+      final submittedPin = _enteredPin;
+      final success = await _service.verifyCustomPin(submittedPin);
       if (!mounted) return;
 
       if (success) {
@@ -138,11 +140,14 @@ class _AppLockScreenState extends State<AppLockScreen> {
       } else {
         final newAttempts = await _service.recordFailedPinAttempt();
         if (!mounted) return;
+        final lockoutSecs = AppSecurityService.calculateLockoutSeconds(
+          newAttempts,
+        );
         setState(() {
           _failedAttempts = newAttempts;
           _enteredPin = '';
-          if (_failedAttempts >= 5) {
-            _startLockoutTimer(30);
+          if (lockoutSecs > 0) {
+            _startLockoutTimer(lockoutSecs, persist: false);
           } else {
             _errorMessage = 'PIN salah. Sisa percobaan: ${5 - _failedAttempts}';
           }
@@ -178,11 +183,14 @@ class _AppLockScreenState extends State<AppLockScreen> {
     } else {
       final newAttempts = await _service.recordFailedPinAttempt();
       if (!mounted) return;
+      final lockoutSecs = AppSecurityService.calculateLockoutSeconds(
+        newAttempts,
+      );
       setState(() {
         _failedAttempts = newAttempts;
         _passwordController.clear();
-        if (_failedAttempts >= 5) {
-          _startLockoutTimer(30);
+        if (lockoutSecs > 0) {
+          _startLockoutTimer(lockoutSecs, persist: false);
         } else {
           _errorMessage =
               'Kata sandi salah. Sisa percobaan: ${5 - _failedAttempts}';

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'ui/app_design_system.dart';
+
 /// Linear Interpolation persis seperti formula `Mathf.Lerp(a, b, t)` di Unity Engine:
 ///
 /// $$\text{result} = a + (b - a) \times t$$
@@ -13,7 +15,7 @@ double unityLerp(double a, double b, double t) {
 /// Widget angka atau nilai nominal yang bertransisi halus menggunakan formula `Mathf.Lerp` ala Unity.
 ///
 /// Setiap kali [value] diperbarui, angka akan "menggelinding" secara halus dari nilai sebelumnya
-/// ke nilai target baru.
+/// ke nilai target baru. Menghormati preferensi Reduced Motion OS secara otomatis.
 class LerpAnimatedCounter extends StatefulWidget {
   final num value;
   final Duration duration;
@@ -25,8 +27,8 @@ class LerpAnimatedCounter extends StatefulWidget {
   const LerpAnimatedCounter({
     super.key,
     required this.value,
-    this.duration = const Duration(milliseconds: 450),
-    this.curve = Curves.easeOutCubic,
+    this.duration = AppMotion.complex,
+    this.curve = AppMotion.enterCurve,
     this.style,
     this.formatter,
     this.textAlign,
@@ -63,13 +65,27 @@ class _LerpAnimatedCounterState extends State<LerpAnimatedCounter>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (AppMotion.isReducedMotion(context) && _controller.isAnimating) {
+      _controller.stop();
+      _displayValue = _targetValue;
+    }
+  }
+
+  @override
   void didUpdateWidget(LerpAnimatedCounter oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.value != widget.value) {
       _startValue = _displayValue;
       _targetValue = widget.value.toDouble();
-      _controller.duration = widget.duration;
-      _controller.forward(from: 0.0);
+      if (AppMotion.isReducedMotion(context)) {
+        _controller.stop();
+        _displayValue = _targetValue;
+      } else {
+        _controller.duration = widget.duration;
+        _controller.forward(from: 0.0);
+      }
     }
   }
 
@@ -88,9 +104,12 @@ class _LerpAnimatedCounterState extends State<LerpAnimatedCounter>
 
   @override
   Widget build(BuildContext context) {
+    final effectiveValue = AppMotion.isReducedMotion(context)
+        ? _targetValue
+        : _displayValue;
     final text = widget.formatter != null
-        ? widget.formatter!(_displayValue)
-        : _displayValue.round().toString();
+        ? widget.formatter!(effectiveValue)
+        : effectiveValue.round().toString();
 
     return Text(text, style: widget.style, textAlign: widget.textAlign);
   }
@@ -110,8 +129,8 @@ class LerpAnimatedProgress extends StatefulWidget {
   const LerpAnimatedProgress({
     super.key,
     required this.value,
-    this.duration = const Duration(milliseconds: 380),
-    this.curve = Curves.easeOutCubic,
+    this.duration = AppMotion.complex,
+    this.curve = AppMotion.enterCurve,
     this.color,
     this.backgroundColor,
     this.minHeight = 4.0,
@@ -148,13 +167,27 @@ class _LerpAnimatedProgressState extends State<LerpAnimatedProgress>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (AppMotion.isReducedMotion(context) && _controller.isAnimating) {
+      _controller.stop();
+      _displayValue = _targetValue;
+    }
+  }
+
+  @override
   void didUpdateWidget(LerpAnimatedProgress oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.value != widget.value) {
       _startValue = _displayValue;
       _targetValue = widget.value.clamp(0.0, 1.0);
-      _controller.duration = widget.duration;
-      _controller.forward(from: 0.0);
+      if (AppMotion.isReducedMotion(context)) {
+        _controller.stop();
+        _displayValue = _targetValue;
+      } else {
+        _controller.duration = widget.duration;
+        _controller.forward(from: 0.0);
+      }
     }
   }
 
@@ -173,10 +206,13 @@ class _LerpAnimatedProgressState extends State<LerpAnimatedProgress>
 
   @override
   Widget build(BuildContext context) {
+    final effectiveValue = AppMotion.isReducedMotion(context)
+        ? _targetValue
+        : _displayValue;
     return ClipRRect(
       borderRadius: widget.borderRadius ?? BorderRadius.circular(4),
       child: LinearProgressIndicator(
-        value: _displayValue.clamp(0.0, 1.0),
+        value: effectiveValue.clamp(0.0, 1.0),
         color: widget.color,
         backgroundColor: widget.backgroundColor,
         minHeight: widget.minHeight,
@@ -190,15 +226,15 @@ class _LerpAnimatedProgressState extends State<LerpAnimatedProgress>
 class LerpPressable extends StatefulWidget {
   final Widget child;
   final VoidCallback? onTap;
-  final double pressedScale; // Default 0.96 (squash 4% saat ditekan)
+  final double pressedScale; // Default 0.97 (squash 3% saat ditekan)
   final Duration duration;
 
   const LerpPressable({
     super.key,
     required this.child,
     this.onTap,
-    this.pressedScale = 0.96,
-    this.duration = const Duration(milliseconds: 100),
+    this.pressedScale = 0.97,
+    this.duration = AppMotion.micro,
   });
 
   @override
@@ -214,7 +250,7 @@ class _LerpPressableState extends State<LerpPressable>
   void initState() {
     super.initState();
     _controller = AnimationController(vsync: this, duration: widget.duration);
-    _curved = CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic);
+    _curved = CurvedAnimation(parent: _controller, curve: AppMotion.enterCurve);
   }
 
   @override
@@ -224,25 +260,32 @@ class _LerpPressableState extends State<LerpPressable>
   }
 
   void _onPointerDown(PointerDownEvent _) {
-    if (widget.onTap != null) {
+    if (widget.onTap != null && !AppMotion.isReducedMotion(context)) {
       _controller.forward();
     }
   }
 
   void _onPointerUp(PointerUpEvent _) {
-    if (widget.onTap != null) {
+    if (widget.onTap != null && !AppMotion.isReducedMotion(context)) {
       _controller.reverse();
     }
   }
 
   void _onPointerCancel(PointerCancelEvent _) {
-    if (widget.onTap != null) {
+    if (widget.onTap != null && !AppMotion.isReducedMotion(context)) {
       _controller.reverse();
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    if (AppMotion.isReducedMotion(context)) {
+      return GestureDetector(
+        onTap: widget.onTap,
+        behavior: HitTestBehavior.opaque,
+        child: widget.child,
+      );
+    }
     return Listener(
       onPointerDown: _onPointerDown,
       onPointerUp: _onPointerUp,
@@ -291,15 +334,17 @@ class SmoothActivityBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final color = accentColor ?? scheme.primary;
+    final sizeDuration = AppMotion.resolve(context, AppMotion.component);
+    final switchDuration = AppMotion.resolve(context, AppMotion.component);
 
     return AnimatedSize(
-      duration: const Duration(milliseconds: 260),
-      curve: Curves.easeOutCubic,
+      duration: sizeDuration,
+      curve: AppMotion.enterCurve,
       alignment: Alignment.topCenter,
       child: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 240),
-        switchInCurve: Curves.easeOutCubic,
-        switchOutCurve: Curves.easeInCubic,
+        duration: switchDuration,
+        switchInCurve: AppMotion.enterCurve,
+        switchOutCurve: AppMotion.exitCurve,
         transitionBuilder: (child, animation) {
           final offsetAnimation = Tween<Offset>(
             begin: const Offset(0, -0.08),
@@ -432,11 +477,12 @@ class SmoothLoadingCard extends StatelessWidget {
     final colorScheme = theme.colorScheme;
     final primary =
         accentColor ?? (isDarkCanvas ? Colors.tealAccent : colorScheme.primary);
+    final reducedMotion = AppMotion.isReducedMotion(context);
 
     return TweenAnimationBuilder<double>(
-      tween: Tween<double>(begin: 0.94, end: 1.0),
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeOutCubic,
+      tween: Tween<double>(begin: reducedMotion ? 1.0 : 0.94, end: 1.0),
+      duration: AppMotion.resolve(context, AppMotion.dialog),
+      curve: AppMotion.enterCurve,
       builder: (context, scale, child) {
         final opacity = ((scale - 0.94) / 0.06).clamp(0.0, 1.0);
         return Opacity(

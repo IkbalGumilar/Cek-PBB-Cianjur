@@ -1,10 +1,17 @@
+import 'dart:async' show unawaited;
+
 import 'package:flutter/material.dart';
 
 import '../blok_record.dart';
+import '../blok_report_pdf.dart'
+    show BlokPrintCancelToken, BlokPrintCancelledException;
 import '../calculator/pbb_calculator_models.dart';
 import '../tagihan_result.dart' show formatRupiah;
 import '../unity_lerp_widgets.dart';
 import 'blok_catatan_models.dart';
+
+export '../blok_report_pdf.dart'
+    show BlokPrintCancelToken, BlokPrintCancelledException;
 
 class BlokCatatanLoadingView extends StatelessWidget {
   final String title;
@@ -261,7 +268,20 @@ class DhkpSummaryFooterCard extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
         child: LayoutBuilder(
           builder: (context, constraints) {
+            final isDark = Theme.of(context).brightness == Brightness.dark;
             final dividerColor = Colors.grey.withValues(alpha: 0.3);
+            final sudahColor = isDark
+                ? Colors.green.shade400
+                : Colors.green.shade700;
+            final belumColor = isDark
+                ? Colors.orange.shade300
+                : Colors.orange.shade800;
+            final targetColor = isDark
+                ? Colors.red.shade300
+                : Colors.red.shade700;
+            final totalColor = isDark
+                ? Colors.lightBlue.shade300
+                : Colors.blue.shade800;
 
             if (constraints.maxWidth < 480) {
               return Column(
@@ -275,7 +295,7 @@ class DhkpSummaryFooterCard extends StatelessWidget {
                           count: sudahBayarCount,
                           nominal: sudahBayarNominal,
                           percentage: pctSudah,
-                          color: Colors.green,
+                          color: sudahColor,
                           icon: Icons.check_circle_outline,
                         ),
                       ),
@@ -286,7 +306,7 @@ class DhkpSummaryFooterCard extends StatelessWidget {
                           count: belumBayarCount,
                           nominal: belumBayarNominal,
                           percentage: pctBelum,
-                          color: Colors.orange.shade800,
+                          color: belumColor,
                           icon: Icons.pending_actions_outlined,
                         ),
                       ),
@@ -300,7 +320,7 @@ class DhkpSummaryFooterCard extends StatelessWidget {
                           label: 'Target Pemda',
                           count: targetPemdaCount,
                           nominal: targetPemdaNominal,
-                          color: Colors.red.shade700,
+                          color: targetColor,
                           icon: Icons.track_changes,
                         ),
                       ),
@@ -311,7 +331,7 @@ class DhkpSummaryFooterCard extends StatelessWidget {
                           count: totalCount,
                           nominal: totalNominal,
                           percentage: pctTotal,
-                          color: Colors.blue.shade800,
+                          color: totalColor,
                           icon: Icons.account_balance_wallet_outlined,
                         ),
                       ),
@@ -328,7 +348,7 @@ class DhkpSummaryFooterCard extends StatelessWidget {
                       count: sudahBayarCount,
                       nominal: sudahBayarNominal,
                       percentage: pctSudah,
-                      color: Colors.green,
+                      color: sudahColor,
                       icon: Icons.check_circle_outline,
                     ),
                   ),
@@ -339,7 +359,7 @@ class DhkpSummaryFooterCard extends StatelessWidget {
                       count: belumBayarCount,
                       nominal: belumBayarNominal,
                       percentage: pctBelum,
-                      color: Colors.orange.shade800,
+                      color: belumColor,
                       icon: Icons.pending_actions_outlined,
                     ),
                   ),
@@ -349,7 +369,7 @@ class DhkpSummaryFooterCard extends StatelessWidget {
                       label: 'Target Pemda',
                       count: targetPemdaCount,
                       nominal: targetPemdaNominal,
-                      color: Colors.red.shade700,
+                      color: targetColor,
                       icon: Icons.track_changes,
                     ),
                   ),
@@ -360,7 +380,7 @@ class DhkpSummaryFooterCard extends StatelessWidget {
                       count: totalCount,
                       nominal: totalNominal,
                       percentage: pctTotal,
-                      color: Colors.blue.shade800,
+                      color: totalColor,
                       icon: Icons.account_balance_wallet_outlined,
                     ),
                   ),
@@ -481,11 +501,166 @@ class DhkpRowCelenganButton extends StatelessWidget {
       ),
       tooltip: isLunas
           ? (tabungan.hasKelebihan
-              ? 'Celengan Warga: LUNAS (${tabungan.persentase.toStringAsFixed(0)}% • Lebih ${formatRupiah(tabungan.kelebihanSaldo)}${tabungan.kelebihanAlokasi != null ? ' • ${tabungan.kelebihanAlokasi!.label}' : ''})'
-              : 'Celengan Warga: LUNAS (${formatRupiah(tabungan.saldo)})')
+                ? 'Celengan Warga: LUNAS (${tabungan.persentase.toStringAsFixed(0)}% • Lebih ${formatRupiah(tabungan.kelebihanSaldo)}${tabungan.kelebihanAlokasi != null ? ' • ${tabungan.kelebihanAlokasi!.label}' : ''})'
+                : 'Celengan Warga: LUNAS (${formatRupiah(tabungan.saldo)})')
           : (hasTabungan
-              ? 'Celengan Warga: ${formatRupiah(tabungan.saldo)} / ${formatRupiah(tabungan.target)} (${tabungan.persentase.toStringAsFixed(0)}%)'
-              : 'Mulai Tabungan / Cicilan PBB Warga'),
+                ? 'Celengan Warga: ${formatRupiah(tabungan.saldo)} / ${formatRupiah(tabungan.target)} (${tabungan.persentase.toStringAsFixed(0)}%)'
+                : 'Mulai Tabungan / Cicilan PBB Warga'),
     );
+  }
+}
+
+/// Kondisi progres penyusunan PDF cetak DHKP.
+class DhkpPrintProgressState {
+  final String message;
+  final int current;
+  final int total;
+
+  const DhkpPrintProgressState({
+    required this.message,
+    this.current = 0,
+    this.total = 0,
+  });
+
+  double? get fraction => total > 0 ? (current / total).clamp(0.0, 1.0) : null;
+}
+
+/// Menjalankan pembuatan PDF DHKP di dalam dialog progres dengan tombol
+/// "Batal Cetak" agar pengguna dapat membatalkan penyusunan laporan kapan saja
+/// sebelum dokumen dikirim ke printer. Mengembalikan `null` jika dibatalkan.
+Future<T?> runCancellableDhkpPrint<T>({
+  required BuildContext context,
+  required BlokPrintCancelToken cancelToken,
+  required String title,
+  required String initialMessage,
+  String? subtitle,
+  required Future<T> Function(
+    void Function(int current, int total, {String? message}) onProgress,
+  )
+  task,
+}) async {
+  final progress = ValueNotifier<DhkpPrintProgressState>(
+    DhkpPrintProgressState(message: initialMessage),
+  );
+  BuildContext? dialogContext;
+  var dialogClosed = false;
+
+  void closeDialog() {
+    if (dialogClosed) return;
+    dialogClosed = true;
+    final ctx = dialogContext;
+    if (ctx != null && ctx.mounted && Navigator.of(ctx).canPop()) {
+      Navigator.of(ctx).pop();
+    }
+  }
+
+  void cancelPrint() {
+    cancelToken.cancel();
+    closeDialog();
+  }
+
+  unawaited(
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dCtx) {
+        dialogContext = dCtx;
+        if (dialogClosed) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (dCtx.mounted && Navigator.of(dCtx).canPop()) {
+              Navigator.of(dCtx).pop();
+            }
+          });
+          return const SizedBox.shrink();
+        }
+        return PopScope(
+          canPop: false,
+          onPopInvokedWithResult: (didPop, _) {
+            if (!didPop) {
+              cancelPrint();
+            }
+          },
+          child: AlertDialog(
+            title: Row(
+              children: [
+                Icon(
+                  Icons.print_rounded,
+                  color: Theme.of(dCtx).colorScheme.primary,
+                ),
+                const SizedBox(width: 10),
+                Expanded(child: Text(title)),
+              ],
+            ),
+            content: ValueListenableBuilder<DhkpPrintProgressState>(
+              valueListenable: progress,
+              builder: (ctx, state, _) {
+                final scheme = Theme.of(ctx).colorScheme;
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      state.message,
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 12),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(999),
+                      child: LinearProgressIndicator(
+                        value: state.fraction,
+                        minHeight: 6,
+                      ),
+                    ),
+                    if (subtitle != null && subtitle.isNotEmpty) ...[
+                      const SizedBox(height: 10),
+                      Text(
+                        subtitle,
+                        style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ],
+                );
+              },
+            ),
+            actions: [
+              FilledButton.tonalIcon(
+                key: const ValueKey('dhkp_cancel_print_btn'),
+                onPressed: cancelPrint,
+                style: FilledButton.styleFrom(
+                  foregroundColor: Theme.of(dCtx).colorScheme.error,
+                ),
+                icon: const Icon(Icons.close_rounded, size: 18),
+                label: const Text('Batal Cetak'),
+              ),
+            ],
+          ),
+        );
+      },
+    ).whenComplete(() {
+      dialogClosed = true;
+      progress.dispose();
+    }),
+  );
+
+  try {
+    final result = await task((current, total, {String? message}) {
+      if (cancelToken.isCancelled || dialogClosed) return;
+      progress.value = DhkpPrintProgressState(
+        message: message ?? 'Menyusun halaman $current dari $total...',
+        current: current,
+        total: total,
+      );
+    });
+    closeDialog();
+    if (cancelToken.isCancelled) return null;
+    return result;
+  } on BlokPrintCancelledException {
+    closeDialog();
+    return null;
+  } catch (e) {
+    closeDialog();
+    rethrow;
   }
 }

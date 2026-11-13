@@ -11,22 +11,27 @@ import 'package:cek_pbb_app/document_preview_screen.dart';
 
 void main() {
   group('DesktopPdfScrollPhysics Tests', () {
-    test('shouldAcceptUserOffset returns true when Ctrl/Meta is NOT pressed', () {
-      const physics = DesktopPdfScrollPhysics();
-      // By default in test environment, no keys are pressed
-      final metrics = FixedScrollMetrics(
-        minScrollExtent: 0,
-        maxScrollExtent: 1000,
-        pixels: 0,
-        viewportDimension: 500,
-        axisDirection: AxisDirection.down,
-        devicePixelRatio: 1.0,
-      );
+    test(
+      'shouldAcceptUserOffset returns true when Ctrl/Meta is NOT pressed',
+      () {
+        const physics = DesktopPdfScrollPhysics();
+        // By default in test environment, no keys are pressed
+        final metrics = FixedScrollMetrics(
+          minScrollExtent: 0,
+          maxScrollExtent: 1000,
+          pixels: 0,
+          viewportDimension: 500,
+          axisDirection: AxisDirection.down,
+          devicePixelRatio: 1.0,
+        );
 
-      expect(physics.shouldAcceptUserOffset(metrics), isTrue);
-    });
+        expect(physics.shouldAcceptUserOffset(metrics), isTrue);
+      },
+    );
 
-    testWidgets('shouldAcceptUserOffset returns false when Ctrl is pressed', (tester) async {
+    testWidgets('shouldAcceptUserOffset returns false when Ctrl is pressed', (
+      tester,
+    ) async {
       const physics = DesktopPdfScrollPhysics();
       final metrics = FixedScrollMetrics(
         minScrollExtent: 0,
@@ -58,16 +63,29 @@ void main() {
             final double scaleMultiplier = math.exp(zoomDelta / 300.0);
             final Matrix4 currentMatrix = transformController.value;
             final double currentScale = currentMatrix.getMaxScaleOnAxis();
-            final double targetScale = (currentScale * scaleMultiplier).clamp(0.8, 6.0);
+            final double targetScale = (currentScale * scaleMultiplier).clamp(
+              0.8,
+              6.0,
+            );
             final double factor = targetScale / currentScale;
 
-            final Offset scenePointBefore = transformController.toScene(event.localPosition);
-            final Matrix4 scaledMatrix = currentMatrix.clone()..scaleByDouble(factor, factor, 1.0, 1.0);
+            final Offset scenePointBefore = transformController.toScene(
+              event.localPosition,
+            );
+            final Matrix4 scaledMatrix = currentMatrix.clone()
+              ..scaleByDouble(factor, factor, 1.0, 1.0);
             transformController.value = scaledMatrix;
-            final Offset scenePointAfter = transformController.toScene(event.localPosition);
+            final Offset scenePointAfter = transformController.toScene(
+              event.localPosition,
+            );
             final Offset translationDelta = scenePointAfter - scenePointBefore;
             transformController.value = scaledMatrix
-              ..translateByDouble(translationDelta.dx, translationDelta.dy, 0.0, 1.0);
+              ..translateByDouble(
+                translationDelta.dx,
+                translationDelta.dy,
+                0.0,
+                1.0,
+              );
           }
         }
 
@@ -178,9 +196,7 @@ void main() {
         const renderWidth = 400.0;
         const renderHeight = 600.0;
 
-        Widget buildHighlightBox({
-          required bool isActive,
-        }) {
+        Widget buildHighlightBox({required bool isActive}) {
           final left = normRect.left * renderWidth;
           final top = normRect.top * renderHeight;
           final width = normRect.width * renderWidth;
@@ -216,7 +232,11 @@ void main() {
                 height: renderHeight,
                 child: Stack(
                   children: [
-                    Container(width: renderWidth, height: renderHeight, color: Colors.white),
+                    Container(
+                      width: renderWidth,
+                      height: renderHeight,
+                      color: Colors.white,
+                    ),
                     buildHighlightBox(isActive: false),
                   ],
                 ),
@@ -239,7 +259,9 @@ void main() {
         expect(positioned.height, closeTo(32.0, 0.01));
 
         // Check border of inactive match
-        AnimatedContainer container = tester.widget(find.byType(AnimatedContainer));
+        AnimatedContainer container = tester.widget(
+          find.byType(AnimatedContainer),
+        );
         BoxDecoration deco = container.decoration as BoxDecoration;
         expect((deco.border as Border).top.color, Colors.amber.shade700);
 
@@ -252,7 +274,11 @@ void main() {
                 height: renderHeight,
                 child: Stack(
                   children: [
-                    Container(width: renderWidth, height: renderHeight, color: Colors.white),
+                    Container(
+                      width: renderWidth,
+                      height: renderHeight,
+                      color: Colors.white,
+                    ),
                     buildHighlightBox(isActive: true),
                   ],
                 ),
@@ -319,9 +345,7 @@ void main() {
         final col1 = spans.firstWhere(
           (s) => s.text.contains('32.05.200.004.001-0034.0'),
         );
-        final col2 = spans.firstWhere(
-          (s) => s.text.contains('ENOH BOBOJONG'),
-        );
+        final col2 = spans.firstWhere((s) => s.text.contains('ENOH BOBOJONG'));
         expect(
           col1.normalizedBounds.right,
           lessThan(col2.normalizedBounds.left),
@@ -384,7 +408,10 @@ void main() {
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 300));
 
-        expect(printCallCount, 1); // belum bertambah sebelum tekan tombol cetak di preview
+        expect(
+          printCallCount,
+          1,
+        ); // belum bertambah sebelum tekan tombol cetak di preview
         expect(find.byType(DocumentPreviewScreen), findsOneWidget);
 
         // 3. Menekan Ctrl + P di dalam DocumentPreviewScreen langsung memanggil driver printer
@@ -463,10 +490,9 @@ void main() {
         expect(pdfBytes, isNotEmpty);
 
         final parsedDoc = sf.PdfDocument(inputBytes: pdfBytes);
-        final extractedText = sf
-            .PdfTextExtractor(parsedDoc)
-            .extractText()
-            .replaceAll(RegExp(r'\s+'), ' ');
+        final extractedText = sf.PdfTextExtractor(
+          parsedDoc,
+        ).extractText().replaceAll(RegExp(r'\s+'), ' ');
         parsedDoc.dispose();
 
         expect(
@@ -478,4 +504,3 @@ void main() {
     );
   });
 }
-

@@ -131,15 +131,79 @@ class UpdateChecker {
       return null; // rilis ada tapi belum dilampiri berkas untuk platform ini
     }
 
+    final changelog = (data['body'] as String? ?? '').trim();
+    final assetName = (asset['name'] as String?)?.trim();
+    final sha256Checksum = extractAssetSha256(
+      asset,
+      releaseBody: changelog,
+      allAssets: assets,
+    );
+
     return UpdateInfo(
       version: latestVersion,
-      changelog: (data['body'] as String? ?? '').trim(),
+      changelog: changelog,
       apkDownloadUrl: asset['browser_download_url'] as String,
       apkSize: asset['size'] as int? ?? 0,
       publishedAt:
           DateTime.tryParse(data['published_at'] as String? ?? '') ??
           DateTime.now(),
+      sha256Checksum: sha256Checksum,
+      assetName: assetName,
     );
+  }
+
+  /// Mengekstrak checksum SHA-256 (64 karakter hex) dari metadata asset GitHub Release
+  /// (`digest` / `sha256`) atau dari catatan rilis (`body`) yang mencantumkan nama berkas.
+  static String? extractAssetSha256(
+    Map<String, dynamic> asset, {
+    String? releaseBody,
+    List<Map<String, dynamic>>? allAssets,
+  }) {
+    final rawDigest = (asset['digest'] ?? asset['sha256'])?.toString().trim();
+    if (rawDigest != null && rawDigest.isNotEmpty) {
+      final cleaned = rawDigest.replaceFirst(
+        RegExp(r'^sha256:', caseSensitive: false),
+        '',
+      );
+      if (RegExp(r'^[a-fA-F0-9]{64}$').hasMatch(cleaned)) {
+        return cleaned.toLowerCase();
+      }
+    }
+
+    if (releaseBody == null || releaseBody.trim().isEmpty) return null;
+    final assetName = (asset['name'] as String? ?? '').trim();
+
+    if (assetName.isNotEmpty) {
+      final escapedName = RegExp.escape(assetName);
+      // Format: "<sha256>  <filename>" atau "<filename>: <sha256>"
+      final byNameFirst = RegExp(
+        '$escapedName[^\\n\\r0-9a-fA-F]*([a-fA-F0-9]{64})',
+        caseSensitive: false,
+      ).firstMatch(releaseBody);
+      if (byNameFirst != null) {
+        return byNameFirst.group(1)!.toLowerCase();
+      }
+      final byHashFirst = RegExp(
+        '([a-fA-F0-9]{64})[ \\t\\*`-]+$escapedName',
+        caseSensitive: false,
+      ).firstMatch(releaseBody);
+      if (byHashFirst != null) {
+        return byHashFirst.group(1)!.toLowerCase();
+      }
+    }
+
+    // Jika rilis hanya memiliki 1 asset biner utama, izinkan format umum "SHA-256: <hash>"
+    if (allAssets == null || allAssets.length <= 1) {
+      final genericMatch = RegExp(
+        r'sha-?256\s*[:=]\s*`?([a-fA-F0-9]{64})`?',
+        caseSensitive: false,
+      ).firstMatch(releaseBody);
+      if (genericMatch != null) {
+        return genericMatch.group(1)!.toLowerCase();
+      }
+    }
+
+    return null;
   }
 
   /// Cari asset rilis GitHub yang cocok untuk platform yang sedang berjalan.

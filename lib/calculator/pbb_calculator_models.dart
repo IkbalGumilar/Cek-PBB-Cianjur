@@ -146,8 +146,12 @@ class PbbCalculatorHelper {
     final kekurangan = sudahTercapai ? 0 : (targetNominal - realisasiSaatIni);
     final kelebihan = sudahTercapai ? (realisasiSaatIni - targetNominal) : 0;
 
-    final effectiveRata = rataRataNominalPerNop > 0 ? rataRataNominalPerNop : 50000;
-    final estimasiNop = kekurangan > 0 ? (kekurangan / effectiveRata).ceil() : 0;
+    final effectiveRata = rataRataNominalPerNop > 0
+        ? rataRataNominalPerNop
+        : 50000;
+    final estimasiNop = kekurangan > 0
+        ? (kekurangan / effectiveRata).ceil()
+        : 0;
 
     return PbbTargetSimulationResult(
       totalKetetapan: totalKetetapan,
@@ -204,8 +208,16 @@ class PbbCalculatorHelper {
     double tarifBungaPerBulan = 1.0,
     int maxBulan = 24,
   }) {
-    final tglJatuhTempo = DateTime(jatuhTempo.year, jatuhTempo.month, jatuhTempo.day);
-    final tglBayar = DateTime(rencanaBayar.year, rencanaBayar.month, rencanaBayar.day);
+    final tglJatuhTempo = DateTime(
+      jatuhTempo.year,
+      jatuhTempo.month,
+      jatuhTempo.day,
+    );
+    final tglBayar = DateTime(
+      rencanaBayar.year,
+      rencanaBayar.month,
+      rencanaBayar.day,
+    );
 
     if (!tglBayar.isAfter(tglJatuhTempo)) {
       return PbbDendaResult(
@@ -221,7 +233,9 @@ class PbbCalculatorHelper {
       );
     }
 
-    var months = (tglBayar.year - tglJatuhTempo.year) * 12 + (tglBayar.month - tglJatuhTempo.month);
+    var months =
+        (tglBayar.year - tglJatuhTempo.year) * 12 +
+        (tglBayar.month - tglJatuhTempo.month);
     if (tglBayar.day > tglJatuhTempo.day) {
       months += 1;
     }
@@ -315,15 +329,27 @@ class PbbCalculatorHelper {
       buffer.writeln('📍 *Wilayah:* $namaWilayah');
     }
     buffer.writeln('-----------------------------------');
-    buffer.writeln('• *Pagu Ketetapan:* ${formatRupiah(targetResult.totalKetetapan)}');
-    buffer.writeln('• *Realisasi Terkini:* ${formatRupiah(targetResult.realisasiSaatIni)} (${targetResult.persenSaatIni.toStringAsFixed(1)}%)');
-    buffer.writeln('• *Target Sasaran:* ${targetResult.targetPersen.toStringAsFixed(0)}% (${formatRupiah(targetResult.targetNominal)})');
+    buffer.writeln(
+      '• *Pagu Ketetapan:* ${formatRupiah(targetResult.totalKetetapan)}',
+    );
+    buffer.writeln(
+      '• *Realisasi Terkini:* ${formatRupiah(targetResult.realisasiSaatIni)} (${targetResult.persenSaatIni.toStringAsFixed(1)}%)',
+    );
+    buffer.writeln(
+      '• *Target Sasaran:* ${targetResult.targetPersen.toStringAsFixed(0)}% (${formatRupiah(targetResult.targetNominal)})',
+    );
 
     if (targetResult.targetSudahTercapai) {
-      buffer.writeln('🎉 *Status:* Target sudah tercapai! (Surplus ${formatRupiah(targetResult.kelebihanNominal)})');
+      buffer.writeln(
+        '🎉 *Status:* Target sudah tercapai! (Surplus ${formatRupiah(targetResult.kelebihanNominal)})',
+      );
     } else {
-      buffer.writeln('⚠️ *Kekurangan Target:* ${formatRupiah(targetResult.kekuranganNominal)}');
-      buffer.writeln('📋 *Estimasi Kebutuhan:* ~${targetResult.estimasiNopDibutuhkan} NOP');
+      buffer.writeln(
+        '⚠️ *Kekurangan Target:* ${formatRupiah(targetResult.kekuranganNominal)}',
+      );
+      buffer.writeln(
+        '📋 *Estimasi Kebutuhan:* ~${targetResult.estimasiNopDibutuhkan} NOP',
+      );
     }
 
     if (pacingResult != null && !targetResult.targetSudahTercapai) {
@@ -331,10 +357,16 @@ class PbbCalculatorHelper {
       if (pacingResult.sudahLewatJatuhTempo) {
         buffer.writeln('⏳ *Catatan:* Waktu jatuh tempo telah terlewati.');
       } else {
-        buffer.writeln('⏳ *Sisa Waktu:* ${pacingResult.sisaHari} Hari menuju Jatuh Tempo');
+        buffer.writeln(
+          '⏳ *Sisa Waktu:* ${pacingResult.sisaHari} Hari menuju Jatuh Tempo',
+        );
         buffer.writeln('🚀 *Kecepatan Penagihan:*');
-        buffer.writeln('   - Target Harian: ${formatRupiah(pacingResult.targetHarian)}/hari');
-        buffer.writeln('   - Target Mingguan: ${formatRupiah(pacingResult.targetMingguan)}/minggu');
+        buffer.writeln(
+          '   - Target Harian: ${formatRupiah(pacingResult.targetHarian)}/hari',
+        );
+        buffer.writeln(
+          '   - Target Mingguan: ${formatRupiah(pacingResult.targetMingguan)}/minggu',
+        );
       }
     }
 
@@ -354,20 +386,32 @@ class PbbCalculatorHelper {
     if (nop.isNotEmpty) buffer.writeln('• *NOP:* $nop');
     if (namaWp.isNotEmpty) buffer.writeln('• *Nama WP:* $namaWp');
     buffer.writeln('• *Pokok Pajak:* ${formatRupiah(dendaResult.pokokPbb)}');
-    buffer.writeln('• *Tgl Jatuh Tempo:* ${dendaResult.jatuhTempo.day}-${dendaResult.jatuhTempo.month}-${dendaResult.jatuhTempo.year}');
-    buffer.writeln('• *Rencana Bayar:* ${dendaResult.rencanaBayar.day}-${dendaResult.rencanaBayar.month}-${dendaResult.rencanaBayar.year}');
+    buffer.writeln(
+      '• *Tgl Jatuh Tempo:* ${dendaResult.jatuhTempo.day}-${dendaResult.jatuhTempo.month}-${dendaResult.jatuhTempo.year}',
+    );
+    buffer.writeln(
+      '• *Rencana Bayar:* ${dendaResult.rencanaBayar.day}-${dendaResult.rencanaBayar.month}-${dendaResult.rencanaBayar.year}',
+    );
 
     if (dendaResult.tepatWaktu) {
       buffer.writeln('✅ *Status:* Tepat Waktu (Bebas Denda)');
       buffer.writeln('💰 *Total Bayar:* ${formatRupiah(dendaResult.pokokPbb)}');
     } else {
-      buffer.writeln('⚠️ *Keterlambatan:* ${dendaResult.bulanKeterlambatan} Bulan (${dendaResult.totalPersenDenda.toStringAsFixed(1)}%)');
-      buffer.writeln('💸 *Nominal Sanksi Denda:* ${formatRupiah(dendaResult.nominalDenda)}');
-      buffer.writeln('💰 *Total yang Harus Dibayar:* ${formatRupiah(dendaResult.totalBayar)}');
+      buffer.writeln(
+        '⚠️ *Keterlambatan:* ${dendaResult.bulanKeterlambatan} Bulan (${dendaResult.totalPersenDenda.toStringAsFixed(1)}%)',
+      );
+      buffer.writeln(
+        '💸 *Nominal Sanksi Denda:* ${formatRupiah(dendaResult.nominalDenda)}',
+      );
+      buffer.writeln(
+        '💰 *Total yang Harus Dibayar:* ${formatRupiah(dendaResult.totalBayar)}',
+      );
     }
 
     buffer.writeln('-----------------------------------');
-    buffer.writeln('*(Estimasi berdasarkan regulasi tarif bunga PBB-P2 Pemda Cianjur)*');
+    buffer.writeln(
+      '*(Estimasi berdasarkan regulasi tarif bunga PBB-P2 Pemda Cianjur)*',
+    );
     return buffer.toString();
   }
 
@@ -381,12 +425,20 @@ class PbbCalculatorHelper {
     buffer.writeln('💳 *SKEMA TABUNGAN / CICILAN PBB-P2*');
     if (nop.isNotEmpty) buffer.writeln('• *NOP:* $nop');
     if (namaWp.isNotEmpty) buffer.writeln('• *Nama WP:* $namaWp');
-    buffer.writeln('• *Total Ketetapan:* ${formatRupiah(cicilanResult.totalTagihan)}');
+    buffer.writeln(
+      '• *Total Ketetapan:* ${formatRupiah(cicilanResult.totalTagihan)}',
+    );
     buffer.writeln('• *Frekuensi Setoran:* ${cicilanResult.frekuensi}');
-    buffer.writeln('• *Jumlah Setoran:* ${cicilanResult.jumlahKaliSetoran}x Kali');
-    buffer.writeln('• *Besaran per Setoran:* ${formatRupiah(cicilanResult.nominalPerSetoran)}');
+    buffer.writeln(
+      '• *Jumlah Setoran:* ${cicilanResult.jumlahKaliSetoran}x Kali',
+    );
+    buffer.writeln(
+      '• *Besaran per Setoran:* ${formatRupiah(cicilanResult.nominalPerSetoran)}',
+    );
     buffer.writeln('-----------------------------------');
-    buffer.writeln('Dengan menabung secara rutin, pembayaran PBB menjadi ringan sebelum jatuh tempo. Terima kasih! 🙏');
+    buffer.writeln(
+      'Dengan menabung secara rutin, pembayaran PBB menjadi ringan sebelum jatuh tempo. Terima kasih! 🙏',
+    );
     return buffer.toString();
   }
 
@@ -399,21 +451,29 @@ class PbbCalculatorHelper {
     final buffer = StringBuffer();
     buffer.writeln('📑 *SIMULASI BIAYA AKTA JUAL BELI (AJB) & PAJAK*');
     if (nop != null && nop.isNotEmpty) buffer.writeln('• *NOP:* $nop');
-    if (namaWp != null && namaWp.isNotEmpty) buffer.writeln('• *Nama Pemilik/WP:* $namaWp');
+    if (namaWp != null && namaWp.isNotEmpty) {
+      buffer.writeln('• *Nama Pemilik/WP:* $namaWp');
+    }
     buffer.writeln('• *Luas Tanah:* ${ajbResult.luas.toStringAsFixed(0)} m²');
     buffer.writeln('• *NJOP / m²:* ${formatRupiah(ajbResult.njopPerM2)}');
-    buffer.writeln('• *Total Nilai Transaksi / NJOP:* ${formatRupiah(ajbResult.totalNilai)}');
+    buffer.writeln(
+      '• *Total Nilai Transaksi / NJOP:* ${formatRupiah(ajbResult.totalNilai)}',
+    );
     buffer.writeln('-----------------------------------');
     buffer.writeln('📋 *Rincian Estimasi Pajak:*');
     buffer.writeln('• PPh (2.5%): ${formatRupiah(ajbResult.pph)}');
     buffer.writeln('• PPN (2.5%): ${formatRupiah(ajbResult.ppn)}');
     if (ajbResult.kenaBphtb) {
-      buffer.writeln('• BPHTB (5% - Transaksi >= 80 Juta): ${formatRupiah(ajbResult.bphtb)}');
+      buffer.writeln(
+        '• BPHTB (5% - Transaksi >= 80 Juta): ${formatRupiah(ajbResult.bphtb)}',
+      );
     } else {
       buffer.writeln('• BPHTB: Rp 0 (Nilai transaksi di bawah 80 Juta)');
     }
     buffer.writeln('-----------------------------------');
-    buffer.writeln('💰 *Total Estimasi Pajak Transaksi:* ${formatRupiah(ajbResult.totalBiayaPajak)}');
+    buffer.writeln(
+      '💰 *Total Estimasi Pajak Transaksi:* ${formatRupiah(ajbResult.totalBiayaPajak)}',
+    );
     return buffer.toString();
   }
 }
@@ -422,7 +482,8 @@ class PbbCalculatorHelper {
 class PbbTabunganMutasi {
   final int nominal; // positif untuk setor (+), negatif untuk tarik (-)
   final String tanggal; // e.g. "09/11/2026 19:30"
-  final String keterangan; // e.g. "Setor cicilan ke-1", "Tarik kebutuhan mendesak"
+  final String
+  keterangan; // e.g. "Setor cicilan ke-1", "Tarik kebutuhan mendesak"
 
   const PbbTabunganMutasi({
     required this.nominal,
@@ -433,10 +494,10 @@ class PbbTabunganMutasi {
   bool get isSetor => nominal >= 0;
 
   Map<String, dynamic> toJson() => {
-        'n': nominal,
-        't': tanggal,
-        if (keterangan.isNotEmpty) 'k': keterangan,
-      };
+    'n': nominal,
+    't': tanggal,
+    if (keterangan.isNotEmpty) 'k': keterangan,
+  };
 
   factory PbbTabunganMutasi.fromJson(Map<String, dynamic> json) =>
       PbbTabunganMutasi(
@@ -491,10 +552,7 @@ class PbbTabunganModel {
       tandaTanganStrokes.any((stroke) => stroke.length >= 2);
 
   bool get hasTabungan =>
-      saldo > 0 ||
-      catatan.isNotEmpty ||
-      riwayat.isNotEmpty ||
-      hasTandaTangan;
+      saldo > 0 || catatan.isNotEmpty || riwayat.isNotEmpty || hasTandaTangan;
 
   bool get isLunas => target > 0 && saldo >= target;
   int get sisaKekurangan => (target - saldo).clamp(0, target);
@@ -601,9 +659,11 @@ class PbbTabunganModel {
       saldo: saldo,
       target: target,
       catatan: json['catatan'] as String? ?? '',
-      riwayat: (json['riwayat'] as List<dynamic>?)
-              ?.map((e) =>
-                  PbbTabunganMutasi.fromJson(e as Map<String, dynamic>))
+      riwayat:
+          (json['riwayat'] as List<dynamic>?)
+              ?.map(
+                (e) => PbbTabunganMutasi.fromJson(e as Map<String, dynamic>),
+              )
               .toList() ??
           const [],
       kelebihanAlokasi: parsedAlokasi,
@@ -636,8 +696,10 @@ class PbbTabunganHelper {
   }
 
   /// Mengekstrak objek [PbbTabunganModel] dari dalam field catatan.
-  static PbbTabunganModel extractTabungan(String rawCatatan,
-      {int defaultTarget = 0}) {
+  static PbbTabunganModel extractTabungan(
+    String rawCatatan, {
+    int defaultTarget = 0,
+  }) {
     final startIdx = rawCatatan.indexOf(_tagPrefix);
     if (startIdx == -1) {
       return PbbTabunganModel(target: defaultTarget);
@@ -661,7 +723,9 @@ class PbbTabunganHelper {
 
   /// Menggabungkan catatan manusia dengan data tabungan terstruktur.
   static String encodeCatatanWithTabungan(
-      String humanCatatan, PbbTabunganModel tabungan) {
+    String humanCatatan,
+    PbbTabunganModel tabungan,
+  ) {
     final cleanHuman = cleanCatatan(humanCatatan);
     if (!tabungan.hasTabungan) {
       return cleanHuman;
@@ -685,18 +749,26 @@ class PbbTabunganHelper {
     buffer.writeln('🐷 *BUKTI TABUNGAN / CICILAN PBB-P2*');
     if (nop.isNotEmpty) buffer.writeln('• *NOP:* $nop');
     if (namaWp.isNotEmpty) buffer.writeln('• *Nama WP:* $namaWp');
-    buffer.writeln('• *Target Ketetapan PBB:* ${formatRupiah(tabungan.target)}');
-    buffer.writeln('• *Saldo Terkumpul:* ${formatRupiah(tabungan.saldo)} (${tabungan.persentase.toStringAsFixed(0)}%)');
+    buffer.writeln(
+      '• *Target Ketetapan PBB:* ${formatRupiah(tabungan.target)}',
+    );
+    buffer.writeln(
+      '• *Saldo Terkumpul:* ${formatRupiah(tabungan.saldo)} (${tabungan.persentase.toStringAsFixed(0)}%)',
+    );
     if (tabungan.isLunas) {
       buffer.writeln('• *Status:* ✅ *LUNAS / SIAP BAYAR*');
       if (tabungan.hasKelebihan) {
-        buffer.writeln('• *Kelebihan / Sisa Dana:* ${formatRupiah(tabungan.kelebihanSaldo)}');
+        buffer.writeln(
+          '• *Kelebihan / Sisa Dana:* ${formatRupiah(tabungan.kelebihanSaldo)}',
+        );
         buffer.writeln(
           '• *Alokasi Kelebihan:* ${tabungan.kelebihanAlokasi?.label ?? 'Belum ditentukan'}',
         );
       }
     } else {
-      buffer.writeln('• *Sisa Kekurangan:* ${formatRupiah(tabungan.sisaKekurangan)}');
+      buffer.writeln(
+        '• *Sisa Kekurangan:* ${formatRupiah(tabungan.sisaKekurangan)}',
+      );
     }
     if (tabungan.hasTandaTangan) {
       final waktu = tabungan.tandaTanganWaktu.isNotEmpty
@@ -711,7 +783,9 @@ class PbbTabunganHelper {
       buffer.writeln('-----------------------------------');
       final jenis = transaksiTerakhir.isSetor ? 'Setoran (+)' : 'Penarikan (-)';
       buffer.writeln('📋 *Mutasi Terakhir:*');
-      buffer.writeln('• Jenis: $jenis ${formatRupiah(transaksiTerakhir.nominal.abs())}');
+      buffer.writeln(
+        '• Jenis: $jenis ${formatRupiah(transaksiTerakhir.nominal.abs())}',
+      );
       buffer.writeln('• Waktu: ${transaksiTerakhir.tanggal}');
       if (transaksiTerakhir.keterangan.isNotEmpty) {
         buffer.writeln('• Info: ${transaksiTerakhir.keterangan}');
@@ -719,11 +793,14 @@ class PbbTabunganHelper {
     }
     buffer.writeln('-----------------------------------');
     if (tabungan.isLunas) {
-      buffer.writeln('🎉 *Alhamdulillah, Tabungan PBB sudah cukup untuk dilunaskan!* Terima kasih atas ketaatan dan kerja samanya. 🙏');
+      buffer.writeln(
+        '🎉 *Alhamdulillah, Tabungan PBB sudah cukup untuk dilunaskan!* Terima kasih atas ketaatan dan kerja samanya. 🙏',
+      );
     } else {
-      buffer.writeln('Semoga tabungan PBB ini mempermudah pelunasan sebelum jatuh tempo. Terima kasih! 🙏');
+      buffer.writeln(
+        'Semoga tabungan PBB ini mempermudah pelunasan sebelum jatuh tempo. Terima kasih! 🙏',
+      );
     }
     return buffer.toString();
   }
 }
-

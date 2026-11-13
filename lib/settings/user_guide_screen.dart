@@ -140,7 +140,10 @@ class _UserGuideScreenState extends State<UserGuideScreen> {
             // 2. Search Bar & Quick Chips
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 6,
+                ),
                 child: _buildSearchSection(scheme),
               ),
             ),
@@ -212,16 +215,15 @@ class _UserGuideScreenState extends State<UserGuideScreen> {
                       Expanded(
                         child: Text(
                           'Daftar Bab Panduan Visual (${topics.length} Layar)',
-                          style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                fontWeight: FontWeight.w700,
-                              ),
+                          style: Theme.of(context).textTheme.titleSmall
+                              ?.copyWith(fontWeight: FontWeight.w700),
                         ),
                       ),
                       Text(
                         'Ketuk untuk membuka',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: scheme.onSurfaceVariant,
-                            ),
+                          color: scheme.onSurfaceVariant,
+                        ),
                       ),
                     ],
                   ),
@@ -260,9 +262,8 @@ class _UserGuideScreenState extends State<UserGuideScreen> {
                       Expanded(
                         child: Text(
                           'Tanya Jawab & Solusi Cepat (FAQ)',
-                          style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                fontWeight: FontWeight.w700,
-                              ),
+                          style: Theme.of(context).textTheme.titleSmall
+                              ?.copyWith(fontWeight: FontWeight.w700),
                         ),
                       ),
                     ],
@@ -308,9 +309,8 @@ class _UserGuideScreenState extends State<UserGuideScreen> {
                       Text(
                         'Tidak ditemukan panduan untuk "$_searchQuery"',
                         textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w600,
-                            ),
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w600),
                       ),
                       const SizedBox(height: 6),
                       Text(
@@ -348,17 +348,12 @@ class _UserGuideScreenState extends State<UserGuideScreen> {
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [
-            scheme.primaryContainer,
-            scheme.surfaceContainerHighest,
-          ],
+          colors: [scheme.primaryContainer, scheme.surfaceContainerHighest],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: scheme.primary.withValues(alpha: 0.25),
-        ),
+        border: Border.all(color: scheme.primary.withValues(alpha: 0.25)),
       ),
       padding: const EdgeInsets.all(18),
       child: Column(
@@ -387,17 +382,17 @@ class _UserGuideScreenState extends State<UserGuideScreen> {
                     Text(
                       'Panduan Visual Interaktif',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w800,
-                            color: scheme.onPrimaryContainer,
-                          ),
+                        fontWeight: FontWeight.w800,
+                        color: scheme.onPrimaryContainer,
+                      ),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       'Pelajari fungsi setiap tombol dan menu melalui tangkapan layar bertitik nomor yang dapat diketuk secara langsung.',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: scheme.onSurfaceVariant,
-                            height: 1.35,
-                          ),
+                        color: scheme.onSurfaceVariant,
+                        height: 1.35,
+                      ),
                     ),
                   ],
                 ),
@@ -439,7 +434,10 @@ class _UserGuideScreenState extends State<UserGuideScreen> {
               style: OutlinedButton.styleFrom(
                 backgroundColor: scheme.surface.withValues(alpha: 0.65),
                 side: BorderSide(color: scheme.primary.withValues(alpha: 0.4)),
-                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                padding: const EdgeInsets.symmetric(
+                  vertical: 10,
+                  horizontal: 12,
+                ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -484,8 +482,12 @@ class _UserGuideScreenState extends State<UserGuideScreen> {
           controller: _searchController,
           onChanged: (val) => setState(() => _searchQuery = val),
           decoration: InputDecoration(
-            hintText: 'Cari fitur, tombol, atau masalah (mis. QRIS, Kolektif)...',
-            hintStyle: TextStyle(fontSize: 13.5, color: scheme.onSurfaceVariant),
+            hintText:
+                'Cari fitur, tombol, atau masalah (mis. QRIS, Kolektif)...',
+            hintStyle: TextStyle(
+              fontSize: 13.5,
+              color: scheme.onSurfaceVariant,
+            ),
             prefixIcon: Icon(Icons.search_rounded, color: scheme.primary),
             suffixIcon: _searchQuery.isNotEmpty
                 ? IconButton(
@@ -549,8 +551,9 @@ class _UserGuideScreenState extends State<UserGuideScreen> {
                       kw,
                       style: TextStyle(
                         fontSize: 11.5,
-                        fontWeight:
-                            isSelected ? FontWeight.w700 : FontWeight.w500,
+                        fontWeight: isSelected
+                            ? FontWeight.w700
+                            : FontWeight.w500,
                       ),
                     ),
                     onPressed: () {
@@ -603,9 +606,7 @@ class _GuideTopicCard extends StatelessWidget {
       color: scheme.surfaceContainerLow,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        side: BorderSide(
-          color: scheme.outlineVariant.withValues(alpha: 0.45),
-        ),
+        side: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.45)),
       ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -641,10 +642,8 @@ class _GuideTopicCard extends StatelessWidget {
                     Image.asset(
                       topic.imageAsset,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, _, _) => Icon(
-                        topic.icon,
-                        color: Colors.white54,
-                      ),
+                      errorBuilder: (_, _, _) =>
+                          Icon(topic.icon, color: Colors.white54),
                     ),
                     Positioned(
                       bottom: 4,
@@ -712,8 +711,8 @@ class _GuideTopicCard extends StatelessWidget {
                     Text(
                       topic.title,
                       style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                     const SizedBox(height: 3),
                     Text(
@@ -721,9 +720,9 @@ class _GuideTopicCard extends StatelessWidget {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: scheme.onSurfaceVariant,
-                            height: 1.3,
-                          ),
+                        color: scheme.onSurfaceVariant,
+                        height: 1.3,
+                      ),
                     ),
                     const SizedBox(height: 10),
                     Wrap(
@@ -861,8 +860,8 @@ class _FaqCard extends StatelessWidget {
                     child: Text(
                       faq.question,
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -881,9 +880,9 @@ class _FaqCard extends StatelessWidget {
                 Text(
                   faq.answer,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: scheme.onSurface,
-                        height: 1.45,
-                      ),
+                    color: scheme.onSurface,
+                    height: 1.45,
+                  ),
                 ),
               ],
             ],
@@ -1051,16 +1050,16 @@ class _GuideTopicDetailScreenState extends State<GuideTopicDetailScreen>
                   Text(
                     topic.title,
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     topic.summary,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: scheme.onSurfaceVariant,
-                          height: 1.4,
-                        ),
+                      color: scheme.onSurfaceVariant,
+                      height: 1.4,
+                    ),
                   ),
                   if (topic.warningNote != null) ...[
                     const SizedBox(height: 10),
@@ -1220,8 +1219,8 @@ class _GuideTopicDetailScreenState extends State<GuideTopicDetailScreen>
                   child: Text(
                     'Daftar Lengkap Elemen & Fungsi (${topic.pins.length} Titik)',
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
               ],
@@ -1321,9 +1320,7 @@ class _GuideTopicDetailScreenState extends State<GuideTopicDetailScreen>
                               const SizedBox(height: 4),
                               Text(
                                 pin.description,
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodySmall
+                                style: Theme.of(context).textTheme.bodySmall
                                     ?.copyWith(
                                       color: scheme.onSurfaceVariant,
                                       height: 1.4,
@@ -1490,17 +1487,17 @@ class _GuideTopicDetailScreenState extends State<GuideTopicDetailScreen>
           const SizedBox(height: 8),
           Text(
             activePin.title,
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 4),
           Text(
             activePin.description,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: scheme.onSurface,
-                  height: 1.4,
-                ),
+              color: scheme.onSurface,
+              height: 1.4,
+            ),
           ),
         ],
       ),
@@ -1568,10 +1565,7 @@ class _InteractiveGuideScreenshot extends StatelessWidget {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              Image.asset(
-                imageAsset,
-                fit: BoxFit.fill,
-              ),
+              Image.asset(imageAsset, fit: BoxFit.fill),
               if (showPins)
                 AnimatedBuilder(
                   animation: pulseAnimation,
@@ -1728,11 +1722,7 @@ class _GuidePinOverlayPainter extends CustomPainter {
       r + (isSelected ? 2.0 : 1.4),
       Paint()..color = Colors.white,
     );
-    canvas.drawCircle(
-      dot,
-      r,
-      Paint()..color = pin.color,
-    );
+    canvas.drawCircle(dot, r, Paint()..color = pin.color);
 
     // 4. Number Label
     final tp = TextPainter(

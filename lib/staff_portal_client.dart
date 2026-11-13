@@ -238,24 +238,62 @@ class StaffPortalClient extends BaseHttpClient {
 
   Future<String> _followAndRead(Response<String> response) async {
     final location = response.headers.value('location');
-    if (location == null) return response.data ?? '';
+    if (location == null || location.trim().isEmpty) {
+      return response.data ?? '';
+    }
+    final normalized = normalizeRedirectLocation(location);
     final next = await _dio.get<String>(
-      _normalizeLocation(location),
+      normalized,
       options: Options(responseType: ResponseType.plain),
     );
     return next.data ?? '';
   }
 
-  String _normalizeLocation(String location) {
-    if (location.startsWith('http://') || location.startsWith('https://')) {
-      return location;
+  /// Memvalidasi dan menormalisasi header `Location` redirect agar hanya
+  /// mengarah ke path internal atau `https://cianjurkab.v-tax.id`.
+  /// Menolak domain eksternal, skema non-HTTPS, protocol-relative URL (`//`),
+  /// atau kredensial URL (`userInfo`).
+  static String normalizeRedirectLocation(String location) {
+    final trimmed = location.trim();
+    if (trimmed.isEmpty ||
+        RegExp(r'[\x00-\x1F\x7F]').hasMatch(trimmed) ||
+        trimmed.startsWith('//') ||
+        trimmed.contains('\\')) {
+      throw FormatException('Lokasi redirect tidak valid: $location');
     }
-    return location.startsWith('/') ? location : '/$location';
+
+    if (trimmed.contains('://') ||
+        trimmed.toLowerCase().startsWith('http:') ||
+        trimmed.toLowerCase().startsWith('https:')) {
+      final uri = Uri.tryParse(trimmed);
+      if (uri == null ||
+          uri.scheme.toLowerCase() != 'https' ||
+          uri.host.toLowerCase() != 'cianjurkab.v-tax.id' ||
+          uri.userInfo.isNotEmpty ||
+          (uri.hasPort && uri.port != 443)) {
+        throw FormatException(
+          'Redirect ke domain atau skema eksternal ditolak: $location',
+        );
+      }
+      final path = uri.path.isEmpty ? '/' : uri.path;
+      if (path.startsWith('//')) {
+        throw FormatException('Path redirect tidak valid: $location');
+      }
+      return uri.hasQuery ? '$path?${uri.query}' : path;
+    }
+
+    final relUri = Uri.tryParse(trimmed);
+    if (relUri == null || relUri.hasScheme || relUri.hasAuthority) {
+      throw FormatException('Lokasi redirect relatif tidak valid: $location');
+    }
+    return trimmed.startsWith('/') ? trimmed : '/$trimmed';
   }
 
   /// Muat halaman Monitoring Wilayah sekali per sesi login.
   Future<String> _ensureMonitoringPage({bool forceReload = false}) async {
-    if (!forceReload && _monitoringHtml != null && _monitoringHtml!.isNotEmpty) {
+    if (!forceReload &&
+        _monitoringHtml != null &&
+        _monitoringHtml!.isNotEmpty) {
       return _monitoringHtml!;
     }
     await _ensureCookieManager();
@@ -336,10 +374,7 @@ class StaffPortalClient extends BaseHttpClient {
     try {
       final response = await _dio.post<String>(
         '/main.php',
-        queryParameters: {
-          'q': q,
-          if (page > 1) 'p': '$page',
-        },
+        queryParameters: {'q': q, if (page > 1) 'p': '$page'},
         data: {
           'query': query,
           ...params,
@@ -510,10 +545,12 @@ class StaffPortalClient extends BaseHttpClient {
   }) {
     final effKec = kecamatan.isNotEmpty ? kecamatan : activeKecamatanCode;
     final effKel = kelurahan.isNotEmpty ? kelurahan : activeKelurahanCode;
-    final effNamaKec =
-        namaKecamatan.isNotEmpty ? namaKecamatan : activeKecamatanName;
-    final effNamaKel =
-        namaKelurahan.isNotEmpty ? namaKelurahan : activeKelurahanName;
+    final effNamaKec = namaKecamatan.isNotEmpty
+        ? namaKecamatan
+        : activeKecamatanName;
+    final effNamaKel = namaKelurahan.isNotEmpty
+        ? namaKelurahan
+        : activeKelurahanName;
     return _fetchTab(
       jsFunctionName: 'showModelRealisasi1',
       query: 'Realisasi',
@@ -561,10 +598,12 @@ class StaffPortalClient extends BaseHttpClient {
   }) {
     final effKec = kecamatan.isNotEmpty ? kecamatan : activeKecamatanCode;
     final effKel = kelurahan.isNotEmpty ? kelurahan : activeKelurahanCode;
-    final effNamaKec =
-        namaKecamatan.isNotEmpty ? namaKecamatan : activeKecamatanName;
-    final effNamaKel =
-        namaKelurahan.isNotEmpty ? namaKelurahan : activeKelurahanName;
+    final effNamaKec = namaKecamatan.isNotEmpty
+        ? namaKecamatan
+        : activeKecamatanName;
+    final effNamaKel = namaKelurahan.isNotEmpty
+        ? namaKelurahan
+        : activeKelurahanName;
     return _fetchTab(
       jsFunctionName: 'showModelPiutang',
       query: 'Piutang',
@@ -664,8 +703,9 @@ class StaffPortalClient extends BaseHttpClient {
     String namaKecamatan = '',
   }) {
     final effKec = kecamatan.isNotEmpty ? kecamatan : activeKecamatanCode;
-    final effNamaKec =
-        namaKecamatan.isNotEmpty ? namaKecamatan : activeKecamatanName;
+    final effNamaKec = namaKecamatan.isNotEmpty
+        ? namaKecamatan
+        : activeKecamatanName;
     return _fetchTab(
       jsFunctionName: 'showRangkingRealisasi',
       query: 'Ranking_Realisasi',
@@ -699,12 +739,14 @@ class StaffPortalClient extends BaseHttpClient {
   /// Ambil info wilayah (Kecamatan & Kelurahan) secara dinamis dari akun login
   /// atau server Bapenda untuk seluruh 32 kecamatan se-Kabupaten Cianjur.
   Future<
-      ({
-        String kecamatanCode,
-        String kecamatanName,
-        String kelurahanCode,
-        List<KolektifKelurahan> kelurahan,
-      })> fetchMonitoringWilayahOptions() async {
+    ({
+      String kecamatanCode,
+      String kecamatanName,
+      String kelurahanCode,
+      List<KolektifKelurahan> kelurahan,
+    })
+  >
+  fetchMonitoringWilayahOptions() async {
     final html = await _ensureMonitoringPage();
     final idKec =
         StaffPortalTokenExtractor.extractMonitoringIdKec(html) ??
@@ -746,10 +788,7 @@ class StaffPortalClient extends BaseHttpClient {
         options = List.of(_defaultMandeList);
       } else {
         options = [
-          KolektifKelurahan(
-            code: idKel,
-            name: _activeKelurahanName ?? idKel,
-          ),
+          KolektifKelurahan(code: idKel, name: _activeKelurahanName ?? idKel),
         ];
       }
     } else if (idKec == '3205200') {
@@ -833,7 +872,8 @@ class StaffPortalClient extends BaseHttpClient {
     required int st,
   }) async {
     final html = await _ensureMonitoringPage();
-    final q = StaffPortalTokenExtractor.extractLoadQ(html, jsFunctionName) ??
+    final q =
+        StaffPortalTokenExtractor.extractLoadQ(html, jsFunctionName) ??
         await _ensurePageQ23();
     final funcMode = StaffPortalTokenExtractor.extractFuncMode(
       html,
@@ -882,7 +922,8 @@ class StaffPortalClient extends BaseHttpClient {
     required Map<String, String> params,
   }) async {
     final html = await _ensureMonitoringPage();
-    final q = StaffPortalTokenExtractor.extractLoadQ(html, 'onSubmitSudahBayar') ??
+    final q =
+        StaffPortalTokenExtractor.extractLoadQ(html, 'onSubmitSudahBayar') ??
         await _ensurePageQ23();
     final funcMode = StaffPortalTokenExtractor.extractFuncMode(
       html,
@@ -897,11 +938,7 @@ class StaffPortalClient extends BaseHttpClient {
     final response = await _dio.post<String>(
       '/main.php',
       queryParameters: {'q': q},
-      data: {
-        'query': query,
-        ...params,
-        'funcMode': funcMode,
-      },
+      data: {'query': query, ...params, 'funcMode': funcMode},
       options: Options(
         contentType: Headers.formUrlEncodedContentType,
         responseType: ResponseType.plain,
@@ -910,7 +947,9 @@ class StaffPortalClient extends BaseHttpClient {
     final body = response.data?.trim() ?? '';
     return (
       success: true,
-      message: body.isNotEmpty ? body : 'Permintaan ekspor Excel berhasil dikirim ke server.',
+      message: body.isNotEmpty
+          ? body
+          : 'Permintaan ekspor Excel berhasil dikirim ke server.',
     );
   }
 
@@ -936,10 +975,7 @@ class StaffPortalClient extends BaseHttpClient {
 
     final response = await _dio.post<String>(
       endpoint,
-      data: {
-        'id': cpmId,
-        'q': qBase64,
-      },
+      data: {'id': cpmId, 'q': qBase64},
       options: Options(
         contentType: Headers.formUrlEncodedContentType,
         responseType: ResponseType.plain,
@@ -981,7 +1017,8 @@ class StaffPortalClient extends BaseHttpClient {
     String kelurahan = '',
   }) async {
     final html = await _ensureMonitoringPage();
-    final q = StaffPortalTokenExtractor.extractLoadQ(html, 'showRangkingRealisasi') ??
+    final q =
+        StaffPortalTokenExtractor.extractLoadQ(html, 'showRangkingRealisasi') ??
         await _ensurePageQ23();
     final funcMode = StaffPortalTokenExtractor.extractFuncMode(
       html,

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../feature_tour/feature_tour.dart';
+import '../ui/app_design_system.dart';
 import 'bansos_client.dart';
 import 'nik_scanner.dart';
 
@@ -404,185 +405,224 @@ class DesilViewState extends State<DesilView> {
   Widget build(BuildContext context) {
     return SingleChildScrollView(
       controller: _scrollController,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 40),
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 760),
-          child: _result == null ? _form(context) : _resultView(context),
+          child: _result == null
+              ? _form(context)
+              : AppAnimatedReveal(child: _resultView(context)),
         ),
       ),
     );
   }
 
-  Widget _form(BuildContext context) => Card(
-    child: Padding(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            'Cek Desil & Bansos',
-            style: Theme.of(context).textTheme.headlineSmall,
-          ),
-          const SizedBox(height: 8),
-          const Text('Masukkan NIK dan huruf kode dari layanan Kemensos.'),
-          const SizedBox(height: 24),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: TextField(
-                  key: _nikInputKey,
-                  controller: _nikController,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  maxLength: 16,
-                  onChanged: _onNikChanged,
-                  onSubmitted: (value) {
-                    if (value.length == 16 &&
-                        RegExp(r'^\d{16}$').hasMatch(value)) {
-                      _focusCaptcha();
-                    } else {
-                      setState(
-                        () => _errorText =
-                            'NIK harus terdiri dari tepat 16 digit angka.',
-                      );
-                    }
-                  },
-                  decoration: const InputDecoration(
-                    labelText: 'NIK (Nomor Induk Kependudukan)',
-                    hintText: 'Masukkan 16 digit NIK',
-                    border: OutlineInputBorder(),
-                    counterText: '',
+  Widget _form(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Card(
+      elevation: 0,
+      color: scheme.surfaceContainerLow,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.5)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: scheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    Icons.people_alt_outlined,
+                    color: scheme.onPrimaryContainer,
+                    size: 22,
                   ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              _scanningNik
-                  ? const Padding(
-                      padding: EdgeInsets.all(12),
-                      child: SizedBox(
-                        width: 28,
-                        height: 28,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Cek Desil & Bansos',
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.bold),
                       ),
-                    )
-                  : IconButton.filledTonal(
-                      key: _scanNikButtonKey,
-                      onPressed: _scanAndFillNik,
-                      icon: const Icon(Icons.document_scanner_outlined),
-                      tooltip: 'Pindai NIK dari Foto KTP atau KK',
-                    ),
-            ],
-          ),
-          if (_nikFromOcr) ...[
-            const SizedBox(height: 8),
-            DecoratedBox(
-              decoration: BoxDecoration(
-                color: Color(0xFFFFF3CD),
-                border: Border.all(color: Color(0xFFFFD166)),
-                borderRadius: BorderRadius.all(Radius.circular(8)),
-              ),
-              child: const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                child: Row(
+                      const SizedBox(height: 2),
+                      Text(
+                        'Masukkan NIK dan huruf kode dari layanan Kemensos.',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final isCompact = constraints.maxWidth < 420;
+                return Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.warning_amber_rounded, color: Color(0xFF8A6500)),
-                    SizedBox(width: 8),
                     Expanded(
-                      child: Text(
-                        'NIK terisi dari foto dokumen. Pastikan angkanya sudah sesuai dengan KTP atau KK.',
-                        style: TextStyle(color: Color(0xFF5F4800)),
+                      child: TextField(
+                        key: _nikInputKey,
+                        controller: _nikController,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                        ],
+                        maxLength: 16,
+                        onChanged: _onNikChanged,
+                        onSubmitted: (value) {
+                          if (value.length == 16 &&
+                              RegExp(r'^\d{16}$').hasMatch(value)) {
+                            _focusCaptcha();
+                          } else {
+                            setState(
+                              () => _errorText =
+                                  'NIK harus terdiri dari tepat 16 digit angka.',
+                            );
+                          }
+                        },
+                        decoration: InputDecoration(
+                          labelText: isCompact
+                              ? 'NIK (16 Digit KTP)'
+                              : 'NIK (Nomor Induk Kependudukan)',
+                          hintText: 'Masukkan 16 digit NIK',
+                          border: const OutlineInputBorder(),
+                          counterText: '',
+                        ),
                       ),
                     ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-          const SizedBox(height: 8),
-          Text(
-            'Pastikan NIK sesuai dengan KTP.',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-          const SizedBox(height: 20),
-          Text('HURUF KODE', style: Theme.of(context).textTheme.labelLarge),
-          const SizedBox(height: 8),
-          Column(
-            key: _captchaAreaKey,
-            children: [
-              Center(
-                child: _loadingCaptcha
-                    ? const SizedBox(
-                        height: 84,
-                        width: 84,
-                        child: CircularProgressIndicator(),
-                      )
-                    : _captchaImage == null
-                    ? const Text('Gambar kode belum muncul')
-                    : Container(
-                        decoration: BoxDecoration(
-                          border: Border.all(
-                            color: Theme.of(context).dividerColor,
+                    const SizedBox(width: 8),
+                    _scanningNik
+                        ? const Padding(
+                            padding: EdgeInsets.all(12),
+                            child: SizedBox(
+                              width: 28,
+                              height: 28,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          )
+                        : IconButton.filledTonal(
+                            key: _scanNikButtonKey,
+                            onPressed: _scanAndFillNik,
+                            icon: const Icon(Icons.document_scanner_outlined),
+                            tooltip: 'Pindai NIK dari Foto KTP atau KK',
                           ),
-                        ),
-                        child: Image.memory(_captchaImage!, height: 84),
-                      ),
-              ),
-              Align(
-                alignment: Alignment.center,
-                child: TextButton.icon(
-                  onPressed: _loadingCaptcha ? null : _loadCaptcha,
-                  icon: const Icon(Icons.refresh),
-                  label: const Text('Ganti Kode Gambar'),
-                ),
+                  ],
+                );
+              },
+            ),
+            if (_nikFromOcr) ...[
+              const SizedBox(height: 8),
+              const AppAlertBanner(
+                message:
+                    'NIK terisi dari foto dokumen. Pastikan angkanya sudah sesuai dengan KTP atau KK.',
+                tone: AppBadgeTone.warning,
               ),
             ],
-          ),
-          TextField(
-            key: _captchaInputKey,
-            controller: _captchaController,
-            focusNode: _captchaFocus,
-            autocorrect: false,
-            enableSuggestions: false,
-            textInputAction: TextInputAction.done,
-            onSubmitted: (_) => FocusScope.of(context).unfocus(),
-            decoration: const InputDecoration(
-              labelText: 'Huruf kode',
-              hintText: 'Ketik huruf kode di atas',
-              border: OutlineInputBorder(),
+            const SizedBox(height: 8),
+            Text(
+              'Pastikan 16 digit Nomor Induk Kependudukan sesuai dengan KTP.',
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
             ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Setelah mengetik huruf kode, tekan tombol Cari Data.',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-          if (_errorText != null) ...[
-            const SizedBox(height: 16),
-            _messageCard(context, _errorText!, isError: true),
+            const SizedBox(height: 20),
+            Text('HURUF KODE', style: Theme.of(context).textTheme.labelLarge),
+            const SizedBox(height: 8),
+            Column(
+              key: _captchaAreaKey,
+              children: [
+                Center(
+                  child: _loadingCaptcha
+                      ? const SizedBox(
+                          height: 84,
+                          width: 84,
+                          child: CircularProgressIndicator(),
+                        )
+                      : _captchaImage == null
+                      ? const Text('Gambar kode belum muncul')
+                      : Container(
+                          decoration: BoxDecoration(
+                            border: Border.all(color: scheme.outlineVariant),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          clipBehavior: Clip.antiAlias,
+                          child: Image.memory(_captchaImage!, height: 84),
+                        ),
+                ),
+                Align(
+                  alignment: Alignment.center,
+                  child: TextButton.icon(
+                    onPressed: _loadingCaptcha ? null : _loadCaptcha,
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Ganti Kode Gambar'),
+                  ),
+                ),
+              ],
+            ),
+            TextField(
+              key: _captchaInputKey,
+              controller: _captchaController,
+              focusNode: _captchaFocus,
+              autocorrect: false,
+              enableSuggestions: false,
+              textInputAction: TextInputAction.done,
+              onSubmitted: (_) => FocusScope.of(context).unfocus(),
+              decoration: const InputDecoration(
+                labelText: 'Huruf kode',
+                hintText: 'Ketik huruf kode di atas',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Setelah mengetik huruf kode, tekan tombol Cari Data.',
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+            ),
+            if (_errorText != null) ...[
+              const SizedBox(height: 16),
+              _messageCard(context, _errorText!, isError: true),
+            ],
+            const SizedBox(height: 20),
+            FilledButton.icon(
+              key: _submitButtonKey,
+              onPressed: _submitting || _loadingCaptcha ? null : _submit,
+              icon: _submitting
+                  ? SizedBox(
+                      height: 18,
+                      width: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: scheme.onPrimary,
+                      ),
+                    )
+                  : const Icon(Icons.search),
+              label: Text(_submitting ? 'Mencari...' : 'Cari Data'),
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+            ),
           ],
-          const SizedBox(height: 20),
-          FilledButton.icon(
-            key: _submitButtonKey,
-            onPressed: _submitting || _loadingCaptcha ? null : _submit,
-            icon: _submitting
-                ? SizedBox(
-                    height: 18,
-                    width: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Theme.of(context).colorScheme.onPrimary,
-                    ),
-                  )
-                : const Icon(Icons.search),
-            label: Text(_submitting ? 'Mencari...' : 'Cari Data'),
-          ),
-        ],
+        ),
       ),
-    ),
-  );
+    );
+  }
 
   Widget _resultView(BuildContext context) {
     final result = _result!;
@@ -684,21 +724,8 @@ class DesilViewState extends State<DesilView> {
     BuildContext context,
     String text, {
     bool isError = false,
-  }) => Container(
-    padding: const EdgeInsets.all(12),
-    decoration: BoxDecoration(
-      color: isError
-          ? Theme.of(context).colorScheme.errorContainer
-          : Theme.of(context).colorScheme.secondaryContainer,
-      borderRadius: BorderRadius.circular(8),
-    ),
-    child: Text(
-      text,
-      style: TextStyle(
-        color: isError
-            ? Theme.of(context).colorScheme.onErrorContainer
-            : Theme.of(context).colorScheme.onSecondaryContainer,
-      ),
-    ),
+  }) => AppAlertBanner(
+    message: text,
+    tone: isError ? AppBadgeTone.error : AppBadgeTone.info,
   );
 }

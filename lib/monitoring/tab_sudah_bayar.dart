@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../staff_portal_client.dart';
+import '../ui/app_design_system.dart';
 import 'monitoring_form_fields.dart';
 import 'monitoring_tab_scaffold.dart';
 
@@ -30,6 +31,26 @@ class _TabSudahBayarState extends State<TabSudahBayar> {
   String _bank = '';
   late String _kelurahan = widget.client.activeKelurahanCode;
   String get _kecamatan => widget.client.activeKecamatanCode;
+
+  int get _activeOptionalCount {
+    var count = 0;
+    for (final c in [
+      _tahunAwal,
+      _tahunAkhir,
+      _nop,
+      _namaWp,
+      _kodeBayarIndividu,
+      _kodeBayarKolektif,
+      _va,
+      _qris,
+      _operator,
+    ]) {
+      if (c.text.trim().isNotEmpty) count++;
+    }
+    if (_buku != 'semua') count++;
+    if (_bank.isNotEmpty) count++;
+    return count;
+  }
 
   @override
   void dispose() {
@@ -145,117 +166,128 @@ class _TabSudahBayarState extends State<TabSudahBayar> {
             ),
           ],
         ),
-        const MonitoringSectionTitle('Tahun Pajak (opsional)'),
-        Row(
+        const SizedBox(height: 12),
+        AppCollapsibleFilterSection(
+          title: 'Filter Tambahan (Opsional)',
+          subtitle: 'Tahun Pajak, Buku, Bank, NOP, Nama WP, VA, QRIS',
+          activeFilterCount: _activeOptionalCount,
           children: [
-            Expanded(
-              child: TextField(
-                controller: _tahunAwal,
-                keyboardType: TextInputType.number,
-                maxLength: 4,
-                decoration: const InputDecoration(
-                  labelText: 'Awal',
-                  border: OutlineInputBorder(),
-                  counterText: '',
+            const MonitoringSectionTitle('Tahun Pajak (opsional)'),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _tahunAwal,
+                    keyboardType: TextInputType.number,
+                    maxLength: 4,
+                    decoration: const InputDecoration(
+                      labelText: 'Awal',
+                      border: OutlineInputBorder(),
+                      counterText: '',
+                    ),
+                  ),
                 ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    controller: _tahunAkhir,
+                    keyboardType: TextInputType.number,
+                    maxLength: 4,
+                    decoration: const InputDecoration(
+                      labelText: 'Akhir',
+                      border: OutlineInputBorder(),
+                      counterText: '',
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const MonitoringSectionTitle('Filter lainnya (opsional)'),
+            BukuDropdown(
+              value: _buku,
+              onChanged: (v) => setState(() => _buku = v),
+            ),
+            const SizedBox(height: 12),
+            BankDropdown(
+              client: widget.client,
+              value: _bank,
+              onChanged: (v) => setState(() => _bank = v),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _nop,
+              decoration: const InputDecoration(
+                labelText: 'NOP',
+                border: OutlineInputBorder(),
               ),
             ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: TextField(
-                controller: _tahunAkhir,
-                keyboardType: TextInputType.number,
-                maxLength: 4,
-                decoration: const InputDecoration(
-                  labelText: 'Akhir',
-                  border: OutlineInputBorder(),
-                  counterText: '',
-                ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _namaWp,
+              decoration: const InputDecoration(
+                labelText: 'Nama WP',
+                border: OutlineInputBorder(),
               ),
             ),
-          ],
-        ),
-        const MonitoringSectionTitle('Filter lainnya (opsional)'),
-        BukuDropdown(value: _buku, onChanged: (v) => setState(() => _buku = v)),
-        const SizedBox(height: 12),
-        BankDropdown(
-          client: widget.client,
-          value: _bank,
-          onChanged: (v) => setState(() => _bank = v),
-        ),
-        const SizedBox(height: 12),
-        TextField(
-          controller: _nop,
-          decoration: const InputDecoration(
-            labelText: 'NOP',
-            border: OutlineInputBorder(),
-          ),
-        ),
-        const SizedBox(height: 12),
-        TextField(
-          controller: _namaWp,
-          decoration: const InputDecoration(
-            labelText: 'Nama WP',
-            border: OutlineInputBorder(),
-          ),
-        ),
-        const SizedBox(height: 12),
-        TextField(
-          controller: _operator,
-          decoration: const InputDecoration(
-            labelText: 'Petugas Pembayaran',
-            border: OutlineInputBorder(),
-          ),
-        ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: _kodeBayarIndividu,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Kode Bayar Individu',
-                  border: OutlineInputBorder(),
-                ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _operator,
+              decoration: const InputDecoration(
+                labelText: 'Petugas Pembayaran',
+                border: OutlineInputBorder(),
               ),
             ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: TextField(
-                controller: _kodeBayarKolektif,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Kode Bayar Kolektif',
-                  border: OutlineInputBorder(),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _kodeBayarIndividu,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Kode Bayar Individu',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
                 ),
-              ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    controller: _kodeBayarKolektif,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Kode Bayar Kolektif',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: _va,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'VA',
-                  border: OutlineInputBorder(),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _va,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'VA',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
                 ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: TextField(
-                controller: _qris,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'QRIS',
-                  border: OutlineInputBorder(),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    controller: _qris,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'QRIS',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
                 ),
-              ),
+              ],
             ),
           ],
         ),

@@ -171,9 +171,7 @@ class PbbClient extends BaseHttpClient {
       if (matchTabelTunggakan != null) {
         final block = matchTabelTunggakan.group(1) ?? '';
         unpaidYears.addAll(
-          RegExp(r'\b(20\d{2})\b')
-              .allMatches(block)
-              .map((m) => m.group(1)!),
+          RegExp(r'\b(20\d{2})\b').allMatches(block).map((m) => m.group(1)!),
         );
       }
 
@@ -670,7 +668,9 @@ class PbbClient extends BaseHttpClient {
       }
       totalPbb = sumPbb > 0 ? sumPbb.toString() : totalPbb;
       totalDenda = sumDenda > 0 ? sumDenda.toString() : totalDenda;
-      totalKurangBayar = sumKurang > 0 ? sumKurang.toString() : totalKurangBayar;
+      totalKurangBayar = sumKurang > 0
+          ? sumKurang.toString()
+          : totalKurangBayar;
     }
 
     return TagihanResult(

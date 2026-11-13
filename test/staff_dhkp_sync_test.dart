@@ -93,54 +93,84 @@ void main() {
   });
 
   group('StaffDhkpSyncService.parseRow', () {
-    test('extracts NOP, Nama WP, Pokok, and normalized Tanggal Bayar from standard headers', () {
-      final headers = ['No', 'NOP', 'Nama Wajib Pajak', 'Pokok Bayar', 'Tanggal Bayar'];
-      final cells = ['1', '32.05.200.004.024-0012.0', 'HJ. SITI MARYAM', '150.000', '15-08-2025'];
+    test(
+      'extracts NOP, Nama WP, Pokok, and normalized Tanggal Bayar from standard headers',
+      () {
+        final headers = [
+          'No',
+          'NOP',
+          'Nama Wajib Pajak',
+          'Pokok Bayar',
+          'Tanggal Bayar',
+        ];
+        final cells = [
+          '1',
+          '32.05.200.004.024-0012.0',
+          'HJ. SITI MARYAM',
+          '150.000',
+          '15-08-2025',
+        ];
 
-      final parsed = StaffDhkpSyncService.parseRow(cells, headers, defaultTahun: '2025');
-      expect(parsed, isNotNull);
-      expect(parsed!.nop, '320520000402400120');
-      expect(parsed.namaWp, 'HJ. SITI MARYAM');
-      expect(parsed.jumlahPbb, '150000');
-      expect(parsed.tanggalBayar, '2025-08-15');
-    });
+        final parsed = StaffDhkpSyncService.parseRow(
+          cells,
+          headers,
+          defaultTahun: '2025',
+        );
+        expect(parsed, isNotNull);
+        expect(parsed!.nop, '320520000402400120');
+        expect(parsed.namaWp, 'HJ. SITI MARYAM');
+        expect(parsed.jumlahPbb, '150000');
+        expect(parsed.tanggalBayar, '2025-08-15');
+      },
+    );
 
     test('falls back to regex cell inspection when headers do not match', () {
       final headers = ['Kolom 1', 'Kolom 2', 'Kolom 3'];
       final cells = ['Data A', '320520000402400990', 'Keterangan B'];
 
-      final parsed = StaffDhkpSyncService.parseRow(cells, headers, defaultTahun: '2026');
+      final parsed = StaffDhkpSyncService.parseRow(
+        cells,
+        headers,
+        defaultTahun: '2026',
+      );
       expect(parsed, isNotNull);
       expect(parsed!.nop, '320520000402400990');
     });
 
-    test('prioritizes Pokok Pembayaran / Estimasi when Pokok Ketetapan is 0 (Belum Bayar tables)', () {
-      final headers = [
-        'NOP',
-        'NAMA WP',
-        'TAHUN PAJAK',
-        'POKOK KETETAPAN',
-        'POKOK PEMBAYARAN/ESTIMASI_POKOK_PEMBAYARAN',
-        'TOTAL',
-        'STATUS',
-      ];
-      final cells = [
-        '320520000400100040',
-        'HASAN',
-        '2026',
-        '0',
-        '47.952',
-        '959',
-        'Belum Lunas',
-      ];
+    test(
+      'prioritizes Pokok Pembayaran / Estimasi when Pokok Ketetapan is 0 (Belum Bayar tables)',
+      () {
+        final headers = [
+          'NOP',
+          'NAMA WP',
+          'TAHUN PAJAK',
+          'POKOK KETETAPAN',
+          'POKOK PEMBAYARAN/ESTIMASI_POKOK_PEMBAYARAN',
+          'TOTAL',
+          'STATUS',
+        ];
+        final cells = [
+          '320520000400100040',
+          'HASAN',
+          '2026',
+          '0',
+          '47.952',
+          '959',
+          'Belum Lunas',
+        ];
 
-      final parsed = StaffDhkpSyncService.parseRow(cells, headers, defaultTahun: '2026');
-      expect(parsed, isNotNull);
-      expect(parsed!.nop, '320520000400100040');
-      expect(parsed.namaWp, 'HASAN');
-      expect(parsed.jumlahPbb, '47952'); // must NOT be '0'
-      expect(parsed.status, 'Belum Lunas');
-    });
+        final parsed = StaffDhkpSyncService.parseRow(
+          cells,
+          headers,
+          defaultTahun: '2026',
+        );
+        expect(parsed, isNotNull);
+        expect(parsed!.nop, '320520000400100040');
+        expect(parsed.namaWp, 'HASAN');
+        expect(parsed.jumlahPbb, '47952'); // must NOT be '0'
+        expect(parsed.status, 'Belum Lunas');
+      },
+    );
 
     test('returns null when no 18-digit NOP is found in cells', () {
       final headers = ['No', 'Nama'];
@@ -152,63 +182,91 @@ void main() {
   });
 
   group('StaffDhkpSyncService.syncBloks execution', () {
-    test('updates unpaid record to paid, preserves note, and discovers new SPPT', () async {
-      // Setup existing records in store
-      const existingUnpaid = BlokRecord(
-        nop: '320520000402400010',
-        namaWajibPajak: 'WARGA LAMA',
-        tahunBayar: '2025',
-        tanggalBayar: '',
-        jumlahPbb: '75000',
-        statusBayar: 'Belum Bayar',
-        catatan: 'Catatan penting kolektor',
-      );
+    test(
+      'updates unpaid record to paid, preserves note, and discovers new SPPT',
+      () async {
+        // Setup existing records in store
+        const existingUnpaid = BlokRecord(
+          nop: '320520000402400010',
+          namaWajibPajak: 'WARGA LAMA',
+          tahunBayar: '2025',
+          tanggalBayar: '',
+          jumlahPbb: '75000',
+          statusBayar: 'Belum Bayar',
+          catatan: 'Catatan penting kolektor',
+        );
 
-      await BlokDataStore.instance.upsert(existingUnpaid);
+        await BlokDataStore.instance.upsert(existingUnpaid);
 
-      // Server returns 2 rows for Blok 024:
-      // 1) The existing record (now marked paid on server)
-      // 2) A brand new SPPT never in DHKP before
-      final fakeResponses = {
-        '3205200004024': const MonitoringTableResult(
-          headers: ['No', 'NOP', 'Nama WP', 'Pokok', 'Tgl Bayar', 'Alamat OP'],
-          rows: [
-            ['1', '320520000402400010', 'WARGA LAMA', '75.000', '2025-06-20', 'KP. SUKAMAJU'],
-            ['2', '320520000402400099', 'WARGA BARU BAPENDA', '125.000', '2025-07-10', 'KP. MEKARSARI'],
-          ],
-        ),
-      };
+        // Server returns 2 rows for Blok 024:
+        // 1) The existing record (now marked paid on server)
+        // 2) A brand new SPPT never in DHKP before
+        final fakeResponses = {
+          '3205200004024': const MonitoringTableResult(
+            headers: [
+              'No',
+              'NOP',
+              'Nama WP',
+              'Pokok',
+              'Tgl Bayar',
+              'Alamat OP',
+            ],
+            rows: [
+              [
+                '1',
+                '320520000402400010',
+                'WARGA LAMA',
+                '75.000',
+                '2025-06-20',
+                'KP. SUKAMAJU',
+              ],
+              [
+                '2',
+                '320520000402400099',
+                'WARGA BARU BAPENDA',
+                '125.000',
+                '2025-07-10',
+                'KP. MEKARSARI',
+              ],
+            ],
+          ),
+        };
 
-      final client = FakeStaffPortalClient(responses: fakeResponses);
+        final client = FakeStaffPortalClient(responses: fakeResponses);
 
-      final outcome = await StaffDhkpSyncService.instance.syncBloks(
-        client: client,
-        tahun: '2025',
-        bloks: ['024'],
-        kelurahanCode: '3205200004',
-        kecamatanCode: '3205200',
-        pacingDelay: Duration.zero,
-      );
+        final outcome = await StaffDhkpSyncService.instance.syncBloks(
+          client: client,
+          tahun: '2025',
+          bloks: ['024'],
+          kelurahanCode: '3205200004',
+          kecamatanCode: '3205200',
+          pacingDelay: Duration.zero,
+        );
 
-      expect(outcome.isSuccess, isTrue);
-      expect(outcome.totalCheckedRows, 2);
-      expect(outcome.updatedPaidCount, 1);
-      expect(outcome.newSpptCount, 1);
+        expect(outcome.isSuccess, isTrue);
+        expect(outcome.totalCheckedRows, 2);
+        expect(outcome.updatedPaidCount, 1);
+        expect(outcome.newSpptCount, 1);
 
-      // Verify in database store
-      final all = await BlokDataStore.instance.loadAll();
-      final updated = all.firstWhere((r) => r.nop == '320520000402400010' && r.tahunBayar == '2025');
-      expect(updated.isPaid, isTrue);
-      expect(updated.tanggalBayar, '2025-06-20');
-      // Existing note must be preserved!
-      expect(updated.catatan, 'Catatan penting kolektor');
+        // Verify in database store
+        final all = await BlokDataStore.instance.loadAll();
+        final updated = all.firstWhere(
+          (r) => r.nop == '320520000402400010' && r.tahunBayar == '2025',
+        );
+        expect(updated.isPaid, isTrue);
+        expect(updated.tanggalBayar, '2025-06-20');
+        // Existing note must be preserved!
+        expect(updated.catatan, 'Catatan penting kolektor');
 
-      final newRecord = all.firstWhere((r) => r.nop == '320520000402400099' && r.tahunBayar == '2025');
-      expect(newRecord.namaWajibPajak, 'WARGA BARU BAPENDA');
-      expect(newRecord.isPaid, isTrue);
-      expect(newRecord.jumlahPbb, '125000');
-      expect(newRecord.alamatObjek, 'KP. MEKARSARI');
-    });
+        final newRecord = all.firstWhere(
+          (r) => r.nop == '320520000402400099' && r.tahunBayar == '2025',
+        );
+        expect(newRecord.namaWajibPajak, 'WARGA BARU BAPENDA');
+        expect(newRecord.isPaid, isTrue);
+        expect(newRecord.jumlahPbb, '125000');
+        expect(newRecord.alamatObjek, 'KP. MEKARSARI');
+      },
+    );
 
     test('respects shouldCancel flag during sync', () async {
       final client = FakeStaffPortalClient();
@@ -288,9 +346,25 @@ void main() {
       ]);
 
       final bbPage = const MonitoringTableResult(
-        headers: ['No', 'NOP', 'Nama WP', 'Pokok', 'Luas Bumi', 'NJOP Bumi', 'Alamat OP'],
+        headers: [
+          'No',
+          'NOP',
+          'Nama WP',
+          'Pokok',
+          'Luas Bumi',
+          'NJOP Bumi',
+          'Alamat OP',
+        ],
         rows: [
-          ['1', '320520000402500010', 'WARGA BELUM BAYAR', '80.000', '150', '20.000.000', 'KP. BARU'],
+          [
+            '1',
+            '320520000402500010',
+            'WARGA BELUM BAYAR',
+            '80.000',
+            '150',
+            '20.000.000',
+            'KP. BARU',
+          ],
         ],
         totalRecords: 1,
         hasNextPage: false,
@@ -300,7 +374,13 @@ void main() {
         headers: ['No', 'NOP', 'Nama WP', 'Pokok', 'Tgl Bayar'],
         rows: [
           ['1', '320520000402500020', 'WARGA LAMA SB', '95.000', '2025-06-15'],
-          ['2', '320520000402500030', 'WARGA BARU LUNAS', '110.000', '2025-07-20'],
+          [
+            '2',
+            '320520000402500030',
+            'WARGA BARU LUNAS',
+            '110.000',
+            '2025-07-20',
+          ],
         ],
         totalRecords: 2,
         hasNextPage: false,
@@ -341,122 +421,155 @@ void main() {
       expect(newRecord.namaWajibPajak, 'WARGA BARU LUNAS');
     });
 
-    test('strictly ignores unknown NOPs in Belum Bayar and does not add as new SPPT', () async {
-      final bbPage = const MonitoringTableResult(
-        headers: ['No', 'NOP', 'Nama WP', 'Pokok', 'Luas Bumi', 'NJOP Bumi', 'Alamat OP'],
-        rows: [
-          ['1', '320520000402500099', 'NOP NONAKTIF MENEMPEL', '50.000', '100', '10.000.000', 'KP. LAMA'],
-        ],
-        totalRecords: 1,
-        hasNextPage: false,
-      );
+    test(
+      'strictly ignores unknown NOPs in Belum Bayar and does not add as new SPPT',
+      () async {
+        final bbPage = const MonitoringTableResult(
+          headers: [
+            'No',
+            'NOP',
+            'Nama WP',
+            'Pokok',
+            'Luas Bumi',
+            'NJOP Bumi',
+            'Alamat OP',
+          ],
+          rows: [
+            [
+              '1',
+              '320520000402500099',
+              'NOP NONAKTIF MENEMPEL',
+              '50.000',
+              '100',
+              '10.000.000',
+              'KP. LAMA',
+            ],
+          ],
+          totalRecords: 1,
+          hasNextPage: false,
+        );
 
-      final client = FakeStaffPortalClient(
-        belumBayarPageResponses: {1: bbPage},
-        pageResponses: const {},
-      );
+        final client = FakeStaffPortalClient(
+          belumBayarPageResponses: {1: bbPage},
+          pageResponses: const {},
+        );
 
-      final outcome = await StaffDhkpSyncService.instance.syncBloks(
-        client: client,
-        tahun: '2025',
-        bloks: ['025'],
-        kelurahanCode: '3205200004',
-        kecamatanCode: '3205200',
-        mode: StaffSyncMode.full,
-        pacingDelay: Duration.zero,
-      );
+        final outcome = await StaffDhkpSyncService.instance.syncBloks(
+          client: client,
+          tahun: '2025',
+          bloks: ['025'],
+          kelurahanCode: '3205200004',
+          kecamatanCode: '3205200',
+          mode: StaffSyncMode.full,
+          pacingDelay: Duration.zero,
+        );
 
-      expect(outcome.isSuccess, isTrue);
-      expect(outcome.newSpptCount, 0);
-      expect(outcome.newRecords, isEmpty);
+        expect(outcome.isSuccess, isTrue);
+        expect(outcome.newSpptCount, 0);
+        expect(outcome.newRecords, isEmpty);
 
-      final all = await BlokDataStore.instance.loadAll();
-      expect(all.any((r) => r.nop == '320520000402500099'), isFalse);
-    });
+        final all = await BlokDataStore.instance.loadAll();
+        expect(all.any((r) => r.nop == '320520000402500099'), isFalse);
+      },
+    );
 
-    test('syncBloks defaults to paidOnly mode and never calls fetchBelumBayar', () async {
-      final client = FakeStaffPortalClient();
+    test(
+      'syncBloks defaults to paidOnly mode and never calls fetchBelumBayar',
+      () async {
+        final client = FakeStaffPortalClient();
 
-      final outcome = await StaffDhkpSyncService.instance.syncBloks(
-        client: client,
-        tahun: '2026',
-        bloks: ['001'],
-        kelurahanCode: '3205200004',
-        kecamatanCode: '3205200',
-        pacingDelay: Duration.zero,
-      );
+        final outcome = await StaffDhkpSyncService.instance.syncBloks(
+          client: client,
+          tahun: '2026',
+          bloks: ['001'],
+          kelurahanCode: '3205200004',
+          kecamatanCode: '3205200',
+          pacingDelay: Duration.zero,
+        );
 
-      expect(outcome.isSuccess, isTrue);
-      expect(client.fetchBelumBayarCallCount, 0); // NEVER called in default paidOnly mode!
-      expect(client.fetchSudahBayarCallCount, 1);
-    });
+        expect(outcome.isSuccess, isTrue);
+        expect(
+          client.fetchBelumBayarCallCount,
+          0,
+        ); // NEVER called in default paidOnly mode!
+        expect(client.fetchSudahBayarCallCount, 1);
+      },
+    );
 
-    test('syncBloks respects custom date range and forwards tglBayarAwal and tglBayarAkhir', () async {
-      final client = FakeStaffPortalClient();
+    test(
+      'syncBloks respects custom date range and forwards tglBayarAwal and tglBayarAkhir',
+      () async {
+        final client = FakeStaffPortalClient();
 
-      final outcome = await StaffDhkpSyncService.instance.syncBloks(
-        client: client,
-        tahun: '2026',
-        bloks: ['001'],
-        kelurahanCode: '3205200004',
-        kecamatanCode: '3205200',
-        tglBayarAwal: '2026-11-01',
-        tglBayarAkhir: '2026-11-07',
-        pacingDelay: Duration.zero,
-      );
+        final outcome = await StaffDhkpSyncService.instance.syncBloks(
+          client: client,
+          tahun: '2026',
+          bloks: ['001'],
+          kelurahanCode: '3205200004',
+          kecamatanCode: '3205200',
+          tglBayarAwal: '2026-11-01',
+          tglBayarAkhir: '2026-11-07',
+          pacingDelay: Duration.zero,
+        );
 
-      expect(outcome.isSuccess, isTrue);
-      expect(client.lastTglBayarAwal, '2026-11-01');
-      expect(client.lastTglBayarAkhir, '2026-11-07');
-    });
+        expect(outcome.isSuccess, isTrue);
+        expect(client.lastTglBayarAwal, '2026-11-01');
+        expect(client.lastTglBayarAkhir, '2026-11-07');
+      },
+    );
   });
 
   group('StaffDhkpSyncDialog UI', () {
-    testWidgets('shows dialog with Tahun, Blok, and local DHKP status counters', (tester) async {
-      await BlokDataStore.instance.upsertAll([
-        const BlokRecord(
-          nop: '320520000402400010',
-          namaWajibPajak: 'WARGA A',
-          tahunBayar: '2025',
-          statusBayar: 'Sudah Bayar',
-          tanggalBayar: '2025-01-01',
-          jumlahPbb: '50000',
-        ),
-        const BlokRecord(
-          nop: '320520000402400020',
-          namaWajibPajak: 'WARGA B',
-          tahunBayar: '2025',
-          statusBayar: 'Belum Bayar',
-          tanggalBayar: '',
-          jumlahPbb: '50000',
-        ),
-      ]);
+    testWidgets(
+      'shows dialog with Tahun, Blok, and local DHKP status counters',
+      (tester) async {
+        await BlokDataStore.instance.upsertAll([
+          const BlokRecord(
+            nop: '320520000402400010',
+            namaWajibPajak: 'WARGA A',
+            tahunBayar: '2025',
+            statusBayar: 'Sudah Bayar',
+            tanggalBayar: '2025-01-01',
+            jumlahPbb: '50000',
+          ),
+          const BlokRecord(
+            nop: '320520000402400020',
+            namaWajibPajak: 'WARGA B',
+            tahunBayar: '2025',
+            statusBayar: 'Belum Bayar',
+            tanggalBayar: '',
+            jumlahPbb: '50000',
+          ),
+        ]);
 
-      final client = FakeStaffPortalClient();
+        final client = FakeStaffPortalClient();
 
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: Builder(
-              builder: (ctx) => ElevatedButton(
-                onPressed: () => showStaffDhkpSyncDialog(ctx, client: client),
-                child: const Text('Buka Dialog'),
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: Builder(
+                builder: (ctx) => ElevatedButton(
+                  onPressed: () => showStaffDhkpSyncDialog(ctx, client: client),
+                  child: const Text('Buka Dialog'),
+                ),
               ),
             ),
           ),
-        ),
-      );
+        );
 
-      // Tap to open dialog
-      await tester.tap(find.text('Buka Dialog'));
-      await tester.pumpAndSettle();
+        // Tap to open dialog
+        await tester.tap(find.text('Buka Dialog'));
+        await tester.pumpAndSettle();
 
-      expect(find.text('Sinkronkan Status ke DHKP'), findsOneWidget);
-      expect(find.text('Mulai Sinkronisasi'), findsOneWidget);
-      expect(find.text('Data DHKP Tersimpan Saat Ini:'), findsOneWidget);
-    });
+        expect(find.text('Sinkronkan Status ke DHKP'), findsOneWidget);
+        expect(find.text('Mulai Sinkronisasi'), findsOneWidget);
+        expect(find.text('Data DHKP Tersimpan Saat Ini:'), findsOneWidget);
+      },
+    );
 
-    testWidgets('shows sync report dialog with tabs and filter', (tester) async {
+    testWidgets('shows sync report dialog with tabs and filter', (
+      tester,
+    ) async {
       final outcome = StaffDhkpSyncOutcome(
         tahun: '2025',
         blokLabel: 'Blok 25',
@@ -520,4 +633,3 @@ void main() {
     });
   });
 }
-

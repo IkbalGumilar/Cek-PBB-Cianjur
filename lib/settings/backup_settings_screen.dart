@@ -173,7 +173,8 @@ class _BackupSettingsSectionState extends State<BackupSettingsSection> {
               folderId: backupFolderId,
             );
             if (uploaded != null) {
-              cloudInfo = '\nDisinkronkan ke Google Drive ($_googleAccount/backup)';
+              cloudInfo =
+                  '\nDisinkronkan ke Google Drive ($_googleAccount/backup)';
             } else {
               cloudInfo = '\n(Tersimpan di HP, gagal unggah ke Google Drive)';
             }
@@ -486,7 +487,7 @@ class _BackupSettingsSectionState extends State<BackupSettingsSection> {
       ),
     );
 
-    if (confirm == true) {
+    if (confirm == true && mounted) {
       setState(() {
         _isBackingUp = true;
         _busyMessage = 'Menghapus berkas cadangan...';
@@ -732,10 +733,12 @@ class _BackupSettingsSectionState extends State<BackupSettingsSection> {
                     !Platform.isAndroid
                         ? 'Masuk akun Google hanya didukung di Android'
                         : (_googleAccount.isEmpty
-                            ? 'Belum terhubung • Folder "${GoogleDriveBackupPolicy.dedicatedFolderName}/backup"'
-                            : '$_googleAccount • Folder backup aktif'),
+                              ? 'Belum terhubung • Folder "${GoogleDriveBackupPolicy.dedicatedFolderName}/backup"'
+                              : '$_googleAccount • Folder backup aktif'),
                   ),
-                  trailing: Platform.isAndroid ? const Icon(Icons.chevron_right) : null,
+                  trailing: Platform.isAndroid
+                      ? const Icon(Icons.chevron_right)
+                      : null,
                   onTap: Platform.isAndroid ? _showGoogleAccountDialog : null,
                 ),
                 const Divider(height: 1),

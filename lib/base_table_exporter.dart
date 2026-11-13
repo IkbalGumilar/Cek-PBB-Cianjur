@@ -43,13 +43,61 @@ class SimpleExportableTable implements ExportableTable {
 /// Subclass atau modul pengekspor dapat mewarisi kelas ini untuk menghindari
 /// duplikasi konversi biner dan penamaan berkas.
 abstract class BaseTableExporter {
-  /// Membangun byte CSV dari tabel atau kombinasi headers dan rows.
+  static final RegExp _legitimateNegativeNumberPattern = RegExp(
+    r'^-\d+(?:[.,]\d+)*$',
+  );
+
+  /// Menyanitasi nilai sel ekspor (CSV / XLSX) terhadap serangan Formula Injection
+  /// (CSV/Spreadsheet Injection).
+  ///
+  /// - Mendeteksi karakter awal berbahaya (`=`, `+`, `-`, `@`, `\t`, `\r`, `\n`),
+  ///   termasuk apabila didahului oleh spasi di depan.
+  /// - Membiarkan angka negatif yang sah (misal `-125000` atau `-12.500,00`) tetap utuh.
+  /// - Menambahkan prefix tanda kutip tunggal (`'`) pada nilai yang mencurigakan.
+  static String sanitizeSpreadsheetCell(String value) {
+    if (value.isEmpty) return value;
+
+    final firstChar = value[0];
+    final startsWithControl =
+        firstChar == '\t' || firstChar == '\r' || firstChar == '\n';
+
+    final trimmedLeft = value.trimLeft();
+    if (trimmedLeft.isEmpty) return value;
+
+    final leadingTrigger = trimmedLeft[0];
+    final isFormulaTrigger =
+        startsWithControl ||
+        leadingTrigger == '=' ||
+        leadingTrigger == '+' ||
+        leadingTrigger == '-' ||
+        leadingTrigger == '@' ||
+        leadingTrigger == '\t' ||
+        leadingTrigger == '\r' ||
+        leadingTrigger == '\n';
+
+    if (!isFormulaTrigger) return value;
+
+    // Izinkan angka negatif murni yang sah (tanpa operator/karakter formula tambahan)
+    if (!startsWithControl &&
+        leadingTrigger == '-' &&
+        _legitimateNegativeNumberPattern.hasMatch(trimmedLeft.trimRight())) {
+      return value;
+    }
+
+    return "'$value";
+  }
+
+  /// Membangun byte CSV dari tabel atau kombinasi headers dan rows (dengan sanitasi formula injection).
   static Uint8List buildCsvData(List<String> headers, List<List<String>> rows) {
-    final combined = <List<String>>[headers, ...rows];
+    final sanitizedHeaders = headers.map(sanitizeSpreadsheetCell).toList();
+    final sanitizedRows = rows
+        .map((r) => r.map(sanitizeSpreadsheetCell).toList())
+        .toList();
+    final combined = <List<String>>[sanitizedHeaders, ...sanitizedRows];
     return Uint8List.fromList(utf8.encode(Csv().encode(combined)));
   }
 
-  /// Membangun byte Excel (.xlsx) dari headers dan rows.
+  /// Membangun byte Excel (.xlsx) dari headers dan rows (dengan sanitasi formula injection).
   static Uint8List buildXlsxData(
     List<String> headers,
     List<List<String>> rows, {
@@ -58,45 +106,51 @@ abstract class BaseTableExporter {
     final excel = Excel.createExcel();
     final targetSheet = sheetName ?? excel.getDefaultSheet()!;
     final sheet = excel[targetSheet];
-    sheet.appendRow(headers.map(TextCellValue.new).toList());
+    sheet.appendRow(
+      headers.map((h) => TextCellValue(sanitizeSpreadsheetCell(h))).toList(),
+    );
     for (final row in rows) {
-      sheet.appendRow(row.map(TextCellValue.new).toList());
+      sheet.appendRow(
+        row
+            .map((cell) => TextCellValue(sanitizeSpreadsheetCell(cell)))
+            .toList(),
+      );
     }
     return Uint8List.fromList(excel.encode()!);
   }
 
   static String _cleanPdfText(String text) {
-  if (text.isEmpty) return text;
-  final replaced = text
-      .replaceAll('•', '-')
-      .replaceAll('—', '-')
-      .replaceAll('–', '-')
-      .replaceAll('“', '"')
-      .replaceAll('”', '"')
-      .replaceAll('‘', "'")
-      .replaceAll('’', "'")
-      .replaceAll('…', '...')
-      .replaceAll('✓', '[Lunas]')
-      .replaceAll('✔', '[Lunas]')
-      .replaceAll('🎯', '[Target]')
-      .replaceAll('⛔', '[Blacklist]')
-      .replaceAll('⏳', '[Belum Bayar]')
-      .replaceAll('≥', '>=')
-      .replaceAll('≤', '<=')
-      .replaceAll('\u00A0', ' ');
+    if (text.isEmpty) return text;
+    final replaced = text
+        .replaceAll('•', '-')
+        .replaceAll('—', '-')
+        .replaceAll('–', '-')
+        .replaceAll('“', '"')
+        .replaceAll('”', '"')
+        .replaceAll('‘', "'")
+        .replaceAll('’', "'")
+        .replaceAll('…', '...')
+        .replaceAll('✓', '[Lunas]')
+        .replaceAll('✔', '[Lunas]')
+        .replaceAll('🎯', '[Target]')
+        .replaceAll('⛔', '[Blacklist]')
+        .replaceAll('⏳', '[Belum Bayar]')
+        .replaceAll('≥', '>=')
+        .replaceAll('≤', '<=')
+        .replaceAll('\u00A0', ' ');
 
-  final buffer = StringBuffer();
-  for (final rune in replaced.runes) {
-    if (rune == 10 || rune == 13 || rune == 9) {
-      buffer.writeCharCode(rune);
-    } else if ((rune >= 32 && rune <= 126) || (rune >= 160 && rune <= 255)) {
-      buffer.writeCharCode(rune);
-    } else {
-      buffer.write(' ');
+    final buffer = StringBuffer();
+    for (final rune in replaced.runes) {
+      if (rune == 10 || rune == 13 || rune == 9) {
+        buffer.writeCharCode(rune);
+      } else if ((rune >= 32 && rune <= 126) || (rune >= 160 && rune <= 255)) {
+        buffer.writeCharCode(rune);
+      } else {
+        buffer.write(' ');
+      }
     }
+    return buffer.toString();
   }
-  return buffer.toString();
-}
 
   /// Membangun byte PDF tabel landscape standar.
   static Future<Uint8List> buildPdfData({
@@ -176,9 +230,7 @@ abstract class BaseTableExporter {
               fontSize: fontSize,
               fontWeight: pw.FontWeight.bold,
             ),
-            headerDecoration: const pw.BoxDecoration(
-              color: PdfColors.grey200,
-            ),
+            headerDecoration: const pw.BoxDecoration(color: PdfColors.grey200),
             cellAlignment: pw.Alignment.centerLeft,
             headerAlignment: pw.Alignment.centerLeft,
             cellPadding: const pw.EdgeInsets.symmetric(
@@ -231,10 +283,10 @@ abstract class BaseTableExporter {
     String? dialogTitle,
     bool useSaveAs = true,
   }) => DownloadHelper.saveBytes(
-        bytes,
-        fileName,
-        subfolder: subfolder,
-        dialogTitle: dialogTitle,
-        useSaveAs: useSaveAs,
-      );
+    bytes,
+    fileName,
+    subfolder: subfolder,
+    dialogTitle: dialogTitle,
+    useSaveAs: useSaveAs,
+  );
 }

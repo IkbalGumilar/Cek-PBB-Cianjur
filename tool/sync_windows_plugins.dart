@@ -34,8 +34,10 @@ void main() {
     'windows_file_picker',
   ];
 
-  final symlinksDir = Directory(r'Z:\windows\flutter\ephemeral\.plugin_symlinks');
-  
+  final symlinksDir = Directory(
+    r'Z:\windows\flutter\ephemeral\.plugin_symlinks',
+  );
+
   // Always reset .plugin_symlinks to avoid SMB symlink lock / collision
   final ts = DateTime.now().millisecondsSinceEpoch;
   Process.runSync('powershell', [
@@ -46,7 +48,7 @@ void main() {
 
   final cacheDir = Directory(pubCache);
   if (!cacheDir.existsSync()) {
-    print('Pub cache not found at $pubCache');
+    stderr.writeln('Pub cache not found at $pubCache');
     exit(1);
   }
 
@@ -60,7 +62,7 @@ void main() {
     }).toList();
 
     if (matched.isEmpty) {
-      print('Warning: plugin $plugin not found in pub cache!');
+      stderr.writeln('Warning: plugin $plugin not found in pub cache!');
       continue;
     }
 
@@ -71,20 +73,26 @@ void main() {
 
     final l = Link(target);
     if (l.existsSync()) {
-      try { l.deleteSync(); } catch (_) {}
+      try {
+        l.deleteSync();
+      } catch (_) {}
     }
     final f = File(target);
     if (f.existsSync()) {
-      try { f.deleteSync(); } catch (_) {}
+      try {
+        f.deleteSync();
+      } catch (_) {}
     }
     final d = Directory(target);
     if (d.existsSync()) {
-      try { d.deleteSync(recursive: true); } catch (_) {}
+      try {
+        d.deleteSync(recursive: true);
+      } catch (_) {}
     }
 
-    print('Syncing $plugin from ${srcDir.path} -> $target');
+    stdout.writeln('Syncing $plugin from ${srcDir.path} -> $target');
     copyDir(srcDir, Directory(target));
   }
 
-  print('All Windows plugin dependencies synced successfully!');
+  stdout.writeln('All Windows plugin dependencies synced successfully!');
 }

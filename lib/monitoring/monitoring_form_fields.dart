@@ -148,19 +148,40 @@ class BankDropdown extends StatefulWidget {
 }
 
 class _BankDropdownState extends State<BankDropdown> {
-  late final Future<List<BankOption>> _future = widget.client
-      .fetchBankOptions();
+  late Future<List<BankOption>> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = widget.client.fetchBankOptions();
+  }
+
+  @override
+  void didUpdateWidget(covariant BankDropdown oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.client != widget.client) {
+      _future = widget.client.fetchBankOptions();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<List<BankOption>>(
       future: _future,
       builder: (context, snapshot) {
-        final options = snapshot.data ?? const <BankOption>[];
+        final rawOptions = snapshot.data ?? const <BankOption>[];
+        // Deduplikasi berdasarkan id agar DropdownButtonFormField tidak pernah duplikat item
+        final seenIds = <String>{''};
+        final options = <BankOption>[
+          for (final o in rawOptions)
+            if (seenIds.add(o.id)) o,
+        ];
+        final selectedValue = options.any((o) => o.id == widget.value)
+            ? widget.value
+            : '';
         return DropdownButtonFormField<String>(
-          initialValue: options.any((o) => o.id == widget.value)
-              ? widget.value
-              : '',
+          key: ValueKey('bank_dropdown_$selectedValue'),
+          initialValue: selectedValue,
           isExpanded: true,
           decoration: InputDecoration(
             labelText: 'Bank (opsional)',
@@ -219,48 +240,111 @@ class DesaKelurahanDropdown extends StatefulWidget {
 }
 
 class _DesaKelurahanDropdownState extends State<DesaKelurahanDropdown> {
-  late final Future<
+  int _requestToken = 0;
+  late Future<
+    ({
+      String kecamatanCode,
+      String kecamatanName,
+      String kelurahanCode,
+      List<KolektifKelurahan> kelurahan,
+    })
+  >
+  _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = _startFetch();
+  }
+
+  @override
+  void didUpdateWidget(covariant DesaKelurahanDropdown oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.client != widget.client) {
+      _future = _startFetch();
+    }
+  }
+
+  Future<
+    ({
+      String kecamatanCode,
+      String kecamatanName,
+      String kelurahanCode,
+      List<KolektifKelurahan> kelurahan,
+    })
+  >
+  _startFetch() {
+    final token = ++_requestToken;
+    return widget.client.fetchMonitoringWilayahOptions().then((res) {
+      if (mounted &&
+          token == _requestToken &&
+          widget.onKecamatanChanged != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && token == _requestToken) {
+            widget.onKecamatanChanged?.call(
+              res.kecamatanCode,
+              res.kecamatanName,
+            );
+          }
+        });
+      }
+      return res;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<
       ({
         String kecamatanCode,
         String kecamatanName,
         String kelurahanCode,
         List<KolektifKelurahan> kelurahan,
-      })> _future = widget.client.fetchMonitoringWilayahOptions().then((res) {
-    if (widget.onKecamatanChanged != null) {
-      widget.onKecamatanChanged!(res.kecamatanCode, res.kecamatanName);
-    }
-    return res;
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<
-        ({
-          String kecamatanCode,
-          String kecamatanName,
-          String kelurahanCode,
-          List<KolektifKelurahan> kelurahan,
-        })>(
+      })
+    >(
       future: _future,
       builder: (context, snapshot) {
-        final options = snapshot.data?.kelurahan ??
+        final rawOptions =
+            snapshot.data?.kelurahan ??
             (widget.client.activeKelurahanOptions.isNotEmpty
                 ? widget.client.activeKelurahanOptions
-                : [
-                    KolektifKelurahan(
-                      code: widget.client.activeKelurahanCode,
-                      name: widget.client.activeKelurahanName,
-                    ),
-                  ]);
-        final defaultKel = snapshot.data?.kelurahanCode ??
-            widget.client.activeKelurahanCode;
-        final selectedValue = (widget.allowAll && widget.value.isEmpty)
-            ? ''
-            : (options.any((o) => o.code == widget.value)
-                ? widget.value
-                : defaultKel);
+                : (widget.client.activeKelurahanCode.isNotEmpty
+                      ? [
+                          KolektifKelurahan(
+                            code: widget.client.activeKelurahanCode,
+                            name: widget.client.activeKelurahanName,
+                          ),
+                        ]
+                      : const <KolektifKelurahan>[]));
+
+        final seenCodes = <String>{if (widget.allowAll) ''};
+        final options = <KolektifKelurahan>[
+          for (final o in rawOptions)
+            if (o.code.isNotEmpty && seenCodes.add(o.code)) o,
+        ];
+
+        final defaultKel =
+            snapshot.data?.kelurahanCode ?? widget.client.activeKelurahanCode;
+
+        String? selectedValue;
+        if (widget.allowAll && widget.value.isEmpty) {
+          selectedValue = '';
+        } else if (options.any((o) => o.code == widget.value)) {
+          selectedValue = widget.value;
+        } else if (options.any((o) => o.code == defaultKel)) {
+          selectedValue = defaultKel;
+        } else if (options.isNotEmpty) {
+          selectedValue = options.first.code;
+        } else if (widget.allowAll) {
+          selectedValue = '';
+        } else {
+          selectedValue = null;
+        }
 
         return DropdownButtonFormField<String>(
+          key: ValueKey(
+            'desa_dropdown_${selectedValue ?? 'none'}_${options.length}',
+          ),
           initialValue: selectedValue,
           isExpanded: true,
           decoration: InputDecoration(
@@ -286,10 +370,7 @@ class _DesaKelurahanDropdownState extends State<DesaKelurahanDropdown> {
             if (widget.allowAll)
               DropdownMenuItem(
                 value: '',
-                child: Text(
-                  widget.allLabel,
-                  overflow: TextOverflow.ellipsis,
-                ),
+                child: Text(widget.allLabel, overflow: TextOverflow.ellipsis),
               ),
             for (final o in options)
               DropdownMenuItem(
@@ -307,11 +388,12 @@ class _DesaKelurahanDropdownState extends State<DesaKelurahanDropdown> {
               if (v.isEmpty) {
                 widget.onNameChanged!(widget.allLabel);
               } else {
-                final found = options.firstWhere(
-                  (o) => o.code == v,
-                  orElse: () => options.first,
-                );
-                widget.onNameChanged!(found.name);
+                final found = options.where((o) => o.code == v).firstOrNull;
+                if (found != null) {
+                  widget.onNameChanged!(found.name);
+                } else if (options.isNotEmpty) {
+                  widget.onNameChanged!(options.first.name);
+                }
               }
             }
           },
@@ -330,7 +412,8 @@ class WilayahBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final effectiveLabel = label ??
+    final effectiveLabel =
+        label ??
         (client != null
             ? 'Kec. ${client!.activeKecamatanName} - Desa ${client!.activeKelurahanName} (${client!.activeKelurahanCode})'
             : 'Kabupaten Cianjur');

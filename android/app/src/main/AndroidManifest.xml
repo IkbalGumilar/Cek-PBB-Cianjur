@@ -25,6 +25,8 @@
         android:label="Cek PBB Cianjur"
         android:name="${applicationName}"
         android:icon="@mipmap/launcher_icon"
+        android:allowBackup="false"
+        android:fullBackupContent="false"
         android:requestLegacyExternalStorage="true">
         <activity
             android:name=".MainActivity"

@@ -39,21 +39,21 @@ class MapPinEntry {
 
   MapCoordinate? get ownerCoordinate =>
       (ownerLatitude != null && ownerLongitude != null)
-          ? MapCoordinate(ownerLatitude!, ownerLongitude!)
-          : null;
+      ? MapCoordinate(ownerLatitude!, ownerLongitude!)
+      : null;
 
   Map<String, dynamic> toJson() => {
-        'nop': nop,
-        'lat': latitude,
-        'lng': longitude,
-        if (ownerLatitude != null) 'ownerLat': ownerLatitude,
-        if (ownerLongitude != null) 'ownerLng': ownerLongitude,
-        'source': source,
-        'updatedAtMs': updatedAtMs,
-        if (namaWajibPajak.isNotEmpty) 'namaWp': namaWajibPajak,
-        if (alamatObjek.isNotEmpty) 'alamatObjek': alamatObjek,
-        if (alamatWp.isNotEmpty) 'alamatWp': alamatWp,
-      };
+    'nop': nop,
+    'lat': latitude,
+    'lng': longitude,
+    if (ownerLatitude != null) 'ownerLat': ownerLatitude,
+    if (ownerLongitude != null) 'ownerLng': ownerLongitude,
+    'source': source,
+    'updatedAtMs': updatedAtMs,
+    if (namaWajibPajak.isNotEmpty) 'namaWp': namaWajibPajak,
+    if (alamatObjek.isNotEmpty) 'alamatObjek': alamatObjek,
+    if (alamatWp.isNotEmpty) 'alamatWp': alamatWp,
+  };
 
   factory MapPinEntry.fromJson(Map<String, dynamic> json) {
     final rawNop = json['nop']?.toString() ?? '';
@@ -151,9 +151,7 @@ class MapPinStore {
   }) async {
     final existing = await loadAll();
     final now = timestampMs ?? DateTime.now().millisecondsSinceEpoch;
-    final byNop = <String, MapPinEntry>{
-      for (final e in existing) e.nop: e,
-    };
+    final byNop = <String, MapPinEntry>{for (final e in existing) e.nop: e};
 
     for (final rec in selectedRecords) {
       final normNop = MapPinEntry.normalizePinNop(rec.nop);
@@ -191,8 +189,10 @@ class MapPinStore {
   /// Menghapus seluruh pin/NOP pada [coordinate] tertentu.
   Future<List<MapPinEntry>> removeByCoordinate(MapCoordinate coordinate) async {
     final existing = await loadAll();
-    final targetKey =
-        MapPinEntry.coordinateKey(coordinate.latitude, coordinate.longitude);
+    final targetKey = MapPinEntry.coordinateKey(
+      coordinate.latitude,
+      coordinate.longitude,
+    );
     final updated = existing
         .where(
           (e) =>
@@ -211,9 +211,7 @@ class MapPinStore {
   }) async {
     if (incoming.isEmpty) return 0;
     final existing = await loadAll();
-    final byNop = <String, MapPinEntry>{
-      for (final e in existing) e.nop: e,
-    };
+    final byNop = <String, MapPinEntry>{for (final e in existing) e.nop: e};
 
     int changedCount = 0;
     for (final item in incoming) {
@@ -223,7 +221,8 @@ class MapPinStore {
         byNop[item.nop] = item;
         changedCount++;
       } else if (!onlyIfNewer || item.updatedAtMs >= prev.updatedAtMs) {
-        final sameCoord = prev.latitude == item.latitude &&
+        final sameCoord =
+            prev.latitude == item.latitude &&
             prev.longitude == item.longitude &&
             prev.ownerLatitude == item.ownerLatitude &&
             prev.ownerLongitude == item.ownerLongitude;
@@ -382,8 +381,9 @@ class MapPinStore {
     }
 
     final blok = nopBlok(primary.nop).isNotEmpty ? nopBlok(primary.nop) : '001';
-    final urut =
-        nopWilayah(primary.nop).isNotEmpty ? nopWilayah(primary.nop) : '0000';
+    final urut = nopWilayah(primary.nop).isNotEmpty
+        ? nopWilayah(primary.nop)
+        : '0000';
     final dusunNum = DusunData.instance.byBlok(blok)?.number ?? 1;
 
     final totalPbb = spptList.fold<int>(0, (sum, r) => sum + r.jumlahPbbValue);

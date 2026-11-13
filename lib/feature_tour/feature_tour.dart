@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../ui/app_design_system.dart';
+
 /// Satu langkah panduan interaktif untuk menjelaskan fungsi sebuah tombol,
 /// kolom isian, atau bagian tampilan pada layar yang sedang dibuka.
 class FeatureTourStep {
@@ -347,18 +349,16 @@ class _FeatureTourOverlayWidgetState extends State<_FeatureTourOverlayWidget>
 
     _cardController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 280),
+      duration: AppMotion.page,
     );
     _cardFade = CurvedAnimation(
       parent: _cardController,
-      curve: Curves.easeOutCubic,
+      curve: AppMotion.enterCurve,
     );
-    _cardSlide = Tween<Offset>(
-      begin: const Offset(0, 0.04),
-      end: Offset.zero,
-    ).animate(
-      CurvedAnimation(parent: _cardController, curve: Curves.easeOutCubic),
-    );
+    _cardSlide = Tween<Offset>(begin: const Offset(0, 0.04), end: Offset.zero)
+        .animate(
+          CurvedAnimation(parent: _cardController, curve: AppMotion.enterCurve),
+        );
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -366,6 +366,19 @@ class _FeatureTourOverlayWidgetState extends State<_FeatureTourOverlayWidget>
         _focusCurrentStep();
       }
     });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (AppMotion.isReducedMotion(context)) {
+      if (_pulseController.isAnimating) {
+        _pulseController.stop();
+        _pulseController.value = 0.0;
+      }
+    } else if (!_pulseController.isAnimating) {
+      unawaited(_pulseController.repeat(reverse: true));
+    }
   }
 
   @override
@@ -396,7 +409,8 @@ class _FeatureTourOverlayWidgetState extends State<_FeatureTourOverlayWidget>
       return;
     }
 
-    _cardController.value = 0;
+    final reducedMotion = AppMotion.isReducedMotion(context);
+    _cardController.value = reducedMotion ? 1.0 : 0.0;
 
     final step = _steps[_currentIndex];
     final ctx = step.targetKey.currentContext;
@@ -420,22 +434,28 @@ class _FeatureTourOverlayWidgetState extends State<_FeatureTourOverlayWidget>
           await Scrollable.ensureVisible(
             ctx,
             alignment: 0.20,
-            duration: const Duration(milliseconds: 250),
-            curve: Curves.easeOutCubic,
+            duration: reducedMotion
+                ? Duration.zero
+                : const Duration(milliseconds: 240),
+            curve: AppMotion.enterCurve,
           );
         } catch (_) {}
       }
     }
 
     await WidgetsBinding.instance.endOfFrame;
-    await Future<void>.delayed(const Duration(milliseconds: 50));
+    if (!reducedMotion) {
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    }
     if (!mounted) return;
 
     final measured = _measureTargetRect(step);
     setState(() {
       _targetRect = measured;
     });
-    unawaited(_cardController.forward());
+    if (!reducedMotion) {
+      unawaited(_cardController.forward());
+    }
   }
 
   Rect? _measureTargetRect(FeatureTourStep step) {
@@ -639,7 +659,10 @@ class _FeatureTourOverlayWidgetState extends State<_FeatureTourOverlayWidget>
                   position: _cardSlide,
                   child: ConstrainedBox(
                     constraints: BoxConstraints(
-                      maxHeight: maxCardHeight.clamp(160.0, screenSize.height * 0.75),
+                      maxHeight: maxCardHeight.clamp(
+                        160.0,
+                        screenSize.height * 0.75,
+                      ),
                     ),
                     child: _buildTourCard(context, step, scheme, isDark),
                   ),
@@ -769,11 +792,12 @@ class _FeatureTourOverlayWidgetState extends State<_FeatureTourOverlayWidget>
                       Expanded(
                         child: Text(
                           step.title,
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 15.5,
-                            height: 1.25,
-                          ),
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15.5,
+                                height: 1.25,
+                              ),
                         ),
                       ),
                     ],
@@ -868,8 +892,8 @@ class _FeatureTourOverlayWidgetState extends State<_FeatureTourOverlayWidget>
                             color: i == _currentIndex
                                 ? scheme.primary
                                 : (isDark
-                                    ? Colors.white24
-                                    : Colors.grey.shade300),
+                                      ? Colors.white24
+                                      : Colors.grey.shade300),
                             borderRadius: BorderRadius.circular(4),
                           ),
                         ),
@@ -885,7 +909,9 @@ class _FeatureTourOverlayWidgetState extends State<_FeatureTourOverlayWidget>
                       onPressed: widget.onFinish,
                       style: TextButton.styleFrom(
                         visualDensity: VisualDensity.compact,
-                        foregroundColor: isDark ? Colors.white60 : Colors.black54,
+                        foregroundColor: isDark
+                            ? Colors.white60
+                            : Colors.black54,
                         padding: const EdgeInsets.symmetric(horizontal: 10),
                       ),
                       child: const Text('Lewati'),

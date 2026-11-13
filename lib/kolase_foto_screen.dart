@@ -48,7 +48,9 @@ class _KolaseFotoScreenState extends State<KolaseFotoScreen> {
   final _filterBlokKey = GlobalKey(debugLabel: 'tour_kolase_filter_blok');
   final _previewCanvasKey = GlobalKey(debugLabel: 'tour_kolase_preview_canvas');
   final _templateGridBarKey = GlobalKey(debugLabel: 'tour_kolase_template_bar');
-  final _bottomActionRowKey = GlobalKey(debugLabel: 'tour_kolase_bottom_actions');
+  final _bottomActionRowKey = GlobalKey(
+    debugLabel: 'tour_kolase_bottom_actions',
+  );
 
   @override
   void initState() {

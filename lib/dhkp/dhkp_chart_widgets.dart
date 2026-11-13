@@ -250,10 +250,7 @@ class SlantedLabelPainter extends CustomPainter {
 class DhkpScrollableBars extends StatefulWidget {
   final Widget child;
 
-  const DhkpScrollableBars({
-    super.key,
-    required this.child,
-  });
+  const DhkpScrollableBars({super.key, required this.child});
 
   @override
   State<DhkpScrollableBars> createState() => _DhkpScrollableBarsState();
@@ -343,10 +340,13 @@ Widget renderDhkpColumnBars({
 
         // Jika jumlah data > 7 atau lebar slot per item < 48 px, miringkan label sumbu X 45 derajat (seperti Word/Excel)
         final totalWidth = constraints.maxWidth;
-        final chartAvailableWidth =
-            math.max(0.0, totalWidth - leftMargin - rightMargin);
-        final rawSlotWidth =
-            n > 0 ? (chartAvailableWidth / n) : chartAvailableWidth;
+        final chartAvailableWidth = math.max(
+          0.0,
+          totalWidth - leftMargin - rightMargin,
+        );
+        final rawSlotWidth = n > 0
+            ? (chartAvailableWidth / n)
+            : chartAvailableWidth;
         final rotateLabels = n > 7 || rawSlotWidth < 48.0;
         final bottomOffset = rotateLabels ? 54.0 : 26.0;
 
@@ -430,41 +430,43 @@ Widget renderDhkpColumnBars({
                       child: Center(
                         child: (canShowTopLabels || isSelected)
                             ? (isSelected && !canShowTopLabels
-                                ? Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 4,
-                                      vertical: 1.5,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: color1,
-                                      borderRadius: BorderRadius.circular(4),
-                                    ),
-                                    child: Text(
+                                  ? Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 4,
+                                        vertical: 1.5,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: color1,
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Text(
+                                        topLabelExtractor(g),
+                                        style: const TextStyle(
+                                          fontSize: 8.5,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white,
+                                        ),
+                                        maxLines: 1,
+                                      ),
+                                    )
+                                  : Text(
                                       topLabelExtractor(g),
-                                      style: const TextStyle(
-                                        fontSize: 8.5,
+                                      style: TextStyle(
+                                        fontSize: isSelected
+                                            ? 10.0
+                                            : (slotWidth < 28
+                                                  ? 7.5
+                                                  : (slotWidth < 46
+                                                        ? 8.5
+                                                        : 9.5)),
                                         fontWeight: FontWeight.bold,
-                                        color: Colors.white,
+                                        color: isSelected
+                                            ? color1
+                                            : (isDark ? Colors.white : color2),
                                       ),
                                       maxLines: 1,
-                                    ),
-                                  )
-                                : Text(
-                                    topLabelExtractor(g),
-                                    style: TextStyle(
-                                      fontSize: isSelected
-                                          ? 10.0
-                                          : (slotWidth < 28
-                                              ? 7.5
-                                              : (slotWidth < 46 ? 8.5 : 9.5)),
-                                      fontWeight: FontWeight.bold,
-                                      color: isSelected
-                                          ? color1
-                                          : (isDark ? Colors.white : color2),
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ))
+                                      overflow: TextOverflow.ellipsis,
+                                    ))
                             : const SizedBox.shrink(),
                       ),
                     ),
@@ -538,10 +540,7 @@ Widget renderDhkpColumnBars({
               if (!isScrollable)
                 Expanded(child: buildBarItem(groups[i], i))
               else
-                SizedBox(
-                  width: slotWidth,
-                  child: buildBarItem(groups[i], i),
-                ),
+                SizedBox(width: slotWidth, child: buildBarItem(groups[i], i)),
             ],
           ],
         );
@@ -1574,14 +1573,15 @@ class ComboBarLineTrendPainter extends CustomPainter {
       )..layout();
       mPainter.paint(
         canvas,
-        Offset(peakPoints[i].dx - mPainter.width / 2, topMargin + chartHeight + 6),
+        Offset(
+          peakPoints[i].dx - mPainter.width / 2,
+          topMargin + chartHeight + 6,
+        ),
       );
     }
 
     // 7. Nilai Nominal di Atas Puncak / Balon Seleksi
-    if (selectedIndex != null &&
-        selectedIndex! >= 0 &&
-        selectedIndex! < n) {
+    if (selectedIndex != null && selectedIndex! >= 0 && selectedIndex! < n) {
       final selP = peakPoints[selectedIndex!];
       final val = data[selectedIndex!];
       final count = counts[selectedIndex!];
@@ -1615,10 +1615,7 @@ class ComboBarLineTrendPainter extends CustomPainter {
         Rect.fromLTWH(badgeX, badgeY, badgeW, badgeH),
         const Radius.circular(6),
       );
-      canvas.drawRRect(
-        badgeRect,
-        Paint()..color = const Color(0xFF0F172A),
-      );
+      canvas.drawRRect(badgeRect, Paint()..color = const Color(0xFF0F172A));
       canvas.drawRRect(
         badgeRect,
         Paint()
@@ -1664,14 +1661,14 @@ Widget renderDhkpComboBarLineTrend({
           const leftMargin = 52.0;
           const rightMargin = 16.0;
           final chartW = math.max(0.0, w - leftMargin - rightMargin);
-          final slotW =
-              monthGroups.isNotEmpty ? chartW / monthGroups.length : 1.0;
+          final slotW = monthGroups.isNotEmpty
+              ? chartW / monthGroups.length
+              : 1.0;
 
           void onTouch(Offset localPos) {
             if (monthGroups.isEmpty || slotW <= 0) return;
             final relX = localPos.dx - leftMargin;
-            final idx =
-                (relX / slotW).floor().clamp(0, monthGroups.length - 1);
+            final idx = (relX / slotW).floor().clamp(0, monthGroups.length - 1);
             final label = monthNames[idx];
             if (selectedItemLabel != label) {
               HapticFeedback.selectionClick();
@@ -1693,15 +1690,19 @@ Widget renderDhkpComboBarLineTrend({
                   monthNames: monthNames,
                   maxVal: maxMonthVal > 0 ? maxMonthVal : 1,
                   progress: animationValue,
-                  barColor1:
-                      isDark ? Colors.blue.shade400 : Colors.blue.shade600,
-                  barColor2:
-                      isDark ? Colors.blue.shade700 : Colors.blue.shade900,
-                  lineColor:
-                      const Color(0xFFDC2626), // Garis merah poligon seperti Brainly
+                  barColor1: isDark
+                      ? Colors.blue.shade400
+                      : Colors.blue.shade600,
+                  barColor2: isDark
+                      ? Colors.blue.shade700
+                      : Colors.blue.shade900,
+                  lineColor: const Color(
+                    0xFFDC2626,
+                  ), // Garis merah poligon seperti Brainly
                   isDark: isDark,
-                  selectedIndex:
-                      selIndex != null && selIndex >= 0 ? selIndex : null,
+                  selectedIndex: selIndex != null && selIndex >= 0
+                      ? selIndex
+                      : null,
                 ),
               ),
             ),
@@ -1770,5 +1771,7 @@ Widget renderDhkpComboBarLineTrend({
 }
 
 /// Fallback kompatibilitas nama lama (deprecated alias)
-@Deprecated('Gunakan ComboBarLineTrendPainter yang mengombinasikan batang dan garis poligon')
+@Deprecated(
+  'Gunakan ComboBarLineTrendPainter yang mengombinasikan batang dan garis poligon',
+)
 typedef GrassLineAreaPainter = ComboBarLineTrendPainter;

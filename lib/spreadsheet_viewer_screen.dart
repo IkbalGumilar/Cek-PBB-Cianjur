@@ -221,54 +221,60 @@ class _SpreadsheetViewerScreenState extends State<SpreadsheetViewerScreen> {
     final controller = TextEditingController();
     bool obscure = true;
 
-    final pwd = await showDialog<String>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setLocalState) => AlertDialog(
-          icon: const Icon(Icons.lock_rounded, color: Colors.blue, size: 36),
-          title: const Text('Berkas Diproteksi'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Berkas DHKP ini terenkripsi. Masukkan kata sandi untuk membukanya:',
-                style: TextStyle(fontSize: 13),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: controller,
-                obscureText: obscure,
-                autofocus: true,
-                decoration: InputDecoration(
-                  labelText: 'Kata Sandi',
-                  border: const OutlineInputBorder(),
-                  suffixIcon: IconButton(
-                    icon: Icon(
-                      obscure ? Icons.visibility : Icons.visibility_off,
-                    ),
-                    onPressed: () => setLocalState(() => obscure = !obscure),
-                  ),
+    String? pwd;
+    try {
+      pwd = await showDialog<String>(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => StatefulBuilder(
+          builder: (ctx, setLocalState) => AlertDialog(
+            icon: const Icon(Icons.lock_rounded, color: Colors.blue, size: 36),
+            title: const Text('Berkas Diproteksi'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Berkas DHKP ini terenkripsi. Masukkan kata sandi untuk membukanya:',
+                  style: TextStyle(fontSize: 13),
                 ),
-                onSubmitted: (val) => Navigator.pop(ctx, val.trim()),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: controller,
+                  obscureText: obscure,
+                  autofocus: true,
+                  decoration: InputDecoration(
+                    labelText: 'Kata Sandi',
+                    border: const OutlineInputBorder(),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        obscure ? Icons.visibility : Icons.visibility_off,
+                      ),
+                      onPressed: () => setLocalState(() => obscure = !obscure),
+                    ),
+                  ),
+                  onSubmitted: (val) => Navigator.pop(ctx, val.trim()),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Batal'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+                child: const Text('Buka'),
               ),
             ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Batal'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-              child: const Text('Buka'),
-            ),
-          ],
         ),
-      ),
-    );
+      );
+    } finally {
+      controller.dispose();
+    }
 
+    if (!mounted) return;
     if (pwd != null && pwd.isNotEmpty) {
       await _loadFile(password: pwd);
     } else {

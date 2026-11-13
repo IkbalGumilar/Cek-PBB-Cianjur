@@ -24,24 +24,12 @@ class BlokBackupScheduler extends BasePreferencesStore {
 
   static const int maxRetainedBackups = 3;
 
-  Future<String?> _readSecureToken(String key) async {
-    final val = await readSecure(key);
-    if (val != null) {
-      await remove(key);
-      return val;
-    }
-    return getString(key);
-  }
+  Future<String?> _readSecureToken(String key) => readSecureWithMigration(key);
 
-  Future<void> _writeSecureToken(String key, String value) async {
-    await writeSecure(key, value);
-    await remove(key);
-  }
+  Future<void> _writeSecureToken(String key, String value) =>
+      writeSecureOnly(key, value);
 
-  Future<void> _deleteSecureToken(String key) async {
-    await deleteSecure(key);
-    await remove(key);
-  }
+  Future<void> _deleteSecureToken(String key) => deleteSecureOnly(key);
 
   /// Folder khusus terisolasi di Google Drive (aplikasi dilarang mengakses folder lain).
   String get googleDriveDedicatedFolder =>

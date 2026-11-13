@@ -74,11 +74,14 @@ Future<Uint8List> generateDhkpRincianBulananPdfBytes({
 }) async {
   final doc = pw.Document();
   final monthName =
-      (monthIndex >= 1 && monthIndex <= DhkpGrafikAnalytics.fullMonthNames.length)
-          ? DhkpGrafikAnalytics.fullMonthNames[monthIndex - 1]
-          : 'Bulan $monthIndex';
-  final totalNominal =
-      targetRecords.fold<int>(0, (sum, r) => sum + r.jumlahPbbValue);
+      (monthIndex >= 1 &&
+          monthIndex <= DhkpGrafikAnalytics.fullMonthNames.length)
+      ? DhkpGrafikAnalytics.fullMonthNames[monthIndex - 1]
+      : 'Bulan $monthIndex';
+  final totalNominal = targetRecords.fold<int>(
+    0,
+    (sum, r) => sum + r.jumlahPbbValue,
+  );
 
   final rows = <List<String>>[];
   for (int i = 0; i < targetRecords.length; i++) {
@@ -172,15 +175,10 @@ Future<Uint8List> generateDhkpRincianBulananPdfBytes({
             fontSize: 8,
             fontWeight: pw.FontWeight.bold,
           ),
-          headerDecoration: const pw.BoxDecoration(
-            color: PdfColors.grey200,
-          ),
+          headerDecoration: const pw.BoxDecoration(color: PdfColors.grey200),
           cellStyle: const pw.TextStyle(fontSize: 7.5),
           cellAlignment: pw.Alignment.centerLeft,
-          cellAlignments: {
-            0: pw.Alignment.center,
-            5: pw.Alignment.centerRight,
-          },
+          cellAlignments: {0: pw.Alignment.center, 5: pw.Alignment.centerRight},
           cellPadding: const pw.EdgeInsets.symmetric(
             horizontal: 4,
             vertical: 3,
@@ -274,9 +272,9 @@ class _DhkpRincianBulananSheetState extends State<DhkpRincianBulananSheet> {
 
   String get _monthName =>
       (widget.monthIndex >= 1 &&
-              widget.monthIndex <= DhkpGrafikAnalytics.fullMonthNames.length)
-          ? DhkpGrafikAnalytics.fullMonthNames[widget.monthIndex - 1]
-          : 'Bulan ${widget.monthIndex}';
+          widget.monthIndex <= DhkpGrafikAnalytics.fullMonthNames.length)
+      ? DhkpGrafikAnalytics.fullMonthNames[widget.monthIndex - 1]
+      : 'Bulan ${widget.monthIndex}';
 
   @override
   void initState() {
@@ -354,9 +352,9 @@ class _DhkpRincianBulananSheetState extends State<DhkpRincianBulananSheet> {
           return a.nop.compareTo(b.nop);
 
         case RincianBulananSortMode.nama:
-          final cmp = a.namaWajibPajak
-              .toLowerCase()
-              .compareTo(b.namaWajibPajak.toLowerCase());
+          final cmp = a.namaWajibPajak.toLowerCase().compareTo(
+            b.namaWajibPajak.toLowerCase(),
+          );
           if (cmp != 0) return cmp;
           return a.nop.compareTo(b.nop);
       }
@@ -380,8 +378,10 @@ class _DhkpRincianBulananSheetState extends State<DhkpRincianBulananSheet> {
 
   Uint8List _generateCsvBytes() {
     final targetRecords = _filteredRecords;
-    final totalNominal =
-        targetRecords.fold<int>(0, (sum, r) => sum + r.jumlahPbbValue);
+    final totalNominal = targetRecords.fold<int>(
+      0,
+      (sum, r) => sum + r.jumlahPbbValue,
+    );
     final sb = StringBuffer();
     sb.writeln(
       '# LAPORAN PEMBAYARAN PBB BULAN ${_monthName.toUpperCase()} ${widget.tahun}',
@@ -390,9 +390,7 @@ class _DhkpRincianBulananSheetState extends State<DhkpRincianBulananSheet> {
     if (_searchQuery.trim().isNotEmpty) {
       sb.writeln('# Filter: "${_searchQuery.trim()}"');
     }
-    sb.writeln(
-      'No,NOP,Nama Wajib Pajak,Blok,Tanggal dan Jam Bayar,Jumlah PBB',
-    );
+    sb.writeln('No,NOP,Nama Wajib Pajak,Blok,Tanggal dan Jam Bayar,Jumlah PBB');
     for (int i = 0; i < targetRecords.length; i++) {
       final r = targetRecords[i];
       final blok = nopBlok(r.nop);
@@ -403,9 +401,7 @@ class _DhkpRincianBulananSheetState extends State<DhkpRincianBulananSheet> {
         '${i + 1},"$nop","$cleanName","${blok.isNotEmpty ? 'Blok $blok' : '-'}","$tglJam",${r.jumlahPbbValue}',
       );
     }
-    sb.writeln(
-      ',,"TOTAL",,,$totalNominal',
-    );
+    sb.writeln(',,"TOTAL",,,$totalNominal');
     return Uint8List.fromList(utf8.encode(sb.toString()));
   }
 
@@ -442,8 +438,9 @@ class _DhkpRincianBulananSheetState extends State<DhkpRincianBulananSheet> {
       final fileName =
           'Laporan_Bayar_${safeMonth}_${widget.tahun}_${DateTime.now().millisecondsSinceEpoch}.$choice';
 
-      final bytes =
-          choice == 'pdf' ? await _generatePdfBytes() : _generateCsvBytes();
+      final bytes = choice == 'pdf'
+          ? await _generatePdfBytes()
+          : _generateCsvBytes();
       final savedPath = await DownloadHelper.saveBytes(
         bytes,
         fileName,
@@ -453,7 +450,9 @@ class _DhkpRincianBulananSheetState extends State<DhkpRincianBulananSheet> {
 
       messenger.showSnackBar(
         SnackBar(
-          content: Text('Laporan bulan $_monthName berhasil disimpan di: $savedPath'),
+          content: Text(
+            'Laporan bulan $_monthName berhasil disimpan di: $savedPath',
+          ),
           action: SnackBarAction(
             label: 'Buka',
             onPressed: () => NativeFileHelper.showInFileManager(savedPath),
@@ -476,8 +475,7 @@ class _DhkpRincianBulananSheetState extends State<DhkpRincianBulananSheet> {
     try {
       final pdfBytes = await _generatePdfBytes();
       final safeMonth = _monthName.toLowerCase();
-      final fileName =
-          'Laporan_Bayar_${safeMonth}_${widget.tahun}.pdf';
+      final fileName = 'Laporan_Bayar_${safeMonth}_${widget.tahun}.pdf';
 
       if (Platform.isAndroid) {
         await NativeFileHelper.shareBytes(
@@ -495,9 +493,7 @@ class _DhkpRincianBulananSheetState extends State<DhkpRincianBulananSheet> {
         if (savedPath == null) return;
         await NativeFileHelper.showInFileManager(savedPath);
         messenger.showSnackBar(
-          SnackBar(
-            content: Text('Dokumen PDF disimpan di: $savedPath'),
-          ),
+          SnackBar(content: Text('Dokumen PDF disimpan di: $savedPath')),
         );
       }
     } catch (e) {
@@ -551,305 +547,307 @@ class _DhkpRincianBulananSheetState extends State<DhkpRincianBulananSheet> {
           initialChildSize: 0.85,
           minChildSize: 0.5,
           maxChildSize: 0.95,
-      builder: (context, scrollController) {
-        return Container(
-          decoration: BoxDecoration(
-            color: widget.isDark ? scheme.surface : Colors.white,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-            boxShadow: const [
-              BoxShadow(
-                color: Colors.black26,
-                blurRadius: 16,
-                offset: Offset(0, -4),
-              ),
-            ],
-          ),
-          child: Column(
-            children: [
-              // Garis handle atas
-              Center(
-                child: Container(
-                  width: 44,
-                  height: 4.5,
-                  margin: const EdgeInsets.symmetric(vertical: 10),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.withValues(alpha: 0.4),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
+          builder: (context, scrollController) {
+            return Container(
+              decoration: BoxDecoration(
+                color: widget.isDark ? scheme.surface : Colors.white,
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(20),
                 ),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Colors.black26,
+                    blurRadius: 16,
+                    offset: Offset(0, -4),
+                  ),
+                ],
               ),
-
-              // Header Utama
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
+              child: Column(
+                children: [
+                  // Garis handle atas
+                  Center(
+                    child: Container(
+                      width: 44,
+                      height: 4.5,
+                      margin: const EdgeInsets.symmetric(vertical: 10),
                       decoration: BoxDecoration(
-                        color: Colors.purple.withValues(alpha: 0.12),
+                        color: Colors.grey.withValues(alpha: 0.4),
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child: const Icon(
-                        Icons.calendar_month_rounded,
-                        color: Colors.purple,
-                        size: 24,
-                      ),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Rincian Pembayaran Bulan $_monthName ${widget.tahun}',
-                            style: const TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            '${_monthRecords.length} Objek Pajak • Total ${formatRupiah(_totalNominal)}',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.teal.shade700,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close_rounded),
-                      onPressed: () => Navigator.pop(context),
-                      tooltip: 'Tutup',
-                    ),
-                  ],
-                ),
-              ),
+                  ),
 
-              const SizedBox(height: 10),
-
-              // Baris Tombol Aksi: Unduh, Bagikan, Cetak
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        icon: const Icon(Icons.download_rounded, size: 17),
-                        label: const Text(
-                          'Unduh',
-                          style: TextStyle(fontSize: 12),
+                  // Header Utama
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.purple.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(
+                            Icons.calendar_month_rounded,
+                            color: Colors.purple,
+                            size: 24,
+                          ),
                         ),
-                        onPressed:
-                            (_monthRecords.isEmpty || _isProcessing)
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Rincian Pembayaran Bulan $_monthName ${widget.tahun}',
+                                style: const TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                '${_monthRecords.length} Objek Pajak • Total ${formatRupiah(_totalNominal)}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.teal.shade700,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close_rounded),
+                          onPressed: () => Navigator.pop(context),
+                          tooltip: 'Tutup',
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  // Baris Tombol Aksi: Unduh, Bagikan, Cetak
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            icon: const Icon(Icons.download_rounded, size: 17),
+                            label: const Text(
+                              'Unduh',
+                              style: TextStyle(fontSize: 12),
+                            ),
+                            onPressed: (_monthRecords.isEmpty || _isProcessing)
                                 ? null
                                 : _handleDownload,
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                          visualDensity: VisualDensity.compact,
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              visualDensity: VisualDensity.compact,
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        icon: const Icon(Icons.share_rounded, size: 17),
-                        label: const Text(
-                          'Bagikan',
-                          style: TextStyle(fontSize: 12),
-                        ),
-                        onPressed:
-                            (_monthRecords.isEmpty || _isProcessing)
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            icon: const Icon(Icons.share_rounded, size: 17),
+                            label: const Text(
+                              'Bagikan',
+                              style: TextStyle(fontSize: 12),
+                            ),
+                            onPressed: (_monthRecords.isEmpty || _isProcessing)
                                 ? null
                                 : _handleShare,
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                          visualDensity: VisualDensity.compact,
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              visualDensity: VisualDensity.compact,
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: FilledButton.icon(
-                        icon: const Icon(Icons.print_rounded, size: 17),
-                        label: const Text(
-                          'Cetak',
-                          style: TextStyle(fontSize: 12),
-                        ),
-                        onPressed:
-                            (_monthRecords.isEmpty || _isProcessing)
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: FilledButton.icon(
+                            icon: const Icon(Icons.print_rounded, size: 17),
+                            label: const Text(
+                              'Cetak',
+                              style: TextStyle(fontSize: 12),
+                            ),
+                            onPressed: (_monthRecords.isEmpty || _isProcessing)
                                 ? null
                                 : _handlePrint,
-                        style: FilledButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                          visualDensity: VisualDensity.compact,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 10),
-
-              // Kotak Pencarian Cepat & Pilihan Urutan
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _searchController,
-                        decoration: InputDecoration(
-                          hintText: 'Cari nama WP, NOP, atau Blok...',
-                          prefixIcon: const Icon(Icons.search, size: 20),
-                          suffixIcon: _searchQuery.isNotEmpty
-                              ? IconButton(
-                                  icon: const Icon(Icons.clear, size: 18),
-                                  onPressed: () {
-                                    _searchController.clear();
-                                    setState(() => _searchQuery = '');
-                                  },
-                                )
-                              : null,
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 10,
-                          ),
-                          isDense: true,
-                          filled: true,
-                          fillColor: widget.isDark
-                              ? scheme.surfaceContainerHighest
-                                  .withValues(alpha: 0.3)
-                              : Colors.grey.shade100,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide: BorderSide.none,
-                          ),
-                        ),
-                        onChanged: (val) => setState(() => _searchQuery = val),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    PopupMenuButton<RincianBulananSortMode>(
-                      tooltip: 'Urutkan rincian',
-                      initialValue: _sortMode,
-                      onSelected: (mode) {
-                        setState(() => _sortMode = mode);
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 9,
-                        ),
-                        decoration: BoxDecoration(
-                          color: widget.isDark
-                              ? scheme.surfaceContainerHighest
-                                  .withValues(alpha: 0.3)
-                              : Colors.purple.withValues(alpha: 0.08),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: Colors.purple.withValues(alpha: 0.3),
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              _sortMode.icon,
-                              size: 18,
-                              color: Colors.purple,
+                            style: FilledButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              visualDensity: VisualDensity.compact,
                             ),
-                            const SizedBox(width: 4),
-                            Text(
-                              _sortMode.shortLabel,
-                              style: const TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.purple,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  // Kotak Pencarian Cepat & Pilihan Urutan
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _searchController,
+                            decoration: InputDecoration(
+                              hintText: 'Cari nama WP, NOP, atau Blok...',
+                              prefixIcon: const Icon(Icons.search, size: 20),
+                              suffixIcon: _searchQuery.isNotEmpty
+                                  ? IconButton(
+                                      icon: const Icon(Icons.clear, size: 18),
+                                      onPressed: () {
+                                        _searchController.clear();
+                                        setState(() => _searchQuery = '');
+                                      },
+                                    )
+                                  : null,
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 10,
+                              ),
+                              isDense: true,
+                              filled: true,
+                              fillColor: widget.isDark
+                                  ? scheme.surfaceContainerHighest.withValues(
+                                      alpha: 0.3,
+                                    )
+                                  : Colors.grey.shade100,
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                borderSide: BorderSide.none,
                               ),
                             ),
-                            const Icon(
-                              Icons.arrow_drop_down,
-                              size: 18,
-                              color: Colors.purple,
-                            ),
-                          ],
+                            onChanged: (val) =>
+                                setState(() => _searchQuery = val),
+                          ),
                         ),
-                      ),
-                      itemBuilder: (context) => [
-                        for (final mode in RincianBulananSortMode.values)
-                          PopupMenuItem<RincianBulananSortMode>(
-                            value: mode,
+                        const SizedBox(width: 8),
+                        PopupMenuButton<RincianBulananSortMode>(
+                          tooltip: 'Urutkan rincian',
+                          initialValue: _sortMode,
+                          onSelected: (mode) {
+                            setState(() => _sortMode = mode);
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 9,
+                            ),
+                            decoration: BoxDecoration(
+                              color: widget.isDark
+                                  ? scheme.surfaceContainerHighest.withValues(
+                                      alpha: 0.3,
+                                    )
+                                  : Colors.purple.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: Colors.purple.withValues(alpha: 0.3),
+                              ),
+                            ),
                             child: Row(
+                              mainAxisSize: MainAxisSize.min,
                               children: [
                                 Icon(
-                                  mode.icon,
+                                  _sortMode.icon,
                                   size: 18,
-                                  color: _sortMode == mode
-                                      ? Colors.purple
-                                      : Colors.grey.shade700,
+                                  color: Colors.purple,
                                 ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Text(
-                                    mode.label,
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: _sortMode == mode
-                                          ? FontWeight.bold
-                                          : FontWeight.normal,
-                                      color: _sortMode == mode
-                                          ? Colors.purple
-                                          : null,
-                                    ),
-                                  ),
-                                ),
-                                if (_sortMode == mode)
-                                  const Icon(
-                                    Icons.check,
-                                    size: 18,
+                                const SizedBox(width: 4),
+                                Text(
+                                  _sortMode.shortLabel,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
                                     color: Colors.purple,
                                   ),
+                                ),
+                                const Icon(
+                                  Icons.arrow_drop_down,
+                                  size: 18,
+                                  color: Colors.purple,
+                                ),
                               ],
                             ),
                           ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-
-              const Divider(height: 18),
-
-              // Daftar Objek Pajak
-              Expanded(
-                child: _monthRecords.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.event_busy_rounded,
-                              size: 48,
-                              color: Colors.grey.shade400,
-                            ),
-                            const SizedBox(height: 12),
-                            Text(
-                              'Belum ada transaksi pembayaran di bulan $_monthName',
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: Colors.grey.shade600,
-                                fontWeight: FontWeight.w500,
+                          itemBuilder: (context) => [
+                            for (final mode in RincianBulananSortMode.values)
+                              PopupMenuItem<RincianBulananSortMode>(
+                                value: mode,
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      mode.icon,
+                                      size: 18,
+                                      color: _sortMode == mode
+                                          ? Colors.purple
+                                          : Colors.grey.shade700,
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Text(
+                                        mode.label,
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: _sortMode == mode
+                                              ? FontWeight.bold
+                                              : FontWeight.normal,
+                                          color: _sortMode == mode
+                                              ? Colors.purple
+                                              : null,
+                                        ),
+                                      ),
+                                    ),
+                                    if (_sortMode == mode)
+                                      const Icon(
+                                        Icons.check,
+                                        size: 18,
+                                        color: Colors.purple,
+                                      ),
+                                  ],
+                                ),
                               ),
-                            ),
                           ],
                         ),
-                      )
-                    : filtered.isEmpty
+                      ],
+                    ),
+                  ),
+
+                  const Divider(height: 18),
+
+                  // Daftar Objek Pajak
+                  Expanded(
+                    child: _monthRecords.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.event_busy_rounded,
+                                  size: 48,
+                                  color: Colors.grey.shade400,
+                                ),
+                                const SizedBox(height: 12),
+                                Text(
+                                  'Belum ada transaksi pembayaran di bulan $_monthName',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: Colors.grey.shade600,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )
+                        : filtered.isEmpty
                         ? Center(
                             child: Text(
                               'Tidak ada data yang cocok dengan pencarian "$_searchQuery"',
@@ -870,8 +868,8 @@ class _DhkpRincianBulananSheetState extends State<DhkpRincianBulananSheet> {
                               final blok = nopBlok(item.nop);
                               final tglJam =
                                   DhkpGrafikAnalytics.formatTanggalJamBayar(
-                                item.tanggalBayar,
-                              );
+                                    item.tanggalBayar,
+                                  );
 
                               return Container(
                                 padding: const EdgeInsets.all(12),
@@ -887,8 +885,7 @@ class _DhkpRincianBulananSheetState extends State<DhkpRincianBulananSheet> {
                                   ),
                                 ),
                                 child: Row(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     // Nomor urut
                                     Container(
@@ -896,8 +893,9 @@ class _DhkpRincianBulananSheetState extends State<DhkpRincianBulananSheet> {
                                       height: 28,
                                       alignment: Alignment.center,
                                       decoration: BoxDecoration(
-                                        color: Colors.purple
-                                            .withValues(alpha: 0.12),
+                                        color: Colors.purple.withValues(
+                                          alpha: 0.12,
+                                        ),
                                         shape: BoxShape.circle,
                                       ),
                                       child: Text(
@@ -937,7 +935,8 @@ class _DhkpRincianBulananSheetState extends State<DhkpRincianBulananSheet> {
                                           Row(
                                             children: [
                                               Icon(
-                                                Icons.access_time_filled_rounded,
+                                                Icons
+                                                    .access_time_filled_rounded,
                                                 size: 13,
                                                 color: Colors.blue.shade700,
                                               ),
@@ -978,10 +977,12 @@ class _DhkpRincianBulananSheetState extends State<DhkpRincianBulananSheet> {
                                             vertical: 2,
                                           ),
                                           decoration: BoxDecoration(
-                                            color: Colors.green
-                                                .withValues(alpha: 0.12),
-                                            borderRadius:
-                                                BorderRadius.circular(4),
+                                            color: Colors.green.withValues(
+                                              alpha: 0.12,
+                                            ),
+                                            borderRadius: BorderRadius.circular(
+                                              4,
+                                            ),
                                           ),
                                           child: const Text(
                                             'Lunas',
@@ -999,11 +1000,11 @@ class _DhkpRincianBulananSheetState extends State<DhkpRincianBulananSheet> {
                               );
                             },
                           ),
+                  ),
+                ],
               ),
-            ],
-          ),
-        );
-      },
+            );
+          },
         ),
       ),
     );

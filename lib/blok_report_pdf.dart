@@ -12,7 +12,10 @@ import 'tagihan_result.dart' show formatRupiah;
 String _cleanPdfText(String text) {
   if (text.isEmpty) return text;
   final withoutTabungan = text
-      .replaceAll(RegExp(r'\[TABUNGAN_PBB:.*?:\/TABUNGAN_PBB\]', dotAll: true), '')
+      .replaceAll(
+        RegExp(r'\[TABUNGAN_PBB:.*?:\/TABUNGAN_PBB\]', dotAll: true),
+        '',
+      )
       .trim();
   final replaced = withoutTabungan
       .replaceAll('✓', '[Lunas]')
@@ -75,7 +78,8 @@ String buildReportJudul({
   DhkpKategoriFilter? kategoriFilter,
   String? tahun,
 }) {
-  final isSemuaBlok = blokTitle == null ||
+  final isSemuaBlok =
+      blokTitle == null ||
       blokTitle.isEmpty ||
       blokTitle == 'Semua Blok' ||
       blokTitle == semuaBlokValue;
@@ -184,17 +188,11 @@ pw.Widget _buildCard({
       pw.SizedBox(height: 2),
       pw.Text(
         formatRupiah(nominal),
-        style: pw.TextStyle(
-          fontSize: 9,
-          fontWeight: pw.FontWeight.bold,
-        ),
+        style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold),
       ),
       pw.Text(
         subtitle,
-        style: const pw.TextStyle(
-          fontSize: 7,
-          color: PdfColors.grey700,
-        ),
+        style: const pw.TextStyle(fontSize: 7, color: PdfColors.grey700),
       ),
     ],
   );
@@ -301,9 +299,7 @@ pw.Widget _buildSummarySection(_PdfIsolateParam param) {
     ),
     child: pw.Row(
       mainAxisAlignment: pw.MainAxisAlignment.end,
-      children: [
-        card,
-      ],
+      children: [card],
     ),
   );
 }
@@ -356,8 +352,8 @@ void _pdfWorkerEntry(_PdfIsolateParam param) async {
     final totalHalaman = param.rows.isEmpty
         ? 1
         : (param.rows.length <= 24
-            ? 1
-            : 1 + ((param.rows.length - 24) / 26).ceil());
+              ? 1
+              : 1 + ((param.rows.length - 24) / 26).ceil());
 
     param.sendPort.send({
       'type': 'progress',
@@ -404,7 +400,9 @@ void _pdfWorkerEntry(_PdfIsolateParam param) async {
               4: pw.FixedColumnWidth(28), // Tahun (2026)
               5: pw.FixedColumnWidth(54), // Tanggal Bayar
               6: pw.FixedColumnWidth(58), // Jumlah PBB (Rp 51.425)
-              7: pw.FixedColumnWidth(52), // Status Bayar (Sudah / Belum / Blacklist)
+              7: pw.FixedColumnWidth(
+                52,
+              ), // Status Bayar (Sudah / Belum / Blacklist)
               8: pw.FixedColumnWidth(36), // Target Pemda (Ya / -)
               9: pw.FlexColumnWidth(3.0), // Catatan
             },
@@ -413,9 +411,7 @@ void _pdfWorkerEntry(_PdfIsolateParam param) async {
               fontSize: 7,
               fontWeight: pw.FontWeight.bold,
             ),
-            headerDecoration: const pw.BoxDecoration(
-              color: PdfColors.grey200,
-            ),
+            headerDecoration: const pw.BoxDecoration(color: PdfColors.grey200),
             cellAlignment: pw.Alignment.centerLeft,
             cellAlignments: const {
               0: pw.Alignment.center,
@@ -477,12 +473,56 @@ List<List<String>> _sanitizeRecordsToRows(List<BlokRecord> records) {
         records[i].tanggalBayar,
         records[i].jumlahPbbValue > 0
             ? formatRupiah(records[i].jumlahPbbValue)
-            : (records[i].jumlahPbb.isEmpty ? '-' : formatRupiah(records[i].jumlahPbb)),
+            : (records[i].jumlahPbb.isEmpty
+                  ? '-'
+                  : formatRupiah(records[i].jumlahPbb)),
         _cleanPdfText(records[i].statusBayar),
         records[i].isTargetPemda ? 'Ya' : '-',
         _cleanPdfText(records[i].catatan),
       ],
   ];
+}
+
+/// Pengecualian ketika pengguna membatalkan proses pembuatan dokumen cetak DHKP.
+class BlokPrintCancelledException implements Exception {
+  final String message;
+  const BlokPrintCancelledException([
+    this.message = 'Proses penyusunan dokumen cetak DHKP dibatalkan.',
+  ]);
+
+  @override
+  String toString() => message;
+}
+
+/// Token pembatalan kooperatif untuk menghentikan isolate pembuatan PDF DHKP
+/// seketika jika pengguna menekan Batal Cetak.
+class BlokPrintCancelToken {
+  bool _isCancelled = false;
+  final List<void Function()> _listeners = <void Function()>[];
+
+  bool get isCancelled => _isCancelled;
+
+  void cancel() {
+    if (_isCancelled) return;
+    _isCancelled = true;
+    final snapshot = List<void Function()>.from(_listeners);
+    _listeners.clear();
+    for (final listener in snapshot) {
+      listener();
+    }
+  }
+
+  void addListener(void Function() listener) {
+    if (_isCancelled) {
+      listener();
+      return;
+    }
+    _listeners.add(listener);
+  }
+
+  void removeListener(void Function() listener) {
+    _listeners.remove(listener);
+  }
 }
 
 /// Membuat PDF laporan data blok. [records] harus sudah diurutkan sebelum
@@ -500,8 +540,14 @@ class BlokReportPdf {
     int totalPbb = 0,
     Future<void> Function(int current, int total)? onProgress,
     int pacingDelayMs = 120,
+    BlokPrintCancelToken? cancelToken,
   }) async {
-    final judul = customJudul ??
+    if (cancelToken?.isCancelled == true) {
+      throw const BlokPrintCancelledException();
+    }
+
+    final judul =
+        customJudul ??
         buildReportJudul(
           blokTitle: blokTitle,
           kategoriFilter: kategoriFilter,
@@ -537,6 +583,9 @@ class BlokReportPdf {
           ),
         ),
       );
+      if (cancelToken?.isCancelled == true) {
+        throw const BlokPrintCancelledException();
+      }
       return doc.save();
     }
 
@@ -545,18 +594,24 @@ class BlokReportPdf {
 
     final totalHalaman = records.isEmpty
         ? 1
-        : (records.length <= 24
-            ? 1
-            : 1 + ((records.length - 24) / 26).ceil());
+        : (records.length <= 24 ? 1 : 1 + ((records.length - 24) / 26).ceil());
 
     Timer? progressTimer;
     var currentHalaman = 1;
     if (onProgress != null) {
+      if (cancelToken?.isCancelled == true) {
+        throw const BlokPrintCancelledException();
+      }
       onProgress(1, totalHalaman);
       if (totalHalaman > 1) {
         final intervalMs = pacingDelayMs.clamp(60, 250);
-        progressTimer =
-            Timer.periodic(Duration(milliseconds: intervalMs), (timer) {
+        progressTimer = Timer.periodic(Duration(milliseconds: intervalMs), (
+          timer,
+        ) {
+          if (cancelToken?.isCancelled == true) {
+            timer.cancel();
+            return;
+          }
           if (currentHalaman < totalHalaman) {
             currentHalaman++;
             onProgress(currentHalaman, totalHalaman);
@@ -569,28 +624,54 @@ class BlokReportPdf {
 
     final receivePort = ReceivePort();
     final completer = Completer<Uint8List>();
+    // Hindari unhandled async error jika cancel() dipanggil sebelum `await completer.future`
+    // tercapai (misalnya saat `Isolate.spawn` masih dalam antrean).
+    completer.future.ignore();
+    Isolate? spawnedIsolate;
+
+    void onCancelRequested() {
+      progressTimer?.cancel();
+      spawnedIsolate?.kill(priority: Isolate.immediate);
+      spawnedIsolate = null;
+      receivePort.close();
+      if (!completer.isCompleted) {
+        completer.completeError(const BlokPrintCancelledException());
+      }
+    }
+
+    cancelToken?.addListener(onCancelRequested);
 
     receivePort.listen((dynamic message) {
+      if (cancelToken?.isCancelled == true) {
+        onCancelRequested();
+        return;
+      }
       if (message is Map<String, dynamic>) {
         final type = message['type'] as String?;
         if (type == 'progress') {
           final cur = message['current'] as int;
           final tot = message['total'] as int;
-          if (onProgress != null && cur > currentHalaman) {
+          if (onProgress != null &&
+              cur > currentHalaman &&
+              cancelToken?.isCancelled != true) {
             currentHalaman = cur;
             onProgress(cur, tot);
           }
         } else if (type == 'done') {
           progressTimer?.cancel();
           final finalTotal = message['totalPages'] as int? ?? totalHalaman;
-          if (onProgress != null) {
+          if (onProgress != null && cancelToken?.isCancelled != true) {
             onProgress(finalTotal, finalTotal);
           }
-          completer.complete(message['bytes'] as Uint8List);
+          if (!completer.isCompleted) {
+            completer.complete(message['bytes'] as Uint8List);
+          }
           receivePort.close();
         } else if (type == 'error') {
           progressTimer?.cancel();
-          completer.completeError(Exception(message['error']));
+          if (!completer.isCompleted) {
+            completer.completeError(Exception(message['error']));
+          }
           receivePort.close();
         }
       }
@@ -616,48 +697,56 @@ class BlokReportPdf {
       sudahBayarCount: m.sudahBayarCount > 0
           ? m.sudahBayarCount
           : (kategoriFilter == DhkpKategoriFilter.sudahBayar
-              ? records.length
-              : 0),
+                ? records.length
+                : 0),
       sudahBayarNominal: m.sudahBayarNominal > 0
           ? m.sudahBayarNominal
           : (kategoriFilter == DhkpKategoriFilter.sudahBayar
-              ? effectiveTotalPbb
-              : 0),
+                ? effectiveTotalPbb
+                : 0),
       belumBayarCount: m.belumBayarCount > 0
           ? m.belumBayarCount
           : (kategoriFilter == DhkpKategoriFilter.belumBayar
-              ? records.length
-              : 0),
+                ? records.length
+                : 0),
       belumBayarNominal: m.belumBayarNominal > 0
           ? m.belumBayarNominal
           : (kategoriFilter == DhkpKategoriFilter.belumBayar
-              ? effectiveTotalPbb
-              : 0),
+                ? effectiveTotalPbb
+                : 0),
       targetPemdaCount: m.targetPemdaCount > 0
           ? m.targetPemdaCount
           : (kategoriFilter == DhkpKategoriFilter.targetPemda
-              ? records.length
-              : 0),
+                ? records.length
+                : 0),
       targetPemdaNominal: m.targetPemdaNominal > 0
           ? m.targetPemdaNominal
           : (kategoriFilter == DhkpKategoriFilter.targetPemda
-              ? effectiveTotalPbb
-              : 0),
+                ? effectiveTotalPbb
+                : 0),
       blacklistCount: blCount > 0
           ? blCount
           : (kategoriFilter == DhkpKategoriFilter.blacklist
-              ? records.length
-              : 0),
+                ? records.length
+                : 0),
       blacklistNominal: blNom > 0
           ? blNom
           : (kategoriFilter == DhkpKategoriFilter.blacklist
-              ? effectiveTotalPbb
-              : 0),
+                ? effectiveTotalPbb
+                : 0),
       totalCount: m.totalCount > 0 ? m.totalCount : records.length,
       totalNominal: m.totalNominal > 0 ? m.totalNominal : effectiveTotalPbb,
     );
 
-    await Isolate.spawn(_pdfWorkerEntry, param);
-    return completer.future;
+    try {
+      spawnedIsolate = await Isolate.spawn(_pdfWorkerEntry, param);
+      if (cancelToken?.isCancelled == true) {
+        onCancelRequested();
+      }
+      return await completer.future;
+    } finally {
+      progressTimer?.cancel();
+      cancelToken?.removeListener(onCancelRequested);
+    }
   }
 }

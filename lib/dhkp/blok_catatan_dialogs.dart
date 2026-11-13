@@ -24,92 +24,101 @@ Future<String?> showEditCatatanDialog(
   );
   final controller = TextEditingController(text: cleanText);
 
-  final updated = await showDialog<bool>(
-    context: context,
-    builder: (ctx) => AlertDialog(
-      title: const Row(
-        children: [
-          Icon(Icons.edit_note, color: Colors.blue),
-          SizedBox(width: 8),
-          Text('Catatan Petugas', style: TextStyle(fontSize: 18)),
-        ],
-      ),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            record.namaWajibPajak,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-          ),
-          Text(
-            'NOP: ${record.formattedNop} (Blok ${record.blok} No ${record.wilayah})',
-            style: const TextStyle(fontSize: 12, color: Colors.grey),
-          ),
-          if (tabungan.saldo > 0) ...[
-            const SizedBox(height: 10),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: Colors.pink.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: Colors.pink.shade300),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.savings_rounded, size: 16, color: Colors.pink.shade700),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      'Tersimpan celengan warga: ${formatRupiah(tabungan.saldo)} (Aman & terlindungi)',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: Colors.pink.shade800,
-                        fontWeight: FontWeight.bold,
+  try {
+    final updated = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.edit_note, color: Colors.blue),
+            SizedBox(width: 8),
+            Text('Catatan Petugas', style: TextStyle(fontSize: 18)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              record.namaWajibPajak,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+            ),
+            Text(
+              'NOP: ${record.formattedNop} (Blok ${record.blok} No ${record.wilayah})',
+              style: const TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+            if (tabungan.saldo > 0) ...[
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.pink.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: Colors.pink.shade300),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.savings_rounded,
+                      size: 16,
+                      color: Colors.pink.shade700,
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'Tersimpan celengan warga: ${formatRupiah(tabungan.saldo)} (Aman & terlindungi)',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.pink.shade800,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
+              ),
+            ],
+            const SizedBox(height: 16),
+            TextField(
+              controller: controller,
+              maxLines: 4,
+              minLines: 3,
+              decoration: const InputDecoration(
+                labelText: 'Catatan Petugas (Anomali / Info Khusus)',
+                hintText:
+                    'Misal: Bangunan sudah dibongkar, NOP ganda, pemilik pindah ke luar kota, tanah sengketa...',
+                border: OutlineInputBorder(),
+                alignLabelWithHint: true,
               ),
             ),
           ],
-          const SizedBox(height: 16),
-          TextField(
-            controller: controller,
-            maxLines: 4,
-            minLines: 3,
-            decoration: const InputDecoration(
-              labelText: 'Catatan Petugas (Anomali / Info Khusus)',
-              hintText:
-                  'Misal: Bangunan sudah dibongkar, NOP ganda, pemilik pindah ke luar kota, tanah sengketa...',
-              border: OutlineInputBorder(),
-              alignLabelWithHint: true,
-            ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal'),
+          ),
+          FilledButton.icon(
+            onPressed: () => Navigator.pop(ctx, true),
+            icon: const Icon(Icons.save),
+            label: const Text('Simpan'),
           ),
         ],
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(ctx, false),
-          child: const Text('Batal'),
-        ),
-        FilledButton.icon(
-          onPressed: () => Navigator.pop(ctx, true),
-          icon: const Icon(Icons.save),
-          label: const Text('Simpan'),
-        ),
-      ],
-    ),
-  );
+    );
 
-  final result = updated == true
-      ? PbbTabunganHelper.encodeCatatanWithTabungan(
-          controller.text.trim(),
-          tabungan,
-        )
-      : null;
-  controller.dispose();
-  return result;
+    return updated == true
+        ? PbbTabunganHelper.encodeCatatanWithTabungan(
+            controller.text.trim(),
+            tabungan,
+          )
+        : null;
+  } finally {
+    controller.dispose();
+  }
 }
 
 Future<void> showRincianObjekDialog(
@@ -317,10 +326,14 @@ Future<void> showRincianObjekDialog(
                             ),
                           ),
                         () {
-                          final cleanCatatan = PbbTabunganHelper.cleanCatatan(record.catatan);
+                          final cleanCatatan = PbbTabunganHelper.cleanCatatan(
+                            record.catatan,
+                          );
                           final tabungan = PbbTabunganHelper.extractTabungan(
                             record.catatan,
-                            defaultTarget: record.jumlahPbbValue > 0 ? record.jumlahPbbValue : 50000,
+                            defaultTarget: record.jumlahPbbValue > 0
+                                ? record.jumlahPbbValue
+                                : 50000,
                           );
                           final hasTabungan = tabungan.saldo > 0;
                           final isLunasTabungan = tabungan.isLunas;
@@ -335,10 +348,13 @@ Future<void> showRincianObjekDialog(
                                   decoration: BoxDecoration(
                                     color: Colors.amber.withValues(alpha: 0.12),
                                     borderRadius: BorderRadius.circular(6),
-                                    border: Border.all(color: Colors.amber.shade700),
+                                    border: Border.all(
+                                      color: Colors.amber.shade700,
+                                    ),
                                   ),
                                   child: Row(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Icon(
                                         Icons.info_outline,
@@ -408,7 +424,10 @@ Future<void> showRincianObjekDialog(
                                             ),
                                           ),
                                         ),
-                                        const Icon(Icons.chevron_right, size: 16),
+                                        const Icon(
+                                          Icons.chevron_right,
+                                          size: 16,
+                                        ),
                                       ],
                                     ),
                                   ),
@@ -428,26 +447,38 @@ Future<void> showRincianObjekDialog(
                           },
                           borderRadius: BorderRadius.circular(8),
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
                             decoration: BoxDecoration(
-                              color: isDark ? const Color(0xFF2E2215) : const Color(0xFFFFF3E0),
+                              color: isDark
+                                  ? const Color(0xFF2E2215)
+                                  : const Color(0xFFFFF3E0),
                               borderRadius: BorderRadius.circular(8),
                               border: Border.all(color: Colors.orange.shade400),
                             ),
                             child: Row(
                               children: [
-                                const Icon(Icons.calculate_outlined, color: Colors.orange, size: 22),
+                                const Icon(
+                                  Icons.calculate_outlined,
+                                  color: Colors.orange,
+                                  size: 22,
+                                ),
                                 const SizedBox(width: 10),
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Text(
                                         'Kalkulator Denda, Cicilan & AJB',
                                         style: TextStyle(
                                           fontWeight: FontWeight.bold,
                                           fontSize: 12,
-                                          color: isDark ? Colors.orange.shade200 : Colors.orange.shade900,
+                                          color: isDark
+                                              ? Colors.orange.shade200
+                                              : Colors.orange.shade900,
                                         ),
                                       ),
                                       const SizedBox(height: 2),
@@ -455,13 +486,19 @@ Future<void> showRincianObjekDialog(
                                         'Hitung denda keterlambatan, simulasi setoran cicilan warga, atau estimasi biaya pajak AJB untuk NOP ini.',
                                         style: TextStyle(
                                           fontSize: 10.5,
-                                          color: isDark ? Colors.grey.shade400 : Colors.grey.shade700,
+                                          color: isDark
+                                              ? Colors.grey.shade400
+                                              : Colors.grey.shade700,
                                         ),
                                       ),
                                     ],
                                   ),
                                 ),
-                                const Icon(Icons.chevron_right, size: 20, color: Colors.orange),
+                                const Icon(
+                                  Icons.chevron_right,
+                                  size: 20,
+                                  color: Colors.orange,
+                                ),
                               ],
                             ),
                           ),
@@ -572,94 +609,94 @@ Future<EditRincianResult?> showEditRincianDialog(
   final alamatObjekController = TextEditingController(text: record.alamatObjek);
   final alamatWpController = TextEditingController(text: record.alamatWp);
 
-  final updated = await showDialog<bool>(
-    context: context,
-    builder: (ctx) => AlertDialog(
-      title: const Row(
-        children: [
-          Icon(Icons.edit, color: Colors.blue),
-          SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              'Edit Nama & Alamat',
-              style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
-            ),
-          ),
-        ],
-      ),
-      content: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 480),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
+  try {
+    final updated = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Row(
           children: [
-            Text(
-              'NOP: ${record.formattedNop}',
-              style: const TextStyle(
-                fontSize: 12,
-                color: Colors.grey,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            const SizedBox(height: 14),
-            TextField(
-              controller: namaController,
-              decoration: const InputDecoration(
-                labelText: 'Nama Wajib Pajak / Pemilik Sekarang',
-                helperText: 'Sesuaikan nama dengan pemilik fisik saat ini',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.person_outline),
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: alamatObjekController,
-              decoration: const InputDecoration(
-                labelText: 'Alamat Objek Pajak (OP)',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.place_outlined),
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: alamatWpController,
-              decoration: const InputDecoration(
-                labelText: 'Alamat Wajib Pajak (WP)',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.home_outlined),
+            Icon(Icons.edit, color: Colors.blue),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Edit Nama & Alamat',
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
               ),
             ),
           ],
         ),
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 480),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'NOP: ${record.formattedNop}',
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: namaController,
+                decoration: const InputDecoration(
+                  labelText: 'Nama Wajib Pajak / Pemilik Sekarang',
+                  helperText: 'Sesuaikan nama dengan pemilik fisik saat ini',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.person_outline),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: alamatObjekController,
+                decoration: const InputDecoration(
+                  labelText: 'Alamat Objek Pajak (OP)',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.place_outlined),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: alamatWpController,
+                decoration: const InputDecoration(
+                  labelText: 'Alamat Wajib Pajak (WP)',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.home_outlined),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal'),
+          ),
+          FilledButton.icon(
+            icon: const Icon(Icons.save),
+            label: const Text('Simpan Perubahan'),
+            onPressed: () => Navigator.pop(ctx, true),
+          ),
+        ],
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(ctx, false),
-          child: const Text('Batal'),
-        ),
-        FilledButton.icon(
-          icon: const Icon(Icons.save),
-          label: const Text('Simpan Perubahan'),
-          onPressed: () => Navigator.pop(ctx, true),
-        ),
-      ],
-    ),
-  );
+    );
 
-  EditRincianResult? result;
-  if (updated == true) {
-    result = EditRincianResult(
+    if (updated != true) return null;
+    return EditRincianResult(
       namaWajibPajak: namaController.text.trim().isEmpty
           ? record.namaWajibPajak
           : namaController.text.trim(),
       alamatObjek: alamatObjekController.text.trim(),
       alamatWp: alamatWpController.text.trim(),
     );
+  } finally {
+    namaController.dispose();
+    alamatObjekController.dispose();
+    alamatWpController.dispose();
   }
-  namaController.dispose();
-  alamatObjekController.dispose();
-  alamatWpController.dispose();
-  return result;
 }
 
 Future<List<BlokRecord>?> showPilihBlokCekMassalDialog(
@@ -946,9 +983,7 @@ Future<List<BlokRecord>?> showPilihBlokCekMassalDialog(
                                     border: Border.all(
                                       color: isDownloadStts
                                           ? Colors.teal.withValues(alpha: 0.3)
-                                          : Colors.green.withValues(
-                                              alpha: 0.3,
-                                            ),
+                                          : Colors.green.withValues(alpha: 0.3),
                                     ),
                                   ),
                                   child: Row(
@@ -1408,16 +1443,17 @@ Future<OpsiEksporResult?> showPilihOpsiEksporDialog(
                     ),
                     const SizedBox(height: 14),
                   ],
-                  Container(
-                    decoration: BoxDecoration(
-                      color: scheme.surfaceContainerHighest.withValues(
-                        alpha: 0.45,
-                      ),
+                  Material(
+                    color: scheme.surfaceContainerHighest.withValues(
+                      alpha: 0.45,
+                    ),
+                    shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
+                      side: BorderSide(
                         color: scheme.outlineVariant.withValues(alpha: 0.6),
                       ),
                     ),
+                    clipBehavior: Clip.antiAlias,
                     child: CheckboxListTile(
                       value: sertakanNihil,
                       dense: true,
@@ -1604,7 +1640,9 @@ Future<void> showWhatsAppPhotoPreviewDialog(
                       horizontal: 16,
                       vertical: 10,
                     ),
-                    color: isSuccess ? Colors.green.shade700 : Colors.red.shade700,
+                    color: isSuccess
+                        ? Colors.green.shade700
+                        : Colors.red.shade700,
                     child: Row(
                       children: [
                         Icon(
@@ -1626,7 +1664,8 @@ Future<void> showWhatsAppPhotoPreviewDialog(
                           ),
                         ),
                         InkWell(
-                          onTap: () => setDialogState(() => statusMessage = null),
+                          onTap: () =>
+                              setDialogState(() => statusMessage = null),
                           child: const Icon(
                             Icons.close,
                             color: Colors.white70,
@@ -1775,7 +1814,7 @@ Future<void> showWhatsAppPhotoPreviewDialog(
                           label: const Text('Hapus'),
                           onPressed: () async {
                             final confirm = await showDialog<bool>(
-                              context: context,
+                              context: dialogCtx,
                               builder: (c) => AlertDialog(
                                 title: const Text('Hapus Foto?'),
                                 content: const Text(
@@ -1796,7 +1835,7 @@ Future<void> showWhatsAppPhotoPreviewDialog(
                                 ],
                               ),
                             );
-                            if (confirm == true) {
+                            if (confirm == true && dialogCtx.mounted) {
                               setDialogState(() {
                                 isProcessing = true;
                                 statusMessage = null;
@@ -1811,6 +1850,7 @@ Future<void> showWhatsAppPhotoPreviewDialog(
                                       record.nop,
                                       customFileName: '',
                                     );
+                                if (!dialogCtx.mounted) return;
                                 setDialogState(() {
                                   photoFile = refreshed;
                                   isProcessing = false;
@@ -1818,6 +1858,7 @@ Future<void> showWhatsAppPhotoPreviewDialog(
                                   statusMessage = 'Foto berhasil dihapus.';
                                 });
                               } catch (e) {
+                                if (!dialogCtx.mounted) return;
                                 setDialogState(() {
                                   isProcessing = false;
                                   isSuccess = false;
@@ -1856,6 +1897,7 @@ Future<void> showWhatsAppPhotoPreviewDialog(
                                   final newFile = await onPickAndSavePhoto();
                                   if (newFile != null) {
                                     await FileImage(newFile).evict();
+                                    if (!dialogCtx.mounted) return;
                                     setDialogState(() {
                                       photoFile = newFile;
                                       isProcessing = false;
@@ -1864,11 +1906,13 @@ Future<void> showWhatsAppPhotoPreviewDialog(
                                           'Foto berhasil disimpan & didokumentasikan!';
                                     });
                                   } else {
+                                    if (!dialogCtx.mounted) return;
                                     setDialogState(() {
                                       isProcessing = false;
                                     });
                                   }
                                 } catch (e) {
+                                  if (!dialogCtx.mounted) return;
                                   setDialogState(() {
                                     isProcessing = false;
                                     isSuccess = false;

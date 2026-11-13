@@ -28,8 +28,9 @@ class DownloadHelper {
         .last
         .replaceAll('..', '')
         .trim();
-    final effectiveFileName =
-        cleanFileName.isEmpty ? 'download.bin' : cleanFileName;
+    final effectiveFileName = cleanFileName.isEmpty
+        ? 'download.bin'
+        : cleanFileName;
 
     if (useSaveAs) {
       final mime = mimeTypeFor(effectiveFileName);

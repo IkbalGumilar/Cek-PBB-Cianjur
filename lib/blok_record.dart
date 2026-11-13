@@ -77,8 +77,9 @@ class BlokRecord {
   int get jumlahPbbValue => parseNominalRupiah(jumlahPbb);
 
   /// Format tampilan nominal PBB dengan awalan Rupiah (mis. "Rp. 51.425").
-  String get formattedJumlahPbb =>
-      jumlahPbbValue > 0 ? formatRupiah(jumlahPbbValue) : (jumlahPbb.isNotEmpty ? jumlahPbb : '-');
+  String get formattedJumlahPbb => jumlahPbbValue > 0
+      ? formatRupiah(jumlahPbbValue)
+      : (jumlahPbb.isNotEmpty ? jumlahPbb : '-');
 
   /// NOP+tahun mengidentifikasi satu baris pembayaran secara unik (satu NOP
   /// bisa punya beberapa baris untuk tahun yang berbeda-beda).
@@ -209,4 +210,3 @@ String formatCatatanSudahBayar(String tglBayar, [String? tahunBayar]) {
   }
   return 'Sudah bayar $t';
 }
-

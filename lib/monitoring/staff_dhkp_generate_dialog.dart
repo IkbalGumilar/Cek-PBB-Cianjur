@@ -32,10 +32,10 @@ class _DusunFormEntry {
     String lat = '',
     String lng = '',
     String bloks = '',
-  })  : nameController = TextEditingController(text: name),
-        latController = TextEditingController(text: lat),
-        lngController = TextEditingController(text: lng),
-        bloksController = TextEditingController(text: bloks);
+  }) : nameController = TextEditingController(text: name),
+       latController = TextEditingController(text: lat),
+       lngController = TextEditingController(text: lng),
+       bloksController = TextEditingController(text: bloks);
 
   void dispose() {
     nameController.dispose();
@@ -76,7 +76,9 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
   void initState() {
     super.initState();
     _tahunAwalController = TextEditingController(text: '2015');
-    _tahunAkhirController = TextEditingController(text: '${DateTime.now().year}');
+    _tahunAkhirController = TextEditingController(
+      text: '${DateTime.now().year}',
+    );
 
     final kecName = widget.client.activeKecamatanName.isNotEmpty
         ? widget.client.activeKecamatanName
@@ -108,7 +110,9 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
           name: d.name,
           lat: d.focusLat?.toString() ?? '',
           lng: d.focusLng?.toString() ?? '',
-          bloks: d.bloks.map((b) => int.tryParse(b)?.toString() ?? b).join(', '),
+          bloks: d.bloks
+              .map((b) => int.tryParse(b)?.toString() ?? b)
+              .join(', '),
         ),
       );
     }
@@ -135,9 +139,7 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
   void _addDusun() {
     setState(() {
       final nextNum = _dusunEntries.length + 1;
-      _dusunEntries.add(
-        _DusunFormEntry(name: 'Dusun $nextNum', bloks: ''),
-      );
+      _dusunEntries.add(_DusunFormEntry(name: 'Dusun $nextNum', bloks: ''));
     });
   }
 
@@ -197,7 +199,8 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
       }
 
       // 2. Ekstrak Koordinat Kantor Desa
-      final kantor = (manifest['geospasial'] as Map?)?['kantor_desa'] as Map? ??
+      final kantor =
+          (manifest['geospasial'] as Map?)?['kantor_desa'] as Map? ??
           (desa?['kantor_desa'] as Map?);
       if (kantor != null) {
         final lat = kantor['lat']?.toString();
@@ -218,32 +221,34 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
           if (item is Map) {
             final name = item['name']?.toString() ?? 'Dusun ${item['number']}';
             final titikFokus = item['titik_fokus'] as Map?;
-            final lat = titikFokus?['lat']?.toString() ??
+            final lat =
+                titikFokus?['lat']?.toString() ??
                 item['focusLat']?.toString() ??
                 '';
-            final lng = titikFokus?['lng']?.toString() ??
+            final lng =
+                titikFokus?['lng']?.toString() ??
                 item['focusLng']?.toString() ??
                 '';
             final bloksList = item['bloks'] as List?;
             final bloksStr = bloksList != null
                 ? bloksList
-                    .map((b) => int.tryParse(b.toString())?.toString() ?? b.toString())
-                    .join(', ')
+                      .map(
+                        (b) =>
+                            int.tryParse(b.toString())?.toString() ??
+                            b.toString(),
+                      )
+                      .join(', ')
                 : '';
 
             _dusunEntries.add(
-              _DusunFormEntry(
-                name: name,
-                lat: lat,
-                lng: lng,
-                bloks: bloksStr,
-              ),
+              _DusunFormEntry(name: name, lat: lat, lng: lng, bloks: bloksStr),
             );
           }
         }
       }
 
-      final tahunManifest = manifest['tahun']?.toString() ??
+      final tahunManifest =
+          manifest['tahun']?.toString() ??
           manifest['tahun_pajak']?.toString() ??
           manifest['tahunPajak']?.toString();
       if (tahunManifest != null && tahunManifest.isNotEmpty) {
@@ -280,17 +285,20 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
       final lat = double.tryParse(entry.latController.text.trim());
       final lng = double.tryParse(entry.lngController.text.trim());
 
-      final bloksTokens = entry.bloksController.text
-          .split(RegExp(r'[,;]'))
-          .map((s) => s.trim())
-          .where((s) => s.isNotEmpty)
-          .map((s) {
-            final num = int.tryParse(s);
-            return num != null ? num.toString().padLeft(3, '0') : s.padLeft(3, '0');
-          })
-          .toSet()
-          .toList()
-        ..sort();
+      final bloksTokens =
+          entry.bloksController.text
+              .split(RegExp(r'[,;]'))
+              .map((s) => s.trim())
+              .where((s) => s.isNotEmpty)
+              .map((s) {
+                final num = int.tryParse(s);
+                return num != null
+                    ? num.toString().padLeft(3, '0')
+                    : s.padLeft(3, '0');
+              })
+              .toSet()
+              .toList()
+            ..sort();
 
       list.add(
         Dusun(
@@ -347,7 +355,9 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
             child: const Text('Batal'),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.orange.shade800),
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.orange.shade800,
+            ),
             onPressed: () => Navigator.pop(c, true),
             child: const Text('Ya, Mulai Timpa DHKP'),
           ),
@@ -399,7 +409,11 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
       await showDialog(
         context: context,
         builder: (c) => AlertDialog(
-          icon: const Icon(Icons.check_circle_rounded, color: Colors.green, size: 48),
+          icon: const Icon(
+            Icons.check_circle_rounded,
+            color: Colors.green,
+            size: 48,
+          ),
           title: const Text('DHKP Berhasil Digenerate!'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -411,7 +425,9 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
               Text('• Total SPPT Terbit: ${outcome.totalRecords} objek pajak'),
               Text('• Sudah Bayar: ${outcome.sudahBayarCount} NOP'),
               Text('• Belum Bayar: ${outcome.belumBayarCount} NOP'),
-              Text('• Target Pemda (>= 2 Juta): ${outcome.targetPemdaCount} NOP'),
+              Text(
+                '• Target Pemda (>= 2 Juta): ${outcome.targetPemdaCount} NOP',
+              ),
               Text('• Terdeteksi: ${outcome.totalBloks} Blok aktif'),
               const SizedBox(height: 12),
               const Text(
@@ -436,9 +452,15 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
       await showDialog(
         context: context,
         builder: (c) => AlertDialog(
-          icon: const Icon(Icons.error_outline_rounded, color: Colors.red, size: 48),
+          icon: const Icon(
+            Icons.error_outline_rounded,
+            color: Colors.red,
+            size: 48,
+          ),
           title: const Text('Gagal Generate DHKP'),
-          content: Text(outcome.errorMessage ?? 'Terjadi kesalahan tidak dikenal.'),
+          content: Text(
+            outcome.errorMessage ?? 'Terjadi kesalahan tidak dikenal.',
+          ),
           actions: [
             FilledButton(
               onPressed: () => Navigator.pop(c),
@@ -458,7 +480,8 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
     if (_isProcessing) {
       final p = _progress;
       final ratio = p?.ratio ?? 0.0;
-      final status = p?.currentStatus ?? 'Menghubungkan ke Portal Staf Bapenda...';
+      final status =
+          p?.currentStatus ?? 'Menghubungkan ke Portal Staf Bapenda...';
 
       return AlertDialog(
         title: const Row(
@@ -518,7 +541,9 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: theme.colorScheme.primary.withValues(alpha: 0.08),
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(16),
+                ),
               ),
               child: Row(
                 children: [
@@ -550,7 +575,9 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
                           'Unduh seluruh SPPT dari Portal Staf & susun master DHKP baru.',
                           style: TextStyle(
                             fontSize: 12,
-                            color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                            color: isDark
+                                ? Colors.grey.shade400
+                                : Colors.grey.shade600,
                           ),
                         ),
                       ],
@@ -611,12 +638,22 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
                                           hintText: '2015',
                                         ),
                                         validator: (v) =>
-                                            v == null || v.trim().isEmpty ? 'Wajib' : null,
+                                            v == null || v.trim().isEmpty
+                                            ? 'Wajib'
+                                            : null,
                                       ),
                                     ),
                                     const Padding(
-                                      padding: EdgeInsets.symmetric(horizontal: 6),
-                                      child: Text('s/d', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: 6,
+                                      ),
+                                      child: Text(
+                                        's/d',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 12,
+                                        ),
+                                      ),
                                     ),
                                     Expanded(
                                       child: TextFormField(
@@ -629,7 +666,9 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
                                           hintText: '2026',
                                         ),
                                         validator: (v) =>
-                                            v == null || v.trim().isEmpty ? 'Wajib' : null,
+                                            v == null || v.trim().isEmpty
+                                            ? 'Wajib'
+                                            : null,
                                       ),
                                     ),
                                   ],
@@ -642,27 +681,38 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
                                     InkWell(
                                       onTap: () {
                                         setState(() {
-                                          _tahunAwalController.text = '${DateTime.now().year}';
-                                          _tahunAkhirController.text = '${DateTime.now().year}';
+                                          _tahunAwalController.text =
+                                              '${DateTime.now().year}';
+                                          _tahunAkhirController.text =
+                                              '${DateTime.now().year}';
                                         });
                                       },
                                       child: Chip(
-                                        label: Text('Tahun Ini (${DateTime.now().year})', style: const TextStyle(fontSize: 10)),
+                                        label: Text(
+                                          'Tahun Ini (${DateTime.now().year})',
+                                          style: const TextStyle(fontSize: 10),
+                                        ),
                                         padding: EdgeInsets.zero,
-                                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                        materialTapTargetSize:
+                                            MaterialTapTargetSize.shrinkWrap,
                                       ),
                                     ),
                                     InkWell(
                                       onTap: () {
                                         setState(() {
                                           _tahunAwalController.text = '2015';
-                                          _tahunAkhirController.text = '${DateTime.now().year}';
+                                          _tahunAkhirController.text =
+                                              '${DateTime.now().year}';
                                         });
                                       },
                                       child: Chip(
-                                        label: Text('2015 - ${DateTime.now().year}', style: const TextStyle(fontSize: 10)),
+                                        label: Text(
+                                          '2015 - ${DateTime.now().year}',
+                                          style: const TextStyle(fontSize: 10),
+                                        ),
                                         padding: EdgeInsets.zero,
-                                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                        materialTapTargetSize:
+                                            MaterialTapTargetSize.shrinkWrap,
                                       ),
                                     ),
                                   ],
@@ -680,8 +730,9 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
                                 border: OutlineInputBorder(),
                                 isDense: true,
                               ),
-                              validator: (v) =>
-                                  v == null || v.trim().isEmpty ? 'Wajib diisi' : null,
+                              validator: (v) => v == null || v.trim().isEmpty
+                                  ? 'Wajib diisi'
+                                  : null,
                             ),
                           ),
                         ],
@@ -696,8 +747,9 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
                           border: OutlineInputBorder(),
                           isDense: true,
                         ),
-                        validator: (v) =>
-                            v == null || v.trim().isEmpty ? 'Wajib diisi' : null,
+                        validator: (v) => v == null || v.trim().isEmpty
+                            ? 'Wajib diisi'
+                            : null,
                       ),
                       const SizedBox(height: 12),
 
@@ -752,7 +804,9 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
                         'Tuliskan nama dusun, koordinat fokus, dan daftar bloknya (pisahkan dengan koma).',
                         style: TextStyle(
                           fontSize: 12,
-                          color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                          color: isDark
+                              ? Colors.grey.shade400
+                              : Colors.grey.shade600,
                         ),
                       ),
                       const SizedBox(height: 10),
@@ -767,7 +821,9 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
                           elevation: 0,
                           shape: RoundedRectangleBorder(
                             side: BorderSide(
-                              color: isDark ? Colors.grey.shade800 : Colors.grey.shade300,
+                              color: isDark
+                                  ? Colors.grey.shade800
+                                  : Colors.grey.shade300,
                             ),
                             borderRadius: BorderRadius.circular(10),
                           ),
@@ -789,7 +845,11 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
                                     ),
                                     if (_dusunEntries.length > 1)
                                       IconButton(
-                                        icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
+                                        icon: const Icon(
+                                          Icons.delete_outline,
+                                          color: Colors.red,
+                                          size: 20,
+                                        ),
                                         padding: EdgeInsets.zero,
                                         constraints: const BoxConstraints(),
                                         tooltip: 'Hapus Dusun',
@@ -852,33 +912,47 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
 
                       // OPSI FILTER CAKUPAN BLOK BERDASARKAN DUSUN
                       Material(
-                        color: isDark ? Colors.grey.shade900 : Colors.grey.shade100,
+                        color: isDark
+                            ? Colors.grey.shade900
+                            : Colors.grey.shade100,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8),
                           side: BorderSide(
-                            color: isDark ? Colors.grey.shade800 : Colors.grey.shade300,
+                            color: isDark
+                                ? Colors.grey.shade800
+                                : Colors.grey.shade300,
                           ),
                         ),
                         child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
                           child: CheckboxListTile(
                             contentPadding: EdgeInsets.zero,
                             dense: true,
                             title: const Text(
                               'Hanya ambil blok yang terdaftar pada form dusun di atas',
-                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                              ),
                             ),
                             subtitle: Text(
                               'Jika dicentang dan Anda hanya mengisi Dusun 1, maka hanya data blok Dusun 1 yang disimpan. '
                               'Bila tidak dicentang, seluruh blok se-desa akan diambil.',
                               style: TextStyle(
                                 fontSize: 11,
-                                color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                                color: isDark
+                                    ? Colors.grey.shade400
+                                    : Colors.grey.shade600,
                               ),
                             ),
                             value: _filterByDusunBlocks,
                             onChanged: (val) {
-                              if (val != null) setState(() => _filterByDusunBlocks = val);
+                              if (val != null) {
+                                setState(() => _filterByDusunBlocks = val);
+                              }
                             },
                           ),
                         ),
@@ -891,11 +965,17 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
                         decoration: BoxDecoration(
                           color: Colors.amber.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.amber.shade700.withValues(alpha: 0.4)),
+                          border: Border.all(
+                            color: Colors.amber.shade700.withValues(alpha: 0.4),
+                          ),
                         ),
                         child: Row(
                           children: [
-                            Icon(Icons.stars_rounded, color: Colors.amber.shade800, size: 20),
+                            Icon(
+                              Icons.stars_rounded,
+                              color: Colors.amber.shade800,
+                              size: 20,
+                            ),
                             const SizedBox(width: 8),
                             const Expanded(
                               child: Text(
@@ -914,17 +994,26 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
                         decoration: BoxDecoration(
                           color: Colors.red.withValues(alpha: 0.08),
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
+                          border: Border.all(
+                            color: Colors.red.withValues(alpha: 0.3),
+                          ),
                         ),
                         child: const Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Icon(Icons.warning_amber_rounded, color: Colors.red, size: 20),
+                            Icon(
+                              Icons.warning_amber_rounded,
+                              color: Colors.red,
+                              size: 20,
+                            ),
                             SizedBox(width: 8),
                             Expanded(
                               child: Text(
                                 'Mode Timpa: Database DHKP aktif akan digantikan dengan data baru hasil unduh dari Portal Staf. Salinan cadangan (backup) otomatis dibuat.',
-                                style: TextStyle(fontSize: 12, color: Colors.red),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.red,
+                                ),
                               ),
                             ),
                           ],
@@ -940,7 +1029,11 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
-                border: Border(top: BorderSide(color: isDark ? Colors.grey.shade800 : Colors.grey.shade200)),
+                border: Border(
+                  top: BorderSide(
+                    color: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
+                  ),
+                ),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.end,

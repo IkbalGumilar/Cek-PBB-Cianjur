@@ -121,164 +121,203 @@ void main() {
       await DusunData.instance.clearKantorDesaLocation();
     });
 
-    testWidgets('renders Map HUD, controls, and selects dot when coordinates provided', (tester) async {
-      tester.view.physicalSize = const Size(1000, 1400);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(() => tester.view.resetPhysicalSize());
+    testWidgets(
+      'renders Map HUD, controls, and selects dot when coordinates provided',
+      (tester) async {
+        tester.view.physicalSize = const Size(1000, 1400);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(() => tester.view.resetPhysicalSize());
 
-      const sampleRecords = [
-        BlokRecord(
-          nop: '320520000400100010',
-          namaWajibPajak: 'RAHMAT SUBUR',
-          tahunBayar: '2026',
-          tanggalBayar: '2026-03-10 00:00:00',
-          jumlahPbb: 'Rp 50.000',
-          statusBayar: 'Sudah Bayar',
-          alamatObjek: 'KP SERANG RT 01',
-          alamatWp: 'KP SERANG RT 01',
-        ),
-      ];
-
-      final sample = KmlParser.generateSampleBobojongMap(sampleRecords);
-      const testDots = <MapTaxDot>[
-        MapTaxDot(
-          id: '1',
-          nop: '320520000400100010',
-          namaWajibPajak: 'RAHMAT SUBUR',
-          blok: '001',
-          nomorUrut: '0001',
-          dusunNumber: 1,
-          status: MapDotStatus.lunas,
-          coordinate: MapCoordinate(-6.753, 107.260),
-        ),
-      ];
-
-      // Set kantor desa agar tombol fokus muncul
-      await DusunData.instance.setKantorDesaLocation(-6.7535, 107.2601);
-
-      await tester.pumpWidget(
-        MaterialApp(
-          home: DhkpMapScreen(
-            initialRecords: sampleRecords,
-            initialDusun: 1,
-            initialBlok: '001',
-            initialDots: testDots,
-            initialZones: sample.dusunZones,
+        const sampleRecords = [
+          BlokRecord(
+            nop: '320520000400100010',
+            namaWajibPajak: 'RAHMAT SUBUR',
+            tahunBayar: '2026',
+            tanggalBayar: '2026-03-10 00:00:00',
+            jumlahPbb: 'Rp 50.000',
+            statusBayar: 'Sudah Bayar',
+            alamatObjek: 'KP SERANG RT 01',
+            alamatWp: 'KP SERANG RT 01',
           ),
-        ),
-      );
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 100));
+        ];
 
-      // Verify Title & Subtitle
-      expect(find.textContaining('Peta Objek Pajak: Dusun 1'), findsOneWidget);
-
-      // Verify Dusun & Blok Chips
-      expect(find.textContaining('Dusun 1'), findsWidgets);
-      expect(find.textContaining('Dusun 2'), findsWidgets);
-      expect(find.text('Semua Blok'), findsOneWidget);
-
-      // Verify HUD Status Bar
-      expect(find.textContaining('TOTAL:'), findsOneWidget);
-
-      // Tap Dusun 2 chip
-      await tester.tap(find.textContaining('Dusun 2').last);
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 100));
-      expect(find.textContaining('Peta Objek Pajak: Dusun 2'), findsOneWidget);
-
-      // Verify Layer Switch Button
-      expect(find.byKey(const ValueKey('btn_switch_layer_map')), findsOneWidget);
-
-      // Verify Fit Boundary Button
-      expect(find.byKey(const ValueKey('btn_fit_desa_boundary')), findsOneWidget);
-      await tester.tap(find.byKey(const ValueKey('btn_fit_desa_boundary')));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 100));
-
-      // Verify Fokuskan ke Kantor Desa Button
-      expect(find.byKey(const ValueKey('btn_fokus_kantor_desa')), findsOneWidget);
-      expect(find.byIcon(Icons.account_balance_rounded), findsWidgets);
-      await tester.tap(find.byKey(const ValueKey('btn_fokus_kantor_desa')));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 100));
-
-      // Verify Experimental Badge
-      expect(find.text('EKSPERIMENTAL'), findsOneWidget);
-
-      // Open Layer Switch Menu
-      await tester.tap(find.byKey(const ValueKey('btn_switch_layer_map')));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 250));
-
-      expect(find.textContaining('Peta Rupabumi Indonesia (BIG)'), findsOneWidget);
-      expect(find.textContaining('Batas Desa'), findsOneWidget);
-      expect(find.textContaining('Layer Putih Wilayah Sekitar'), findsOneWidget);
-      expect(find.textContaining('Bangunan & Rumah Warga (OSM)'), findsOneWidget);
-
-      // Tap Bangunan OSM option - sheet must NOT close automatically
-      await tester.tap(find.textContaining('Bangunan & Rumah Warga (OSM)'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 100));
-
-      // Verify sheet is still open ("biarkan user yg tutup")
-      expect(find.text('Tutup Panel Layer'), findsOneWidget);
-
-      // Tap RBI BIG option
-      await tester.tap(find.textContaining('Peta Rupabumi Indonesia (BIG)'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 100));
-
-      // User manually closes sheet
-      await tester.tap(find.text('Tutup Panel Layer'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 250));
-
-      // Verify sheet is closed
-      expect(find.text('Tutup Panel Layer'), findsNothing);
-    });
-
-    testWidgets('renders clean empty map without dusun 1 or focus buttons when data is empty',
-        (tester) async {
-      tester.view.physicalSize = const Size(1000, 1400);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(() => tester.view.resetPhysicalSize());
-
-      await tester.pumpWidget(
-        const MaterialApp(
-          home: DhkpMapScreen(
-            initialRecords: [],
-            initialDusun: 1,
+        final sample = KmlParser.generateSampleBobojongMap(sampleRecords);
+        const testDots = <MapTaxDot>[
+          MapTaxDot(
+            id: '1',
+            nop: '320520000400100010',
+            namaWajibPajak: 'RAHMAT SUBUR',
+            blok: '001',
+            nomorUrut: '0001',
+            dusunNumber: 1,
+            status: MapDotStatus.lunas,
+            coordinate: MapCoordinate(-6.753, 107.260),
           ),
-        ),
-      );
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 100));
+        ];
 
-      // Title must be 'Peta Wilayah' and NOT 'Dusun 1'
-      expect(find.text('Peta Wilayah'), findsOneWidget);
-      expect(find.textContaining('Dusun 1'), findsNothing);
-      expect(find.textContaining('Dusun 2'), findsNothing);
+        // Set kantor desa agar tombol fokus muncul
+        await DusunData.instance.setKantorDesaLocation(-6.7535, 107.2601);
 
-      // Subtitle indicates no DHKP loaded
-      expect(
-        find.textContaining('Peta Dasar Satelit (Belum ada berkas DHKP dimuat)'),
-        findsOneWidget,
-      );
+        await tester.pumpWidget(
+          MaterialApp(
+            home: DhkpMapScreen(
+              initialRecords: sampleRecords,
+              initialDusun: 1,
+              initialBlok: '001',
+              initialDots: testDots,
+              initialZones: sample.dusunZones,
+            ),
+          ),
+        );
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 100));
 
-      // Focus buttons must NOT be rendered when data is empty
-      expect(find.byKey(const ValueKey('btn_fit_desa_boundary')), findsNothing);
-      expect(find.byKey(const ValueKey('btn_fokus_kantor_desa')), findsNothing);
+        // Verify Title & Subtitle
+        expect(
+          find.textContaining('Peta Objek Pajak: Dusun 1'),
+          findsOneWidget,
+        );
 
-      // Only zoom controls should exist
-      expect(find.byKey(const ValueKey('btn_zoom_in')), findsNothing); // heroTag only
-      expect(find.byIcon(Icons.add_rounded), findsOneWidget);
-      expect(find.byIcon(Icons.remove_rounded), findsOneWidget);
+        // Verify Dusun & Blok Chips
+        expect(find.textContaining('Dusun 1'), findsWidgets);
+        expect(find.textContaining('Dusun 2'), findsWidgets);
+        expect(find.text('Semua Blok'), findsOneWidget);
 
-      // Bottom bar shows empty prompt with Unggah KML button
-      expect(find.textContaining('Peta Belum Memuat Koordinat'), findsOneWidget);
-      expect(find.text('Unggah KML'), findsOneWidget);
-    });
+        // Verify HUD Status Bar
+        expect(find.textContaining('TOTAL:'), findsOneWidget);
+
+        // Tap Dusun 2 chip
+        await tester.tap(find.textContaining('Dusun 2').last);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 100));
+        expect(
+          find.textContaining('Peta Objek Pajak: Dusun 2'),
+          findsOneWidget,
+        );
+
+        // Verify Layer Switch Button
+        expect(
+          find.byKey(const ValueKey('btn_switch_layer_map')),
+          findsOneWidget,
+        );
+
+        // Verify Fit Boundary Button
+        expect(
+          find.byKey(const ValueKey('btn_fit_desa_boundary')),
+          findsOneWidget,
+        );
+        await tester.tap(find.byKey(const ValueKey('btn_fit_desa_boundary')));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 100));
+
+        // Verify Fokuskan ke Kantor Desa Button
+        expect(
+          find.byKey(const ValueKey('btn_fokus_kantor_desa')),
+          findsOneWidget,
+        );
+        expect(find.byIcon(Icons.account_balance_rounded), findsWidgets);
+        await tester.tap(find.byKey(const ValueKey('btn_fokus_kantor_desa')));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 100));
+
+        // Verify Experimental Badge
+        expect(find.text('EKSPERIMENTAL'), findsOneWidget);
+
+        // Open Layer Switch Menu
+        await tester.tap(find.byKey(const ValueKey('btn_switch_layer_map')));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 250));
+
+        expect(
+          find.textContaining('Peta Rupabumi Indonesia (BIG)'),
+          findsOneWidget,
+        );
+        expect(find.textContaining('Batas Desa'), findsOneWidget);
+        expect(
+          find.textContaining('Layer Putih Wilayah Sekitar'),
+          findsOneWidget,
+        );
+        expect(
+          find.textContaining('Bangunan & Rumah Warga (OSM)'),
+          findsOneWidget,
+        );
+
+        // Tap Bangunan OSM option - sheet must NOT close automatically
+        await tester.tap(find.textContaining('Bangunan & Rumah Warga (OSM)'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 100));
+
+        // Verify sheet is still open ("biarkan user yg tutup")
+        expect(find.text('Tutup Panel Layer'), findsOneWidget);
+
+        // Tap RBI BIG option
+        await tester.tap(find.textContaining('Peta Rupabumi Indonesia (BIG)'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 100));
+
+        // User manually closes sheet
+        await tester.tap(find.text('Tutup Panel Layer'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 250));
+
+        // Verify sheet is closed
+        expect(find.text('Tutup Panel Layer'), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'renders clean empty map without dusun 1 or focus buttons when data is empty',
+      (tester) async {
+        tester.view.physicalSize = const Size(1000, 1400);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(() => tester.view.resetPhysicalSize());
+
+        await tester.pumpWidget(
+          const MaterialApp(
+            home: DhkpMapScreen(initialRecords: [], initialDusun: 1),
+          ),
+        );
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 100));
+
+        // Title must be 'Peta Wilayah' and NOT 'Dusun 1'
+        expect(find.text('Peta Wilayah'), findsOneWidget);
+        expect(find.textContaining('Dusun 1'), findsNothing);
+        expect(find.textContaining('Dusun 2'), findsNothing);
+
+        // Subtitle indicates no DHKP loaded
+        expect(
+          find.textContaining(
+            'Peta Dasar Satelit (Belum ada berkas DHKP dimuat)',
+          ),
+          findsOneWidget,
+        );
+
+        // Focus buttons must NOT be rendered when data is empty
+        expect(
+          find.byKey(const ValueKey('btn_fit_desa_boundary')),
+          findsNothing,
+        );
+        expect(
+          find.byKey(const ValueKey('btn_fokus_kantor_desa')),
+          findsNothing,
+        );
+
+        // Only zoom controls should exist
+        expect(
+          find.byKey(const ValueKey('btn_zoom_in')),
+          findsNothing,
+        ); // heroTag only
+        expect(find.byIcon(Icons.add_rounded), findsOneWidget);
+        expect(find.byIcon(Icons.remove_rounded), findsOneWidget);
+
+        // Bottom bar shows empty prompt with Unggah KML button
+        expect(
+          find.textContaining('Peta Belum Memuat Koordinat'),
+          findsOneWidget,
+        );
+        expect(find.text('Unggah KML'), findsOneWidget);
+      },
+    );
   });
 }
-

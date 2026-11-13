@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../currency_format.dart';
 import '../feature_tour/feature_tour.dart';
+import '../ui/app_design_system.dart';
 import 'kendaraan_client.dart';
 import 'plat_scanner.dart';
 
@@ -363,152 +364,184 @@ class KendaraanViewState extends State<KendaraanView> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return SingleChildScrollView(
       controller: _scrollController,
-      padding: const EdgeInsets.fromLTRB(20, 24, 20, 36),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 40),
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 1040),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(
-                'Info Kendaraan Bermotor',
-                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Masukkan nomor polisi kendaraan Jawa Barat yang ingin dicari.',
-                style: Theme.of(context).textTheme.bodyLarge,
-              ),
-              const SizedBox(height: 20),
-              _PlateForm(
-                key: _plateFormKey,
-                frontController: _frontController,
-                numberController: _numberController,
-                backController: _backController,
-                numberFocus: _numberFocus,
-                backFocus: _backFocus,
-                onSubmit: _submit,
-                onChanged: _clearPlateOcrWarning,
-              ),
-              const SizedBox(height: 8),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: OutlinedButton.icon(
-                  key: _scanPlateButtonKey,
-                  onPressed: _scanningPlate ? null : _scanAndFillPlate,
-                  icon: _scanningPlate
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.document_scanner_outlined),
-                  label: Text(
-                    _scanningPlate
-                        ? 'Membaca plat...'
-                        : 'Foto / Scan Plat Nomor',
+              Card(
+                elevation: 0,
+                color: scheme.surfaceContainerLow,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  side: BorderSide(
+                    color: scheme.outlineVariant.withValues(alpha: 0.5),
                   ),
                 ),
-              ),
-              if (_plateOcrWarning case final warning?) ...[
-                const SizedBox(height: 8),
-                Card(
-                  color: Colors.amber.shade100,
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Icon(
-                          Icons.warning_amber_rounded,
-                          color: Colors.black87,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            warning,
-                            style: const TextStyle(color: Colors.black87),
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: scheme.primaryContainer,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Icon(
+                              Icons.directions_car_filled_outlined,
+                              color: scheme.onPrimaryContainer,
+                              size: 22,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Info Kendaraan Bermotor',
+                                  style: Theme.of(context).textTheme.titleMedium
+                                      ?.copyWith(fontWeight: FontWeight.bold),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Masukkan nomor polisi kendaraan Jawa Barat yang ingin dicari.',
+                                  style: Theme.of(context).textTheme.bodySmall
+                                      ?.copyWith(
+                                        color: scheme.onSurfaceVariant,
+                                      ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+                      _PlateForm(
+                        key: _plateFormKey,
+                        frontController: _frontController,
+                        numberController: _numberController,
+                        backController: _backController,
+                        numberFocus: _numberFocus,
+                        backFocus: _backFocus,
+                        onSubmit: _submit,
+                        onChanged: _clearPlateOcrWarning,
+                      ),
+                      const SizedBox(height: 10),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: OutlinedButton.icon(
+                          key: _scanPlateButtonKey,
+                          onPressed: _scanningPlate ? null : _scanAndFillPlate,
+                          icon: _scanningPlate
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.document_scanner_outlined),
+                          label: Text(
+                            _scanningPlate
+                                ? 'Membaca plat...'
+                                : 'Foto / Scan Plat Nomor',
                           ),
                         ),
+                      ),
+                      if (_plateOcrWarning case final warning?) ...[
+                        const SizedBox(height: 10),
+                        AppAlertBanner(
+                          message: warning,
+                          tone: AppBadgeTone.warning,
+                        ),
                       ],
-                    ),
-                  ),
-                ),
-              ],
-              const SizedBox(height: 16),
-              Text(
-                'Pilih Warna Plat Nomor',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              Wrap(
-                key: _colorChipsKey,
-                spacing: 8,
-                children: [
-                  _colorChip('1', 'Hitam / Putih'),
-                  _colorChip('2', 'Merah'),
-                  _colorChip('3', 'Kuning'),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Card(
-                color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                child: const Padding(
-                  padding: EdgeInsets.all(12),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(Icons.info_outline, size: 20),
-                      SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Data diambil dari layanan PKB resmi Jawa Barat. Jika layanan sedang sibuk, coba lagi beberapa saat kemudian.',
+                      const SizedBox(height: 16),
+                      Text(
+                        'Pilih Warna Plat Nomor',
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        key: _colorChipsKey,
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          _colorChip('1', 'Hitam / Putih'),
+                          _colorChip('2', 'Merah'),
+                          _colorChip('3', 'Kuning'),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      const AppAlertBanner(
+                        message:
+                            'Data diambil dari layanan PKB resmi Jawa Barat. Jika layanan sedang sibuk, coba lagi beberapa saat kemudian.',
+                        tone: AppBadgeTone.info,
+                      ),
+                      if (_errorText != null) ...[
+                        const SizedBox(height: 12),
+                        _ErrorCard(text: _errorText!),
+                        if (_errorKind == KendaraanErrorKind.network) ...[
+                          const SizedBox(height: 8),
+                          _OfficialFallbackActions(
+                            onWhatsApp: _openWhatsApp,
+                            onOfficialPage: _openOfficialPage,
+                          ),
+                        ],
+                      ],
+                      const SizedBox(height: 16),
+                      FilledButton.icon(
+                        key: _submitButtonKey,
+                        onPressed: _loading ? null : _submit,
+                        icon: _loading
+                            ? SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: scheme.onPrimary,
+                                ),
+                              )
+                            : const Icon(Icons.search),
+                        label: Text(
+                          _loading ? 'Mengambil data...' : 'Lihat Info',
+                        ),
+                        style: FilledButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Center(
+                        child: TextButton.icon(
+                          key: _officialLinkKey,
+                          onPressed: _openOfficialPage,
+                          icon: const Icon(Icons.open_in_new, size: 18),
+                          label: const Text('Buka layanan resmi Jabar'),
                         ),
                       ),
                     ],
                   ),
                 ),
               ),
-              if (_errorText != null) ...[
-                const SizedBox(height: 12),
-                _ErrorCard(text: _errorText!),
-                if (_errorKind == KendaraanErrorKind.network) ...[
-                  const SizedBox(height: 8),
-                  _OfficialFallbackActions(
-                    onWhatsApp: _openWhatsApp,
-                    onOfficialPage: _openOfficialPage,
-                  ),
-                ],
-              ],
-              const SizedBox(height: 16),
-              FilledButton.icon(
-                key: _submitButtonKey,
-                onPressed: _loading ? null : _submit,
-                icon: _loading
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.search),
-                label: Text(_loading ? 'Mengambil data...' : 'Lihat Info'),
-              ),
-              const SizedBox(height: 10),
-              TextButton.icon(
-                key: _officialLinkKey,
-                onPressed: _openOfficialPage,
-                icon: const Icon(Icons.open_in_new, size: 18),
-                label: const Text('Buka layanan resmi Jabar'),
-              ),
               if (_result case final result?) ...[
                 const SizedBox(height: 20),
-                _KendaraanResult(result: result, titleKey: _resultTitleKey),
+                AppAnimatedReveal(
+                  child: _KendaraanResult(
+                    result: result,
+                    titleKey: _resultTitleKey,
+                  ),
+                ),
               ],
             ],
           ),
@@ -692,25 +725,7 @@ class _ErrorCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Card(
-      color: scheme.errorContainer,
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          children: [
-            Icon(Icons.error_outline, color: scheme.onErrorContainer),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                text,
-                style: TextStyle(color: scheme.onErrorContainer),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+    return AppAlertBanner(message: text, tone: AppBadgeTone.error);
   }
 }
 
@@ -764,16 +779,7 @@ class _KendaraanResult extends StatelessWidget {
         ),
         if (result.keterangan case final message?) ...[
           const SizedBox(height: 10),
-          Card(
-            color: Colors.amber.shade100,
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Text(
-                message,
-                style: const TextStyle(color: Colors.black87),
-              ),
-            ),
-          ),
+          AppAlertBanner(message: message, tone: AppBadgeTone.warning),
         ],
         const SizedBox(height: 12),
         LayoutBuilder(

@@ -205,7 +205,9 @@ class StaffDhkpSyncService {
                   h.contains('TANGGAL') ||
                   h.contains('BAYAR')))) {
         tglIdx = i;
-      } else if (h.contains('JAM') || h.contains('WAKTU') || h.contains('PUKUL')) {
+      } else if (h.contains('JAM') ||
+          h.contains('WAKTU') ||
+          h.contains('PUKUL')) {
         jamIdx = i;
       } else if (h == 'THN' ||
           h == 'TAHUN' ||
@@ -244,8 +246,12 @@ class StaffDhkpSyncService {
     final alamatOp = (alamatOpIdx != -1 && alamatOpIdx < cells.length)
         ? cells[alamatOpIdx].trim()
         : '';
-    final rtOp = (rtIdx != -1 && rtIdx < cells.length) ? cells[rtIdx].trim() : '';
-    final rwOp = (rwIdx != -1 && rwIdx < cells.length) ? cells[rwIdx].trim() : '';
+    final rtOp = (rtIdx != -1 && rtIdx < cells.length)
+        ? cells[rtIdx].trim()
+        : '';
+    final rwOp = (rwIdx != -1 && rwIdx < cells.length)
+        ? cells[rwIdx].trim()
+        : '';
     final luasBumi = (luasBumiIdx != -1 && luasBumiIdx < cells.length)
         ? cells[luasBumiIdx].trim()
         : '';
@@ -303,7 +309,9 @@ class StaffDhkpSyncService {
         }
       }
     }
-    if (parsedTahun.isEmpty && defaultTahun != null && defaultTahun.isNotEmpty) {
+    if (parsedTahun.isEmpty &&
+        defaultTahun != null &&
+        defaultTahun.isNotEmpty) {
       parsedTahun = defaultTahun;
     }
 
@@ -364,7 +372,9 @@ class StaffDhkpSyncService {
     if (raw.isEmpty || raw == '0' || raw == '-') return '';
 
     // Jika sudah format YYYY-MM-DD atau YYYY-MM-DD HH:mm(:ss)
-    if (RegExp(r'^\d{4}-\d{2}-\d{2}(?:\s+\d{1,2}:\d{1,2}(?::\d{1,2})?)?$').hasMatch(raw)) {
+    if (RegExp(
+      r'^\d{4}-\d{2}-\d{2}(?:\s+\d{1,2}:\d{1,2}(?::\d{1,2})?)?$',
+    ).hasMatch(raw)) {
       return raw;
     }
 
@@ -409,7 +419,8 @@ class StaffDhkpSyncService {
     final effectiveTglAwal = (tglBayarAwal != null && tglBayarAwal.isNotEmpty)
         ? tglBayarAwal
         : '$tahun-01-01';
-    final effectiveTglAkhir = (tglBayarAkhir != null && tglBayarAkhir.isNotEmpty)
+    final effectiveTglAkhir =
+        (tglBayarAkhir != null && tglBayarAkhir.isNotEmpty)
         ? tglBayarAkhir
         : DateTime.now().toIso8601String().substring(0, 10);
     final effectiveCutoff = (tglCutoff != null && tglCutoff.isNotEmpty)
@@ -569,7 +580,9 @@ class StaffDhkpSyncService {
             if (parsed != null) bbRows.add(parsed);
           }
 
-          notifyProgress('Memuat data Belum Bayar: Hal $page dari $estimatedTotalPagesBb...');
+          notifyProgress(
+            'Memuat data Belum Bayar: Hal $page dari $estimatedTotalPagesBb...',
+          );
 
           if (tableResult.hasNextPage && page < maxPages) {
             page++;
@@ -629,7 +642,9 @@ class StaffDhkpSyncService {
             if (parsed != null) sbRows.add(parsed);
           }
 
-          notifyProgress('Memuat data Sudah Bayar: Hal $page dari $estimatedTotalPagesSb...');
+          notifyProgress(
+            'Memuat data Sudah Bayar: Hal $page dari $estimatedTotalPagesSb...',
+          );
 
           if (tableResult.hasNextPage && page < maxPages) {
             page++;
@@ -673,7 +688,8 @@ class StaffDhkpSyncService {
         );
       }
 
-      final isSessionDead = (bbErrorMessage?.contains('kedaluwarsa') ?? false) ||
+      final isSessionDead =
+          (bbErrorMessage?.contains('kedaluwarsa') ?? false) ||
           (sbErrorMessage?.contains('kedaluwarsa') ?? false);
       if (isSessionDead) {
         return StaffDhkpSyncOutcome(
@@ -684,18 +700,24 @@ class StaffDhkpSyncService {
         );
       }
 
-      if (mode == StaffSyncMode.paidOnly && sbErrorMessage != null && sbRows.isEmpty) {
+      if (mode == StaffSyncMode.paidOnly &&
+          sbErrorMessage != null &&
+          sbRows.isEmpty) {
         return StaffDhkpSyncOutcome(
           blokLabel: blokSummaryLabel,
           tahun: tahun,
           errorMessage: sbErrorMessage,
         );
       } else if (mode == StaffSyncMode.full) {
-        if (bbErrorMessage != null && bbRows.isEmpty && sbErrorMessage != null && sbRows.isEmpty) {
+        if (bbErrorMessage != null &&
+            bbRows.isEmpty &&
+            sbErrorMessage != null &&
+            sbRows.isEmpty) {
           return StaffDhkpSyncOutcome(
             blokLabel: blokSummaryLabel,
             tahun: tahun,
-            errorMessage: 'Belum Bayar: $bbErrorMessage; Sudah Bayar: $sbErrorMessage',
+            errorMessage:
+                'Belum Bayar: $bbErrorMessage; Sudah Bayar: $sbErrorMessage',
           );
         } else if (bbErrorMessage != null && bbRows.isEmpty) {
           return StaffDhkpSyncOutcome(
@@ -720,7 +742,9 @@ class StaffDhkpSyncService {
       // Sesuai aturan: NOP tak dikenal di Belum Bayar diabaikan (hanya dari Sudah Bayar).
       for (final parsed in bbRows) {
         final b = nopBlok(parsed.nop);
-        if (!isAllBloks && targetBlokSet.isNotEmpty && !targetBlokSet.contains(b)) {
+        if (!isAllBloks &&
+            targetBlokSet.isNotEmpty &&
+            !targetBlokSet.contains(b)) {
           continue;
         }
 
@@ -823,7 +847,9 @@ class StaffDhkpSyncService {
         } else {
           final finalPbb = parsedPbbVal > 0
               ? cleanNominalRupiah(parsedPbbVal)
-              : (priorPbb.isNotEmpty ? cleanNominalRupiah(priorPbb) : cleanNominalRupiah(parsed.jumlahPbb));
+              : (priorPbb.isNotEmpty
+                    ? cleanNominalRupiah(priorPbb)
+                    : cleanNominalRupiah(parsed.jumlahPbb));
 
           final newRecord = BlokRecord(
             nop: parsed.nop,
@@ -856,7 +882,9 @@ class StaffDhkpSyncService {
 
       // 3. Simpan seluruh pembaruan sekaligus ke database lokal
       if (recordsToUpsertMap.isNotEmpty) {
-        await BlokDataStore.instance.upsertAll(recordsToUpsertMap.values.toList());
+        await BlokDataStore.instance.upsertAll(
+          recordsToUpsertMap.values.toList(),
+        );
         DhkpWidgetSyncService.syncFromRecords(
           await BlokDataStore.instance.loadAll(),
         );

@@ -32,7 +32,8 @@ class TotpAccount {
   }
 
   @override
-  String toString() => 'TotpAccount(name: $name, issuer: $issuer, digits: $digits)';
+  String toString() =>
+      'TotpAccount(name: $name, issuer: $issuer, digits: $digits)';
 }
 
 /// Helper murni tanpa dependency eksternal untuk:
@@ -128,7 +129,8 @@ class TotpHelper {
     final hash = hmac.convert(counterBytes).bytes;
 
     final offset = hash[hash.length - 1] & 0x0f;
-    final binary = ((hash[offset] & 0x7f) << 24) |
+    final binary =
+        ((hash[offset] & 0x7f) << 24) |
         ((hash[offset + 1] & 0xff) << 16) |
         ((hash[offset + 2] & 0xff) << 8) |
         (hash[offset + 3] & 0xff);
@@ -139,10 +141,7 @@ class TotpHelper {
   }
 
   /// Menghitung sisa detik sebelum kode TOTP kedaluwarsa (1..30).
-  static int getRemainingSeconds({
-    DateTime? time,
-    int intervalSeconds = 30,
-  }) {
+  static int getRemainingSeconds({DateTime? time, int intervalSeconds = 30}) {
     final targetTime = time ?? DateTime.now().toUtc();
     final epochSeconds = targetTime.millisecondsSinceEpoch ~/ 1000;
     final remainder = epochSeconds % intervalSeconds;
@@ -151,11 +150,11 @@ class TotpHelper {
   }
 
   /// Menghitung rasio sisa waktu (0.0 .. 1.0) untuk CircularProgressIndicator.
-  static double getProgressRatio({
-    DateTime? time,
-    int intervalSeconds = 30,
-  }) {
-    final rem = getRemainingSeconds(time: time, intervalSeconds: intervalSeconds);
+  static double getProgressRatio({DateTime? time, int intervalSeconds = 30}) {
+    final rem = getRemainingSeconds(
+      time: time,
+      intervalSeconds: intervalSeconds,
+    );
     return rem / intervalSeconds;
   }
 
@@ -174,16 +173,22 @@ class TotpHelper {
   static List<TotpAccount> parseImportInput(String rawInput) {
     final input = rawInput.trim();
     if (input.isEmpty) {
-      throw const FormatException('Input kunci authenticator tidak boleh kosong');
+      throw const FormatException(
+        'Input kunci authenticator tidak boleh kosong',
+      );
     }
 
     // 1. Ekspor Migrasi Google Authenticator (QR Transfer)
     if (input.startsWith('otpauth-migration://offline')) {
       final uri = Uri.tryParse(input);
-      if (uri == null) throw const FormatException('Format URI migrasi tidak valid');
+      if (uri == null) {
+        throw const FormatException('Format URI migrasi tidak valid');
+      }
       final dataParam = uri.queryParameters['data'];
       if (dataParam == null || dataParam.isEmpty) {
-        throw const FormatException('Parameter "data" tidak ditemukan pada tautan migrasi');
+        throw const FormatException(
+          'Parameter "data" tidak ditemukan pada tautan migrasi',
+        );
       }
       return _parseGoogleMigrationData(dataParam);
     }
@@ -191,10 +196,14 @@ class TotpHelper {
     // 2. Format standar otpauth://
     if (input.startsWith('otpauth://')) {
       final uri = Uri.tryParse(input);
-      if (uri == null) throw const FormatException('Format URI otpauth tidak valid');
+      if (uri == null) {
+        throw const FormatException('Format URI otpauth tidak valid');
+      }
       final secret = uri.queryParameters['secret'];
       if (secret == null || !isValidBase32(secret)) {
-        throw const FormatException('Parameter secret tidak ditemukan atau bukan Base32 valid');
+        throw const FormatException(
+          'Parameter secret tidak ditemukan atau bukan Base32 valid',
+        );
       }
       var name = Uri.decodeComponent(uri.path.replaceFirst('/', ''));
       final issuer = uri.queryParameters['issuer'] ?? '';
@@ -306,7 +315,9 @@ class TotpHelper {
     }
 
     if (accounts.isEmpty) {
-      throw const FormatException('Tidak ada akun valid yang ditemukan dalam data ekspor migrasi');
+      throw const FormatException(
+        'Tidak ada akun valid yang ditemukan dalam data ekspor migrasi',
+      );
     }
     return accounts;
   }

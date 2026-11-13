@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../staff_portal_client.dart';
+import '../ui/app_design_system.dart';
 import 'monitoring_form_fields.dart';
 import 'monitoring_tab_scaffold.dart';
 
@@ -24,6 +25,21 @@ class _TabBelumBayarState extends State<TabBelumBayar> {
   String _buku = 'semua';
   late String _kelurahan = widget.client.activeKelurahanCode;
   String get _kecamatan => widget.client.activeKecamatanCode;
+
+  int get _activeOptionalCount {
+    var count = 0;
+    for (final c in [
+      _tahunAwal,
+      _tahunAkhir,
+      _nop,
+      _namaWp,
+      _kodeBayarIndividu,
+    ]) {
+      if (c.text.trim().isNotEmpty) count++;
+    }
+    if (_buku != 'semua') count++;
+    return count;
+  }
 
   @override
   void dispose() {
@@ -113,62 +129,73 @@ class _TabBelumBayarState extends State<TabBelumBayar> {
           controller: _tglCutoff,
           required: true,
         ),
-        const MonitoringSectionTitle('Tahun Pajak (opsional)'),
-        Row(
+        const SizedBox(height: 12),
+        AppCollapsibleFilterSection(
+          title: 'Filter Tambahan (Opsional)',
+          subtitle: 'Tahun Pajak, Buku, NOP, Nama WP, Kode Bayar',
+          activeFilterCount: _activeOptionalCount,
           children: [
-            Expanded(
-              child: TextField(
-                controller: _tahunAwal,
-                keyboardType: TextInputType.number,
-                maxLength: 4,
-                decoration: const InputDecoration(
-                  labelText: 'Awal',
-                  border: OutlineInputBorder(),
-                  counterText: '',
+            const MonitoringSectionTitle('Tahun Pajak (opsional)'),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _tahunAwal,
+                    keyboardType: TextInputType.number,
+                    maxLength: 4,
+                    decoration: const InputDecoration(
+                      labelText: 'Awal',
+                      border: OutlineInputBorder(),
+                      counterText: '',
+                    ),
+                  ),
                 ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    controller: _tahunAkhir,
+                    keyboardType: TextInputType.number,
+                    maxLength: 4,
+                    decoration: const InputDecoration(
+                      labelText: 'Akhir',
+                      border: OutlineInputBorder(),
+                      counterText: '',
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const MonitoringSectionTitle('Filter lainnya (opsional)'),
+            BukuDropdown(
+              value: _buku,
+              onChanged: (v) => setState(() => _buku = v),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _nop,
+              decoration: const InputDecoration(
+                labelText: 'NOP',
+                border: OutlineInputBorder(),
               ),
             ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: TextField(
-                controller: _tahunAkhir,
-                keyboardType: TextInputType.number,
-                maxLength: 4,
-                decoration: const InputDecoration(
-                  labelText: 'Akhir',
-                  border: OutlineInputBorder(),
-                  counterText: '',
-                ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _namaWp,
+              decoration: const InputDecoration(
+                labelText: 'Nama WP',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _kodeBayarIndividu,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Kode Bayar',
+                border: OutlineInputBorder(),
               ),
             ),
           ],
-        ),
-        const MonitoringSectionTitle('Filter lainnya (opsional)'),
-        BukuDropdown(value: _buku, onChanged: (v) => setState(() => _buku = v)),
-        const SizedBox(height: 12),
-        TextField(
-          controller: _nop,
-          decoration: const InputDecoration(
-            labelText: 'NOP',
-            border: OutlineInputBorder(),
-          ),
-        ),
-        const SizedBox(height: 12),
-        TextField(
-          controller: _namaWp,
-          decoration: const InputDecoration(
-            labelText: 'Nama WP',
-            border: OutlineInputBorder(),
-          ),
-        ),
-        const SizedBox(height: 12),
-        TextField(
-          controller: _kodeBayarIndividu,
-          keyboardType: TextInputType.number,
-          decoration: const InputDecoration(
-            labelText: 'Kode Bayar',
-            border: OutlineInputBorder(),
-          ),
         ),
       ],
     );

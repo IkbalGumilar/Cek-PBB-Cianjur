@@ -126,12 +126,15 @@ class _StaffDhkpSyncConfigDialogState
   }
 
   void _computeLocalStats() {
-    final yearRecords = _allRecords
-        .where((r) => r.tahunBayar.isEmpty || r.tahunBayar == _selectedTahun);
+    final yearRecords = _allRecords.where(
+      (r) => r.tahunBayar.isEmpty || r.tahunBayar == _selectedTahun,
+    );
 
     final filtered = _selectedBlok == _semuaBlokKey
         ? yearRecords.toList()
-        : yearRecords.where((r) => nopBlok(r.nop) == _selectedBlok.padLeft(3, '0')).toList();
+        : yearRecords
+              .where((r) => nopBlok(r.nop) == _selectedBlok.padLeft(3, '0'))
+              .toList();
 
     _localTotalCount = filtered.length;
     _localPaidCount = filtered.where((r) => r.isPaid).length;
@@ -226,7 +229,9 @@ class _StaffDhkpSyncConfigDialogState
                     'Menarik data lunas dan mendeteksi SPPT baru langsung dari tabel server Bapenda untuk memperbarui DHKP lokal kantor secara instan.',
                     style: TextStyle(
                       fontSize: 13,
-                      color: isDark ? Colors.grey.shade300 : Colors.grey.shade700,
+                      color: isDark
+                          ? Colors.grey.shade300
+                          : Colors.grey.shade700,
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -363,6 +368,7 @@ class _StaffDhkpSyncConfigDialogState
                                   firstDate: DateTime(2010),
                                   lastDate: now,
                                 );
+                                if (!mounted) return;
                                 if (picked != null) {
                                   setState(() => _customStartDate = picked);
                                 }
@@ -387,6 +393,7 @@ class _StaffDhkpSyncConfigDialogState
                                   firstDate: DateTime(2010),
                                   lastDate: now,
                                 );
+                                if (!mounted) return;
                                 if (picked != null) {
                                   setState(() => _customEndDate = picked);
                                 }
@@ -405,7 +412,10 @@ class _StaffDhkpSyncConfigDialogState
                     ],
                     const SizedBox(height: 8),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.teal.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
@@ -478,9 +488,21 @@ class _StaffDhkpSyncConfigDialogState
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            _buildMiniStat('Total SPPT', '$_localTotalCount', Colors.blue),
-                            _buildMiniStat('Sudah Bayar', '$_localPaidCount', Colors.green),
-                            _buildMiniStat('Belum Bayar', '$_localUnpaidCount', Colors.orange),
+                            _buildMiniStat(
+                              'Total SPPT',
+                              '$_localTotalCount',
+                              Colors.blue,
+                            ),
+                            _buildMiniStat(
+                              'Sudah Bayar',
+                              '$_localPaidCount',
+                              Colors.green,
+                            ),
+                            _buildMiniStat(
+                              'Belum Bayar',
+                              '$_localUnpaidCount',
+                              Colors.orange,
+                            ),
                           ],
                         ),
                       ],
@@ -493,7 +515,9 @@ class _StaffDhkpSyncConfigDialogState
                       Icon(
                         Icons.info_outline_rounded,
                         size: 16,
-                        color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                        color: isDark
+                            ? Colors.grey.shade400
+                            : Colors.grey.shade600,
                       ),
                       const SizedBox(width: 6),
                       Expanded(
@@ -501,7 +525,9 @@ class _StaffDhkpSyncConfigDialogState
                           'Jika server mendeteksi SPPT/NOP baru yang belum ada di DHKP, otomatis ditambahkan sebagai data baru.',
                           style: TextStyle(
                             fontSize: 11,
-                            color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                            color: isDark
+                                ? Colors.grey.shade400
+                                : Colors.grey.shade600,
                           ),
                         ),
                       ),
@@ -542,10 +568,7 @@ class _StaffDhkpSyncConfigDialogState
         ),
         Text(
           label,
-          style: TextStyle(
-            fontSize: 11,
-            color: Colors.grey.shade700,
-          ),
+          style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
         ),
       ],
     );
@@ -588,8 +611,7 @@ class _StaffDhkpSyncRunningSheet extends StatelessWidget {
         final currentBlok = progress?.currentBlok ?? 'Memulai...';
         final updatedPaid =
             outcome?.updatedPaidCount ?? progress?.updatedPaidCount ?? 0;
-        final newSppt =
-            outcome?.newSpptCount ?? progress?.newSpptCount ?? 0;
+        final newSppt = outcome?.newSpptCount ?? progress?.newSpptCount ?? 0;
         final checked =
             outcome?.totalCheckedRows ?? progress?.totalCheckedRows ?? 0;
 
@@ -676,10 +698,12 @@ class _StaffDhkpSyncRunningSheet extends StatelessWidget {
                     // Progress Bar & Keterangan Blok Aktif
                     LinearProgressIndicator(
                       value: progressRatio.clamp(0.0, 1.0),
-                      backgroundColor:
-                          isDark ? Colors.white12 : Colors.grey.shade200,
-                      valueColor:
-                          AlwaysStoppedAnimation<Color>(Colors.teal.shade600),
+                      backgroundColor: isDark
+                          ? Colors.white12
+                          : Colors.grey.shade200,
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        Colors.teal.shade600,
+                      ),
                       borderRadius: BorderRadius.circular(8),
                       minHeight: 8,
                     ),
@@ -782,7 +806,9 @@ class _StaffDhkpSyncRunningSheet extends StatelessWidget {
                   if (!isCompleted) ...[
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 8),
+                        horizontal: 10,
+                        vertical: 8,
+                      ),
                       decoration: BoxDecoration(
                         color: isDark ? Colors.white10 : Colors.grey.shade100,
                         borderRadius: BorderRadius.circular(8),
@@ -816,8 +842,9 @@ class _StaffDhkpSyncRunningSheet extends StatelessWidget {
                           child: FilledButton.tonalIcon(
                             onPressed: () => mgr.togglePause(),
                             style: FilledButton.styleFrom(
-                              backgroundColor:
-                                  isPaused ? Colors.teal.shade100 : null,
+                              backgroundColor: isPaused
+                                  ? Colors.teal.shade100
+                                  : null,
                             ),
                             icon: Icon(
                               isPaused
@@ -866,7 +893,9 @@ class _StaffDhkpSyncRunningSheet extends StatelessWidget {
                               mgr.dismiss();
                               if (out != null) {
                                 showStaffDhkpSyncReportDialog(
-                                    parentContext, out);
+                                  parentContext,
+                                  out,
+                                );
                               }
                             },
                             style: FilledButton.styleFrom(
@@ -874,8 +903,10 @@ class _StaffDhkpSyncRunningSheet extends StatelessWidget {
                               foregroundColor: Colors.white,
                               padding: const EdgeInsets.symmetric(vertical: 12),
                             ),
-                            icon:
-                                const Icon(Icons.assignment_outlined, size: 18),
+                            icon: const Icon(
+                              Icons.assignment_outlined,
+                              size: 18,
+                            ),
                             label: const Text('Lihat Laporan Rinci'),
                           ),
                         ),
@@ -915,13 +946,9 @@ class _StaffDhkpSyncRunningSheet extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
       decoration: BoxDecoration(
-        color: isDark
-            ? color.shade900.withValues(alpha: 0.3)
-            : color.shade50,
+        color: isDark ? color.shade900.withValues(alpha: 0.3) : color.shade50,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isDark ? color.shade700 : color.shade200,
-        ),
+        border: Border.all(color: isDark ? color.shade700 : color.shade200),
       ),
       child: Column(
         children: [
@@ -972,7 +999,8 @@ class _StaffDhkpSyncReportDialog extends StatefulWidget {
       _StaffDhkpSyncReportDialogState();
 }
 
-class _StaffDhkpSyncReportDialogState extends State<_StaffDhkpSyncReportDialog> {
+class _StaffDhkpSyncReportDialogState
+    extends State<_StaffDhkpSyncReportDialog> {
   final TextEditingController _searchCtrl = TextEditingController();
   String _searchQuery = '';
 
@@ -1021,43 +1049,51 @@ class _StaffDhkpSyncReportDialogState extends State<_StaffDhkpSyncReportDialog> 
     final newItems = o.newRecords.isNotEmpty
         ? o.newRecords
         : o.newNops
-            .map((nop) => BlokRecord(
+              .map(
+                (nop) => BlokRecord(
                   nop: nop,
                   namaWajibPajak: 'WP Baru (Bapenda)',
                   tahunBayar: o.tahun,
                   tanggalBayar: '',
                   statusBayar: 'Sudah Bayar',
-                ))
-            .toList();
+                ),
+              )
+              .toList();
 
     final paidItems = o.updatedRecords.isNotEmpty
         ? o.updatedRecords
         : o.updatedNops
-            .map((nop) => BlokRecord(
+              .map(
+                (nop) => BlokRecord(
                   nop: nop,
                   namaWajibPajak: 'Wajib Pajak',
                   tahunBayar: o.tahun,
                   tanggalBayar: '',
                   statusBayar: 'Sudah Bayar',
-                ))
-            .toList();
+                ),
+              )
+              .toList();
 
     final query = _searchQuery.trim().toLowerCase();
     final filteredNew = query.isEmpty
         ? newItems
         : newItems
-            .where((r) =>
-                r.nop.toLowerCase().contains(query) ||
-                r.namaWajibPajak.toLowerCase().contains(query))
-            .toList();
+              .where(
+                (r) =>
+                    r.nop.toLowerCase().contains(query) ||
+                    r.namaWajibPajak.toLowerCase().contains(query),
+              )
+              .toList();
 
     final filteredPaid = query.isEmpty
         ? paidItems
         : paidItems
-            .where((r) =>
-                r.nop.toLowerCase().contains(query) ||
-                r.namaWajibPajak.toLowerCase().contains(query))
-            .toList();
+              .where(
+                (r) =>
+                    r.nop.toLowerCase().contains(query) ||
+                    r.namaWajibPajak.toLowerCase().contains(query),
+              )
+              .toList();
 
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -1282,13 +1318,9 @@ class _StaffDhkpSyncReportDialogState extends State<_StaffDhkpSyncReportDialog> 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
       decoration: BoxDecoration(
-        color: isDark
-            ? color.shade900.withValues(alpha: 0.25)
-            : color.shade50,
+        color: isDark ? color.shade900.withValues(alpha: 0.25) : color.shade50,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: isDark ? color.shade700 : color.shade200,
-        ),
+        border: Border.all(color: isDark ? color.shade700 : color.shade200),
       ),
       child: Column(
         children: [
@@ -1391,8 +1423,10 @@ class _StaffDhkpSyncReportDialogState extends State<_StaffDhkpSyncReportDialog> 
                   style: TextStyle(fontSize: 11),
                 ),
                 style: TextButton.styleFrom(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   minimumSize: Size.zero,
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
@@ -1413,8 +1447,10 @@ class _StaffDhkpSyncReportDialogState extends State<_StaffDhkpSyncReportDialog> 
                   : '-';
 
               return Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
                 decoration: BoxDecoration(
                   color: isDark
                       ? Colors.white.withValues(alpha: 0.04)
@@ -1479,8 +1515,10 @@ class _StaffDhkpSyncReportDialogState extends State<_StaffDhkpSyncReportDialog> 
                                 ),
                               ),
                               if (r.tanggalBayar.isNotEmpty) ...[
-                                const Text(' • ',
-                                    style: TextStyle(fontSize: 11)),
+                                const Text(
+                                  ' • ',
+                                  style: TextStyle(fontSize: 11),
+                                ),
                                 Text(
                                   'Bayar: ${r.tanggalBayar}',
                                   style: TextStyle(

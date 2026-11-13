@@ -86,35 +86,38 @@ class _StaffSyncBubbleOverlayState extends State<StaffSyncBubbleOverlay>
 
   Offset _clampOffset(Offset raw, Size size, EdgeInsets padding) {
     final minX = _margin;
-    final maxX = (size.width - _bubbleSize - _margin).clamp(minX, double.infinity);
-    final minY = padding.top + _margin;
-    final maxY = (size.height - padding.bottom - _totalHeight - _margin)
-        .clamp(minY, double.infinity);
-
-    return Offset(
-      raw.dx.clamp(minX, maxX),
-      raw.dy.clamp(minY, maxY),
+    final maxX = (size.width - _bubbleSize - _margin).clamp(
+      minX,
+      double.infinity,
     );
+    final minY = padding.top + _margin;
+    final maxY = (size.height - padding.bottom - _totalHeight - _margin).clamp(
+      minY,
+      double.infinity,
+    );
+
+    return Offset(raw.dx.clamp(minX, maxX), raw.dy.clamp(minY, maxY));
   }
 
   void _snapToEdge(Size size, EdgeInsets padding) {
     if (_offset == null) return;
     final minX = _margin;
-    final maxX = (size.width - _bubbleSize - _margin).clamp(minX, double.infinity);
+    final maxX = (size.width - _bubbleSize - _margin).clamp(
+      minX,
+      double.infinity,
+    );
 
     final targetX = (_offset!.dx < size.width / 2) ? minX : maxX;
     final targetOffset = Offset(targetX, _offset!.dy);
 
-    _snapAnimation = Tween<Offset>(
-      begin: _offset,
-      end: targetOffset,
-    ).animate(
-      CurvedAnimation(parent: _snapController, curve: Curves.easeOutCubic),
-    )..addListener(() {
-        if (mounted) {
-          setState(() => _offset = _snapAnimation!.value);
-        }
-      });
+    _snapAnimation =
+        Tween<Offset>(begin: _offset, end: targetOffset).animate(
+          CurvedAnimation(parent: _snapController, curve: Curves.easeOutCubic),
+        )..addListener(() {
+          if (mounted) {
+            setState(() => _offset = _snapAnimation!.value);
+          }
+        });
 
     _snapController.forward(from: 0.0);
   }
@@ -195,8 +198,9 @@ class _StaffSyncBubbleOverlayState extends State<StaffSyncBubbleOverlay>
             if (nav != null) {
               nav.push(
                 MaterialPageRoute(
-                  settings:
-                      const RouteSettings(name: 'MonitoringWilayahScreen'),
+                  settings: const RouteSettings(
+                    name: 'MonitoringWilayahScreen',
+                  ),
                   builder: (_) => MonitoringWilayahScreen(
                     client: mgr.client ?? StaffPortalClient(),
                     themeController: ThemeController.current,
@@ -245,11 +249,11 @@ class _StaffSyncBubbleOverlayState extends State<StaffSyncBubbleOverlay>
                       child: Padding(
                         padding: const EdgeInsets.all(3.0),
                         child: CircularProgressIndicator(
-                          value: isCompleted
-                              ? 1.0
-                              : (ratio > 0 ? ratio : null),
+                          value: isCompleted ? 1.0 : (ratio > 0 ? ratio : null),
                           strokeWidth: 3.5,
-                          valueColor: AlwaysStoppedAnimation<Color>(progressColor),
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            progressColor,
+                          ),
                           backgroundColor: Colors.white24,
                         ),
                       ),
@@ -285,7 +289,10 @@ class _StaffSyncBubbleOverlayState extends State<StaffSyncBubbleOverlay>
               Positioned(
                 bottom: 0,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 7,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.black.withValues(alpha: 0.85),
                     borderRadius: BorderRadius.circular(10),
@@ -301,8 +308,8 @@ class _StaffSyncBubbleOverlayState extends State<StaffSyncBubbleOverlay>
                     isCompleted
                         ? 'Selesai'
                         : (isPaused
-                            ? 'Jeda'
-                            : (percent >= 100 ? '99%' : '$percent%')),
+                              ? 'Jeda'
+                              : (percent >= 100 ? '99%' : '$percent%')),
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 10,

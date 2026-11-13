@@ -261,7 +261,8 @@ class UserGuideRepository {
           title: 'Kotak Input Daftar NOP',
           description:
               'Ketik atau tempel (paste) banyak nomor pajak sekaligus, satu NOP per baris atau dipisahkan koma.',
-          tip: 'Mendukung 18 digit NOP lengkap maupun kode singkat blok+nomor (contoh: 17154).',
+          tip:
+              'Mendukung 18 digit NOP lengkap maupun kode singkat blok+nomor (contoh: 17154).',
           dotPos: Offset(42, 1150),
           targetPos: Offset(98, 1150),
         ),
@@ -357,7 +358,8 @@ class UserGuideRepository {
       category: GuideCategory.publik,
       chapterBadge: 'Bab 1.5',
       title: 'Cek Desil & Bantuan Sosial',
-      subtitle: 'Periksa status desil kesejahteraan & bansos Kemensos berdasarkan NIK',
+      subtitle:
+          'Periksa status desil kesejahteraan & bansos Kemensos berdasarkan NIK',
       summary:
           'Memeriksa status kepesertaan bantuan sosial dan kelompok desil kesejahteraan warga melalui layanan resmi Kemensos menggunakan 16 digit NIK KTP.',
       icon: Icons.family_restroom_rounded,
@@ -422,7 +424,8 @@ class UserGuideRepository {
       category: GuideCategory.dhkp,
       chapterBadge: 'Bab 2.1',
       title: 'Buku Catatan DHKP Digital',
-      subtitle: 'Kelola tabel DHKP, grafik capaian blok, ekspor Excel & sinkronisasi',
+      subtitle:
+          'Kelola tabel DHKP, grafik capaian blok, ekspor Excel & sinkronisasi',
       summary:
           'Buku kerja digital bagi perangkat desa dan kolektor untuk memuat berkas DHKP, menandai status pelunasan warga di lapangan, melampirkan foto bukti bayar, melihat grafik capaian per blok, hingga mengekspor laporan Excel/PDF.',
       icon: Icons.table_chart_rounded,
@@ -598,7 +601,8 @@ class UserGuideRepository {
       category: GuideCategory.staf,
       chapterBadge: 'Bab 3.4',
       title: 'Pantauan Wilayah Desa (7 Laporan)',
-      subtitle: 'Filter transaksi Sudah Bayar, Belum Bayar, Realisasi & Piutang',
+      subtitle:
+          'Filter transaksi Sudah Bayar, Belum Bayar, Realisasi & Piutang',
       summary:
           'Memantau data pembayaran pajak warga di wilayah desa/kelurahan secara real-time lengkap dengan filter tanggal, tahun pajak, buku, bank, dan pencarian NOP/nama.',
       icon: Icons.analytics_outlined,
@@ -741,7 +745,8 @@ class UserGuideRepository {
       category: GuideCategory.staf,
       chapterBadge: 'Bab 3.7',
       title: 'Menu Aksi Grup & Surat Pengantar',
-      subtitle: 'Kelola anggota NOP, cetak surat pengantar resmi, atau hapus draf',
+      subtitle:
+          'Kelola anggota NOP, cetak surat pengantar resmi, atau hapus draf',
       summary:
           'Panel aksi yang muncul ketika Anda mengetuk salah satu baris grup rombongan pada halaman Pembayaran Kolektif.',
       icon: Icons.description_outlined,
@@ -837,7 +842,8 @@ class UserGuideRepository {
       category: GuideCategory.pengaturan,
       chapterBadge: 'Bab 4.1',
       title: 'Menu Pengaturan Aplikasi',
-      subtitle: 'Pusat pengaturan tema, keamanan, cadangan data & informasi aplikasi',
+      subtitle:
+          'Pusat pengaturan tema, keamanan, cadangan data & informasi aplikasi',
       summary:
           'Mengatur tampilan aplikasi, penguncian keamanan, pencadangan data DHKP, panduan penggunaan, serta informasi aplikasi dan pengembang.',
       icon: Icons.settings_outlined,
@@ -898,7 +904,8 @@ class UserGuideRepository {
       category: GuideCategory.pengaturan,
       chapterBadge: 'Bab 4.2',
       title: 'Tema & Tampilan Aplikasi',
-      subtitle: 'Atur mode Terang/Gelap, warna wallpaper, dan kustomisasi warna RGB',
+      subtitle:
+          'Atur mode Terang/Gelap, warna wallpaper, dan kustomisasi warna RGB',
       summary:
           'Sesuaikan kenyamanan mata saat bertugas di lapangan maupun malam hari dengan mode tema dan pilihan warna aksen aplikasi.',
       icon: Icons.palette_outlined,
@@ -1025,7 +1032,8 @@ class UserGuideRepository {
       category: GuideCategory.pengaturan,
       chapterBadge: 'Bab 4.5',
       title: 'Tentang & Bagikan Aplikasi',
-      subtitle: 'Bagikan file APK, profil pengembang, GitHub, Saweria & pembaruan',
+      subtitle:
+          'Bagikan file APK, profil pengembang, GitHub, Saweria & pembaruan',
       summary:
           'Memuat informasi versi aplikasi, tombol berbagi file instalasi APK ke sesama perangkat desa, profil pengembang Ikbal (@IkbalGumilar), tautan GitHub & Saweria, serta pemeriksa pembaruan.',
       icon: Icons.info_outline_rounded,

@@ -62,7 +62,11 @@ class _TargetPacingDialogContentState
       SnackBar(
         content: Row(
           children: [
-            const Icon(Icons.check_circle_outline, color: Colors.white, size: 20),
+            const Icon(
+              Icons.check_circle_outline,
+              color: Colors.white,
+              size: 20,
+            ),
             const SizedBox(width: 8),
             Expanded(child: Text('$label berhasil disalin ke papan klip!')),
           ],
@@ -84,6 +88,7 @@ class _TargetPacingDialogContentState
       confirmText: 'Pilih',
       cancelText: 'Batal',
     );
+    if (!mounted) return;
     if (picked != null) {
       setState(() => _jatuhTempo = picked);
     }
@@ -123,10 +128,7 @@ class _TargetPacingDialogContentState
               color: theme.colorScheme.primary,
               child: Row(
                 children: [
-                  Icon(
-                    Icons.speed_rounded,
-                    color: theme.colorScheme.onPrimary,
-                  ),
+                  Icon(Icons.speed_rounded, color: theme.colorScheme.onPrimary),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Column(
@@ -144,7 +146,9 @@ class _TargetPacingDialogContentState
                         Text(
                           widget.wilayahTitle,
                           style: TextStyle(
-                            color: theme.colorScheme.onPrimary.withValues(alpha: 0.85),
+                            color: theme.colorScheme.onPrimary.withValues(
+                              alpha: 0.85,
+                            ),
                             fontSize: 12,
                           ),
                         ),
@@ -152,10 +156,7 @@ class _TargetPacingDialogContentState
                     ),
                   ),
                   IconButton(
-                    icon: Icon(
-                      Icons.close,
-                      color: theme.colorScheme.onPrimary,
-                    ),
+                    icon: Icon(Icons.close, color: theme.colorScheme.onPrimary),
                     onPressed: () => Navigator.pop(context),
                   ),
                 ],
@@ -172,10 +173,14 @@ class _TargetPacingDialogContentState
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: isDark ? const Color(0xFF1E281E) : const Color(0xFFF1F8E9),
+                        color: isDark
+                            ? const Color(0xFF1E281E)
+                            : const Color(0xFFF1F8E9),
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
-                          color: isDark ? Colors.green.shade900 : Colors.green.shade300,
+                          color: isDark
+                              ? Colors.green.shade900
+                              : Colors.green.shade300,
                         ),
                       ),
                       child: Row(
@@ -184,10 +189,16 @@ class _TargetPacingDialogContentState
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text('Pagu Ketetapan:', style: TextStyle(fontSize: 11)),
+                                const Text(
+                                  'Pagu Ketetapan:',
+                                  style: TextStyle(fontSize: 11),
+                                ),
                                 Text(
                                   formatRupiah(widget.totalKetetapan),
-                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
+                                  ),
                                 ),
                               ],
                             ),
@@ -197,13 +208,18 @@ class _TargetPacingDialogContentState
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.end,
                               children: [
-                                const Text('Realisasi Terkini:', style: TextStyle(fontSize: 11)),
+                                const Text(
+                                  'Realisasi Terkini:',
+                                  style: TextStyle(fontSize: 11),
+                                ),
                                 Text(
                                   '${formatRupiah(widget.realisasi)} (${targetResult.persenSaatIni.toStringAsFixed(1)}%)',
                                   style: TextStyle(
                                     fontWeight: FontWeight.bold,
                                     fontSize: 13,
-                                    color: isDark ? Colors.green.shade300 : Colors.green.shade800,
+                                    color: isDark
+                                        ? Colors.green.shade300
+                                        : Colors.green.shade800,
                                   ),
                                 ),
                               ],
@@ -222,12 +238,18 @@ class _TargetPacingDialogContentState
                         const Expanded(
                           child: Text(
                             'Pilih Target Realisasi:',
-                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
                           ),
                         ),
                         const SizedBox(width: 8),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 3,
+                          ),
                           decoration: BoxDecoration(
                             color: theme.colorScheme.primaryContainer,
                             borderRadius: BorderRadius.circular(16),
@@ -257,10 +279,14 @@ class _TargetPacingDialogContentState
                         final isSel = _targetPersen.round() == preset;
                         return ActionChip(
                           label: Text('$preset%'),
-                          backgroundColor: isSel ? theme.colorScheme.primary : null,
+                          backgroundColor: isSel
+                              ? theme.colorScheme.primary
+                              : null,
                           labelStyle: TextStyle(
                             color: isSel ? theme.colorScheme.onPrimary : null,
-                            fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
+                            fontWeight: isSel
+                                ? FontWeight.bold
+                                : FontWeight.normal,
                             fontSize: 12,
                           ),
                           visualDensity: VisualDensity.compact,
@@ -277,8 +303,12 @@ class _TargetPacingDialogContentState
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
                         color: targetResult.targetSudahTercapai
-                            ? (isDark ? const Color(0xFF1B331A) : const Color(0xFFE8F5E9))
-                            : (isDark ? const Color(0xFF332B15) : const Color(0xFFFFF8E1)),
+                            ? (isDark
+                                  ? const Color(0xFF1B331A)
+                                  : const Color(0xFFE8F5E9))
+                            : (isDark
+                                  ? const Color(0xFF332B15)
+                                  : const Color(0xFFFFF8E1)),
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(
                           color: targetResult.targetSudahTercapai
@@ -297,8 +327,12 @@ class _TargetPacingDialogContentState
                               fontWeight: FontWeight.bold,
                               fontSize: 12,
                               color: targetResult.targetSudahTercapai
-                                  ? (isDark ? Colors.green.shade300 : Colors.green.shade900)
-                                  : (isDark ? Colors.amber.shade300 : Colors.amber.shade900),
+                                  ? (isDark
+                                        ? Colors.green.shade300
+                                        : Colors.green.shade900)
+                                  : (isDark
+                                        ? Colors.amber.shade300
+                                        : Colors.amber.shade900),
                             ),
                           ),
                           const SizedBox(height: 6),
@@ -310,8 +344,12 @@ class _TargetPacingDialogContentState
                               fontSize: 22,
                               fontWeight: FontWeight.w900,
                               color: targetResult.targetSudahTercapai
-                                  ? (isDark ? Colors.green.shade200 : Colors.green.shade900)
-                                  : (isDark ? Colors.amber.shade200 : Colors.amber.shade900),
+                                  ? (isDark
+                                        ? Colors.green.shade200
+                                        : Colors.green.shade900)
+                                  : (isDark
+                                        ? Colors.amber.shade200
+                                        : Colors.amber.shade900),
                             ),
                           ),
                           if (!targetResult.targetSudahTercapai) ...[
@@ -321,7 +359,9 @@ class _TargetPacingDialogContentState
                               style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w600,
-                                color: isDark ? Colors.grey.shade300 : Colors.grey.shade800,
+                                color: isDark
+                                    ? Colors.grey.shade300
+                                    : Colors.grey.shade800,
                               ),
                             ),
                           ],
@@ -338,7 +378,10 @@ class _TargetPacingDialogContentState
                         const Expanded(
                           child: Text(
                             'Pacing Kecepatan Penagihan',
-                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -346,11 +389,18 @@ class _TargetPacingDialogContentState
                           onTap: _pickDate,
                           borderRadius: BorderRadius.circular(4),
                           child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 4,
+                              vertical: 2,
+                            ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(Icons.event_outlined, size: 16, color: theme.colorScheme.primary),
+                                Icon(
+                                  Icons.event_outlined,
+                                  size: 16,
+                                  color: theme.colorScheme.primary,
+                                ),
                                 const SizedBox(width: 4),
                                 Text(
                                   'Jatuh Tempo: ${_jatuhTempo.day}/${_jatuhTempo.month}/${_jatuhTempo.year}',
@@ -371,18 +421,28 @@ class _TargetPacingDialogContentState
                       Container(
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
-                          color: isDark ? const Color(0xFF331515) : const Color(0xFFFFEBEE),
+                          color: isDark
+                              ? const Color(0xFF331515)
+                              : const Color(0xFFFFEBEE),
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(color: Colors.red.shade400),
                         ),
                         child: const Row(
                           children: [
-                            Icon(Icons.warning_amber_rounded, color: Colors.red, size: 18),
+                            Icon(
+                              Icons.warning_amber_rounded,
+                              color: Colors.red,
+                              size: 18,
+                            ),
                             SizedBox(width: 8),
                             Expanded(
                               child: Text(
                                 'Batas tanggal jatuh tempo telah terlewati.',
-                                style: TextStyle(fontSize: 12, color: Colors.red, fontWeight: FontWeight.bold),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.red,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ),
                           ],
@@ -395,7 +455,8 @@ class _TargetPacingDialogContentState
                             child: _buildMetricBox(
                               title: 'Sisa Waktu',
                               value: '${pacingResult.sisaHari} Hari',
-                              subtitle: 'ke ${_jatuhTempo.day}/${_jatuhTempo.month}',
+                              subtitle:
+                                  'ke ${_jatuhTempo.day}/${_jatuhTempo.month}',
                               color: Colors.blue,
                               isDark: isDark,
                             ),
@@ -454,7 +515,10 @@ class _TargetPacingDialogContentState
                         targetResult: targetResult,
                         pacingResult: pacingResult,
                       );
-                      NativeFileHelper.shareText(text: text, title: 'Target Capaian PBB-P2');
+                      NativeFileHelper.shareText(
+                        text: text,
+                        title: 'Target Capaian PBB-P2',
+                      );
                     },
                     icon: const Icon(Icons.share_rounded, size: 18),
                     tooltip: 'Bagikan',
@@ -485,11 +549,28 @@ class _TargetPacingDialogContentState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: TextStyle(fontSize: 10, color: color.shade800, fontWeight: FontWeight.bold)),
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 10,
+              color: color.shade800,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
           const SizedBox(height: 2),
-          Text(value, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: color.shade900)),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: color.shade900,
+            ),
+          ),
           const SizedBox(height: 2),
-          Text(subtitle, style: TextStyle(fontSize: 9, color: Colors.grey.shade600)),
+          Text(
+            subtitle,
+            style: TextStyle(fontSize: 9, color: Colors.grey.shade600),
+          ),
         ],
       ),
     );

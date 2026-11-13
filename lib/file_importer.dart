@@ -209,7 +209,8 @@ class FileImporter {
         }
       }
 
-      final rawKec = kecCol != -1 &&
+      final rawKec =
+          kecCol != -1 &&
               row.length > kecCol &&
               row[kecCol].toString().trim().isNotEmpty
           ? row[kecCol].toString().trim()
@@ -217,10 +218,11 @@ class FileImporter {
       final kec = rawKec.isNotEmpty
           ? rawKec
           : (nopDigits.length == 18
-              ? lookupKecamatanName(nopKecamatan(nopDigits))
-              : 'MANDE');
+                ? lookupKecamatanName(nopKecamatan(nopDigits))
+                : 'MANDE');
 
-      final rawKel = kelCol != -1 &&
+      final rawKel =
+          kelCol != -1 &&
               row.length > kelCol &&
               row[kelCol].toString().trim().isNotEmpty
           ? row[kelCol].toString().trim()
@@ -228,8 +230,8 @@ class FileImporter {
       final kel = rawKel.isNotEmpty
           ? rawKel
           : (nopDigits.length == 18
-              ? lookupMandeKelurahanName(nopKelurahan(nopDigits))
-              : 'BOBOJONG');
+                ? lookupMandeKelurahanName(nopKelurahan(nopDigits))
+                : 'BOBOJONG');
       final almtObj = almtObjCol != -1 && row.length > almtObjCol
           ? row[almtObjCol].toString().trim()
           : '';

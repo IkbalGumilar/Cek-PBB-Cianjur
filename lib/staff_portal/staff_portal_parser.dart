@@ -66,8 +66,7 @@ class StaffPortalParser {
     if (html.isEmpty) return null;
     final document = html_parser.parse(html);
 
-    String? getText(String id) =>
-        document.querySelector('#$id')?.text.trim();
+    String? getText(String id) => document.querySelector('#$id')?.text.trim();
 
     // 1. Coba tab Sudah Bayar
     var jumlahOpRaw = getText('tot_jumlah_op');
@@ -93,11 +92,26 @@ class StaffPortalParser {
     }
 
     // Fallback: regex scan jika tag berada dalam potongan HTML tanpa body utuh
-    jumlahOpRaw ??= RegExp(r'''id=["'](?:bb_)?tot_jumlah_op["'][^>]*>([^<]+)<''', caseSensitive: false).firstMatch(html)?.group(1);
-    pokokKetetapanRaw ??= RegExp(r'''id=["'](?:bb_)?tot_pokok["'][^>]*>([^<]+)<''', caseSensitive: false).firstMatch(html)?.group(1);
-    pokokBayarRaw ??= RegExp(r'''id=["'](?:tot_pokok_pembayaran|rea_pokok)["'][^>]*>([^<]+)<''', caseSensitive: false).firstMatch(html)?.group(1);
-    dendaRaw ??= RegExp(r'''id=["'](?:tot_denda|bb_tot_denda|rea_denda)["'][^>]*>([^<]+)<''', caseSensitive: false).firstMatch(html)?.group(1);
-    totalRaw ??= RegExp(r'''id=["'](?:tot_penerimaan|bb_tot_penerimaan|rea_penerimaan)["'][^>]*>([^<]+)<''', caseSensitive: false).firstMatch(html)?.group(1);
+    jumlahOpRaw ??= RegExp(
+      r'''id=["'](?:bb_)?tot_jumlah_op["'][^>]*>([^<]+)<''',
+      caseSensitive: false,
+    ).firstMatch(html)?.group(1);
+    pokokKetetapanRaw ??= RegExp(
+      r'''id=["'](?:bb_)?tot_pokok["'][^>]*>([^<]+)<''',
+      caseSensitive: false,
+    ).firstMatch(html)?.group(1);
+    pokokBayarRaw ??= RegExp(
+      r'''id=["'](?:tot_pokok_pembayaran|rea_pokok)["'][^>]*>([^<]+)<''',
+      caseSensitive: false,
+    ).firstMatch(html)?.group(1);
+    dendaRaw ??= RegExp(
+      r'''id=["'](?:tot_denda|bb_tot_denda|rea_denda)["'][^>]*>([^<]+)<''',
+      caseSensitive: false,
+    ).firstMatch(html)?.group(1);
+    totalRaw ??= RegExp(
+      r'''id=["'](?:tot_penerimaan|bb_tot_penerimaan|rea_penerimaan)["'][^>]*>([^<]+)<''',
+      caseSensitive: false,
+    ).firstMatch(html)?.group(1);
 
     final summary = MonitoringSummaryTotals(
       jumlahOp: parseAngkaServer(jumlahOpRaw ?? ''),
@@ -146,16 +160,23 @@ class StaffPortalParser {
     final table = tables.first;
     final trs = table.querySelectorAll('tr');
     if (trs.isEmpty) {
-      return MonitoringTableResult(errorMessage: 'Tidak ada data.', summary: summary);
+      return MonitoringTableResult(
+        errorMessage: 'Tidak ada data.',
+        summary: summary,
+      );
     }
 
     // 1. Cari baris header: prioritaskan <tr> yang memiliki elemen <th>
     dom.Element? headerTr;
-    final thRows = trs.where((tr) => tr.querySelectorAll('th').isNotEmpty).toList();
+    final thRows = trs
+        .where((tr) => tr.querySelectorAll('th').isNotEmpty)
+        .toList();
     if (thRows.isNotEmpty) {
       headerTr = thRows.reduce(
         (a, b) =>
-            a.querySelectorAll('th').length >= b.querySelectorAll('th').length ? a : b,
+            a.querySelectorAll('th').length >= b.querySelectorAll('th').length
+            ? a
+            : b,
       );
     }
 
@@ -222,7 +243,10 @@ class StaffPortalParser {
       }
       if (headers.isNotEmpty) {
         if (r.length < headers.length) {
-          normalizedRows.add([...r, ...List.filled(headers.length - r.length, '')]);
+          normalizedRows.add([
+            ...r,
+            ...List.filled(headers.length - r.length, ''),
+          ]);
         } else if (r.length > headers.length) {
           normalizedRows.add(r.sublist(0, headers.length));
         } else {
@@ -233,13 +257,18 @@ class StaffPortalParser {
       }
     }
 
-    final pagingMatch = RegExp(r'(\d+)\s*-\s*(\d+)\s+dari\s+([\d\.\,]+)').firstMatch(html);
+    final pagingMatch = RegExp(
+      r'(\d+)\s*-\s*(\d+)\s+dari\s+([\d\.\,]+)',
+    ).firstMatch(html);
     final pageStart = int.tryParse(pagingMatch?.group(1) ?? '') ?? 0;
     final pageEnd = int.tryParse(pagingMatch?.group(2) ?? '') ?? 0;
-    final rawTotal = pagingMatch?.group(3)?.replaceAll(RegExp(r'[^0-9]'), '') ?? '';
+    final rawTotal =
+        pagingMatch?.group(3)?.replaceAll(RegExp(r'[^0-9]'), '') ?? '';
     final totalRecords = int.tryParse(rawTotal) ?? normalizedRows.length;
-    final hasNextPage = (pageEnd > 0 && pageEnd < totalRecords) ||
-        ((html.contains('id="next-page"') || html.contains('name="next-page"')) &&
+    final hasNextPage =
+        (pageEnd > 0 && pageEnd < totalRecords) ||
+        ((html.contains('id="next-page"') ||
+                html.contains('name="next-page"')) &&
             pageEnd < totalRecords) ||
         (pagingMatch == null && normalizedRows.length >= 50);
 
@@ -277,28 +306,32 @@ class StaffPortalParser {
       );
     }
     if (html.isEmpty) {
-      return const MonitoringExcelQueueResult(errorMessage: 'Tidak ada data antrean.');
+      return const MonitoringExcelQueueResult(
+        errorMessage: 'Tidak ada data antrean.',
+      );
     }
     final document = html_parser.parse(html);
     final tables = document.querySelectorAll('table');
     if (tables.isEmpty) {
       final text = document.body?.text.trim();
       return MonitoringExcelQueueResult(
-        errorMessage: (text == null || text.isEmpty) ? 'Tidak ada data antrean.' : text,
+        errorMessage: (text == null || text.isEmpty)
+            ? 'Tidak ada data antrean.'
+            : text,
       );
     }
 
-    var queueTable = tables.firstWhere(
-      (t) {
-        final text = t.text.toLowerCase();
-        return text.contains('tanggal') && (text.contains('download') || text.contains('filter'));
-      },
-      orElse: () => tables.first,
-    );
+    var queueTable = tables.firstWhere((t) {
+      final text = t.text.toLowerCase();
+      return text.contains('tanggal') &&
+          (text.contains('download') || text.contains('filter'));
+    }, orElse: () => tables.first);
 
     final trs = queueTable.querySelectorAll('tr');
     if (trs.isEmpty) {
-      return const MonitoringExcelQueueResult(errorMessage: 'Tabel antrean kosong.');
+      return const MonitoringExcelQueueResult(
+        errorMessage: 'Tabel antrean kosong.',
+      );
     }
 
     final items = <MonitoringExcelQueueItem>[];
@@ -310,7 +343,8 @@ class StaffPortalParser {
 
       if (tds.length < 5) {
         final rowText = tds.map((c) => c.text.trim()).join(' ').trim();
-        if (rowText.contains('dari') || RegExp(r'\d+\s*-\s*\d+').hasMatch(rowText)) {
+        if (rowText.contains('dari') ||
+            RegExp(r'\d+\s*-\s*\d+').hasMatch(rowText)) {
           paginationText = rowText;
         }
         continue;
@@ -321,15 +355,20 @@ class StaffPortalParser {
 
       final lis = tds[2].querySelectorAll('li');
       final filterSummary = lis.isNotEmpty
-          ? lis.map((li) => li.text.trim()).where((s) => s.isNotEmpty).join(' • ')
+          ? lis
+                .map((li) => li.text.trim())
+                .where((s) => s.isNotEmpty)
+                .join(' • ')
           : tds[2].text.trim().replaceAll(RegExp(r'\s+'), ' ');
 
       final statusHtml = tds[3].innerHtml;
       final statusText = tds[3].text.trim().toLowerCase();
-      final isProcessing = statusText.contains('process') ||
+      final isProcessing =
+          statusText.contains('process') ||
           statusText.contains('loading') ||
           statusHtml.contains('Processing') ||
-          (!statusHtml.contains('accept.png') && !tds[4].innerHtml.contains('download'));
+          (!statusHtml.contains('accept.png') &&
+              !tds[4].innerHtml.contains('download'));
 
       final dlAnchor = tds[4].querySelector('a');
       final downloadUrl = dlAnchor?.attributes['href']?.trim();
@@ -365,7 +404,9 @@ class StaffPortalParser {
     if (items.isEmpty && paginationText == null) {
       final msg = queueTable.text.trim();
       return MonitoringExcelQueueResult(
-        errorMessage: msg.isNotEmpty ? msg : 'Belum ada berkas ekspor dalam antrean.',
+        errorMessage: msg.isNotEmpty
+            ? msg
+            : 'Belum ada berkas ekspor dalam antrean.',
       );
     }
 

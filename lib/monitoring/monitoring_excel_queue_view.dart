@@ -154,15 +154,15 @@ class _MonitoringExcelQueueViewState extends State<MonitoringExcelQueueView> {
         isKolektif: widget.isKolektif,
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(res.message)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(res.message)));
       await _loadQueue();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal menghapus antrean: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Gagal menghapus antrean: $e')));
     } finally {
       if (mounted) setState(() => _actionBusy = false);
     }
@@ -217,7 +217,9 @@ class _MonitoringExcelQueueViewState extends State<MonitoringExcelQueueView> {
                             ? const SizedBox(
                                 width: 18,
                                 height: 18,
-                                child: CircularProgressIndicator(strokeWidth: 2),
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
                               )
                             : const Icon(Icons.refresh),
                         tooltip: 'Segarkan Antrean',
@@ -229,7 +231,9 @@ class _MonitoringExcelQueueViewState extends State<MonitoringExcelQueueView> {
                     'Server V-Tax memproses ekspor Excel di latar belakang. '
                     'Jika proses selesai, tombol Unduh akan aktif. Jika proses macet, gunakan tombol Hapus.',
                     style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.8),
+                      color: theme.textTheme.bodySmall?.color?.withValues(
+                        alpha: 0.8,
+                      ),
                     ),
                   ),
                   if (widget.onTriggerNewExport != null) ...[
@@ -237,7 +241,9 @@ class _MonitoringExcelQueueViewState extends State<MonitoringExcelQueueView> {
                     OutlinedButton.icon(
                       onPressed: _actionBusy ? null : widget.onTriggerNewExport,
                       icon: const Icon(Icons.post_add_outlined, size: 18),
-                      label: const Text('Buat Permintaan Ekspor Baru ke Server'),
+                      label: const Text(
+                        'Buat Permintaan Ekspor Baru ke Server',
+                      ),
                       style: OutlinedButton.styleFrom(
                         visualDensity: VisualDensity.compact,
                       ),
@@ -296,8 +302,7 @@ class _MonitoringExcelQueueViewState extends State<MonitoringExcelQueueView> {
               separatorBuilder: (context, index) => const SizedBox(height: 8),
               itemBuilder: (context, index) {
                 final item = res.items[index];
-                final isDownloadingThis =
-                    _downloadingFileName == item.fileName;
+                final isDownloadingThis = _downloadingFileName == item.fileName;
 
                 return Card(
                   elevation: 0,
@@ -438,7 +443,8 @@ class _MonitoringExcelQueueViewState extends State<MonitoringExcelQueueView> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.end,
                           children: [
-                            if (!item.isProcessing && item.fileName != null) ...[
+                            if (!item.isProcessing &&
+                                item.fileName != null) ...[
                               FilledButton.icon(
                                 onPressed: _actionBusy || isDownloadingThis
                                     ? null
@@ -452,10 +458,15 @@ class _MonitoringExcelQueueViewState extends State<MonitoringExcelQueueView> {
                                           color: Colors.white,
                                         ),
                                       )
-                                    : const Icon(Icons.download_rounded, size: 16),
-                                label: Text(isDownloadingThis
-                                    ? 'Mengunduh...'
-                                    : 'Unduh .xlsx'),
+                                    : const Icon(
+                                        Icons.download_rounded,
+                                        size: 16,
+                                      ),
+                                label: Text(
+                                  isDownloadingThis
+                                      ? 'Mengunduh...'
+                                      : 'Unduh .xlsx',
+                                ),
                                 style: FilledButton.styleFrom(
                                   visualDensity: VisualDensity.compact,
                                 ),
@@ -479,7 +490,9 @@ class _MonitoringExcelQueueViewState extends State<MonitoringExcelQueueView> {
                                 style: OutlinedButton.styleFrom(
                                   visualDensity: VisualDensity.compact,
                                   side: BorderSide(
-                                    color: colorScheme.error.withValues(alpha: 0.5),
+                                    color: colorScheme.error.withValues(
+                                      alpha: 0.5,
+                                    ),
                                   ),
                                 ),
                               ),

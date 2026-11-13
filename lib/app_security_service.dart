@@ -55,12 +55,26 @@ class AppSecurityService extends BasePreferencesStore {
     pbkdf2Iterations = iterations;
   }
 
-  Future<String?> _readSecure(String key) => readSecureWithFallback(key);
+  Future<String?> _readSecure(String key) => readSecureWithMigration(key);
 
   Future<void> _writeSecure(String key, String value) =>
-      writeSecureWithFallback(key, value);
+      writeSecureOnly(key, value);
 
-  Future<void> _deleteSecure(String key) => deleteSecureWithFallback(key);
+  Future<void> _deleteSecure(String key) => deleteSecureOnly(key);
+
+  /// Menghitung durasi lockout (dalam detik) menggunakan exponential backoff:
+  /// - < 5 percobaan gagal = 0 detik
+  /// - 5 gagal = 30 detik
+  /// - 6 gagal = 60 detik
+  /// - 7 gagal = 120 detik
+  /// - 8 gagal = 240 detik
+  /// - Maksimal 1800 detik (30 menit).
+  static int calculateLockoutSeconds(int failedAttempts) {
+    if (failedAttempts < 5) return 0;
+    final exp = (failedAttempts - 5).clamp(0, 10);
+    final seconds = 30 * (1 << exp);
+    return seconds > 1800 ? 1800 : seconds;
+  }
 
   Future<String> _hashSecretPbkdf2(String secret, String salt) async {
     final saltBytes = utf8.encode(salt);
@@ -136,14 +150,16 @@ class AppSecurityService extends BasePreferencesStore {
 
   DateTime? _lastPausedTime;
 
-  /// Apakah kunci aplikasi aktif.
+  /// Apakah kunci aplikasi aktif (disimpan di secure storage dengan migrasi dari SharedPreferences).
   Future<bool> isLockEnabled() async {
-    return getBool(_keyLockEnabled, defaultValue: false);
+    final raw = await _readSecure(_keyLockEnabled);
+    if (raw == null) return false;
+    return raw.toLowerCase() == 'true';
   }
 
   /// Mengaktifkan atau menonaktifkan kunci aplikasi.
   Future<void> setLockEnabled(bool enabled) async {
-    await setBool(_keyLockEnabled, enabled);
+    await _writeSecure(_keyLockEnabled, enabled.toString());
     if (!enabled) {
       unlock();
     }
@@ -151,7 +167,7 @@ class AppSecurityService extends BasePreferencesStore {
 
   /// Mendapatkan jenis kunci yang dipilih. Default: [AppLockType.device].
   Future<AppLockType> getLockType() async {
-    final raw = await getString(_keyLockType);
+    final raw = await _readSecure(_keyLockType);
     if (raw == 'pin') return AppLockType.pin;
     if (raw == 'password') return AppLockType.password;
     return AppLockType.device;
@@ -164,7 +180,7 @@ class AppSecurityService extends BasePreferencesStore {
       AppLockType.pin => 'pin',
       AppLockType.password => 'password',
     };
-    await setString(_keyLockType, val);
+    await _writeSecure(_keyLockType, val);
   }
 
   /// Mendapatkan jeda waktu kunci otomatis dalam detik.
@@ -261,6 +277,7 @@ class AppSecurityService extends BasePreferencesStore {
         persistAcrossBackgrounding: true,
       );
       if (authenticated) {
+        await resetFailedPinAttempts();
         unlock();
       }
       return authenticated;
@@ -327,6 +344,9 @@ class AppSecurityService extends BasePreferencesStore {
   /// Memverifikasi PIN kustom yang dimasukkan pengguna.
   /// Mendukung verifikasi hash PBKDF2 maupun migrasi otomatis dari hash legacy SHA-256.
   Future<bool> verifyCustomPin(String pin) async {
+    final activeLockout = await getLockoutUntil();
+    if (activeLockout != null) return false;
+
     final salt = await _readSecure(_keyPinSalt);
     final storedHash = await _readSecure(_keyPinHash);
     if (salt == null || storedHash == null) return false;
@@ -346,6 +366,7 @@ class AppSecurityService extends BasePreferencesStore {
     }
 
     if (matches) {
+      await resetFailedPinAttempts();
       unlock();
     }
     return matches;
@@ -370,6 +391,9 @@ class AppSecurityService extends BasePreferencesStore {
   /// Memverifikasi password kustom yang dimasukkan pengguna.
   /// Mendukung verifikasi hash PBKDF2 maupun migrasi otomatis dari hash legacy SHA-256.
   Future<bool> verifyCustomPassword(String password) async {
+    final activeLockout = await getLockoutUntil();
+    if (activeLockout != null) return false;
+
     final salt = await _readSecure(_keyPasswordSalt);
     final storedHash = await _readSecure(_keyPasswordHash);
     if (salt == null || storedHash == null) return false;
@@ -389,6 +413,7 @@ class AppSecurityService extends BasePreferencesStore {
     }
 
     if (matches) {
+      await resetFailedPinAttempts();
       unlock();
     }
     return matches;
@@ -403,12 +428,25 @@ class AppSecurityService extends BasePreferencesStore {
     return int.tryParse(raw) ?? 0;
   }
 
-  /// Menambah 1 catatan percobaan salah dan mengembalikan hitungan terbaru.
+  /// Menambah 1 catatan percobaan salah, menerapkan exponential backoff jika >= 5,
+  /// dan mengembalikan hitungan terbaru.
   Future<int> recordFailedPinAttempt() async {
     final current = await getFailedPinAttempts();
     final updated = current + 1;
     await _writeSecure(_keyFailedAttempts, updated.toString());
+    final lockoutSeconds = calculateLockoutSeconds(updated);
+    if (lockoutSeconds > 0) {
+      await setLockoutUntil(
+        DateTime.now().add(Duration(seconds: lockoutSeconds)),
+      );
+    }
     return updated;
+  }
+
+  /// Menghapus hanya batas waktu lockout yang sudah kedaluwarsa tanpa mereset
+  /// total kegagalan (total kegagalan hanya direset setelah autentikasi berhasil).
+  Future<void> clearExpiredLockout() async {
+    await _deleteSecure(_keyLockoutUntilMillis);
   }
 
   /// Me-reset hitungan percobaan salah dan status lockout setelah berhasil buka kunci.

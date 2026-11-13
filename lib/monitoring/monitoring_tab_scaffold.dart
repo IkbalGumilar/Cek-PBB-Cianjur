@@ -173,8 +173,8 @@ class _MonitoringTabScaffoldState extends State<MonitoringTabScaffold> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final hasExcelSubTab = widget.client != null &&
-        widget.excelQueueFunctionName != null;
+    final hasExcelSubTab =
+        widget.client != null && widget.excelQueueFunctionName != null;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(14),
@@ -269,7 +269,10 @@ class _MonitoringTabScaffoldState extends State<MonitoringTabScaffold> {
                     if (_filterExpanded) ...[
                       const Divider(height: 16),
                       WilayahBadge(client: widget.client),
-                      ...widget.formBuilder(context, _loading || _exportLoading),
+                      ...widget.formBuilder(
+                        context,
+                        _loading || _exportLoading,
+                      ),
                       const SizedBox(height: 16),
                     ],
 
@@ -279,7 +282,9 @@ class _MonitoringTabScaffoldState extends State<MonitoringTabScaffold> {
                         Expanded(
                           flex: 3,
                           child: FilledButton.icon(
-                            onPressed: _loading || _exportLoading ? null : _submit,
+                            onPressed: _loading || _exportLoading
+                                ? null
+                                : _submit,
                             icon: _loading
                                 ? SizedBox(
                                     height: 18,

@@ -4,6 +4,7 @@ import 'check_mode.dart';
 import 'feature_tour/feature_tour.dart';
 import 'settings_screen.dart';
 import 'theme_controller.dart';
+import 'ui/app_design_system.dart';
 
 const kHeaderGreen = Color(0xFF2E7D32);
 
@@ -20,6 +21,7 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
   final GlobalKey? settingsButtonKey;
   final bool desilSelected;
   final bool kendaraanSelected;
+  final double? viewportWidth;
 
   const AppHeader({
     super.key,
@@ -35,9 +37,10 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
     this.desilSelected = false,
     this.kendaraanSelected = false,
     this.isOperator = false,
+    this.viewportWidth,
   });
 
-  static const _narrowThreshold = 480.0;
+  static const _narrowThreshold = 640.0;
 
   void _openSettings(BuildContext context) {
     Navigator.push(
@@ -50,10 +53,13 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
 
   @override
   Widget build(BuildContext context) {
-    final primaryColor = Theme.of(context).colorScheme.primary;
-    final onPrimary = Theme.of(context).colorScheme.onPrimary;
+    final scheme = Theme.of(context).colorScheme;
+    final primaryColor = scheme.primary;
+    final onPrimary = scheme.onPrimary;
     return Material(
       color: primaryColor,
+      elevation: 1,
+      shadowColor: Colors.black.withValues(alpha: 0.25),
       child: SafeArea(
         bottom: false,
         child: LayoutBuilder(
@@ -84,16 +90,20 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
             );
 
             return Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              padding: EdgeInsets.symmetric(
+                horizontal: isNarrow ? 8 : 16,
+                vertical: isNarrow ? 4 : 8,
+              ),
               child: isNarrow
                   ? Column(
+                      mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
                           children: [
                             Expanded(
                               child: Padding(
-                                padding: const EdgeInsets.only(left: 8),
+                                padding: const EdgeInsets.only(left: 6),
                                 child: logoAndName,
                               ),
                             ),
@@ -102,17 +112,18 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
                           ],
                         ),
                         Padding(
-                          padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                          padding: const EdgeInsets.fromLTRB(6, 2, 6, 6),
                           child: menu,
                         ),
                       ],
                     )
                   : Row(
                       children: [
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 4),
                         logoAndName,
-                        const SizedBox(width: 24),
+                        const SizedBox(width: 20),
                         Expanded(child: menu),
+                        const SizedBox(width: 8),
                         ?helpButton,
                         settingsButton,
                       ],
@@ -125,7 +136,12 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
   }
 
   @override
-  Size get preferredSize => const Size.fromHeight(120);
+  Size get preferredSize {
+    if (viewportWidth != null && viewportWidth! >= _narrowThreshold) {
+      return const Size.fromHeight(68);
+    }
+    return const Size.fromHeight(114);
+  }
 }
 
 class _LogoAndName extends StatelessWidget {
@@ -135,24 +151,30 @@ class _LogoAndName extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final onPrimary = Theme.of(context).colorScheme.onPrimary;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         const CircleAvatar(
-          radius: 20,
+          radius: 19,
           backgroundColor: Colors.white,
           child: Padding(
-            padding: EdgeInsets.all(6),
+            padding: EdgeInsets.all(5),
             child: Image(image: AssetImage('logo/kabupaten-cianjur.png')),
           ),
         ),
-        const SizedBox(width: 12),
-        Text(
-          'Cek PBB Cianjur',
-          style: TextStyle(
-            color: Theme.of(context).colorScheme.onPrimary,
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
+        const SizedBox(width: 10),
+        Flexible(
+          child: Text(
+            'Cek PBB Cianjur',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: onPrimary,
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 0.15,
+            ),
           ),
         ),
         if (isOperator) ...[
@@ -160,7 +182,7 @@ class _LogoAndName extends StatelessWidget {
           Tooltip(
             message: 'Mode Operator — menerima laporan dari semua dusun',
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
               decoration: BoxDecoration(
                 color: Colors.amber,
                 borderRadius: BorderRadius.circular(6),
@@ -208,32 +230,41 @@ class _ModeMenu extends StatelessWidget {
     required VoidCallback onSelected,
     required Color primaryColor,
     required Color onPrimary,
+    IconData? leadingIcon,
   }) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    // Latar belakang pil: putih bersih di mode terang (tidak abu-abu),
-    // atau permukaan kontainer gelap di mode gelap.
-    final chipBgColor = isDark ? const Color(0xFF2C2C2C) : Colors.white;
+    // Latar belakang chip terpilih vs belum terpilih dibuat kontras jelas
+    final chipBgColor = selected
+        ? (isDark
+              ? Color.alphaBlend(
+                  primaryColor.withValues(alpha: 0.28),
+                  const Color(0xFF1E2620),
+                )
+              : Colors.white)
+        : (isDark
+              ? const Color(0xFF262626)
+              : Colors.white.withValues(alpha: 0.88));
     final isBgBright = chipBgColor.computeLuminance() > 0.5;
 
-    // Warna teks adaptif sesuai preferensi:
-    // "jika terang jadi gelap, jika kelam jadi terang"
     const darkTextColor = Color(0xFF1F1F1F);
     const lightTextColor = Colors.white;
 
-    // Teks chip terpilih: memakai primaryColor bila kontrasnya mencukupi,
-    // atau warna gelap/terang kontras tinggi bila warna aksen terlalu pucat.
     final selectedTextColor = isBgBright
         ? (primaryColor.computeLuminance() > 0.4 ? darkTextColor : primaryColor)
-        : (primaryColor.computeLuminance() < 0.2
+        : (primaryColor.computeLuminance() < 0.25
               ? lightTextColor
               : primaryColor);
 
-    // Teks chip belum terpilih: adaptif terhadap terang/kelamnya latar belakang
-    final unselectedTextColor = isBgBright ? darkTextColor : lightTextColor;
+    final unselectedTextColor = isBgBright
+        ? darkTextColor.withValues(alpha: 0.82)
+        : lightTextColor.withValues(alpha: 0.88);
 
     return ChoiceChip(
+      avatar: (!selected && leadingIcon != null)
+          ? Icon(leadingIcon, size: 15, color: unselectedTextColor)
+          : null,
       label: Text(label),
       selected: selected,
       onSelected: (_) => onSelected(),
@@ -242,14 +273,22 @@ class _ModeMenu extends StatelessWidget {
       color: WidgetStateProperty.all<Color>(chipBgColor),
       selectedColor: chipBgColor,
       backgroundColor: chipBgColor,
+      visualDensity: VisualDensity.compact,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadius.sm + 2),
+      ),
       labelStyle: TextStyle(
         color: selected ? selectedTextColor : unselectedTextColor,
-        fontWeight: FontWeight.bold,
+        fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+        fontSize: 13,
       ),
       side: BorderSide(
-        color: isDark
-            ? Colors.white.withValues(alpha: 0.15)
-            : Colors.black.withValues(alpha: 0.08),
+        color: selected
+            ? (isDark ? primaryColor : darkTextColor.withValues(alpha: 0.25))
+            : (isDark
+                  ? Colors.white.withValues(alpha: 0.14)
+                  : Colors.black.withValues(alpha: 0.08)),
+        width: selected ? 1.5 : 1.0,
       ),
     );
   }
@@ -281,6 +320,7 @@ class _ModeMenu extends StatelessWidget {
         onSelected: onMonitoringPressed,
         primaryColor: primaryColor,
         onPrimary: onPrimary,
+        leadingIcon: Icons.shield_outlined,
       ),
       _buildHeaderChip(
         context: context,
@@ -300,12 +340,9 @@ class _ModeMenu extends StatelessWidget {
       ),
     ];
 
-    // Scroll horizontal, bukan Wrap — Wrap membuat baris kedua begitu chip
-    // tidak muat (mis. layar sempit + chip "Monitoring"), dan baris kedua itu
-    // mendorong tinggi header melebihi preferredSize tetap milik AppHeader
-    // sehingga overflow di bagian bawah header.
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.only(right: 8),
       child: Row(
         children: [
           for (var i = 0; i < chips.length; i++) ...[

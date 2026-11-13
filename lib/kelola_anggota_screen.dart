@@ -15,6 +15,7 @@ import 'monitoring/monitoring_result_exporter.dart';
 import 'native_file_helper.dart';
 import 'nop_helper.dart';
 import 'staff_portal_client.dart';
+import 'ui/app_design_system.dart';
 
 /// Layar "Kelola Anggota" satu grup kolektif — replika modal "Tambah NOP Pada
 /// Group" di halaman asli, dengan tiga aksinya:
@@ -144,7 +145,8 @@ class _KelolaAnggotaScreenState extends State<KelolaAnggotaScreen> {
           description:
               'Ketik NOP lengkap (18 angka) atau cukup singkatan Blok+Nomor (contoh: 17154 untuk Blok 017 No 0154). Anda juga bisa mengunggah daftar NOP sekaligus dari file Excel/CSV.',
           icon: Icons.playlist_add_rounded,
-          actionHint: 'Pisahkan dengan tanda koma (,) jika ingin memasukkan beberapa NOP sekaligus',
+          actionHint:
+              'Pisahkan dengan tanda koma (,) jika ingin memasukkan beberapa NOP sekaligus',
         ),
       FeatureTourStep(
         targetKey: _memberToolbarKey,
@@ -159,7 +161,8 @@ class _KelolaAnggotaScreenState extends State<KelolaAnggotaScreen> {
         description:
             'Menampilkan rincian setiap warga beserta tagihan pokok, denda, dan total keseluruhan di bagian paling bawah. Jika daftar anggota sudah lengkap dan siap dibayar, ketuk tombol Finalkan di kartu Total bawah.',
         icon: Icons.fact_check_outlined,
-        actionHint: 'Centang kotak di samping NOP jika ingin mengeluarkan warga dari grup',
+        actionHint:
+            'Centang kotak di samping NOP jika ingin mengeluarkan warga dari grup',
       ),
     ];
   }
@@ -254,7 +257,7 @@ class _KelolaAnggotaScreenState extends State<KelolaAnggotaScreen> {
 
   Future<void> _unduh(KolektifMemberListResult hasil) async {
     final format = await _pilihFormat('Unduh Sebagai');
-    if (format == null) return;
+    if (format == null || !mounted) return;
     setState(() => _aksiBerjalan = true);
     try {
       final bytes = await MonitoringResultExporter.build(
@@ -280,7 +283,7 @@ class _KelolaAnggotaScreenState extends State<KelolaAnggotaScreen> {
 
   Future<void> _bagikan(KolektifMemberListResult hasil) async {
     final format = await _pilihFormat('Bagikan Sebagai');
-    if (format == null) return;
+    if (format == null || !mounted) return;
     setState(() => _aksiBerjalan = true);
     try {
       final bytes = await MonitoringResultExporter.build(
@@ -509,13 +512,13 @@ class _KelolaAnggotaScreenState extends State<KelolaAnggotaScreen> {
             njopBangunan: template?.njopBangunan ?? '',
             kecamatan: m.kecamatan.trim().isNotEmpty
                 ? m.kecamatan.trim()
-                : (template?.kecamatan ?? 'MANDE'),
+                : (template?.kecamatan ?? ''),
             kelurahan: m.kelurahan.trim().isNotEmpty
                 ? m.kelurahan.trim()
                 : (template?.kelurahan ??
                       (widget.group.kelurahan.trim().isNotEmpty
                           ? widget.group.kelurahan.trim()
-                          : 'BOBOJONG')),
+                          : '')),
             alamatObjek: template?.alamatObjek ?? '',
             alamatWp: template?.alamatWp ?? '',
             rtObjek: template?.rtObjek ?? '',
@@ -883,298 +886,394 @@ class _KelolaAnggotaScreenState extends State<KelolaAnggotaScreen> {
         child: SingleChildScrollView(
           controller: _scroll,
           padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Column(
-                key: _groupHeaderKey,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    widget.group.namaGroup,
-                    style: Theme.of(context).textTheme.titleMedium,
+          child: ResponsivePageContainer(
+            padding: EdgeInsets.zero,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Card(
+                  key: _groupHeaderKey,
+                  margin: EdgeInsets.zero,
+                  elevation: 0,
+                  color: theme.colorScheme.surfaceContainerLow,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    side: BorderSide(
+                      color: theme.colorScheme.outlineVariant.withValues(
+                        alpha: 0.5,
+                      ),
+                    ),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '${rapikanNamaWilayah(widget.group.kelurahan)} · ${widget.group.status}',
-                    style: const TextStyle(color: Colors.grey),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              if (!_bisaDiubah)
-                const Card(
                   child: Padding(
-                    padding: EdgeInsets.all(12),
-                    child: Text(
-                      'Grup ini sudah dikunci (bukan Draft lagi), sehingga daftar anggotanya hanya bisa dilihat.',
-                    ),
-                  ),
-                )
-              else
-                Column(
-                  key: _addNopFormKey,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    TextField(
-                      controller: _nop,
-                      keyboardType: TextInputType.number,
-                      maxLines: 2,
-                      inputFormatters: [
-                        FilteringTextInputFormatter.allow(RegExp(r'[0-9,]')),
-                      ],
-                      decoration: const InputDecoration(
-                        labelText: 'NOP Warga',
-                        helperText:
-                            'Ketik NOP lengkap 18 angka, atau singkatan Blok+Nomor 5–7 angka '
-                            '(contoh 17154 → Blok 017 Nomor 0154). Pisahkan dengan koma kalau lebih dari satu.',
-                        helperMaxLines: 3,
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.primaryContainer,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(
+                            Icons.groups_2_outlined,
+                            color: theme.colorScheme.onPrimaryContainer,
+                            size: 22,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
                         Expanded(
-                          child: TextField(
-                            controller: _tahunPajak,
-                            keyboardType: TextInputType.number,
-                            maxLength: 4,
-                            inputFormatters: [
-                              FilteringTextInputFormatter.digitsOnly,
-                            ],
-                            decoration: const InputDecoration(
-                              labelText: 'Tahun Pajak',
-                              border: OutlineInputBorder(),
-                              counterText: '',
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: DropdownButtonFormField<String>(
-                            isExpanded: true,
-                            initialValue: _buku,
-                            decoration: const InputDecoration(
-                              labelText: 'Buku',
-                              border: OutlineInputBorder(),
-                            ),
-                            items: [
-                              for (final b in _bukuOptions)
-                                DropdownMenuItem(value: b.$1, child: Text(b.$2)),
-                            ],
-                            onChanged: (v) => setState(() => _buku = v ?? '1'),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    FilledButton.icon(
-                      onPressed: sibuk ? null : _tambahNop,
-                      icon: const Icon(Icons.playlist_add),
-                      label: const Text('Cari & Tambah ke Grup'),
-                    ),
-                    const SizedBox(height: 8),
-                    OutlinedButton.icon(
-                      onPressed: sibuk ? null : _unggahBerkas,
-                      icon: const Icon(Icons.upload_file),
-                      label: const Text('Masukkan dari File (Excel/CSV)'),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Isi file akan diperiksa dan ditampilkan sebagai NOP 18 angka terlebih dahulu sebelum ditambahkan. '
-                      'Tahun pajak & buku di atas berlaku untuk seluruh NOP di dalam file.',
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodySmall?.copyWith(color: Colors.grey),
-                    ),
-                  ],
-                ),
-              const SizedBox(height: 20),
-              Row(
-                key: _memberToolbarKey,
-                children: [
-                  Expanded(
-                    child: Text(
-                      members.isEmpty
-                          ? 'Anggota'
-                          : 'Anggota (${members.length})',
-                      style: Theme.of(context).textTheme.titleSmall,
-                    ),
-                  ),
-                  if (members.isNotEmpty) ...[
-                    IconButton(
-                      onPressed: sibuk ? null : () => _unduh(_result!),
-                      icon: const Icon(Icons.download_outlined),
-                      tooltip: 'Unduh (PDF/Excel/CSV)',
-                    ),
-                    IconButton(
-                      onPressed: sibuk ? null : () => _bagikan(_result!),
-                      icon: const Icon(Icons.share_outlined),
-                      tooltip: 'Bagikan (PDF/Excel/CSV)',
-                    ),
-                    IconButton(
-                      onPressed: sibuk ? null : () => _cetak(_result!),
-                      icon: const Icon(Icons.print_outlined),
-                      tooltip: 'Cetak',
-                    ),
-                  ],
-                  IconButton(
-                    onPressed: sibuk ? null : _muat,
-                    icon: const Icon(Icons.refresh),
-                    tooltip: 'Muat ulang',
-                  ),
-                ],
-              ),
-              if (_bisaDiubah && members.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Row(
-                    children: [
-                      TextButton(
-                        onPressed: sibuk
-                            ? null
-                            : () => setState(() {
-                                if (_terpilih.length == members.length) {
-                                  _terpilih.clear();
-                                } else {
-                                  _terpilih
-                                    ..clear()
-                                    ..addAll(members.map((m) => m.kunci));
-                                }
-                              }),
-                        child: Text(
-                          _terpilih.length == members.length
-                              ? 'Batal Pilih Semua'
-                              : 'Pilih Semua Data',
-                        ),
-                      ),
-                      const Spacer(),
-                      TextButton.icon(
-                        onPressed: sibuk || _terpilih.isEmpty
-                            ? null
-                            : _hapusTerpilih,
-                        icon: const Icon(Icons.delete_outline),
-                        style: TextButton.styleFrom(
-                          foregroundColor: Theme.of(context).colorScheme.error,
-                        ),
-                        label: Text('Keluarkan (${_terpilih.length})'),
-                      ),
-                    ],
-                  ),
-                ),
-              Column(
-                key: _memberListAreaKey,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  if (_loading)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 24),
-                      child: Center(child: CircularProgressIndicator()),
-                    )
-                  else if (_result?.errorMessage != null)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      child: Text(
-                        _result!.errorMessage!,
-                        style: const TextStyle(color: Colors.grey),
-                      ),
-                    )
-                  else ...[
-                    for (final m in tampil)
-                      Card(
-                        margin: const EdgeInsets.only(bottom: 8),
-                        child: ListTile(
-                          leading: _bisaDiubah
-                              ? Checkbox(
-                                  value: _terpilih.contains(m.kunci),
-                                  onChanged: sibuk
-                                      ? null
-                                      : (v) => setState(() {
-                                          if (v == true) {
-                                            _terpilih.add(m.kunci);
-                                          } else {
-                                            _terpilih.remove(m.kunci);
-                                          }
-                                        }),
-                                )
-                              : null,
-                          title: Text(
-                            m.nop,
-                            style: const TextStyle(fontFamily: 'monospace'),
-                          ),
-                          subtitle: Text(
-                            '${m.namaWp}\nTahun ${m.tahunPajak} · Jatuh tempo ${m.jatuhTempo}\n'
-                            'Pokok ${m.pokok} · Denda ${m.denda} · Total ${m.total}',
-                          ),
-                          isThreeLine: true,
-                        ),
-                      ),
-                    if (_tampil < members.length) ...[
-                      OutlinedButton(
-                        onPressed: () => setState(() => _tampil += _pageSize),
-                        child: Text(
-                          'Muat $_pageSize Data Lagi (${members.length - _tampil} tersisa)',
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      TextButton.icon(
-                        onPressed: () => _bukaSemuaLaluKeBawah(members.length),
-                        icon: const Icon(Icons.vertical_align_bottom),
-                        label: Text(
-                          'Buka Semua (${members.length}) & Lihat Total',
-                        ),
-                      ),
-                    ],
-                    if (members.isNotEmpty)
-                      Card(
-                        margin: const EdgeInsets.only(top: 8, bottom: 72),
-                        color: Theme.of(context).colorScheme.secondaryContainer,
-                        child: Padding(
-                          padding: const EdgeInsets.all(12),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Total Keseluruhan (${members.length} NOP)',
-                                style: Theme.of(context).textTheme.titleSmall,
-                              ),
-                              const SizedBox(height: 8),
-                              _barisTotal('Pokok', _result!.totalPokok),
-                              _barisTotal('Denda', _result!.totalDenda),
-                              const Divider(),
-                              _barisTotal(
-                                'Total Bayar',
-                                _result!.totalBayar,
-                                tebal: true,
-                              ),
-                              if (_bisaDiubah) ...[
-                                const SizedBox(height: 12),
-                                SizedBox(
-                                  width: double.infinity,
-                                  child: FilledButton.icon(
-                                    onPressed:
-                                        sibuk || _finalkanPerluVerifikasi
-                                        ? null
-                                        : _finalkan,
-                                    icon: const Icon(Icons.lock_outline),
-                                    label: const Text('Finalkan & Kunci Grup'),
-                                  ),
+                                widget.group.namaGroup,
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
                                 ),
-                              ],
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                rapikanNamaWilayah(widget.group.kelurahan),
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                              ),
                             ],
                           ),
                         ),
-                      ),
-                  ],
-                ],
-              ),
-              if (_aksiBerjalan)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 24),
-                  child: Center(child: CircularProgressIndicator()),
+                        const SizedBox(width: 8),
+                        AppStatusBadge(
+                          label: widget.group.status.isEmpty
+                              ? 'Draft'
+                              : widget.group.status,
+                          tone: _bisaDiubah
+                              ? AppBadgeTone.warning
+                              : (widget.group.status.toLowerCase().contains(
+                                      'sudah',
+                                    )
+                                    ? AppBadgeTone.success
+                                    : AppBadgeTone.info),
+                          compact: true,
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-            ],
+                const SizedBox(height: 16),
+                if (!_bisaDiubah)
+                  const AppAlertBanner(
+                    message:
+                        'Grup ini sudah dikunci (bukan Draft lagi), sehingga daftar anggotanya hanya bisa dilihat.',
+                    tone: AppBadgeTone.info,
+                  )
+                else
+                  Card(
+                    key: _addNopFormKey,
+                    margin: EdgeInsets.zero,
+                    elevation: 0,
+                    color: theme.colorScheme.surfaceContainerLow,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      side: BorderSide(
+                        color: theme.colorScheme.outlineVariant.withValues(
+                          alpha: 0.5,
+                        ),
+                      ),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          TextField(
+                            controller: _nop,
+                            keyboardType: TextInputType.number,
+                            maxLines: 2,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.allow(
+                                RegExp(r'[0-9,]'),
+                              ),
+                            ],
+                            decoration: const InputDecoration(
+                              labelText: 'NOP Warga',
+                              helperText:
+                                  'Ketik NOP lengkap 18 angka, atau singkatan Blok+Nomor 5–7 angka '
+                                  '(contoh 17154 → Blok 017 Nomor 0154). Pisahkan dengan koma kalau lebih dari satu.',
+                              helperMaxLines: 3,
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: TextField(
+                                  controller: _tahunPajak,
+                                  keyboardType: TextInputType.number,
+                                  maxLength: 4,
+                                  inputFormatters: [
+                                    FilteringTextInputFormatter.digitsOnly,
+                                  ],
+                                  decoration: const InputDecoration(
+                                    labelText: 'Tahun Pajak',
+                                    border: OutlineInputBorder(),
+                                    counterText: '',
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: DropdownButtonFormField<String>(
+                                  isExpanded: true,
+                                  initialValue: _buku,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Buku',
+                                    border: OutlineInputBorder(),
+                                  ),
+                                  items: [
+                                    for (final b in _bukuOptions)
+                                      DropdownMenuItem(
+                                        value: b.$1,
+                                        child: Text(b.$2),
+                                      ),
+                                  ],
+                                  onChanged: (v) =>
+                                      setState(() => _buku = v ?? '1'),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          FilledButton.icon(
+                            onPressed: sibuk ? null : _tambahNop,
+                            icon: const Icon(Icons.playlist_add),
+                            label: const Text('Cari & Tambah ke Grup'),
+                          ),
+                          const SizedBox(height: 8),
+                          OutlinedButton.icon(
+                            onPressed: sibuk ? null : _unggahBerkas,
+                            icon: const Icon(Icons.upload_file),
+                            label: const Text('Masukkan dari File (Excel/CSV)'),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Isi file akan diperiksa dan ditampilkan sebagai NOP 18 angka terlebih dahulu sebelum ditambahkan. '
+                            'Tahun pajak & buku di atas berlaku untuk seluruh NOP di dalam file.',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                const SizedBox(height: 20),
+                Row(
+                  key: _memberToolbarKey,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        members.isEmpty
+                            ? 'Anggota'
+                            : 'Anggota (${members.length})',
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    if (members.isNotEmpty) ...[
+                      IconButton(
+                        onPressed: sibuk ? null : () => _unduh(_result!),
+                        icon: const Icon(Icons.download_outlined),
+                        tooltip: 'Unduh (PDF/Excel/CSV)',
+                      ),
+                      IconButton(
+                        onPressed: sibuk ? null : () => _bagikan(_result!),
+                        icon: const Icon(Icons.share_outlined),
+                        tooltip: 'Bagikan (PDF/Excel/CSV)',
+                      ),
+                      IconButton(
+                        onPressed: sibuk ? null : () => _cetak(_result!),
+                        icon: const Icon(Icons.print_outlined),
+                        tooltip: 'Cetak',
+                      ),
+                    ],
+                    IconButton(
+                      onPressed: sibuk ? null : _muat,
+                      icon: const Icon(Icons.refresh),
+                      tooltip: 'Muat ulang',
+                    ),
+                  ],
+                ),
+                if (_bisaDiubah && members.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Row(
+                      children: [
+                        TextButton(
+                          onPressed: sibuk
+                              ? null
+                              : () => setState(() {
+                                  if (_terpilih.length == members.length) {
+                                    _terpilih.clear();
+                                  } else {
+                                    _terpilih
+                                      ..clear()
+                                      ..addAll(members.map((m) => m.kunci));
+                                  }
+                                }),
+                          child: Text(
+                            _terpilih.length == members.length
+                                ? 'Batal Pilih Semua'
+                                : 'Pilih Semua Data',
+                          ),
+                        ),
+                        const Spacer(),
+                        TextButton.icon(
+                          onPressed: sibuk || _terpilih.isEmpty
+                              ? null
+                              : _hapusTerpilih,
+                          icon: const Icon(Icons.delete_outline),
+                          style: TextButton.styleFrom(
+                            foregroundColor: theme.colorScheme.error,
+                          ),
+                          label: Text('Keluarkan (${_terpilih.length})'),
+                        ),
+                      ],
+                    ),
+                  ),
+                Column(
+                  key: _memberListAreaKey,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (_loading)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 24),
+                        child: Center(child: CircularProgressIndicator()),
+                      )
+                    else if (_result?.errorMessage != null)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        child: AppAlertBanner(
+                          message: _result!.errorMessage!,
+                          tone: AppBadgeTone.info,
+                        ),
+                      )
+                    else if (tampil.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 12),
+                        child: AppEmptyStateCard(
+                          icon: Icons.person_add_alt_1_outlined,
+                          title: 'Belum Ada Anggota di Grup Ini',
+                          subtitle:
+                              'Ketik NOP warga di formulir atas atau unggah dari berkas Excel/CSV untuk mulai menambahkan anggota.',
+                        ),
+                      )
+                    else ...[
+                      for (final m in tampil)
+                        Card(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          child: ListTile(
+                            leading: _bisaDiubah
+                                ? Checkbox(
+                                    value: _terpilih.contains(m.kunci),
+                                    onChanged: sibuk
+                                        ? null
+                                        : (v) => setState(() {
+                                            if (v == true) {
+                                              _terpilih.add(m.kunci);
+                                            } else {
+                                              _terpilih.remove(m.kunci);
+                                            }
+                                          }),
+                                  )
+                                : null,
+                            title: Text(
+                              m.nop,
+                              style: const TextStyle(
+                                fontFamily: 'monospace',
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            subtitle: Text(
+                              '${m.namaWp}\nTahun ${m.tahunPajak} · Jatuh tempo ${m.jatuhTempo}\n'
+                              'Pokok ${m.pokok} · Denda ${m.denda} · Total ${m.total}',
+                            ),
+                            isThreeLine: true,
+                          ),
+                        ),
+                      if (_tampil < members.length) ...[
+                        OutlinedButton(
+                          onPressed: () => setState(() => _tampil += _pageSize),
+                          child: Text(
+                            'Muat $_pageSize Data Lagi (${members.length - _tampil} tersisa)',
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextButton.icon(
+                          onPressed: () =>
+                              _bukaSemuaLaluKeBawah(members.length),
+                          icon: const Icon(Icons.vertical_align_bottom),
+                          label: Text(
+                            'Buka Semua (${members.length}) & Lihat Total',
+                          ),
+                        ),
+                      ],
+                      if (members.isNotEmpty)
+                        Card(
+                          margin: const EdgeInsets.only(top: 8, bottom: 72),
+                          color: theme.colorScheme.secondaryContainer,
+                          child: Padding(
+                            padding: const EdgeInsets.all(14),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Total Keseluruhan (${members.length} NOP)',
+                                  style: theme.textTheme.titleSmall?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                _barisTotal('Pokok', _result!.totalPokok),
+                                _barisTotal('Denda', _result!.totalDenda),
+                                const Divider(),
+                                _barisTotal(
+                                  'Total Bayar',
+                                  _result!.totalBayar,
+                                  tebal: true,
+                                ),
+                                if (_bisaDiubah) ...[
+                                  const SizedBox(height: 12),
+                                  SizedBox(
+                                    width: double.infinity,
+                                    child: FilledButton.icon(
+                                      onPressed:
+                                          sibuk || _finalkanPerluVerifikasi
+                                          ? null
+                                          : _finalkan,
+                                      icon: const Icon(Icons.lock_outline),
+                                      label: const Text(
+                                        'Finalkan & Kunci Grup',
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ),
+                    ],
+                  ],
+                ),
+                if (_aksiBerjalan)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 24),
+                    child: Center(child: CircularProgressIndicator()),
+                  ),
+              ],
+            ),
           ),
         ),
       ),

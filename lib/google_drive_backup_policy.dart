@@ -69,15 +69,34 @@ class GoogleDriveBackupPolicy {
   /// - `1ABC_123-xyz` -> `1ABC_123-xyz`
   static String? extractFolderId(String input) {
     final trimmed = input.trim();
-    if (trimmed.isEmpty) return null;
-
-    final urlMatch = RegExp(r'folders/([a-zA-Z0-9_-]+)').firstMatch(trimmed);
-    if (urlMatch != null) {
-      return urlMatch.group(1);
+    if (trimmed.isEmpty ||
+        trimmed.length > 512 ||
+        trimmed.contains('..') ||
+        trimmed.contains('\\') ||
+        RegExp(r'[\x00-\x1F\x7F]').hasMatch(trimmed)) {
+      return null;
     }
 
-    // ID folder Google Drive biasanya alfanumerik panjang >= 15 karakter
-    if (RegExp(r'^[a-zA-Z0-9_-]{15,}$').hasMatch(trimmed)) {
+    // Jika input tampak seperti URL atau memiliki slash, wajib berupa URL resmi https://drive.google.com/...
+    if (trimmed.contains('://') || trimmed.contains('/')) {
+      final uri = Uri.tryParse(trimmed);
+      if (uri == null ||
+          uri.scheme != 'https' ||
+          uri.host.toLowerCase() != 'drive.google.com' ||
+          uri.userInfo.isNotEmpty) {
+        return null;
+      }
+      final urlMatch = RegExp(
+        r'/folders/([a-zA-Z0-9_-]{10,128})(?:$|[/?#])',
+      ).firstMatch(uri.path);
+      if (urlMatch != null) {
+        return urlMatch.group(1);
+      }
+      return null;
+    }
+
+    // ID folder Google Drive mentah (alfanumerik panjang 15..128 karakter)
+    if (RegExp(r'^[a-zA-Z0-9_-]{15,128}$').hasMatch(trimmed)) {
       return trimmed;
     }
 
@@ -94,22 +113,43 @@ class GoogleDriveBackupPolicy {
     final trimmed = input.trim();
     if (trimmed.isEmpty) return null;
 
-    final fileMatch = RegExp(r'file/d/([a-zA-Z0-9_-]+)').firstMatch(trimmed);
+    if (trimmed.contains('://') ||
+        trimmed.startsWith('//') ||
+        trimmed.contains('/')) {
+      final uri = Uri.tryParse(trimmed);
+      if (uri == null ||
+          !uri.hasScheme ||
+          uri.scheme.toLowerCase() != 'https') {
+        return null;
+      }
+      final host = uri.host.toLowerCase();
+      if (host != 'drive.google.com' && host != 'docs.google.com') {
+        return null;
+      }
+    }
+
+    final fileMatch = RegExp(
+      r'file/d/([a-zA-Z0-9_-]{10,128})(?:[/?#&]|$)',
+    ).firstMatch(trimmed);
     if (fileMatch != null) {
       return fileMatch.group(1);
     }
 
-    final idParamMatch = RegExp(r'[?&]id=([a-zA-Z0-9_-]+)').firstMatch(trimmed);
+    final idParamMatch = RegExp(
+      r'[?&]id=([a-zA-Z0-9_-]{10,128})(?:[&#]|$)',
+    ).firstMatch(trimmed);
     if (idParamMatch != null) {
       return idParamMatch.group(1);
     }
 
-    final folderMatch = RegExp(r'folders/([a-zA-Z0-9_-]+)').firstMatch(trimmed);
+    final folderMatch = RegExp(
+      r'folders/([a-zA-Z0-9_-]{10,128})(?:[/?#&]|$)',
+    ).firstMatch(trimmed);
     if (folderMatch != null) {
       return folderMatch.group(1);
     }
 
-    if (RegExp(r'^[a-zA-Z0-9_-]{15,}$').hasMatch(trimmed)) {
+    if (RegExp(r'^[a-zA-Z0-9_-]{15,128}$').hasMatch(trimmed)) {
       return trimmed;
     }
 

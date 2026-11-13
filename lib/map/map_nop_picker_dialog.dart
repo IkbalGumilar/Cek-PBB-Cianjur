@@ -71,7 +71,8 @@ class _MapNopPickerDialogState extends State<_MapNopPickerDialog> {
     final digitsQ = q.replaceAll(RegExp(r'[^0-9]'), '');
     final results = <BlokRecord>[];
     for (final r in widget.uniqueDhkpRecords) {
-      final matchesText = r.namaWajibPajak.toLowerCase().contains(q) ||
+      final matchesText =
+          r.namaWajibPajak.toLowerCase().contains(q) ||
           r.alamatObjek.toLowerCase().contains(q) ||
           r.blok.toLowerCase().contains(q) ||
           r.wilayah.toLowerCase().contains(q);
@@ -96,7 +97,9 @@ class _MapNopPickerDialogState extends State<_MapNopPickerDialog> {
     }
 
     // Jika NOP ternyata ada di daftar DHKP, pakai data resminya
-    final existingDhkp = widget.uniqueDhkpRecords.cast<BlokRecord?>().firstWhere(
+    final existingDhkp = widget.uniqueDhkpRecords
+        .cast<BlokRecord?>()
+        .firstWhere(
           (r) => MapPinEntry.normalizePinNop(r!.nop) == norm,
           orElse: () => null,
         );
@@ -104,9 +107,10 @@ class _MapNopPickerDialogState extends State<_MapNopPickerDialog> {
     final nama = _manualNamaCtrl.text.trim().isNotEmpty
         ? _manualNamaCtrl.text.trim().toUpperCase()
         : (existingDhkp?.namaWajibPajak ??
-            'WP Blok ${nopBlok(norm)} No ${nopWilayah(norm)}');
+              'WP Blok ${nopBlok(norm)} No ${nopWilayah(norm)}');
 
-    final rec = existingDhkp ??
+    final rec =
+        existingDhkp ??
         BlokRecord(
           nop: norm,
           namaWajibPajak: nama,
@@ -163,13 +167,17 @@ class _MapNopPickerDialogState extends State<_MapNopPickerDialog> {
               decoration: BoxDecoration(
                 color: Colors.blueGrey.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
-                border:
-                    Border.all(color: Colors.blueGrey.withValues(alpha: 0.25)),
+                border: Border.all(
+                  color: Colors.blueGrey.withValues(alpha: 0.25),
+                ),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.my_location_rounded,
-                      size: 14, color: Colors.blueGrey),
+                  const Icon(
+                    Icons.my_location_rounded,
+                    size: 14,
+                    color: Colors.blueGrey,
+                  ),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
@@ -250,8 +258,9 @@ class _MapNopPickerDialogState extends State<_MapNopPickerDialog> {
                       ),
                     ),
                     visualDensity: VisualDensity.compact,
-                    backgroundColor:
-                        const Color(0xFFF1C40F).withValues(alpha: 0.25),
+                    backgroundColor: const Color(
+                      0xFFF1C40F,
+                    ).withValues(alpha: 0.25),
                   ),
                 ],
               ],
@@ -264,7 +273,8 @@ class _MapNopPickerDialogState extends State<_MapNopPickerDialog> {
                   color: Colors.amber.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                      color: Colors.amber.shade700.withValues(alpha: 0.35)),
+                    color: Colors.amber.shade700.withValues(alpha: 0.35),
+                  ),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -316,8 +326,10 @@ class _MapNopPickerDialogState extends State<_MapNopPickerDialog> {
                             ? 'Belum ada data DHKP dimuat.\nGunakan "Input NOP Manual" di atas.'
                             : 'Tidak ditemukan NOP/WP untuk "$_query".',
                         textAlign: TextAlign.center,
-                        style:
-                            const TextStyle(fontSize: 12, color: Colors.grey),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey,
+                        ),
                       ),
                     )
                   : ListView.separated(
@@ -327,10 +339,11 @@ class _MapNopPickerDialogState extends State<_MapNopPickerDialog> {
                         final r = filtered[idx];
                         final norm = MapPinEntry.normalizePinNop(r.nop);
                         final isChecked = _selected.containsKey(norm);
-                        final alreadyHere =
-                            widget.existingNopsAtCoordinate.contains(norm);
+                        final alreadyHere = widget.existingNopsAtCoordinate
+                            .contains(norm);
                         final prevCoord = widget.existingPinCoordByNop[norm];
-                        final pinnedElsewhere = prevCoord != null &&
+                        final pinnedElsewhere =
+                            prevCoord != null &&
                             !alreadyHere &&
                             prevCoord != widget.coordinate;
 
@@ -362,7 +375,9 @@ class _MapNopPickerDialogState extends State<_MapNopPickerDialog> {
                               ),
                               Container(
                                 padding: const EdgeInsets.symmetric(
-                                    horizontal: 6, vertical: 1),
+                                  horizontal: 6,
+                                  vertical: 1,
+                                ),
                                 decoration: BoxDecoration(
                                   color: r.isPaid
                                       ? Colors.green.withValues(alpha: 0.14)

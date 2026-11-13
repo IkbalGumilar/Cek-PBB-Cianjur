@@ -10,6 +10,7 @@ import 'staff_portal/staff_authenticator_store.dart';
 import 'staff_portal/totp_helper.dart';
 import 'staff_portal_client.dart';
 import 'theme_controller.dart';
+import 'ui/app_design_system.dart';
 
 /// Layar verifikasi MFA (kode Google Authenticator) — tahap kedua login
 /// portal staf, dibuka setelah [StaffLoginScreen] berhasil lolos tahap
@@ -109,7 +110,10 @@ class _StaffMfaScreenState extends State<StaffMfaScreen> {
   }
 
   void _maybeTriggerAutoVerify() {
-    if (_hasSecret && _autoVerifyEnabled && !_autoVerifyTriggered && _currentTotpCode != null) {
+    if (_hasSecret &&
+        _autoVerifyEnabled &&
+        !_autoVerifyTriggered &&
+        _currentTotpCode != null) {
       _autoVerifyTriggered = true;
       _otpController.text = _currentTotpCode!;
       // Panggil auto-verify pada frame berikutnya setelah widget terpasang sempurna
@@ -300,95 +304,87 @@ class _StaffMfaScreenState extends State<StaffMfaScreen> {
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // 1. Kartu Status Google Authenticator Terintegrasi / Promosi Hubungkan Kunci
-              if (_hasSecret)
-                _buildConnectedTokenCard(colorScheme)
-              else
-                _buildConnectPromoCard(colorScheme),
+          child: ResponsivePageContainer(
+            isCompactForm: true,
+            padding: EdgeInsets.zero,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // 1. Kartu Status Google Authenticator Terintegrasi / Promosi Hubungkan Kunci
+                if (_hasSecret)
+                  _buildConnectedTokenCard(colorScheme)
+                else
+                  _buildConnectPromoCard(colorScheme),
 
-              const SizedBox(height: 20),
+                const SizedBox(height: 20),
 
-              // 2. Form Input Manual / Auto-Fill
-              Text(
-                'Masukkan kode 6 digit yang dihasilkan aplikasi Google Authenticator:',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
+                // 2. Form Input Manual / Auto-Fill
+                Text(
+                  'Masukkan kode 6 digit yang dihasilkan aplikasi Google Authenticator:',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _otpController,
-                keyboardType: TextInputType.number,
-                maxLength: 6,
-                style: const TextStyle(
-                  fontSize: 22,
-                  letterSpacing: 4,
-                  fontWeight: FontWeight.bold,
-                ),
-                textAlign: TextAlign.center,
-                decoration: InputDecoration(
-                  labelText: 'Kode Verifikasi 6 Digit',
-                  hintText: '000000',
-                  border: const OutlineInputBorder(),
-                  prefixIcon: const Icon(Icons.pin),
-                  suffixIcon: _otpController.text.isNotEmpty
-                      ? IconButton(
-                          icon: const Icon(Icons.clear),
-                          onPressed: () {
-                            _otpController.clear();
-                            setState(() {});
-                          },
-                        )
-                      : null,
-                ),
-                onChanged: (_) => setState(() {}),
-                onSubmitted: (_) => _submitting ? null : _verify(),
-              ),
-              const SizedBox(height: 8),
-
-              FilledButton.icon(
-                icon: _submitting
-                    ? const SizedBox.shrink()
-                    : const Icon(Icons.login_rounded),
-                label: _submitting
-                    ? SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: colorScheme.onPrimary,
-                        ),
-                      )
-                    : const Text('Verifikasi & Masuk'),
-                onPressed: _submitting ? null : _verify,
-              ),
-
-              if (_errorText != null) ...[
                 const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: colorScheme.errorContainer,
-                    borderRadius: BorderRadius.circular(8),
+                TextField(
+                  controller: _otpController,
+                  keyboardType: TextInputType.number,
+                  maxLength: 6,
+                  style: const TextStyle(
+                    fontSize: 22,
+                    letterSpacing: 4,
+                    fontWeight: FontWeight.bold,
                   ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.error_outline, color: colorScheme.error),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          _errorText!,
-                          style: TextStyle(color: colorScheme.onErrorContainer),
-                        ),
-                      ),
-                    ],
+                  textAlign: TextAlign.center,
+                  decoration: InputDecoration(
+                    labelText: 'Kode Verifikasi 6 Digit',
+                    hintText: '000000',
+                    border: const OutlineInputBorder(),
+                    prefixIcon: const Icon(Icons.pin),
+                    suffixIcon: _otpController.text.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear),
+                            onPressed: () {
+                              _otpController.clear();
+                              setState(() {});
+                            },
+                          )
+                        : null,
                   ),
+                  onChanged: (_) => setState(() {}),
+                  onSubmitted: (_) => _submitting ? null : _verify(),
                 ),
+                const SizedBox(height: 8),
+
+                FilledButton.icon(
+                  icon: _submitting
+                      ? const SizedBox.shrink()
+                      : const Icon(Icons.login_rounded),
+                  label: _submitting
+                      ? SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: colorScheme.onPrimary,
+                          ),
+                        )
+                      : const Text('Verifikasi & Masuk'),
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size.fromHeight(48),
+                  ),
+                  onPressed: _submitting ? null : _verify,
+                ),
+
+                if (_errorText != null) ...[
+                  const SizedBox(height: 12),
+                  AppAlertBanner(
+                    message: _errorText!,
+                    tone: AppStatusTone.danger,
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),
@@ -487,9 +483,16 @@ class _StaffMfaScreenState extends State<StaffMfaScreen> {
                       value: 'delete',
                       child: Row(
                         children: [
-                          Icon(Icons.delete_outline_rounded, size: 18, color: Colors.red),
+                          Icon(
+                            Icons.delete_outline_rounded,
+                            size: 18,
+                            color: Colors.red,
+                          ),
                           SizedBox(width: 8),
-                          Text('Hapus Kunci', style: TextStyle(color: Colors.red)),
+                          Text(
+                            'Hapus Kunci',
+                            style: TextStyle(color: Colors.red),
+                          ),
                         ],
                       ),
                     ),
@@ -529,7 +532,9 @@ class _StaffMfaScreenState extends State<StaffMfaScreen> {
                           borderRadius: BorderRadius.circular(6),
                           child: Text(
                             _currentTotpCode != null
-                                ? TotpHelper.formatCodeWithSpace(_currentTotpCode!)
+                                ? TotpHelper.formatCodeWithSpace(
+                                    _currentTotpCode!,
+                                  )
                                 : '------',
                             style: TextStyle(
                               fontFamily: 'monospace',
@@ -554,7 +559,8 @@ class _StaffMfaScreenState extends State<StaffMfaScreen> {
                         CircularProgressIndicator(
                           value: _progressRatio,
                           strokeWidth: 3.5,
-                          backgroundColor: colorScheme.outlineVariant.withValues(alpha: 0.5),
+                          backgroundColor: colorScheme.outlineVariant
+                              .withValues(alpha: 0.5),
                           color: countdownColor,
                         ),
                         Text(
@@ -649,10 +655,7 @@ class _StaffMfaScreenState extends State<StaffMfaScreen> {
                 const Expanded(
                   child: Text(
                     'Hubungkan Google Authenticator',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                    ),
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                   ),
                 ),
               ],
@@ -702,10 +705,12 @@ class _ConnectAuthenticatorDialog extends StatefulWidget {
   });
 
   @override
-  State<_ConnectAuthenticatorDialog> createState() => _ConnectAuthenticatorDialogState();
+  State<_ConnectAuthenticatorDialog> createState() =>
+      _ConnectAuthenticatorDialogState();
 }
 
-class _ConnectAuthenticatorDialogState extends State<_ConnectAuthenticatorDialog> {
+class _ConnectAuthenticatorDialogState
+    extends State<_ConnectAuthenticatorDialog> {
   late final TextEditingController _keyController;
   final _labelController = TextEditingController();
 
@@ -741,7 +746,9 @@ class _ConnectAuthenticatorDialogState extends State<_ConnectAuthenticatorDialog
   void _refreshPreviewCode() {
     if (_selectedAccount != null) {
       try {
-        final code = TotpHelper.generateTotp(secretBase32: _selectedAccount!.secret);
+        final code = TotpHelper.generateTotp(
+          secretBase32: _selectedAccount!.secret,
+        );
         if (mounted && code != _livePreviewCode) {
           setState(() => _livePreviewCode = code);
         }
@@ -794,6 +801,7 @@ class _ConnectAuthenticatorDialogState extends State<_ConnectAuthenticatorDialog
 
   Future<void> _pasteFromClipboard() async {
     final data = await Clipboard.getData(Clipboard.kTextPlain);
+    if (!mounted) return;
     if (data?.text != null) {
       final text = data!.text!.trim();
       _keyController.text = text;
@@ -804,14 +812,15 @@ class _ConnectAuthenticatorDialogState extends State<_ConnectAuthenticatorDialog
   Future<void> _pickQrImage() async {
     try {
       final res = await FilePicker.pickFiles(type: FileType.image);
-      if (res.isEmpty || res.first.path == null) return;
+      if (!mounted || res.isEmpty || res.first.path == null) return;
       final bytes = await File(res.first.path!).readAsBytes();
-      if (bytes.isEmpty) return;
+      if (!mounted || bytes.isEmpty) return;
 
       final qrText = TotpHelper.decodeQrFromImageBytes(bytes);
       if (qrText == null || qrText.trim().isEmpty) {
         setState(() {
-          _validationError = 'Tidak ditemukan QR Code yang terbaca pada gambar tersebut. '
+          _validationError =
+              'Tidak ditemukan QR Code yang terbaca pada gambar tersebut. '
               'Pastikan gambar jelas dan memuat QR Code Google Authenticator yang utuh.';
           _livePreviewCode = null;
           _selectedAccount = null;
@@ -823,6 +832,7 @@ class _ConnectAuthenticatorDialogState extends State<_ConnectAuthenticatorDialog
       _keyController.text = qrText;
       _processInput(qrText);
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _validationError = 'Gagal membaca gambar QR: $e';
       });
@@ -836,7 +846,9 @@ class _ConnectAuthenticatorDialogState extends State<_ConnectAuthenticatorDialog
     await widget.store.saveSecret(
       _selectedAccount!.secret,
       accountName: label.isNotEmpty ? label : _selectedAccount!.name,
-      issuer: _selectedAccount!.issuer.isNotEmpty ? _selectedAccount!.issuer : 'BAPENDA',
+      issuer: _selectedAccount!.issuer.isNotEmpty
+          ? _selectedAccount!.issuer
+          : 'BAPENDA',
     );
 
     if (mounted) Navigator.pop(context, true);
@@ -919,14 +931,20 @@ class _ConnectAuthenticatorDialogState extends State<_ConnectAuthenticatorDialog
                 const SizedBox(height: 12),
                 Text(
                   'Ditemukan ${_parsedAccounts.length} akun dalam data ekspor. Pilih akun:',
-                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 const SizedBox(height: 4),
                 DropdownButtonFormField<TotpAccount>(
                   initialValue: _selectedAccount,
                   decoration: const InputDecoration(
                     border: OutlineInputBorder(),
-                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
                   ),
                   items: _parsedAccounts.map((acc) {
                     return DropdownMenuItem(
@@ -966,14 +984,20 @@ class _ConnectAuthenticatorDialogState extends State<_ConnectAuthenticatorDialog
                   decoration: BoxDecoration(
                     color: colorScheme.primaryContainer.withValues(alpha: 0.4),
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: colorScheme.primary.withValues(alpha: 0.3)),
+                    border: Border.all(
+                      color: colorScheme.primary.withValues(alpha: 0.3),
+                    ),
                   ),
                   child: Column(
                     children: [
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.check_circle_rounded, color: colorScheme.primary, size: 18),
+                          Icon(
+                            Icons.check_circle_rounded,
+                            color: colorScheme.primary,
+                            size: 18,
+                          ),
                           const SizedBox(width: 6),
                           Text(
                             'Kunci Valid — Pratinjau Kode:',
@@ -1017,12 +1041,19 @@ class _ConnectAuthenticatorDialogState extends State<_ConnectAuthenticatorDialog
                   ),
                   child: Row(
                     children: [
-                      Icon(Icons.warning_amber_rounded, color: colorScheme.error, size: 18),
+                      Icon(
+                        Icons.warning_amber_rounded,
+                        color: colorScheme.error,
+                        size: 18,
+                      ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           _validationError!,
-                          style: TextStyle(fontSize: 12, color: colorScheme.error),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: colorScheme.error,
+                          ),
                         ),
                       ),
                     ],

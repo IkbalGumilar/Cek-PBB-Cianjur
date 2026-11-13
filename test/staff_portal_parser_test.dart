@@ -87,8 +87,20 @@ void main() {
         expect(result.errorMessage, isNull);
         expect(result.headers, ['No', 'Kelurahan', 'Baku', 'Realisasi', '%']);
         expect(result.rows, hasLength(2));
-        expect(result.rows[0], ['1', 'BOBOJONG', '232.798.953', '109.341.563', '46,97']);
-        expect(result.rows[1], ['', 'TOTAL', '232.798.953', '109.341.563', '46,97']);
+        expect(result.rows[0], [
+          '1',
+          'BOBOJONG',
+          '232.798.953',
+          '109.341.563',
+          '46,97',
+        ]);
+        expect(result.rows[1], [
+          '',
+          'TOTAL',
+          '232.798.953',
+          '109.341.563',
+          '46,97',
+        ]);
       },
     );
 
@@ -117,22 +129,19 @@ void main() {
       },
     );
 
-    test(
-      'parseGenericTable normalizes row lengths to match header length',
-      () {
-        const html = '''
+    test('parseGenericTable normalizes row lengths to match header length', () {
+      const html = '''
         <table>
           <tr><th>A</th><th>B</th><th>C</th><th>D</th></tr>
           <tr><td>1</td><td>2</td></tr>
           <tr><td>1</td><td>2</td><td>3</td><td>4</td><td>5</td></tr>
         </table>
       ''';
-        final result = StaffPortalParser.parseGenericTable(html);
-        expect(result.headers, ['A', 'B', 'C', 'D', 'Kolom 5']);
-        expect(result.rows[0], ['1', '2', '', '', '']);
-        expect(result.rows[1], ['1', '2', '3', '4', '5']);
-      },
-    );
+      final result = StaffPortalParser.parseGenericTable(html);
+      expect(result.headers, ['A', 'B', 'C', 'D', 'Kolom 5']);
+      expect(result.rows[0], ['1', '2', '', '', '']);
+      expect(result.rows[1], ['1', '2', '3', '4', '5']);
+    });
 
     test(
       'parseKolektifGroupsJson extracts group actions, kelurahan code, and fields',
@@ -251,8 +260,10 @@ void main() {
       expect(bb.totalPenerimaan, 515000000);
     });
 
-    test('parseExcelQueueTable parses queue items, download links, and hapus IDs', () {
-      const htmlQueue = '''
+    test(
+      'parseExcelQueueTable parses queue items, download links, and hapus IDs',
+      () {
+        const htmlQueue = '''
         <div id="frame-tbl-monitoring" class="tbl-monitoring">
           <table width="100%" cellspacing="2" cellpadding="7" border="0">
             <tbody>
@@ -283,28 +294,31 @@ void main() {
         </div>
       ''';
 
-      final queue = StaffPortalParser.parseExcelQueueTable(htmlQueue);
-      expect(queue.errorMessage, isNull);
-      expect(queue.items, hasLength(2));
-      expect(queue.paginationText, '1 - 2 dari 2');
+        final queue = StaffPortalParser.parseExcelQueueTable(htmlQueue);
+        expect(queue.errorMessage, isNull);
+        expect(queue.items, hasLength(2));
+        expect(queue.paginationText, '1 - 2 dari 2');
 
-      final item1 = queue.items[0];
-      expect(item1.no, '1');
-      expect(item1.tanggal, '27-10-2025 11:05:18');
-      expect(item1.filterSummary, 'Tanggal: 01-01-25 • Kel: BOBOJONG');
-      expect(item1.isProcessing, isFalse);
-      expect(item1.fileName, 'sudah_bayar_01.xlsx');
-      expect(item1.hapusId, 'abc123cpm');
+        final item1 = queue.items[0];
+        expect(item1.no, '1');
+        expect(item1.tanggal, '27-10-2025 11:05:18');
+        expect(item1.filterSummary, 'Tanggal: 01-01-25 • Kel: BOBOJONG');
+        expect(item1.isProcessing, isFalse);
+        expect(item1.fileName, 'sudah_bayar_01.xlsx');
+        expect(item1.hapusId, 'abc123cpm');
 
-      final item2 = queue.items[1];
-      expect(item2.no, '2');
-      expect(item2.isProcessing, isTrue);
-      expect(item2.fileName, isNull);
-      expect(item2.hapusId, 'def456cpm');
-    });
+        final item2 = queue.items[1];
+        expect(item2.no, '2');
+        expect(item2.isProcessing, isTrue);
+        expect(item2.fileName, isNull);
+        expect(item2.hapusId, 'def456cpm');
+      },
+    );
 
-    test('parseMonitoringKelurahanOptions extracts kelurahan options from select', () {
-      const html = '''
+    test(
+      'parseMonitoringKelurahanOptions extracts kelurahan options from select',
+      () {
+        const html = '''
         <table>
           <tr>
             <td>Desa/Kelurahan</td>
@@ -315,23 +329,33 @@ void main() {
           </tr>
         </table>
       ''';
-      final options = StaffPortalParser.parseMonitoringKelurahanOptions(html);
-      expect(options, hasLength(2));
-      expect(options[0].code, '3205200004');
-      expect(options[0].name, 'BOBOJONG');
-      expect(options[1].code, '3205200001');
-      expect(options[1].name, 'JAMALI');
-    });
+        final options = StaffPortalParser.parseMonitoringKelurahanOptions(html);
+        expect(options, hasLength(2));
+        expect(options[0].code, '3205200004');
+        expect(options[0].name, 'BOBOJONG');
+        expect(options[1].code, '3205200001');
+        expect(options[1].name, 'JAMALI');
+      },
+    );
 
-    test('StaffPortalTokenExtractor extracts IDKEC and IDKEL from Monitoring HTML', () {
-      const html = '''
+    test(
+      'StaffPortalTokenExtractor extracts IDKEC and IDKEL from Monitoring HTML',
+      () {
+        const html = '''
         var IDKEC = '3205200';
         var IDKEL = '3205200004';
         var ROLE  = 'rmKelurahan';
       ''';
-      expect(StaffPortalTokenExtractor.extractMonitoringIdKec(html), '3205200');
-      expect(StaffPortalTokenExtractor.extractMonitoringIdKel(html), '3205200004');
-    });
+        expect(
+          StaffPortalTokenExtractor.extractMonitoringIdKec(html),
+          '3205200',
+        );
+        expect(
+          StaffPortalTokenExtractor.extractMonitoringIdKel(html),
+          '3205200004',
+        );
+      },
+    );
 
     test('availableDhkpYears contains 2015 s.d. current year', () {
       final years = availableDhkpYears();
@@ -343,24 +367,27 @@ void main() {
       expect(years.last, greaterThanOrEqualTo(2026));
     });
 
-    test('StaffPortalClient session detection recognizes both single and double quoted user-menu', () {
-      const singleQuoteHtml = '''
+    test(
+      'StaffPortalClient session detection recognizes both single and double quoted user-menu',
+      () {
+        const singleQuoteHtml = '''
         <div id='user-menu'> Jam Server : <span>...</span> User: MANDE_BOBOJONG (<a href='main.php?param=bG9nb3V0PTE='>logout</a>)</div>
       ''';
-      const doubleQuoteHtml = '''
+        const doubleQuoteHtml = '''
         <div id="user-menu"> Jam Server : <span>...</span> User: MANDE_BOBOJONG (<a href="main.php?param=bG9nb3V0PTE=">logout</a>)</div>
       ''';
-      const unauthenticatedHtml = '''
+        const unauthenticatedHtml = '''
         <body class='login-page'><div id='header'>PBB-P2 KABUPATEN CIANJUR</div></body>
       ''';
 
-      bool isSessionActive(String html) =>
-          html.contains('user-menu') && html.contains('logout');
+        bool isSessionActive(String html) =>
+            html.contains('user-menu') && html.contains('logout');
 
-      expect(isSessionActive(singleQuoteHtml), isTrue);
-      expect(isSessionActive(doubleQuoteHtml), isTrue);
-      expect(isSessionActive(unauthenticatedHtml), isFalse);
-    });
+        expect(isSessionActive(singleQuoteHtml), isTrue);
+        expect(isSessionActive(doubleQuoteHtml), isTrue);
+        expect(isSessionActive(unauthenticatedHtml), isFalse);
+      },
+    );
 
     test('isSessionExpired detects 302 redirects to login and login forms', () {
       expect(
@@ -399,26 +426,29 @@ void main() {
       );
     });
 
-    test('parseGenericTable handles session expiration and thousand-formatted pagination', () {
-      final expired = StaffPortalParser.parseGenericTable(
-        '<form action="plogin.php"><input name="cImage"></form>',
-      );
-      expect(expired.errorMessage, contains('kedaluwarsa'));
+    test(
+      'parseGenericTable handles session expiration and thousand-formatted pagination',
+      () {
+        final expired = StaffPortalParser.parseGenericTable(
+          '<form action="plogin.php"><input name="cImage"></form>',
+        );
+        expect(expired.errorMessage, contains('kedaluwarsa'));
 
-      const htmlWithDots = '''
+        const htmlWithDots = '''
         <table>
           <tr><th>No</th><th>NOP</th></tr>
           <tr><td>1</td><td>320520000400100010</td></tr>
         </table>
         <div id="paging-tbl">&nbsp;1 - 50 dari 15.515&nbsp;<span id="next-page" onclick="setPage('2','2')"></span></div>
       ''';
-      final res = StaffPortalParser.parseGenericTable(htmlWithDots);
-      expect(res.errorMessage, isNull);
-      expect(res.pageStart, 1);
-      expect(res.pageEnd, 50);
-      expect(res.totalRecords, 15515);
-      expect(res.hasNextPage, isTrue);
-    });
+        final res = StaffPortalParser.parseGenericTable(htmlWithDots);
+        expect(res.errorMessage, isNull);
+        expect(res.pageStart, 1);
+        expect(res.pageEnd, 50);
+        expect(res.totalRecords, 15515);
+        expect(res.hasNextPage, isTrue);
+      },
+    );
 
     test('kolektif and excel queue parsers recognize session expiration', () {
       final qRes = StaffPortalParser.parseExcelQueueTable(
@@ -445,4 +475,3 @@ void main() {
     });
   });
 }
-

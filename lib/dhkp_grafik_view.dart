@@ -8,6 +8,11 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'blok_record.dart';
+import 'dhkp/blok_catatan_widgets.dart'
+    show
+        BlokPrintCancelToken,
+        BlokPrintCancelledException,
+        runCancellableDhkpPrint;
 import 'dhkp/dhkp_chart_widgets.dart';
 import 'dhkp/dhkp_grafik_analytics.dart';
 import 'dhkp/dhkp_grafik_exporter.dart';
@@ -91,13 +96,15 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
   @override
   void initState() {
     super.initState();
-    final availableYears = widget.records
-        .map((r) => r.tahunBayar)
-        .where((y) => y.isNotEmpty)
-        .toSet()
-        .toList()
-      ..sort((a, b) => b.compareTo(a));
-    _selectedTahun = widget.selectedTahun ??
+    final availableYears =
+        widget.records
+            .map((r) => r.tahunBayar)
+            .where((y) => y.isNotEmpty)
+            .toSet()
+            .toList()
+          ..sort((a, b) => b.compareTo(a));
+    _selectedTahun =
+        widget.selectedTahun ??
         (availableYears.isNotEmpty
             ? availableYears.first
             : '${DateTime.now().year}');
@@ -279,7 +286,8 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
           .map((r) => r.tahunBayar)
           .where((y) => y.isNotEmpty)
           .toSet();
-      if (availableYears.isNotEmpty && !availableYears.contains(_selectedTahun)) {
+      if (availableYears.isNotEmpty &&
+          !availableYears.contains(_selectedTahun)) {
         _selectedTahun =
             (availableYears.toList()..sort((a, b) => b.compareTo(a))).first;
         _selectedItemLabel = null;
@@ -518,7 +526,9 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
           if (savedPath == null) return;
           await NativeFileHelper.showInFileManager(savedPath);
           messenger.showSnackBar(
-            SnackBar(content: Text('Gambar grafik disimpan dan dibuka di: $savedPath')),
+            SnackBar(
+              content: Text('Gambar grafik disimpan dan dibuka di: $savedPath'),
+            ),
           );
         }
       } else {
@@ -544,7 +554,11 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
           if (savedPath == null) return;
           await NativeFileHelper.showInFileManager(savedPath);
           messenger.showSnackBar(
-            SnackBar(content: Text('Dokumen PDF grafik disimpan dan dibuka di: $savedPath')),
+            SnackBar(
+              content: Text(
+                'Dokumen PDF grafik disimpan dan dibuka di: $savedPath',
+              ),
+            ),
           );
         }
       }
@@ -555,7 +569,12 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
     }
   }
 
-  (List<BlokRecord> murniRecords, bool hasMultiDusun, List<int> uniqueDusuns, List<String> availableYears)
+  (
+    List<BlokRecord> murniRecords,
+    bool hasMultiDusun,
+    List<int> uniqueDusuns,
+    List<String> availableYears,
+  )
   _resolveFilteredMurniRecords() {
     final allMurni = widget.records.where((r) => !r.isTargetPemda).toList();
     final uniqueDusuns = <int>{};
@@ -568,15 +587,17 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
       }
     }
     final hasMultiDusun = uniqueDusuns.length > 1;
-    final availableYears = allMurni
-        .map((r) => r.tahunBayar)
-        .where((t) => t.isNotEmpty)
-        .toSet()
-        .toList()
-      ..sort((a, b) => b.compareTo(a));
+    final availableYears =
+        allMurni
+            .map((r) => r.tahunBayar)
+            .where((t) => t.isNotEmpty)
+            .toSet()
+            .toList()
+          ..sort((a, b) => b.compareTo(a));
 
     if (availableYears.isNotEmpty && !availableYears.contains(_selectedTahun)) {
-      _selectedTahun = (widget.selectedTahun != null &&
+      _selectedTahun =
+          (widget.selectedTahun != null &&
               availableYears.contains(widget.selectedTahun))
           ? widget.selectedTahun!
           : availableYears.first;
@@ -586,11 +607,14 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
     if (hasMultiDusun && _drillDownDusun != null) {
       final dObj = dusunByNumber(_drillDownDusun!);
       final dBloks = dObj?.bloks.toSet() ?? <String>{};
-      murniRecords = murniRecords.where((r) => dBloks.contains(r.blok)).toList();
+      murniRecords = murniRecords
+          .where((r) => dBloks.contains(r.blok))
+          .toList();
     }
     if (availableYears.isNotEmpty) {
-      murniRecords =
-          murniRecords.where((r) => r.tahunBayar == _selectedTahun).toList();
+      murniRecords = murniRecords
+          .where((r) => r.tahunBayar == _selectedTahun)
+          .toList();
     }
     return (
       murniRecords,
@@ -611,16 +635,39 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
         monthIndex,
         tahun: _selectedTahun,
       );
-      final monthName = (monthIndex >= 1 &&
+      final monthName =
+          (monthIndex >= 1 &&
               monthIndex <= DhkpGrafikAnalytics.fullMonthNames.length)
           ? DhkpGrafikAnalytics.fullMonthNames[monthIndex - 1]
           : 'Bulan_$monthIndex';
-      final pdfBytes = await generateDhkpRincianBulananPdfBytes(
-        targetRecords: monthRecords,
-        monthIndex: monthIndex,
-        tahun: _selectedTahun,
+      final cancelToken = BlokPrintCancelToken();
+      final pdfBytes = await runCancellableDhkpPrint<Uint8List>(
+        context: context,
+        cancelToken: cancelToken,
+        title: 'Menyiapkan Cetakan Grafik',
+        initialMessage: 'Menyusun rincian pembayaran bulan $monthName...',
+        subtitle:
+            'Anda dapat menekan Batal Cetak kapan saja sebelum dokumen dikirim ke printer.',
+        task: (_) async {
+          final bytes = await generateDhkpRincianBulananPdfBytes(
+            targetRecords: monthRecords,
+            monthIndex: monthIndex,
+            tahun: _selectedTahun,
+          );
+          if (cancelToken.isCancelled) {
+            throw const BlokPrintCancelledException();
+          }
+          return bytes;
+        },
       );
-      if (!mounted) return;
+      if (pdfBytes == null || cancelToken.isCancelled || !mounted) {
+        if (cancelToken.isCancelled && mounted) {
+          messenger.showSnackBar(
+            const SnackBar(content: Text('Proses cetak DHKP dibatalkan.')),
+          );
+        }
+        return;
+      }
       final fileName =
           'Laporan_Bayar_${monthName.toLowerCase()}_$_selectedTahun.pdf';
       await DocumentPreviewScreen.printOrPreview(
@@ -823,13 +870,35 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
 
     final messenger = ScaffoldMessenger.of(context);
     try {
-      final pdfBytes = await _generateSectionPdf(
-        sectionKey: sectionKey,
-        title: title,
-        subtitle: subtitle,
-        groups: groups,
+      final cancelToken = BlokPrintCancelToken();
+      final pdfBytes = await runCancellableDhkpPrint<Uint8List>(
+        context: context,
+        cancelToken: cancelToken,
+        title: 'Menyiapkan Cetakan Grafik',
+        initialMessage: 'Menyusun $title...',
+        subtitle:
+            'Anda dapat menekan Batal Cetak kapan saja sebelum dokumen dikirim ke printer.',
+        task: (_) async {
+          final bytes = await _generateSectionPdf(
+            sectionKey: sectionKey,
+            title: title,
+            subtitle: subtitle,
+            groups: groups,
+          );
+          if (cancelToken.isCancelled) {
+            throw const BlokPrintCancelledException();
+          }
+          return bytes;
+        },
       );
-      if (!mounted) return;
+      if (pdfBytes == null || cancelToken.isCancelled || !mounted) {
+        if (cancelToken.isCancelled && mounted) {
+          messenger.showSnackBar(
+            const SnackBar(content: Text('Proses cetak DHKP dibatalkan.')),
+          );
+        }
+        return;
+      }
       final fileName = DhkpGrafikExporter.buildSafeFileName(title, 'pdf');
       await DocumentPreviewScreen.printOrPreview(
         context,
@@ -848,12 +917,8 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final colorScheme = Theme.of(context).colorScheme;
 
-    final (
-      murniRecords,
-      hasMultiDusun,
-      sortedUniqueDusuns,
-      availableYears,
-    ) = _resolveFilteredMurniRecords();
+    final (murniRecords, hasMultiDusun, sortedUniqueDusuns, availableYears) =
+        _resolveFilteredMurniRecords();
 
     final totalNop = murniRecords.length;
     final sudahBayarList = murniRecords.where((r) => r.isPaid).toList();
@@ -877,9 +942,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
         : 0.0;
     final lunasNominalPct = (totalNominalTarget > 0 && belumBayarNominal > 0)
         ? (sudahBayarNominal / totalNominalTarget * 100)
-        : (belumBayarList.isEmpty
-            ? (totalNop > 0 ? 100.0 : 0.0)
-            : lunasNopPct);
+        : (belumBayarList.isEmpty ? (totalNop > 0 ? 100.0 : 0.0) : lunasNopPct);
 
     return CallbackShortcuts(
       bindings: <ShortcutActivator, VoidCallback>{
@@ -917,11 +980,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
 
               // 2b. FILTER CEPAT TAHUN (JIKA DATA MENCAKUP LEBIH DARI 1 TAHUN)
               if (availableYears.length > 1) ...[
-                _buildYearQuickBar(
-                  availableYears,
-                  isDark,
-                  colorScheme,
-                ),
+                _buildYearQuickBar(availableYears, isDark, colorScheme),
                 const SizedBox(height: 10),
               ],
 
@@ -1361,62 +1420,62 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-              for (final style in ChartStyle.values)
-                InkWell(
-                  onTap: () => _switchStyle(style),
-                  borderRadius: BorderRadius.circular(8),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: _selectedStyle == style
-                          ? (isDark ? colorScheme.surface : Colors.white)
-                          : Colors.transparent,
-                      borderRadius: BorderRadius.circular(8),
-                      boxShadow: _selectedStyle == style
-                          ? [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.08),
-                                blurRadius: 4,
-                                offset: const Offset(0, 1),
-                              ),
-                            ]
-                          : null,
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          style.icon,
-                          size: 14,
-                          color: _selectedStyle == style
-                              ? accent.shade700
-                              : colorScheme.onSurfaceVariant,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          style.label,
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: _selectedStyle == style
-                                ? FontWeight.bold
-                                : FontWeight.w500,
+                for (final style in ChartStyle.values)
+                  InkWell(
+                    onTap: () => _switchStyle(style),
+                    borderRadius: BorderRadius.circular(8),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _selectedStyle == style
+                            ? (isDark ? colorScheme.surface : Colors.white)
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(8),
+                        boxShadow: _selectedStyle == style
+                            ? [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.08),
+                                  blurRadius: 4,
+                                  offset: const Offset(0, 1),
+                                ),
+                              ]
+                            : null,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            style.icon,
+                            size: 14,
                             color: _selectedStyle == style
                                 ? accent.shade700
                                 : colorScheme.onSurfaceVariant,
                           ),
-                        ),
-                      ],
+                          const SizedBox(width: 4),
+                          Text(
+                            style.label,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: _selectedStyle == style
+                                  ? FontWeight.bold
+                                  : FontWeight.w500,
+                              color: _selectedStyle == style
+                                  ? accent.shade700
+                                  : colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
         ),
-      ),
 
         // Kanan: Pengurutan & Tombol Lipat/Buka Semua
         Row(
@@ -1474,8 +1533,8 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
                             color: _fitColumnBars
                                 ? accent.shade700
                                 : (isDark
-                                    ? Colors.white
-                                    : Colors.grey.shade800),
+                                      ? Colors.white
+                                      : Colors.grey.shade800),
                           ),
                         ),
                       ],
@@ -1608,10 +1667,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
     bool isDark,
   ) {
     final groups = _activeTab == DhkpGrafikTab.trenBulanan
-        ? DhkpGrafikAnalytics.buildMonthGroups(
-            records,
-            tahun: _selectedTahun,
-          )
+        ? DhkpGrafikAnalytics.buildMonthGroups(records, tahun: _selectedTahun)
         : _groupData(records, hasMultiDusun: hasMultiDusun, applySort: false);
 
     final match = groups
@@ -1760,10 +1816,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
                           ),
                           onPressed: () =>
                               _printSingleSelectedMonth(records, mIdx),
-                          icon: const Icon(
-                            Icons.print_outlined,
-                            size: 15,
-                          ),
+                          icon: const Icon(Icons.print_outlined, size: 15),
                           label: const Text(
                             'Cetak Bulan Ini',
                             style: TextStyle(
@@ -1957,8 +2010,8 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
                         color: _fitColumnBars
                             ? accentColor.shade700
                             : (isDark
-                                ? Colors.grey.shade300
-                                : Colors.grey.shade700),
+                                  ? Colors.grey.shade300
+                                  : Colors.grey.shade700),
                       ),
                       onPressed: () {
                         setState(() => _fitColumnBars = !_fitColumnBars);

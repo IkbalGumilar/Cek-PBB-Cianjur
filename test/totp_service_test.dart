@@ -23,7 +23,9 @@ void main() {
       };
 
       vectors.forEach((plain, expectedBase32) {
-        final encoded = TotpHelper.base32Encode(Uint8List.fromList(utf8.encode(plain)));
+        final encoded = TotpHelper.base32Encode(
+          Uint8List.fromList(utf8.encode(plain)),
+        );
         expect(encoded, equals(expectedBase32));
 
         final decoded = TotpHelper.base32Decode(expectedBase32);
@@ -56,7 +58,10 @@ void main() {
       // T=1111111109s: expected 8-digit "07081804" -> 6-digit "081804"
       final code2 = TotpHelper.generateTotp(
         secretBase32: secret,
-        time: DateTime.fromMillisecondsSinceEpoch(1111111109 * 1000, isUtc: true),
+        time: DateTime.fromMillisecondsSinceEpoch(
+          1111111109 * 1000,
+          isUtc: true,
+        ),
         digits: 6,
       );
       expect(code2, equals('081804'));
@@ -64,7 +69,10 @@ void main() {
       // T=1234567890s: expected 8-digit "89005924" -> 6-digit "005924"
       final code3 = TotpHelper.generateTotp(
         secretBase32: secret,
-        time: DateTime.fromMillisecondsSinceEpoch(1234567890 * 1000, isUtc: true),
+        time: DateTime.fromMillisecondsSinceEpoch(
+          1234567890 * 1000,
+          isUtc: true,
+        ),
         digits: 6,
       );
       expect(code3, equals('005924'));
@@ -101,7 +109,8 @@ void main() {
     });
 
     test('parseImportInput parses otpauth:// URI', () {
-      const uri = 'otpauth://totp/BAPENDA:petugas1?secret=JBSWY3DPEHPK3PXP&issuer=BAPENDA&digits=6';
+      const uri =
+          'otpauth://totp/BAPENDA:petugas1?secret=JBSWY3DPEHPK3PXP&issuer=BAPENDA&digits=6';
       final accounts = TotpHelper.parseImportInput(uri);
       expect(accounts.length, equals(1));
       expect(accounts.first.secret, equals('JBSWY3DPEHPK3PXP'));
@@ -110,76 +119,99 @@ void main() {
       expect(accounts.first.digits, equals(6));
     });
 
-    test('parseImportInput parses otpauth-migration:// Google Authenticator export URI', () {
-      // We can construct a minimal protobuf payload for testing:
-      // OtpParameters { secret: "1234567890" (10 bytes), name: "cianjur_admin", issuer: "BAPENDA" }
-      final secretBytes = Uint8List.fromList([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
-      final nameBytes = utf8.encode('cianjur_admin');
-      final issuerBytes = utf8.encode('BAPENDA');
+    test(
+      'parseImportInput parses otpauth-migration:// Google Authenticator export URI',
+      () {
+        // We can construct a minimal protobuf payload for testing:
+        // OtpParameters { secret: "1234567890" (10 bytes), name: "cianjur_admin", issuer: "BAPENDA" }
+        final secretBytes = Uint8List.fromList([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+        final nameBytes = utf8.encode('cianjur_admin');
+        final issuerBytes = utf8.encode('BAPENDA');
 
-      final otpBytes = <int>[
-        // field 1 (secret, wire type 2): tag 0x0a, length 10
-        0x0a, 10, ...secretBytes,
-        // field 2 (name, wire type 2): tag 0x12, length
-        0x12, nameBytes.length, ...nameBytes,
-        // field 3 (issuer, wire type 2): tag 0x1a, length
-        0x1a, issuerBytes.length, ...issuerBytes,
-        // field 6 (type 2 = TOTP, wire type 0): tag 0x30, val 2
-        0x30, 0x02,
-      ];
+        final otpBytes = <int>[
+          // field 1 (secret, wire type 2): tag 0x0a, length 10
+          0x0a, 10, ...secretBytes,
+          // field 2 (name, wire type 2): tag 0x12, length
+          0x12, nameBytes.length, ...nameBytes,
+          // field 3 (issuer, wire type 2): tag 0x1a, length
+          0x1a, issuerBytes.length, ...issuerBytes,
+          // field 6 (type 2 = TOTP, wire type 0): tag 0x30, val 2
+          0x30, 0x02,
+        ];
 
-      // MigrationPayload: field 1 (otp_parameters, wire type 2): tag 0x0a
-      final payloadBytes = <int>[
-        0x0a, otpBytes.length, ...otpBytes,
-      ];
-      final b64 = base64Encode(payloadBytes);
-      final migrationUri = 'otpauth-migration://offline?data=$b64';
+        // MigrationPayload: field 1 (otp_parameters, wire type 2): tag 0x0a
+        final payloadBytes = <int>[0x0a, otpBytes.length, ...otpBytes];
+        final b64 = base64Encode(payloadBytes);
+        final migrationUri = 'otpauth-migration://offline?data=$b64';
 
-      final accounts = TotpHelper.parseImportInput(migrationUri);
-      expect(accounts.length, equals(1));
-      expect(accounts.first.name, equals('cianjur_admin'));
-      expect(accounts.first.issuer, equals('BAPENDA'));
-      expect(TotpHelper.base32Decode(accounts.first.secret), equals(secretBytes));
-    });
+        final accounts = TotpHelper.parseImportInput(migrationUri);
+        expect(accounts.length, equals(1));
+        expect(accounts.first.name, equals('cianjur_admin'));
+        expect(accounts.first.issuer, equals('BAPENDA'));
+        expect(
+          TotpHelper.base32Decode(accounts.first.secret),
+          equals(secretBytes),
+        );
+      },
+    );
 
     test('parseImportInput throws FormatException on invalid inputs', () {
       expect(() => TotpHelper.parseImportInput(''), throwsFormatException);
-      expect(() => TotpHelper.parseImportInput('invalid!@@#'), throwsFormatException);
+      expect(
+        () => TotpHelper.parseImportInput('invalid!@@#'),
+        throwsFormatException,
+      );
     });
 
-    test('decodeQrFromImageBytes and parseQrImageBytes roundtrip with synthetic QR image', () {
-      // 1. Buat gambar QR Code sintetis menggunakan zxing2 Encoder & package:image
-      const qrPayload = 'otpauth://totp/BAPENDA:petugas_qr?secret=JBSWY3DPEHPK3PXP&issuer=BAPENDA';
-      final qr = Encoder.encode(qrPayload, ErrorCorrectionLevel.l);
-      final matrix = qr.matrix!;
+    test(
+      'decodeQrFromImageBytes and parseQrImageBytes roundtrip with synthetic QR image',
+      () {
+        // 1. Buat gambar QR Code sintetis menggunakan zxing2 Encoder & package:image
+        const qrPayload =
+            'otpauth://totp/BAPENDA:petugas_qr?secret=JBSWY3DPEHPK3PXP&issuer=BAPENDA';
+        final qr = Encoder.encode(qrPayload, ErrorCorrectionLevel.l);
+        final matrix = qr.matrix!;
 
-      const scale = 4;
-      final image = img.Image(width: matrix.width * scale, height: matrix.height * scale);
-      for (var y = 0; y < image.height; y++) {
-        for (var x = 0; x < image.width; x++) {
-          final isBlack = matrix.get(x ~/ scale, y ~/ scale) == 1;
-          image.setPixelRgb(x, y, isBlack ? 0 : 255, isBlack ? 0 : 255, isBlack ? 0 : 255);
+        const scale = 4;
+        final image = img.Image(
+          width: matrix.width * scale,
+          height: matrix.height * scale,
+        );
+        for (var y = 0; y < image.height; y++) {
+          for (var x = 0; x < image.width; x++) {
+            final isBlack = matrix.get(x ~/ scale, y ~/ scale) == 1;
+            image.setPixelRgb(
+              x,
+              y,
+              isBlack ? 0 : 255,
+              isBlack ? 0 : 255,
+              isBlack ? 0 : 255,
+            );
+          }
         }
-      }
-      final pngBytes = Uint8List.fromList(img.encodePng(image));
+        final pngBytes = Uint8List.fromList(img.encodePng(image));
 
-      // 2. Decode teks dari bytes gambar
-      final decodedText = TotpHelper.decodeQrFromImageBytes(pngBytes);
-      expect(decodedText, equals(qrPayload));
+        // 2. Decode teks dari bytes gambar
+        final decodedText = TotpHelper.decodeQrFromImageBytes(pngBytes);
+        expect(decodedText, equals(qrPayload));
 
-      // 3. Parse langsung menjadi daftar akun TOTP
-      final accounts = TotpHelper.parseQrImageBytes(pngBytes);
-      expect(accounts.length, equals(1));
-      expect(accounts.first.secret, equals('JBSWY3DPEHPK3PXP'));
-      expect(accounts.first.name, equals('BAPENDA:petugas_qr'));
-      expect(accounts.first.issuer, equals('BAPENDA'));
+        // 3. Parse langsung menjadi daftar akun TOTP
+        final accounts = TotpHelper.parseQrImageBytes(pngBytes);
+        expect(accounts.length, equals(1));
+        expect(accounts.first.secret, equals('JBSWY3DPEHPK3PXP'));
+        expect(accounts.first.name, equals('BAPENDA:petugas_qr'));
+        expect(accounts.first.issuer, equals('BAPENDA'));
 
-      // 4. Gambar kosong / bukan QR menghasilkan null / FormatException
-      final blankImage = img.Image(width: 100, height: 100);
-      final blankPng = Uint8List.fromList(img.encodePng(blankImage));
-      expect(TotpHelper.decodeQrFromImageBytes(blankPng), isNull);
-      expect(() => TotpHelper.parseQrImageBytes(blankPng), throwsFormatException);
-    });
+        // 4. Gambar kosong / bukan QR menghasilkan null / FormatException
+        final blankImage = img.Image(width: 100, height: 100);
+        final blankPng = Uint8List.fromList(img.encodePng(blankImage));
+        expect(TotpHelper.decodeQrFromImageBytes(blankPng), isNull);
+        expect(
+          () => TotpHelper.parseQrImageBytes(blankPng),
+          throwsFormatException,
+        );
+      },
+    );
   });
 
   group('StaffAuthenticatorStore Unit Tests', () {
@@ -194,13 +226,20 @@ void main() {
       expect(await store.getSecret(), isNull);
 
       const secret = 'JBSWY3DPEHPK3PXP';
-      await store.saveSecret(secret, accountName: 'petugas_bobojong', issuer: 'BAPENDA');
+      await store.saveSecret(
+        secret,
+        accountName: 'petugas_bobojong',
+        issuer: 'BAPENDA',
+      );
 
       expect(await store.hasSecret(), isTrue);
       expect(await store.getSecret(), equals(secret));
       expect(await store.getAccountName(), equals('petugas_bobojong'));
       expect(await store.getIssuer(), equals('BAPENDA'));
-      expect(await store.getAccountLabel(), equals('BAPENDA (petugas_bobojong)'));
+      expect(
+        await store.getAccountLabel(),
+        equals('BAPENDA (petugas_bobojong)'),
+      );
 
       // Code generated
       final code = await store.getCurrentCode();

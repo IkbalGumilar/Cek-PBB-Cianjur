@@ -35,6 +35,7 @@ class BlokReportExporter extends BaseTableExporter {
     DhkpKategoriFilter? kategoriFilter,
     Future<void> Function(int current, int total)? onProgress,
     int pacingDelayMs = 120,
+    BlokPrintCancelToken? cancelToken,
   }) async {
     final totalPbb = records.fold<int>(0, (sum, r) => sum + r.jumlahPbbValue);
     switch (format) {
@@ -57,6 +58,7 @@ class BlokReportExporter extends BaseTableExporter {
           totalPbb: totalPbb,
           onProgress: onProgress,
           pacingDelayMs: pacingDelayMs,
+          cancelToken: cancelToken,
         );
     }
   }
@@ -84,7 +86,9 @@ class BlokReportExporter extends BaseTableExporter {
           records[i].tanggalBayar,
           records[i].jumlahPbbValue > 0
               ? formatRupiah(records[i].jumlahPbbValue)
-              : (records[i].jumlahPbb.isEmpty ? '-' : formatRupiah(records[i].jumlahPbb)),
+              : (records[i].jumlahPbb.isEmpty
+                    ? '-'
+                    : formatRupiah(records[i].jumlahPbb)),
           records[i].statusBayar,
           records[i].isTargetPemda ? 'Target Pemda' : '-',
           records[i].catatan,

@@ -37,10 +37,8 @@ class MapCoordinate {
           (longitude - other.longitude).abs() < 0.000001;
 
   @override
-  int get hashCode => Object.hash(
-        (latitude * 100000).round(),
-        (longitude * 100000).round(),
-      );
+  int get hashCode =>
+      Object.hash((latitude * 100000).round(), (longitude * 100000).round());
 
   @override
   String toString() => '($latitude, $longitude)';
@@ -60,10 +58,8 @@ class MapBounds {
     required this.maxLng,
   });
 
-  MapCoordinate get center => MapCoordinate(
-        (minLat + maxLat) / 2,
-        (minLng + maxLng) / 2,
-      );
+  MapCoordinate get center =>
+      MapCoordinate((minLat + maxLat) / 2, (minLng + maxLng) / 2);
 
   double get width => (maxLng - minLng).abs();
   double get height => (maxLat - minLat).abs();
@@ -262,4 +258,3 @@ class MapDusunZone {
     this.boundaryPolygon = const [],
   });
 }
-

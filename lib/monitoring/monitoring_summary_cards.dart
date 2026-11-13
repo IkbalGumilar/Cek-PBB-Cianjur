@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../currency_format.dart';
 import '../staff_portal/staff_portal_models.dart';
+import '../ui/app_design_system.dart';
+import '../unity_lerp_widgets.dart';
 
 /// Widget kartu ringkasan metrik (KPI Summary) untuk hasil Monitoring Wilayah:
 /// Jumlah OP, Pokok Ketetapan, Pokok Bayar, Denda, dan Total Penerimaan.
@@ -30,42 +32,54 @@ class MonitoringSummaryCards extends StatelessWidget {
       if (s.jumlahOp > 0)
         _KpiCardData(
           title: 'Jumlah OP',
-          value: '${formatRibuan(s.jumlahOp)} OP',
+          rawValue: s.jumlahOp,
+          formatter: (val) => '${formatRibuan(val)} OP',
           icon: Icons.home_work_outlined,
           color: colorScheme.primary,
-          containerColor: colorScheme.primaryContainer.withValues(alpha: 0.5),
+          containerColor: colorScheme.primaryContainer.withValues(alpha: 0.45),
+          borderColor: colorScheme.primary.withValues(alpha: 0.3),
         ),
       if (s.pokokKetetapan > 0)
         _KpiCardData(
           title: 'Pokok Ketetapan',
-          value: formatRupiah(s.pokokKetetapan),
+          rawValue: s.pokokKetetapan,
+          formatter: formatRupiah,
           icon: Icons.assignment_outlined,
           color: colorScheme.secondary,
-          containerColor: colorScheme.secondaryContainer.withValues(alpha: 0.5),
+          containerColor: colorScheme.secondaryContainer.withValues(
+            alpha: 0.45,
+          ),
+          borderColor: colorScheme.secondary.withValues(alpha: 0.3),
         ),
       if (s.pokokPembayaran > 0)
         _KpiCardData(
           title: customLabelPokokBayar ?? 'Pokok Pembayaran',
-          value: formatRupiah(s.pokokPembayaran),
+          rawValue: s.pokokPembayaran,
+          formatter: formatRupiah,
           icon: Icons.payments_outlined,
-          color: Colors.green.shade700,
-          containerColor: Colors.green.shade50,
+          color: AppSemanticColors.onSuccessContainer(context),
+          containerColor: AppSemanticColors.successContainer(context),
+          borderColor: AppSemanticColors.successBorder(context),
         ),
       if (s.denda > 0)
         _KpiCardData(
           title: 'Denda',
-          value: formatRupiah(s.denda),
+          rawValue: s.denda,
+          formatter: formatRupiah,
           icon: Icons.warning_amber_rounded,
-          color: Colors.orange.shade800,
-          containerColor: Colors.orange.shade50,
+          color: AppSemanticColors.onWarningContainer(context),
+          containerColor: AppSemanticColors.warningContainer(context),
+          borderColor: AppSemanticColors.warningBorder(context),
         ),
       if (s.totalPenerimaan > 0)
         _KpiCardData(
           title: customLabelTotal ?? 'Total Realisasi',
-          value: formatRupiah(s.totalPenerimaan),
+          rawValue: s.totalPenerimaan,
+          formatter: formatRupiah,
           icon: Icons.account_balance_wallet_outlined,
           color: colorScheme.tertiary,
-          containerColor: colorScheme.tertiaryContainer.withValues(alpha: 0.6),
+          containerColor: colorScheme.tertiaryContainer.withValues(alpha: 0.5),
+          borderColor: colorScheme.tertiary.withValues(alpha: 0.3),
         ),
     ];
 
@@ -74,7 +88,9 @@ class MonitoringSummaryCards extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final isNarrow = constraints.maxWidth < 600;
-        final crossAxisCount = isNarrow ? 2 : (cards.length > 3 ? 4 : cards.length);
+        final crossAxisCount = isNarrow
+            ? 2
+            : (cards.length > 3 ? 4 : cards.length);
 
         return Padding(
           padding: const EdgeInsets.only(top: 12, bottom: 8),
@@ -116,11 +132,8 @@ class MonitoringSummaryCards extends StatelessWidget {
                     elevation: 0,
                     color: item.containerColor,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      side: BorderSide(
-                        color: item.color.withValues(alpha: 0.25),
-                        width: 1,
-                      ),
+                      borderRadius: BorderRadius.circular(12),
+                      side: BorderSide(color: item.borderColor, width: 1),
                     ),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(
@@ -146,8 +159,8 @@ class MonitoringSummaryCards extends StatelessWidget {
                                 Text(
                                   item.title,
                                   style: theme.textTheme.labelSmall?.copyWith(
-                                    color: Colors.black87,
-                                    fontWeight: FontWeight.w500,
+                                    color: colorScheme.onSurfaceVariant,
+                                    fontWeight: FontWeight.w600,
                                   ),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
@@ -156,8 +169,10 @@ class MonitoringSummaryCards extends StatelessWidget {
                                 FittedBox(
                                   fit: BoxFit.scaleDown,
                                   alignment: Alignment.centerLeft,
-                                  child: Text(
-                                    item.value,
+                                  child: LerpAnimatedCounter(
+                                    value: item.rawValue,
+                                    formatter: (val) =>
+                                        item.formatter(val.round()),
                                     style: theme.textTheme.titleSmall?.copyWith(
                                       fontWeight: FontWeight.bold,
                                       color: item.color,
@@ -183,16 +198,20 @@ class MonitoringSummaryCards extends StatelessWidget {
 
 class _KpiCardData {
   final String title;
-  final String value;
+  final int rawValue;
+  final String Function(int) formatter;
   final IconData icon;
   final Color color;
   final Color containerColor;
+  final Color borderColor;
 
   const _KpiCardData({
     required this.title,
-    required this.value,
+    required this.rawValue,
+    required this.formatter,
     required this.icon,
     required this.color,
     required this.containerColor,
+    required this.borderColor,
   });
 }

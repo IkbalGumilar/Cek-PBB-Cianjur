@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../staff_portal_client.dart';
+import '../ui/app_design_system.dart';
 import 'monitoring_form_fields.dart';
 import 'monitoring_tab_scaffold.dart';
 
@@ -28,6 +29,21 @@ class _TabRealisasiState extends State<TabRealisasi> {
   late String _namaKelurahan = widget.client.activeKelurahanName;
   String get _kecamatan => widget.client.activeKecamatanCode;
   String get _namaKecamatan => widget.client.activeKecamatanName;
+
+  int get _activeOptionalCount {
+    var count = 0;
+    for (final c in [
+      _tahunAwal,
+      _tahunAkhir,
+      _tglPelimpahanAwal,
+      _tglPelimpahanAkhir,
+    ]) {
+      if (c.text.trim().isNotEmpty) count++;
+    }
+    if (_buku != 'semua') count++;
+    if (_bank.isNotEmpty) count++;
+    return count;
+  }
 
   @override
   void dispose() {
@@ -146,59 +162,70 @@ class _TabRealisasiState extends State<TabRealisasi> {
           controller: _tglCutoff,
           required: true,
         ),
-        const MonitoringSectionTitle('Tahun Pajak (opsional)'),
-        Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: _tahunAwal,
-                keyboardType: TextInputType.number,
-                maxLength: 4,
-                decoration: const InputDecoration(
-                  labelText: 'Awal',
-                  border: OutlineInputBorder(),
-                  counterText: '',
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: TextField(
-                controller: _tahunAkhir,
-                keyboardType: TextInputType.number,
-                maxLength: 4,
-                decoration: const InputDecoration(
-                  labelText: 'Akhir',
-                  border: OutlineInputBorder(),
-                  counterText: '',
-                ),
-              ),
-            ),
-          ],
-        ),
-        const MonitoringSectionTitle('Filter lainnya (opsional)'),
-        BukuDropdown(value: _buku, onChanged: (v) => setState(() => _buku = v)),
         const SizedBox(height: 12),
-        BankDropdown(
-          client: widget.client,
-          value: _bank,
-          onChanged: (v) => setState(() => _bank = v),
-        ),
-        const SizedBox(height: 12),
-        Row(
+        AppCollapsibleFilterSection(
+          title: 'Filter Tambahan (Opsional)',
+          subtitle: 'Tahun Pajak, Buku, Bank, Tanggal Pelimpahan',
+          activeFilterCount: _activeOptionalCount,
           children: [
-            Expanded(
-              child: MonitoringDateField(
-                label: 'Tgl. Pelimpahan Awal',
-                controller: _tglPelimpahanAwal,
-              ),
+            const MonitoringSectionTitle('Tahun Pajak (opsional)'),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _tahunAwal,
+                    keyboardType: TextInputType.number,
+                    maxLength: 4,
+                    decoration: const InputDecoration(
+                      labelText: 'Awal',
+                      border: OutlineInputBorder(),
+                      counterText: '',
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    controller: _tahunAkhir,
+                    keyboardType: TextInputType.number,
+                    maxLength: 4,
+                    decoration: const InputDecoration(
+                      labelText: 'Akhir',
+                      border: OutlineInputBorder(),
+                      counterText: '',
+                    ),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: MonitoringDateField(
-                label: 'Tgl. Pelimpahan Akhir',
-                controller: _tglPelimpahanAkhir,
-              ),
+            const MonitoringSectionTitle('Filter lainnya (opsional)'),
+            BukuDropdown(
+              value: _buku,
+              onChanged: (v) => setState(() => _buku = v),
+            ),
+            const SizedBox(height: 12),
+            BankDropdown(
+              client: widget.client,
+              value: _bank,
+              onChanged: (v) => setState(() => _bank = v),
+            ),
+            const MonitoringSectionTitle('Tanggal Pelimpahan (opsional)'),
+            Row(
+              children: [
+                Expanded(
+                  child: MonitoringDateField(
+                    label: 'Awal',
+                    controller: _tglPelimpahanAwal,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: MonitoringDateField(
+                    label: 'Akhir',
+                    controller: _tglPelimpahanAkhir,
+                  ),
+                ),
+              ],
             ),
           ],
         ),

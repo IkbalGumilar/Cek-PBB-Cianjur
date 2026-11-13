@@ -40,7 +40,9 @@ class _TabRangkingRealisasiState extends State<TabRangkingRealisasi> {
       if (!mounted || location == null) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Berhasil mengunduh $fileName\nTersimpan di: $location'),
+          content: Text(
+            'Berhasil mengunduh $fileName\nTersimpan di: $location',
+          ),
           action: SnackBarAction(
             label: 'Bagikan',
             onPressed: () => NativeFileHelper.shareBytes(
@@ -93,7 +95,8 @@ class _TabRangkingRealisasiState extends State<TabRangkingRealisasi> {
             for (var y = DateTime.now().year; y >= 2015; y--)
               DropdownMenuItem(value: '$y', child: Text('$y')),
           ],
-          onChanged: (v) => setState(() => _tahun = v ?? '${DateTime.now().year}'),
+          onChanged: (v) =>
+              setState(() => _tahun = v ?? '${DateTime.now().year}'),
         ),
         const MonitoringSectionTitle('Buku'),
         DropdownButtonFormField<String>(

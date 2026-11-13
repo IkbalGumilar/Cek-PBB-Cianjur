@@ -209,63 +209,26 @@ class GoogleAuthService {
       'prompt': 'consent',
     });
 
-    // 4. Buka browser bawaan sistem (Chrome, Firefox, Edge, dll)
-    final launched = await launchUrl(
-      authUri,
-      mode: LaunchMode.externalApplication,
-    );
-    if (!launched) {
-      await server.close(force: true);
-      throw Exception('Gagal membuka web browser sistem.');
-    }
-
-    HttpRequest request;
+    final String authCode;
     try {
-      // 5. Tunggu respon redirect dari browser (timeout 3 menit)
-      request = await server.first.timeout(
-        const Duration(minutes: 3),
-        onTimeout: () => throw TimeoutException(
-          'Waktu otorisasi di browser telah habis (timeout).',
-        ),
+      // 4. Buka browser bawaan sistem (Chrome, Firefox, Edge, dll)
+      final launched = await launchUrl(
+        authUri,
+        mode: LaunchMode.externalApplication,
       );
-    } catch (e) {
+      if (!launched) {
+        throw Exception('Gagal membuka web browser sistem.');
+      }
+
+      // 5. Tunggu respon callback OAuth yang valid dari browser (timeout 3 menit)
+      authCode = await waitForOAuthCallback(
+        server,
+        expectedState: state,
+        timeout: const Duration(minutes: 3),
+      );
+    } finally {
       await server.close(force: true);
-      rethrow;
     }
-
-    final queryParams = request.uri.queryParameters;
-
-    if (queryParams.containsKey('error')) {
-      final errorMsg = queryParams['error'] ?? 'access_denied';
-      await _sendHtmlResponse(
-        request.response,
-        isSuccess: false,
-        message: 'Otorisasi dibatalkan: $errorMsg',
-      );
-      await server.close(force: true);
-      throw Exception(
-        'Otorisasi akun Google dibatalkan di browser ($errorMsg).',
-      );
-    }
-
-    final returnedState = queryParams['state'];
-    final authCode = queryParams['code'];
-
-    if (returnedState != state || authCode == null || authCode.isEmpty) {
-      await _sendHtmlResponse(
-        request.response,
-        isSuccess: false,
-        message: 'Parameter otorisasi tidak valid.',
-      );
-      await server.close(force: true);
-      throw Exception(
-        'Kode otorisasi Google tidak valid atau sesi kadaluarsa.',
-      );
-    }
-
-    // Kirim tampilan HTML sukses ke browser
-    await _sendHtmlResponse(request.response, isSuccess: true);
-    await server.close(force: true);
 
     // 6. Tukarkan authorization code dengan Access Token di Google Token Endpoint
     final httpClient = HttpClient();
@@ -379,7 +342,86 @@ class GoogleAuthService {
     return base64Url.encode(digest.bytes).replaceAll('=', '');
   }
 
+  /// Menunggu request callback OAuth 2.0 yang valid pada [server] loopback.
+  ///
+  /// - Mengabaikan request `/favicon.ico` (merespons 404 dan lanjut menunggu).
+  /// - Mengabaikan request yang belum memiliki query parameter `code` atau `error`.
+  /// - Memvalidasi parameter `state` untuk mencegah CSRF.
+  /// - Menutup `server` pada blok `finally`.
+  @visibleForTesting
+  static Future<String> waitForOAuthCallback(
+    HttpServer server, {
+    required String expectedState,
+    Duration timeout = const Duration(minutes: 3),
+  }) async {
+    Future<String> listenLoop() async {
+      await for (final request in server) {
+        final path = request.uri.path;
+        if (path == '/favicon.ico') {
+          request.response.statusCode = HttpStatus.notFound;
+          await request.response.close();
+          continue;
+        }
+
+        final queryParams = request.uri.queryParameters;
+        final hasCode = queryParams.containsKey('code');
+        final hasError = queryParams.containsKey('error');
+        if (!hasCode && !hasError) {
+          request.response.statusCode = HttpStatus.notFound;
+          request.response.headers.contentType = ContentType.text;
+          request.response.write('Menunggu callback OAuth...');
+          await request.response.close();
+          continue;
+        }
+
+        if (hasError) {
+          final rawError = queryParams['error'] ?? 'access_denied';
+          await _sendHtmlResponse(
+            request.response,
+            isSuccess: false,
+            message: 'Otorisasi dibatalkan: $rawError',
+          );
+          throw Exception(
+            'Otorisasi akun Google dibatalkan di browser ($rawError).',
+          );
+        }
+
+        final returnedState = queryParams['state'];
+        final authCode = queryParams['code'];
+
+        if (returnedState != expectedState ||
+            authCode == null ||
+            authCode.trim().isEmpty) {
+          await _sendHtmlResponse(
+            request.response,
+            isSuccess: false,
+            message: 'Parameter otorisasi (state/code) tidak valid.',
+          );
+          throw Exception(
+            'Kode otorisasi Google tidak valid atau sesi kadaluarsa.',
+          );
+        }
+
+        await _sendHtmlResponse(request.response, isSuccess: true);
+        return authCode.trim();
+      }
+      throw Exception('Server loopback OAuth ditutup sebelum menerima respon.');
+    }
+
+    try {
+      return await listenLoop().timeout(
+        timeout,
+        onTimeout: () => throw TimeoutException(
+          'Waktu otorisasi di browser telah habis (timeout).',
+        ),
+      );
+    } finally {
+      await server.close(force: true);
+    }
+  }
+
   /// Mengirimkan halaman HTML informatif ke browser setelah proses otentikasi.
+  /// Seluruh nilai dinamis di-escape dengan [HtmlEscape] untuk mencegah Reflected XSS.
   static Future<void> _sendHtmlResponse(
     HttpResponse response, {
     required bool isSuccess,
@@ -392,15 +434,20 @@ class GoogleAuthService {
       charset: 'utf-8',
     );
 
-    final title = isSuccess ? 'Otorisasi Berhasil' : 'Otorisasi Dibatalkan';
-    final heading = isSuccess
-        ? '✅ Otorisasi Akun Google Berhasil'
-        : '⚠️ Otorisasi Dibatalkan';
-    final desc =
-        message ??
-        (isSuccess
-            ? 'Aplikasi <strong>Cek PBB Cianjur</strong> telah terhubung dengan akun Google dan Google Drive Anda.<br><br><strong>Silakan tutup tab atau jendela browser ini dan kembali ke aplikasi.</strong>'
-            : 'Proses otorisasi akun Google dibatalkan atau ditolak. Anda dapat menutup tab ini.');
+    const htmlEscape = HtmlEscape();
+    final title = htmlEscape.convert(
+      isSuccess ? 'Otorisasi Berhasil' : 'Otorisasi Dibatalkan',
+    );
+    final heading = htmlEscape.convert(
+      isSuccess
+          ? '✅ Otorisasi Akun Google Berhasil'
+          : '⚠️ Otorisasi Dibatalkan',
+    );
+    final desc = message != null
+        ? htmlEscape.convert(message)
+        : (isSuccess
+              ? 'Aplikasi <strong>Cek PBB Cianjur</strong> telah terhubung dengan akun Google dan Google Drive Anda.<br><br><strong>Silakan tutup tab atau jendela browser ini dan kembali ke aplikasi.</strong>'
+              : 'Proses otorisasi akun Google dibatalkan atau ditolak. Anda dapat menutup tab ini.');
 
     final html =
         '''<!DOCTYPE html>

@@ -65,18 +65,30 @@ void main() {
     expect(result.nomorStan, 'FCCC68DBDE7B400BA2E54864A0F62AC6');
   });
 
-  test('extractSttsInMemory extracts real STTS from live Bapenda server for DI UJI', () async {
-    final client = PbbClient();
-    final stts = await client.extractSttsInMemory(nop: '320520000403001890', tahun: '2026');
-    expect(stts, isNotNull);
-    expect(stts!.tanggalBayar, contains('2026-10-30'));
-    expect(stts.nomorStan, isNotNull);
-  });
+  test(
+    'extractSttsInMemory extracts real STTS from live Bapenda server for DI UJI',
+    () async {
+      final client = PbbClient();
+      final stts = await client.extractSttsInMemory(
+        nop: '320520000403001890',
+        tahun: '2026',
+      );
+      expect(stts, isNotNull);
+      expect(stts!.tanggalBayar, contains('2026-10-30'));
+      expect(stts.nomorStan, isNotNull);
+    },
+  );
 
-  test('checkStatusViaDocument for DI UJI returns Sudah Bayar for 2026', () async {
-    final client = PbbClient();
-    final result = await client.checkStatusViaDocument('320520000403001890', tahun: '2026');
-    expect(result.status, 'Sudah Bayar');
-    expect(result.isPaid, isTrue);
-  });
+  test(
+    'checkStatusViaDocument for DI UJI returns Sudah Bayar for 2026',
+    () async {
+      final client = PbbClient();
+      final result = await client.checkStatusViaDocument(
+        '320520000403001890',
+        tahun: '2026',
+      );
+      expect(result.status, 'Sudah Bayar');
+      expect(result.isPaid, isTrue);
+    },
+  );
 }

@@ -77,7 +77,9 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
     super.initState();
     _client = widget.client ?? PbbClient();
     _sttsDirectory = widget.sttsTargetDirectory;
-    _actionSubscription = BatchNotificationService.actionStream.listen((action) {
+    _actionSubscription = BatchNotificationService.actionStream.listen((
+      action,
+    ) {
       if (!mounted) return;
       switch (action) {
         case 'pause':
@@ -242,13 +244,15 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
     });
 
     if (widget.downloadStts && _sttsDirectory == null) {
-      final blokStr = widget.sttsBlokNumber ??
+      final blokStr =
+          widget.sttsBlokNumber ??
           (widget.records.isNotEmpty
               ? nopBlok(widget.records.first.nop)
               : '000');
       final cleanBlok = blokStr.replaceAll(RegExp(r'[^0-9]'), '');
-      final blokFormatted =
-          cleanBlok.isNotEmpty ? cleanBlok.padLeft(3, '0') : blokStr;
+      final blokFormatted = cleanBlok.isNotEmpty
+          ? cleanBlok.padLeft(3, '0')
+          : blokStr;
       final now = DateTime.now();
       const namaHariList = [
         'Senin',
@@ -263,8 +267,7 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
       final tgl = now.day.toString().padLeft(2, '0');
       final bln = now.month.toString().padLeft(2, '0');
       final thn = now.year.toString();
-      final folderName =
-          'STTS Blok $blokFormatted - $namaHari, $tgl-$bln-$thn';
+      final folderName = 'STTS Blok $blokFormatted - $namaHari, $tgl-$bln-$thn';
 
       try {
         final pickedPath = await FilePicker.getDirectoryPath(
@@ -500,8 +503,9 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
       _statusMessage = 'Pengecekan dijeda.';
     });
     final total = widget.records.length;
-    final currentNop =
-        _currentIndex < total ? widget.records[_currentIndex].nop : '-';
+    final currentNop = _currentIndex < total
+        ? widget.records[_currentIndex].nop
+        : '-';
     final sudahCount = widget.records.where((r) => r.isPaid).length;
     final belumCount = widget.records
         .where(
@@ -559,13 +563,15 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
     if (dir == null) return;
 
     try {
-      final blokStr = widget.sttsBlokNumber ??
+      final blokStr =
+          widget.sttsBlokNumber ??
           (widget.records.isNotEmpty
               ? nopBlok(widget.records.first.nop)
               : '000');
       final cleanBlok = blokStr.replaceAll(RegExp(r'[^0-9]'), '');
-      final blokFormatted =
-          cleanBlok.isNotEmpty ? cleanBlok.padLeft(3, '0') : blokStr;
+      final blokFormatted = cleanBlok.isNotEmpty
+          ? cleanBlok.padLeft(3, '0')
+          : blokStr;
       final txtFile = File('${dir.path}/INFORMASI_BLOK_$blokFormatted.txt');
 
       final desaName = activeDesaName;
@@ -575,8 +581,9 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
       final belumBayarList = widget.records
           .where((r) => !r.isPaid && r.isChecked)
           .toList();
-      final gagalList =
-          widget.records.where((r) => r.status.contains('Gagal')).toList();
+      final gagalList = widget.records
+          .where((r) => r.status.contains('Gagal'))
+          .toList();
       final sttsDownloadedCount = widget.records
           .where((r) => r.buktiBayarDownloaded == true)
           .length;
@@ -608,34 +615,56 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
           '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}';
 
       final buf = StringBuffer();
-      buf.writeln('================================================================================');
+      buf.writeln(
+        '================================================================================',
+      );
       buf.writeln('                    INFORMASI REKAPITULASI PENGECEKAN BLOK');
       buf.writeln('                              KABUPATEN CIANJUR');
-      buf.writeln('================================================================================');
+      buf.writeln(
+        '================================================================================',
+      );
       buf.writeln('Kecamatan         : $kecName');
       buf.writeln('Desa / Kelurahan  : $desaName');
       buf.writeln('Nomor Blok        : Blok $blokFormatted');
       buf.writeln('Tahun Pajak       : ${widget.tahun}');
       buf.writeln('Waktu Pembuatan   : $namaHari, $tglStr $jamStr');
-      buf.writeln('Status Pengecekan : ${isFinal ? "Selesai" : "Sedang Berjalan / Sebagian"}');
+      buf.writeln(
+        'Status Pengecekan : ${isFinal ? "Selesai" : "Sedang Berjalan / Sebagian"}',
+      );
       buf.writeln('Folder Berkas STTS: ${dir.path}');
-      buf.writeln('--------------------------------------------------------------------------------');
+      buf.writeln(
+        '--------------------------------------------------------------------------------',
+      );
       buf.writeln('RINGKASAN PEMERIKSAAN:');
-      buf.writeln('--------------------------------------------------------------------------------');
+      buf.writeln(
+        '--------------------------------------------------------------------------------',
+      );
       buf.writeln('Total Objek Pajak (NOP)  : $totalRecords');
       buf.writeln('Sudah Bayar (Lunas)      : ${sudahBayarList.length}');
       buf.writeln('Belum Bayar              : ${belumBayarList.length}');
       buf.writeln('Gagal / Kendala Cek      : ${gagalList.length}');
       buf.writeln('Berkas STTS Terunduh     : $sttsDownloadedCount berkas PDF');
-      buf.writeln('Total Nominal Terbayar   : Rp ${formatRibuan(totalNominalBayar)}');
+      buf.writeln(
+        'Total Nominal Terbayar   : Rp ${formatRibuan(totalNominalBayar)}',
+      );
       if (totalNominalBelum > 0) {
-        buf.writeln('Total Nominal Belum Bayar: Rp ${formatRibuan(totalNominalBelum)}');
+        buf.writeln(
+          'Total Nominal Belum Bayar: Rp ${formatRibuan(totalNominalBelum)}',
+        );
       }
-      buf.writeln('--------------------------------------------------------------------------------');
+      buf.writeln(
+        '--------------------------------------------------------------------------------',
+      );
       buf.writeln('DAFTAR RINCIAN OBJEK PAJAK (NOP):');
-      buf.writeln('--------------------------------------------------------------------------------');
-      buf.writeln('No. | NOP                  | Nama Wajib Pajak             | Status Bayar | Nominal PBB   | Tanggal Bayar | No. STAN         | File STTS');
-      buf.writeln('----+----------------------+------------------------------+--------------+---------------+---------------+------------------+------------------');
+      buf.writeln(
+        '--------------------------------------------------------------------------------',
+      );
+      buf.writeln(
+        'No. | NOP                  | Nama Wajib Pajak             | Status Bayar | Nominal PBB   | Tanggal Bayar | No. STAN         | File STTS',
+      );
+      buf.writeln(
+        '----+----------------------+------------------------------+--------------+---------------+---------------+------------------+------------------',
+      );
 
       for (int i = 0; i < widget.records.length; i++) {
         final r = widget.records[i];
@@ -643,15 +672,19 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
         final nop = r.nop.padRight(20);
         final nama = (r.namaWajibPajak ?? '-').trim();
         final namaTrunc =
-            (nama.length > 28 ? '${nama.substring(0, 25)}...' : nama)
-                .padRight(28);
-        final status = (r.isPaid
-                ? 'Sudah Bayar'
-                : (r.isChecked ? r.status : 'Belum Dicek'))
-            .padRight(12);
+            (nama.length > 28 ? '${nama.substring(0, 25)}...' : nama).padRight(
+              28,
+            );
+        final status =
+            (r.isPaid
+                    ? 'Sudah Bayar'
+                    : (r.isChecked ? r.status : 'Belum Dicek'))
+                .padRight(12);
         final nominalVal = parseNominalRupiah(r.jumlahPbb);
-        final nominal = (nominalVal > 0 ? 'Rp ${formatRibuan(nominalVal)}' : '-')
-            .padRight(13);
+        final nominal =
+            (nominalVal > 0 ? 'Rp ${formatRibuan(nominalVal)}' : '-').padRight(
+              13,
+            );
         final tgl = (r.tanggalBayar ?? '-').padRight(13);
         final stan = (r.nomorStan ?? '-').padRight(16);
         final sttsStatus = r.buktiBayarDownloaded == true
@@ -659,14 +692,23 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
             : (r.isPaid ? 'Gagal/Tidak Terbit' : '-');
 
         buf.writeln(
-            '$no | $nop | $namaTrunc | $status | $nominal | $tgl | $stan | $sttsStatus');
+          '$no | $nop | $namaTrunc | $status | $nominal | $tgl | $stan | $sttsStatus',
+        );
       }
 
-      buf.writeln('================================================================================');
+      buf.writeln(
+        '================================================================================',
+      );
       buf.writeln('Catatan:');
-      buf.writeln('- Berkas STTS (.pdf) hanya dapat diunduh untuk NOP yang telah berstatus Sudah Bayar.');
-      buf.writeln('- Berkas ini dihasilkan secara otomatis oleh Aplikasi Cek PBB Cianjur.');
-      buf.writeln('================================================================================');
+      buf.writeln(
+        '- Berkas STTS (.pdf) hanya dapat diunduh untuk NOP yang telah berstatus Sudah Bayar.',
+      );
+      buf.writeln(
+        '- Berkas ini dihasilkan secara otomatis oleh Aplikasi Cek PBB Cianjur.',
+      );
+      buf.writeln(
+        '================================================================================',
+      );
 
       await txtFile.writeAsString(buf.toString());
     } catch (e) {
@@ -786,8 +828,9 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
         .where((r) => r.status == 'Dilewati')
         .length;
     final sisaCount = (total - _currentIndex).clamp(0, total);
-    final sttsDownloadedCount =
-        widget.records.where((r) => r.buktiBayarDownloaded == true).length;
+    final sttsDownloadedCount = widget.records
+        .where((r) => r.buktiBayarDownloaded == true)
+        .length;
     final scheme = Theme.of(context).colorScheme;
 
     final progressVal = total == 0
@@ -914,19 +957,19 @@ class _BatchCheckScreenState extends State<BatchCheckScreen> {
                                 InkWell(
                                   onTap: () =>
                                       NativeFileHelper.showInFileManager(
-                                    _sttsDirectory!.path,
-                                  ),
+                                        _sttsDirectory!.path,
+                                      ),
                                   child: const Padding(
-                                    padding:
-                                        EdgeInsets.symmetric(horizontal: 4),
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: 4,
+                                    ),
                                     child: Text(
                                       'Buka Folder',
                                       style: TextStyle(
                                         fontSize: 11,
                                         color: Colors.teal,
                                         fontWeight: FontWeight.bold,
-                                        decoration:
-                                            TextDecoration.underline,
+                                        decoration: TextDecoration.underline,
                                       ),
                                     ),
                                   ),
