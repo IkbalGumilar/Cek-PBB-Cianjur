@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 0.1.6-beta+12
+version: 0.1.7-beta+13
 
 environment:
   sdk: ^3.12.2
@@ -31,9 +31,6 @@ dependencies:
   flutter:
     sdk: flutter
 
-  # The following adds the Cupertino Icons font to your application.
-  # Use with the CupertinoIcons class for iOS style icons.
-  cupertino_icons: ^1.0.8
   dio: ^5.11.0
   cookie_jar: ^4.0.9
   dio_cookie_manager: ^3.5.0
@@ -64,7 +61,6 @@ dependencies:
   http: ^1.6.0
   syncfusion_flutter_pdf: ^33.2.13
   flutter_local_notifications: ^22.3.3
-  timezone: ^0.11.2
   zxing2: ^0.2.4
   flutter_map: ^8.3.2
   latlong2: ^0.10.1
@@ -97,14 +93,29 @@ flutter:
 
   assets:
     - logo/kabupaten-cianjur.png
-    - assets/guide/
+    - assets/guide/01_cek_tagihan.webp
+    - assets/guide/02_cek_status_bayar.webp
+    - assets/guide/03_cek_banyak_nop.webp
+    - assets/guide/04_cek_kendaraan.webp
+    - assets/guide/05_cek_desil.webp
+    - assets/guide/06_dhkp_catatan.webp
+    - assets/guide/07_login_portal_staf.webp
+    - assets/guide/08_verifikasi_mfa.webp
+    - assets/guide/09_hub_petugas.webp
+    - assets/guide/10_pantauan_wilayah.webp
+    - assets/guide/11_pantauan_ranking.webp
+    - assets/guide/12_pembayaran_kolektif.webp
+    - assets/guide/13_kolektif_aksi_menu.webp
+    - assets/guide/14_tambah_group.webp
+    - assets/guide/15_pengaturan_utama.webp
+    - assets/guide/16_pengaturan_tema.webp
+    - assets/guide/17_pengaturan_keamanan.webp
+    - assets/guide/18_pengaturan_pencadangan.webp
+    - assets/guide/20_pengaturan_tentang.webp
     - assets/data/bobojong_batas_big.geojson
-    - assets/data/bobojong_dusun_zones.geojson
     - assets/data/bobojong_buildings_osm.geojson
     - assets/data/bobojong_roads_osm.geojson
     - assets/data/bobojong_waterways_osm.geojson
-    - assets/data/bobojong_fasum_osm.geojson
-    - assets/data/bobojong_kampung_osm.geojson
     - assets/data/kecamatan_mande_desa_big.geojson
 
   # To add assets to your application, add an assets section, like this:

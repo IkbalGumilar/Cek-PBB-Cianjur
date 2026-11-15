@@ -6,20 +6,24 @@ echo =====================================================================
 echo.
 
 set "PROJECT_DIR=%~dp0.."
-set "APP_VERSION=v0.1.6-beta"
+set "APP_VERSION=v0.1.7-beta"
 cd /d "%PROJECT_DIR%"
 
-echo [0/4] Mengunduh dependensi & menyinkronkan plugin Windows di ephemeral...
+echo [0/4] Mengunduh dependensi ^& memastikan plugin Windows tersinkron...
 call flutter pub get
+if errorlevel 1 (
+    echo [WARNING] flutter pub get gagal atau symlink tidak tersedia, mencoba sinkronisasi manual plugin...
+)
 call dart run tool\sync_windows_plugins.dart
 if errorlevel 1 (
     echo [WARNING] Sinkronisasi plugin via Dart mengalami kendala, melanjutkan build...
 )
 
 echo.
-echo [1/4] Kompilasi rilis Flutter Windows langsung di direktori kerja Z:...
+echo [1/4] Kompilasi rilis Flutter Windows (ramping ^& terobfuskasi) di %CD%...
 if not exist "build\native_assets\windows" mkdir "build\native_assets\windows"
-call flutter build windows --release
+if not exist "build\symbols\windows" mkdir "build\symbols\windows"
+call flutter build windows --release --obfuscate --split-debug-info=build\symbols\windows --tree-shake-icons
 if errorlevel 1 (
     echo [ERROR] Gagal mengompilasi aplikasi Windows!
     exit /b 1
@@ -43,7 +47,7 @@ if errorlevel 1 (
 )
 
 echo.
-echo [3/3] Memeriksa compiler Inno Setup...
+echo [3/4] Memeriksa compiler Inno Setup...
 set "ISCC="
 if exist "C:\Program Files\Inno Setup 7\ISCC.exe" (
     set "ISCC=C:\Program Files\Inno Setup 7\ISCC.exe"
@@ -74,22 +78,27 @@ if exist "build\Cek-PBB-Cianjur-Setup-%APP_VERSION%.exe" move /y "build\Cek-PBB-
 if exist "build\Cek-PBB-Cianjur-Windows-x64-%APP_VERSION%.zip" move /y "build\Cek-PBB-Cianjur-Windows-x64-%APP_VERSION%.zip" "dist\Cek-PBB-Cianjur-Portable-%APP_VERSION%.zip" >nul
 
 echo.
-echo [4/4] Menghitung checksum SHA-256 untuk artefak Windows di dist\...
+echo [4/4] Menghitung checksum SHA-256 ^& ringkasan ukuran rilis...
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+    "$rel = 'build\windows\x64\runner\Release'; " ^
+    "$setup = 'dist\Cek-PBB-Cianjur-Setup-%APP_VERSION%.exe'; " ^
+    "$zip = 'dist\Cek-PBB-Cianjur-Portable-%APP_VERSION%.zip'; " ^
     "$checksumFile = 'dist\Cek-PBB-Cianjur-%APP_VERSION%-checksums.sha256'; " ^
     "$lines = @(); " ^
-    "if (Test-Path 'dist\Cek-PBB-Cianjur-Setup-%APP_VERSION%.exe') { " ^
-    "  $h = (Get-FileHash 'dist\Cek-PBB-Cianjur-Setup-%APP_VERSION%.exe' -Algorithm SHA256).Hash.ToLower(); " ^
-    "  $lines += ('{0}  Cek-PBB-Cianjur-Setup-%APP_VERSION%.exe' -f $h); " ^
-    "} " ^
-    "if (Test-Path 'dist\Cek-PBB-Cianjur-Portable-%APP_VERSION%.zip') { " ^
-    "  $h = (Get-FileHash 'dist\Cek-PBB-Cianjur-Portable-%APP_VERSION%.zip' -Algorithm SHA256).Hash.ToLower(); " ^
-    "  $lines += ('{0}  Cek-PBB-Cianjur-Portable-%APP_VERSION%.zip' -f $h); " ^
-    "} " ^
+    "if (Test-Path $setup) { $lines += ('{0}  Cek-PBB-Cianjur-Setup-%APP_VERSION%.exe' -f (Get-FileHash $setup -Algorithm SHA256).Hash.ToLower()); } " ^
+    "if (Test-Path $zip) { $lines += ('{0}  Cek-PBB-Cianjur-Portable-%APP_VERSION%.zip' -f (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()); } " ^
     "$lines | Out-File -FilePath $checksumFile -Encoding utf8; " ^
-    "Get-Content $checksumFile"
+    "Get-Content $checksumFile; " ^
+    "$relFiles = Get-ChildItem $rel -Recurse -File; " ^
+    "$relMb = [math]::Round((($relFiles | Measure-Object Length -Sum).Sum / 1MB), 2); " ^
+    "Write-Host ('[SIZE] Release staging: {0} MB ({1} berkas)' -f $relMb, $relFiles.Count); " ^
+    "if (Test-Path $zip) { Write-Host ('[SIZE] Portable ZIP   : {0} MB' -f [math]::Round(((Get-Item $zip).Length / 1MB), 2)); } " ^
+    "if (Test-Path $setup) { Write-Host ('[SIZE] Installer EXE  : {0} MB' -f [math]::Round(((Get-Item $setup).Length / 1MB), 2)); } " ^
+    "Write-Host '[SIZE] 5 berkas terbesar di Release:'; " ^
+    "$relFiles | Sort-Object Length -Descending | Select-Object -First 5 | ForEach-Object { Write-Host ('  - {0,6:N2} MB  {1}' -f ($_.Length / 1MB), $_.FullName.Replace((Resolve-Path $rel).Path + '\', '')) }"
 
 echo.
 echo =====================================================================
 echo  BUILD SELESAI! Seluruh artefak tersimpan di direktori dist\
+echo  Simbol debug terpisah tersimpan di build\symbols\windows
 echo =====================================================================

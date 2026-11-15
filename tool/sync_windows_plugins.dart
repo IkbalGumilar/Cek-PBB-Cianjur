@@ -1,98 +1,208 @@
+import 'dart:convert';
 import 'dart:io';
 
-void copyDir(Directory src, Directory dst) {
+/// Menyalin direktori secara rekursif saat Windows tidak dapat mengikuti
+/// symlink lintas drive / shared folder (mis. drive jaringan `Z:\`).
+void _copyDirectory(Directory src, Directory dst) {
   if (!dst.existsSync()) {
     dst.createSync(recursive: true);
   }
-  for (var entity in src.listSync(recursive: false)) {
-    final name = entity.uri.pathSegments.where((s) => s.isNotEmpty).last;
-    final newPath = '${dst.path}\\$name';
+  for (final entity in src.listSync(recursive: false, followLinks: true)) {
+    final name = _lastSegment(entity.path);
+    final newPath = '${dst.path}${Platform.pathSeparator}$name';
     if (entity is Directory) {
-      copyDir(entity, Directory(newPath));
+      _copyDirectory(entity, Directory(newPath));
     } else if (entity is File) {
       entity.copySync(newPath);
     }
   }
 }
 
-void main() {
-  final pubCache = r'C:\Users\ikbal\AppData\Local\Pub\Cache\hosted\pub.dev';
-  final plugins = [
-    'connectivity_plus',
-    'dynamic_color',
-    'file_selector_windows',
-    'flutter_local_notifications_windows',
-    'flutter_secure_storage_windows',
-    'image_picker_windows',
-    'jni',
-    'local_auth_windows',
-    'path_provider_windows',
-    'printing',
-    'screen_brightness_windows',
-    'shared_preferences_windows',
-    'url_launcher_windows',
-    'windows_file_picker',
+String _lastSegment(String rawPath) {
+  final cleaned = rawPath.replaceAll('\\', '/').replaceAll(RegExp(r'/+$'), '');
+  final idx = cleaned.lastIndexOf('/');
+  return idx >= 0 ? cleaned.substring(idx + 1) : cleaned;
+}
+
+Directory? _resolvePubHostedCache(String? cliOverride) {
+  final sep = Platform.pathSeparator;
+  final candidates = <String>[
+    if (cliOverride != null && cliOverride.isNotEmpty) cliOverride,
+    if (Platform.environment['PUB_CACHE'] case final pubCache?
+        when pubCache.isNotEmpty)
+      '$pubCache${sep}hosted${sep}pub.dev',
+    if (Platform.environment['LOCALAPPDATA'] case final localAppData?
+        when localAppData.isNotEmpty)
+      '$localAppData${sep}Pub${sep}Cache${sep}hosted${sep}pub.dev',
+    if (Platform.environment['USERPROFILE'] case final userProfile?
+        when userProfile.isNotEmpty)
+      '$userProfile${sep}AppData${sep}Local${sep}Pub${sep}Cache${sep}hosted${sep}pub.dev',
+    if (Platform.environment['HOME'] case final home? when home.isNotEmpty)
+      '$home$sep.pub-cache${sep}hosted${sep}pub.dev',
   ];
 
-  final symlinksDir = Directory(
-    r'Z:\windows\flutter\ephemeral\.plugin_symlinks',
-  );
+  for (final path in candidates) {
+    final dir = Directory(path);
+    if (dir.existsSync()) return dir;
+  }
+  return null;
+}
 
-  // Always reset .plugin_symlinks to avoid SMB symlink lock / collision
-  final ts = DateTime.now().millisecondsSinceEpoch;
-  Process.runSync('powershell', [
-    '-NoProfile',
-    '-Command',
-    'Rename-Item -Path "Z:\\windows\\flutter\\ephemeral\\.plugin_symlinks" -NewName "plugin_symlinks_$ts" -ErrorAction SilentlyContinue; New-Item -ItemType Directory -Path "Z:\\windows\\flutter\\ephemeral\\.plugin_symlinks" -Force',
-  ]);
+bool _isPluginTargetHealthy(String targetPath) {
+  final sep = Platform.pathSeparator;
+  try {
+    final type = FileSystemEntity.typeSync(targetPath, followLinks: false);
+    if (type == FileSystemEntityType.notFound) return false;
+    final resolvedPath = type == FileSystemEntityType.link
+        ? Link(targetPath).resolveSymbolicLinksSync()
+        : targetPath;
+    final dir = Directory(resolvedPath);
+    if (!dir.existsSync()) return false;
+    return File('$resolvedPath${sep}pubspec.yaml').existsSync();
+  } catch (_) {
+    return false;
+  }
+}
 
-  final cacheDir = Directory(pubCache);
-  if (!cacheDir.existsSync()) {
-    stderr.writeln('Pub cache not found at $pubCache');
+void _deleteEntitySafely(String targetPath) {
+  try {
+    final type = FileSystemEntity.typeSync(targetPath, followLinks: false);
+    if (type == FileSystemEntityType.link) {
+      Link(targetPath).deleteSync();
+    } else if (type == FileSystemEntityType.file) {
+      File(targetPath).deleteSync();
+    } else if (type == FileSystemEntityType.directory) {
+      Directory(targetPath).deleteSync(recursive: true);
+    }
+  } catch (_) {}
+}
+
+Directory? _findPluginSource({
+  required String name,
+  required String? recordedPath,
+  required Directory? pubCacheDir,
+}) {
+  if (recordedPath != null && recordedPath.isNotEmpty) {
+    final direct = Directory(recordedPath);
+    if (direct.existsSync()) return direct;
+
+    // Jika .flutter-plugins-dependencies dibuat dari OS lain (mis. Linux),
+    // ambil nama folder paket persis (<nama>-<versi>) dan cari di Pub Cache lokal.
+    if (pubCacheDir != null) {
+      final exactFolderName = _lastSegment(recordedPath);
+      if (exactFolderName.isNotEmpty) {
+        final mapped = Directory(
+          '${pubCacheDir.path}${Platform.pathSeparator}$exactFolderName',
+        );
+        if (mapped.existsSync()) return mapped;
+      }
+    }
+  }
+
+  if (pubCacheDir != null) {
+    final matches = pubCacheDir
+        .listSync(followLinks: false)
+        .whereType<Directory>()
+        .where((d) {
+          final folder = _lastSegment(d.path);
+          return folder == name || folder.startsWith('$name-');
+        })
+        .toList()
+      ..sort((a, b) => a.path.compareTo(b.path));
+    if (matches.isNotEmpty) return matches.last;
+  }
+
+  return null;
+}
+
+void main(List<String> args) {
+  final sep = Platform.pathSeparator;
+  final forceSync = args.contains('--force');
+  String? pubCacheArg;
+  for (final arg in args) {
+    if (arg.startsWith('--pub-cache=')) {
+      pubCacheArg = arg.substring('--pub-cache='.length);
+    }
+  }
+
+  final projectDir = Directory.current;
+  final pubspecFile = File('${projectDir.path}${sep}pubspec.yaml');
+  if (!pubspecFile.existsSync()) {
+    stderr.writeln(
+      'Jalankan skrip ini dari direktori root proyek (pubspec.yaml tidak ditemukan di ${projectDir.path}).',
+    );
     exit(1);
   }
 
-  final cacheEntries = cacheDir.listSync().whereType<Directory>().toList();
+  final depsFile = File(
+    '${projectDir.path}$sep.flutter-plugins-dependencies',
+  );
+  if (!depsFile.existsSync()) {
+    stderr.writeln(
+      '.flutter-plugins-dependencies belum ada. Jalankan "flutter pub get" terlebih dahulu.',
+    );
+    exit(1);
+  }
 
-  for (final plugin in plugins) {
-    // Find matching directory in pub cache (e.g. connectivity_plus-7.3.1)
-    final matched = cacheEntries.where((d) {
-      final name = d.uri.pathSegments.where((s) => s.isNotEmpty).last;
-      return name == plugin || name.startsWith('$plugin-');
-    }).toList();
+  final decoded = jsonDecode(depsFile.readAsStringSync()) as Map<String, dynamic>;
+  final pluginsMap = decoded['plugins'] as Map<String, dynamic>?;
+  final windowsPlugins =
+      (pluginsMap?['windows'] as List<dynamic>?) ?? const <dynamic>[];
 
-    if (matched.isEmpty) {
-      stderr.writeln('Warning: plugin $plugin not found in pub cache!');
+  if (windowsPlugins.isEmpty) {
+    stdout.writeln('Tidak ada plugin Windows di .flutter-plugins-dependencies.');
+    return;
+  }
+
+  final ephemeralDir = Directory(
+    '${projectDir.path}${sep}windows${sep}flutter${sep}ephemeral',
+  );
+  final symlinksDir = Directory('${ephemeralDir.path}$sep.plugin_symlinks');
+
+  if (forceSync && symlinksDir.existsSync()) {
+    final ts = DateTime.now().millisecondsSinceEpoch;
+    try {
+      symlinksDir.renameSync('${ephemeralDir.path}${sep}plugin_symlinks_$ts');
+    } catch (_) {}
+  }
+  if (!symlinksDir.existsSync()) {
+    symlinksDir.createSync(recursive: true);
+  }
+
+  final pubCacheDir = _resolvePubHostedCache(pubCacheArg);
+  var copiedCount = 0;
+  var okCount = 0;
+
+  for (final rawEntry in windowsPlugins) {
+    final entry = rawEntry as Map<String, dynamic>;
+    final name = entry['name'] as String;
+    final recordedPath = entry['path'] as String?;
+    final targetPath = '${symlinksDir.path}$sep$name';
+
+    if (!forceSync && _isPluginTargetHealthy(targetPath)) {
+      okCount++;
       continue;
     }
 
-    // Pick highest version if multiple
-    matched.sort((a, b) => a.path.compareTo(b.path));
-    final srcDir = matched.last;
-    final target = '${symlinksDir.path}\\$plugin';
-
-    final l = Link(target);
-    if (l.existsSync()) {
-      try {
-        l.deleteSync();
-      } catch (_) {}
-    }
-    final f = File(target);
-    if (f.existsSync()) {
-      try {
-        f.deleteSync();
-      } catch (_) {}
-    }
-    final d = Directory(target);
-    if (d.existsSync()) {
-      try {
-        d.deleteSync(recursive: true);
-      } catch (_) {}
+    final srcDir = _findPluginSource(
+      name: name,
+      recordedPath: recordedPath,
+      pubCacheDir: pubCacheDir,
+    );
+    if (srcDir == null) {
+      stderr.writeln(
+        'Peringatan: sumber plugin "$name" tidak ditemukan (pastikan "flutter pub get" sudah dijalankan).',
+      );
+      continue;
     }
 
-    stdout.writeln('Syncing $plugin from ${srcDir.path} -> $target');
-    copyDir(srcDir, Directory(target));
+    _deleteEntitySafely(targetPath);
+    stdout.writeln('Syncing $name dari ${srcDir.path} -> $targetPath');
+    _copyDirectory(srcDir, Directory(targetPath));
+    copiedCount++;
   }
 
-  stdout.writeln('All Windows plugin dependencies synced successfully!');
+  stdout.writeln(
+    'Sinkronisasi plugin Windows selesai (valid: $okCount, disalin ulang: $copiedCount).',
+  );
 }

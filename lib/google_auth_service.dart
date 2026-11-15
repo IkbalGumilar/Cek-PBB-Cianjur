@@ -517,13 +517,77 @@ class GoogleAuthService {
     await BlokBackupScheduler.instance.setGoogleAccountDetails(email: '');
   }
 
+  /// Memperbarui access token desktop menggunakan refresh token yang tersimpan di penyimpanan aman.
+  Future<String?> refreshDesktopAccessToken() async {
+    if (!Platform.isLinux && !Platform.isWindows && !Platform.isMacOS) {
+      return null;
+    }
+    final refreshToken = await BlokBackupScheduler.instance
+        .getGoogleDesktopRefreshToken();
+    if (refreshToken.isEmpty) return null;
+
+    final httpClient = HttpClient();
+    try {
+      final tokenReq = await httpClient.postUrl(
+        Uri.parse('https://oauth2.googleapis.com/token'),
+      );
+      tokenReq.headers.contentType = ContentType(
+        'application',
+        'x-www-form-urlencoded',
+        charset: 'utf-8',
+      );
+      final tokenParams = <String, String>{
+        'client_id': _desktopClientId,
+        'refresh_token': refreshToken,
+        'grant_type': 'refresh_token',
+      };
+      final body = tokenParams.entries
+          .map(
+            (e) =>
+                '${Uri.encodeQueryComponent(e.key)}=${Uri.encodeQueryComponent(e.value)}',
+          )
+          .join('&');
+      tokenReq.write(body);
+      final tokenRes = await tokenReq.close().timeout(
+        const Duration(seconds: 15),
+      );
+      final tokenBody = await tokenRes.transform(utf8.decoder).join();
+      if (tokenRes.statusCode != 200) {
+        debugPrint('Gagal refresh token Google Desktop (${tokenRes.statusCode})');
+        return null;
+      }
+      final tokenJson = jsonDecode(tokenBody) as Map<String, dynamic>;
+      final newAccessToken = tokenJson['access_token'] as String? ?? '';
+      final newRefreshToken = tokenJson['refresh_token'] as String?;
+      if (newAccessToken.isEmpty) return null;
+
+      await BlokBackupScheduler.instance.setGoogleDesktopTokens(
+        accessToken: newAccessToken,
+        refreshToken: (newRefreshToken != null && newRefreshToken.isNotEmpty)
+            ? newRefreshToken
+            : refreshToken,
+      );
+      return newAccessToken;
+    } catch (e) {
+      debugPrint('Error saat refresh token Google Desktop: $e');
+      return null;
+    } finally {
+      httpClient.close(force: true);
+    }
+  }
+
   /// Mendapatkan HTTP headers otentikasi (Bearer token) untuk sinkronisasi Google Drive.
   Future<Map<String, String>?> getAuthHeaders({
     bool interactiveIfNeeded = false,
+    bool forceRefresh = false,
   }) async {
     if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
-      final token = await BlokBackupScheduler.instance
-          .getGoogleDesktopAccessToken();
+      var token = forceRefresh
+          ? (await refreshDesktopAccessToken() ?? '')
+          : await BlokBackupScheduler.instance.getGoogleDesktopAccessToken();
+      if (token.isEmpty && !forceRefresh) {
+        token = await refreshDesktopAccessToken() ?? '';
+      }
       if (token.isEmpty) return null;
       return {'Authorization': 'Bearer $token'};
     }
@@ -555,6 +619,11 @@ class GoogleAuthService {
       }
     }
     if (account == null) return null;
+    if (forceRefresh) {
+      try {
+        await account.clearAuthCache();
+      } catch (_) {}
+    }
     if (interactiveIfNeeded &&
         !kIsWeb &&
         (Platform.isAndroid || Platform.isIOS)) {

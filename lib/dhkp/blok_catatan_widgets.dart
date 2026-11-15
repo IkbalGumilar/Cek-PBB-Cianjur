@@ -450,11 +450,17 @@ class DhkpSummaryFooterCard extends StatelessWidget {
           const SizedBox(height: 2),
           LerpAnimatedCounter(
             value: nominal,
+            duration: const Duration(milliseconds: 1500),
+            curve: const UnityAnimationCurve(),
+            resetToZeroOnUpdate: true,
             formatter: (v) => formatRupiah(v.round()),
             style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
           ),
           LerpAnimatedCounter(
             value: count,
+            duration: const Duration(milliseconds: 1500),
+            curve: const UnityAnimationCurve(),
+            resetToZeroOnUpdate: true,
             formatter: (v) => '${v.round()} WP',
             style: const TextStyle(fontSize: 10, color: Colors.grey),
           ),

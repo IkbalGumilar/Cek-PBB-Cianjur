@@ -270,38 +270,36 @@ class IncomingFileService {
     }
   }
 
-  Future<void> _promptPassword(
-    BuildContext context,
-    String filePath,
-    bool isDat,
-  ) async {
+  /// Menampilkan dialog input kata sandi atau kunci pemulihan untuk membuka berkas cadangan `.dkhp` / `.dat`
+  /// yang diproteksi (misalnya saat dipulihkan pada perangkat lain atau saat Secure Storage tidak tersedia).
+  static Future<String?> promptBackupPassword(
+    BuildContext context, {
+    String title = 'Kata Sandi / Kunci Pemulihan',
+    String message =
+        'Berkas cadangan ini terenkripsi (DKH2 AES-256-GCM). Masukkan Kata Sandi Backup atau Kunci Pemulihan (Recovery Key) dari perangkat asal untuk membukanya:',
+  }) async {
     final controller = TextEditingController();
-    bool obscure = true;
-
-    String? pwd;
+    var obscure = true;
     try {
-      pwd = await showDialog<String>(
+      return await showDialog<String>(
         context: context,
         barrierDismissible: false,
         builder: (ctx) => StatefulBuilder(
           builder: (ctx, setState) => AlertDialog(
             icon: const Icon(Icons.lock_rounded, color: Colors.blue, size: 36),
-            title: const Text('Kata Sandi Diperlukan'),
+            title: Text(title),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Berkas cadangan ini diproteksi dengan kata sandi. Masukkan kata sandi untuk membukanya:',
-                  style: TextStyle(fontSize: 13),
-                ),
+                Text(message, style: const TextStyle(fontSize: 13)),
                 const SizedBox(height: 14),
                 TextField(
                   controller: controller,
                   obscureText: obscure,
                   autofocus: true,
                   decoration: InputDecoration(
-                    labelText: 'Kata Sandi',
+                    labelText: 'Kata Sandi / Kunci Pemulihan',
                     border: const OutlineInputBorder(),
                     suffixIcon: IconButton(
                       icon: Icon(
@@ -310,6 +308,7 @@ class IncomingFileService {
                       onPressed: () => setState(() => obscure = !obscure),
                     ),
                   ),
+                  onSubmitted: (val) => Navigator.pop(ctx, val.trim()),
                 ),
               ],
             ),
@@ -329,7 +328,14 @@ class IncomingFileService {
     } finally {
       controller.dispose();
     }
+  }
 
+  Future<void> _promptPassword(
+    BuildContext context,
+    String filePath,
+    bool isDat,
+  ) async {
+    final pwd = await promptBackupPassword(context);
     if (pwd != null && pwd.isNotEmpty && context.mounted) {
       await _processImport(context, filePath, isDat, password: pwd);
     }

@@ -171,6 +171,11 @@ class MonitoringSummaryCards extends StatelessWidget {
                                   alignment: Alignment.centerLeft,
                                   child: LerpAnimatedCounter(
                                     value: item.rawValue,
+                                    duration: const Duration(
+                                      milliseconds: 1500,
+                                    ),
+                                    curve: const UnityAnimationCurve(),
+                                    resetToZeroOnUpdate: true,
                                     formatter: (val) =>
                                         item.formatter(val.round()),
                                     style: theme.textTheme.titleSmall?.copyWith(

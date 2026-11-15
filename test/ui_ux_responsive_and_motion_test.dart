@@ -2,10 +2,14 @@ import 'package:cek_pbb_app/app_header.dart';
 import 'package:cek_pbb_app/blok_catatan_screen.dart';
 import 'package:cek_pbb_app/check_form_view.dart';
 import 'package:cek_pbb_app/check_mode.dart';
+import 'package:cek_pbb_app/cianjur_wilayah_data.dart';
+import 'package:cek_pbb_app/currency_format.dart';
 import 'package:cek_pbb_app/desil/desil_view.dart';
 import 'package:cek_pbb_app/kendaraan/kendaraan_view.dart';
 import 'package:cek_pbb_app/monitoring/monitoring_result_table.dart';
 import 'package:cek_pbb_app/monitoring/monitoring_summary_cards.dart';
+import 'package:cek_pbb_app/nop_helper.dart';
+import 'package:cek_pbb_app/services/location_service.dart';
 import 'package:cek_pbb_app/staff_login_screen.dart';
 import 'package:cek_pbb_app/staff_mfa_screen.dart';
 import 'package:cek_pbb_app/staff_portal/staff_authenticator_store.dart';
@@ -406,6 +410,174 @@ void main() {
         expect(tester.takeException(), isNull);
 
         expect(StaffLoginScreen, isNotNull);
+      },
+    );
+  });
+
+  group('Audit Regression Tests: Wilayah, Currency, & Unity Animations', () {
+    test(
+      'All 32 kecamatanCentroids keys match official Bapenda codes in cianjurWilayahCatalog',
+      () {
+        expect(kecamatanCentroids.length, 32);
+        expect(cianjurWilayahCatalog.length, 32);
+        for (final code in kecamatanCentroids.keys) {
+          final kec = findKecamatanByCode(code);
+          expect(
+            kec,
+            isNotNull,
+            reason:
+                'Centroid code $code must exist in cianjurWilayahCatalog',
+          );
+          expect(lookupKecamatanName(code), kec!.name);
+        }
+        expect(lookupCatalogKecamatanName('999'), 'Kecamatan 999');
+        expect(lookupKecamatanName('280'), 'CIPANAS');
+        expect(
+          lookupKelurahanName('002', kecamatanCode: '280'),
+          'CILOTO',
+        );
+      },
+    );
+
+    test(
+      'formatRibuan formats negative numbers without leading dot after minus sign',
+      () {
+        expect(formatRibuan(0), '0');
+        expect(formatRibuan(100), '100');
+        expect(formatRibuan(100000), '100.000');
+        expect(formatRibuan(-100), '-100');
+        expect(formatRibuan(-1000), '-1.000');
+        expect(formatRibuan(-100000), '-100.000');
+        expect(formatRibuan(-1250000), '-1.250.000');
+      },
+    );
+
+    test(
+      'Unity Mathf utilities (unityInverseLerp, unitySmoothStep, unitySmoothDamp, UnityAnimationCurve) compute expected values',
+      () {
+        expect(unityInverseLerp(10, 20, 15), closeTo(0.5, 1e-6));
+        expect(unityInverseLerp(10, 20, 5), 0.0);
+        expect(unityInverseLerp(10, 20, 25), 1.0);
+        expect(unitySmoothStep(0, 100, 0.0), 0.0);
+        expect(unitySmoothStep(0, 100, 0.5), closeTo(50.0, 1e-6));
+        expect(unitySmoothStep(0, 100, 1.0), 100.0);
+
+        final step = unitySmoothDamp(
+          current: 0.0,
+          target: 100.0,
+          currentVelocity: 0.0,
+          smoothTime: 0.2,
+          deltaTime: 0.016,
+        );
+        expect(step.value, greaterThan(0.0));
+        expect(step.value, lessThan(100.0));
+
+        const curve = UnityAnimationCurve(overshoot: 0.08);
+        expect(curve.transform(0.0), closeTo(0.0, 1e-6));
+        expect(curve.transform(1.0), closeTo(1.0, 1e-6));
+      },
+    );
+
+    testWidgets(
+      'LerpPunchScale, LerpShakePosition, and SequenceStaggerReveal animate and dispose cleanly',
+      (tester) async {
+        int shakeCount = 0;
+        int punchCount = 0;
+
+        await tester.pumpWidget(
+          StatefulBuilder(
+            builder: (context, setState) {
+              return MaterialApp(
+                home: Scaffold(
+                  body: SequenceStaggerReveal(
+                    children: [
+                      LerpShakePosition(
+                        shakeTrigger: shakeCount,
+                        child: const Text('Pesan Validasi'),
+                      ),
+                      LerpPunchScale(
+                        trigger: punchCount,
+                        punchOnTap: true,
+                        onTap: () => setState(() {
+                          shakeCount++;
+                          punchCount++;
+                        }),
+                        child: const Text('Tombol Aksi'),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        );
+
+        await tester.pump(const Duration(milliseconds: 100));
+        await tester.tap(find.text('Tombol Aksi'));
+        await tester.pump(const Duration(milliseconds: 80));
+        expect(shakeCount, 1);
+        expect(punchCount, 1);
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    testWidgets(
+      'LerpAnimatedCounter with resetToZeroOnUpdate restarts from 0 smoothly over 1.5s on value change',
+      (tester) async {
+        int currentValue = 1000;
+        late void Function(VoidCallback) setHostState;
+
+        await tester.pumpWidget(
+          StatefulBuilder(
+            builder: (context, setState) {
+              setHostState = setState;
+              return MaterialApp(
+                home: Scaffold(
+                  body: LerpAnimatedCounter(
+                    value: currentValue,
+                    duration: const Duration(milliseconds: 1500),
+                    curve: const UnityAnimationCurve(),
+                    resetToZeroOnUpdate: true,
+                    formatter: (val) => 'Nilai: ${val.round()}',
+                  ),
+                ),
+              );
+            },
+          ),
+        );
+
+        expect(find.text('Nilai: 0'), findsOneWidget);
+        await tester.pump(const Duration(milliseconds: 250));
+        final earlyText = tester.widget<Text>(find.byType(Text)).data!;
+        final earlyVal = int.parse(earlyText.replaceAll('Nilai: ', ''));
+        expect(earlyVal, greaterThan(0));
+        expect(earlyVal, lessThan(200));
+
+        await tester.pump(const Duration(milliseconds: 500));
+        final midText = tester.widget<Text>(find.byType(Text)).data!;
+        final midVal = int.parse(midText.replaceAll('Nilai: ', ''));
+        expect(midVal, greaterThan(350));
+        expect(midVal, lessThan(650));
+
+        await tester.pumpAndSettle();
+        expect(find.text('Nilai: 1000'), findsOneWidget);
+
+        // Update value -> must immediately restart from 0 before lerping to 2000
+        setHostState(() => currentValue = 2000);
+        await tester.pump();
+        expect(find.text('Nilai: 0'), findsOneWidget);
+
+        await tester.pump(const Duration(milliseconds: 250));
+        final resetEarlyText = tester.widget<Text>(find.byType(Text)).data!;
+        final resetEarlyVal = int.parse(
+          resetEarlyText.replaceAll('Nilai: ', ''),
+        );
+        expect(resetEarlyVal, greaterThan(0));
+        expect(resetEarlyVal, lessThan(400));
+
+        await tester.pumpAndSettle();
+        expect(find.text('Nilai: 2000'), findsOneWidget);
       },
     );
   });

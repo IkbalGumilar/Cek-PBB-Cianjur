@@ -5,11 +5,14 @@ import 'package:flutter/foundation.dart';
 import '../batch_notification_service.dart';
 import '../blok_data_store.dart';
 import '../blok_record.dart';
+import '../cianjur_wilayah_data.dart';
 import '../currency_format.dart';
 import '../dhkp/dhkp_grafik_analytics.dart';
 import '../dhkp_widget_sync_service.dart';
+import '../dusun_data.dart';
 import '../nop_helper.dart';
 import '../staff_portal_client.dart';
+
 
 /// Pilihan mode sinkronisasi DHKP dari Portal Staf
 enum StaffSyncMode {
@@ -396,8 +399,54 @@ class StaffDhkpSyncService {
     return raw;
   }
 
+  Future<({MonitoringTableResult result, Duration elapsed})> _fetchSyncPageWithRetry({
+    required Future<MonitoringTableResult> Function() fetcher,
+    required String label,
+    required int page,
+    required int maxRetries,
+    required Duration retryBaseDelay,
+    required void Function(String status) notify,
+    bool Function()? shouldCancel,
+  }) async {
+    var attempt = 0;
+    while (true) {
+      attempt++;
+      final sw = Stopwatch()..start();
+      MonitoringTableResult tableResult;
+      try {
+        tableResult = await fetcher();
+      } catch (e) {
+        tableResult = MonitoringTableResult(
+          headers: const [],
+          rows: const [],
+          errorMessage: 'Kesalahan jaringan pada halaman $page: $e',
+        );
+      }
+      sw.stop();
+
+
+      final hasError =
+          tableResult.errorMessage != null && tableResult.rows.isEmpty;
+      if (!hasError || attempt > maxRetries) {
+        return (result: tableResult, elapsed: sw.elapsed);
+      }
+
+      if (shouldCancel?.call() ?? false) {
+        return (result: tableResult, elapsed: sw.elapsed);
+      }
+
+      final backoffMs = retryBaseDelay.inMilliseconds * attempt;
+      notify(
+        'Server sibuk saat memuat $label Hal $page. Mencoba ulang ($attempt/$maxRetries)...',
+      );
+      if (backoffMs > 0) {
+        await Future.delayed(Duration(milliseconds: backoffMs));
+      }
+    }
+  }
+
   /// Eksekusi sinkronisasi data bayar dari Portal Staf ke DHKP lokal.
-  /// Bekerja bertahap per blok secara ramah server (dilengkapi jeda santai & wake lock).
+  /// Bekerja bertahap per halaman secara ramah server (dilengkapi retry otomatis, jeda adaptif & wake lock).
   Future<StaffDhkpSyncOutcome> syncBloks({
     required StaffPortalClient client,
     required String tahun,
@@ -411,6 +460,8 @@ class StaffDhkpSyncService {
     String bukuMin = '',
     String bukuMax = '',
     Duration pacingDelay = const Duration(milliseconds: 350),
+    Duration retryBaseDelay = const Duration(milliseconds: 1200),
+    int maxRetriesPerPage = 3,
     int maxPages = 1000,
     void Function(StaffDhkpSyncProgress progress)? onProgress,
     bool Function()? shouldCancel,
@@ -426,6 +477,32 @@ class StaffDhkpSyncService {
     final effectiveCutoff = (tglCutoff != null && tglCutoff.isNotEmpty)
         ? tglCutoff
         : DateTime.now().toIso8601String().substring(0, 10);
+
+    // Normalisasi kode wilayah V-Tax agar tetap bekerja baik untuk akun Bapenda, Kecamatan, maupun Desa
+    final rawKec3 = extractKecamatanCode3(
+      kecamatanCode.isNotEmpty
+          ? kecamatanCode
+          : (client.activeKecamatanCode.isNotEmpty
+                ? client.activeKecamatanCode
+                : activeKecamatanCode),
+    );
+    final rawKel3 = extractKelurahanCode3(
+      kelurahanCode.isNotEmpty
+          ? kelurahanCode
+          : (client.activeKelurahanCode.isNotEmpty
+                ? client.activeKelurahanCode
+                : activeKelurahanCode),
+    );
+    final kecCode3 = rawKec3.isNotEmpty ? rawKec3 : '200';
+    final kelCode3 = rawKel3.isNotEmpty ? rawKel3 : '004';
+    final effKecCode = toVtaxKecamatanCode(kecCode3);
+    final effKelCode = toVtaxKelurahanCode(kelCode: kelCode3, kecCode: kecCode3);
+    final effKecName = activeKecamatanName.isNotEmpty
+        ? activeKecamatanName
+        : lookupKecamatanName(kecCode3);
+    final effDesaName = activeDesaName.isNotEmpty
+        ? activeDesaName
+        : lookupKelurahanName(kelCode3, kecamatanCode: kecCode3);
 
     final totalBloks = bloks.length;
     final blokSummaryLabel = totalBloks == 1
@@ -470,8 +547,11 @@ class StaffDhkpSyncService {
       final existingAll = await BlokDataStore.instance.loadAll();
       final keyToExisting = <String, BlokRecord>{};
       final nopToPriorPbb = <String, String>{};
+      final existingBloksSet = <String>{};
       for (final r in existingAll) {
         keyToExisting[r.uniqueKey] = r;
+        final rb = r.blok.replaceAll(RegExp(r'[^0-9]'), '').padLeft(3, '0');
+        if (rb.isNotEmpty && rb != '000') existingBloksSet.add(rb);
         if (r.jumlahPbbValue > 0) {
           nopToPriorPbb[r.nop] = r.jumlahPbb;
         }
@@ -482,10 +562,37 @@ class StaffDhkpSyncService {
           .where((b) => b.isNotEmpty && b != '000')
           .toSet();
 
-      final isAllBloks = targetBlokSet.isEmpty || targetBlokSet.length >= 10;
+      final dusunScope = DusunData.instance.scope;
+      final dusunAllowedSet = dusunScope.isDusunScope
+          ? dusunScope.allowedBloks
+                .map((b) => b.replaceAll(RegExp(r'[^0-9]'), '').padLeft(3, '0'))
+                .where((b) => b.isNotEmpty && b != '000')
+                .toSet()
+          : <String>{};
+
+      // Tentukan apakah pengguna menyinkronkan seluruh blok se-desa (tanpa kunci dusun)
+      // atau memfilter ke blok/dusun tertentu.
+      final isFullVillageSelection =
+          dusunAllowedSet.isEmpty &&
+          (targetBlokSet.isEmpty ||
+              (existingBloksSet.isNotEmpty &&
+                  targetBlokSet.length >= existingBloksSet.length &&
+                  targetBlokSet.containsAll(existingBloksSet)));
+
+      bool isBlokAllowed(String blok3) {
+        if (dusunAllowedSet.isNotEmpty && !dusunAllowedSet.contains(blok3)) {
+          return false;
+        }
+        if (!isFullVillageSelection &&
+            targetBlokSet.isNotEmpty &&
+            !targetBlokSet.contains(blok3)) {
+          return false;
+        }
+        return true;
+      }
 
       // -------------------------------------------------------------
-      // PENGAMBILAN DATA (PARALEL UNTUK BELUM BAYAR & SUDAH BAYAR)
+      // PENGAMBILAN DATA (BERURUTAN & RAMAH SERVER UNTUK BB & SB)
       // -------------------------------------------------------------
       int pageBb = 0;
       int estimatedTotalPagesBb = 1;
@@ -547,17 +654,26 @@ class StaffDhkpSyncService {
           pageBb = page;
           notifyProgress('Memuat data Belum Bayar (Halaman $page)...');
 
-          final tableResult = await client.fetchBelumBayar(
-            tglCutoff: effectiveCutoff,
-            tahunAwal: tahun,
-            tahunAkhir: tahun,
-            bukuMin: bukuMin,
-            bukuMax: bukuMax,
-            nop: '',
-            kelurahan: kelurahanCode,
-            kecamatan: kecamatanCode,
+          final fetched = await _fetchSyncPageWithRetry(
+            fetcher: () => client.fetchBelumBayar(
+              tglCutoff: effectiveCutoff,
+              tahunAwal: tahun,
+              tahunAkhir: tahun,
+              bukuMin: bukuMin,
+              bukuMax: bukuMax,
+              nop: '',
+              kelurahan: effKelCode,
+              kecamatan: effKecCode,
+              page: page,
+            ),
+            label: 'Belum Bayar',
             page: page,
+            maxRetries: maxRetriesPerPage,
+            retryBaseDelay: retryBaseDelay,
+            notify: notifyProgress,
+            shouldCancel: shouldCancel,
           );
+          final tableResult = fetched.result;
 
           if (tableResult.errorMessage != null && tableResult.rows.isEmpty) {
             bbErrorMessage ??= (page == 1)
@@ -586,8 +702,13 @@ class StaffDhkpSyncService {
 
           if (tableResult.hasNextPage && page < maxPages) {
             page++;
-            if (pacingDelay > Duration.zero) {
-              await Future.delayed(pacingDelay);
+            var adaptiveDelay = pacingDelay;
+            if (pacingDelay > Duration.zero &&
+                fetched.elapsed.inMilliseconds > 2000) {
+              adaptiveDelay += const Duration(milliseconds: 500);
+            }
+            if (adaptiveDelay > Duration.zero) {
+              await Future.delayed(adaptiveDelay);
             }
           } else {
             hasMore = false;
@@ -608,18 +729,27 @@ class StaffDhkpSyncService {
           pageSb = page;
           notifyProgress('Memuat data Sudah Bayar (Halaman $page)...');
 
-          final tableResult = await client.fetchSudahBayar(
-            tglBayarAwal: effectiveTglAwal,
-            tglBayarAkhir: effectiveTglAkhir,
-            tahunAwal: tahun,
-            tahunAkhir: tahun,
-            bukuMin: bukuMin,
-            bukuMax: bukuMax,
-            nop: '',
-            kelurahan: kelurahanCode,
-            kecamatan: kecamatanCode,
+          final fetched = await _fetchSyncPageWithRetry(
+            fetcher: () => client.fetchSudahBayar(
+              tglBayarAwal: effectiveTglAwal,
+              tglBayarAkhir: effectiveTglAkhir,
+              tahunAwal: tahun,
+              tahunAkhir: tahun,
+              bukuMin: bukuMin,
+              bukuMax: bukuMax,
+              nop: '',
+              kelurahan: effKelCode,
+              kecamatan: effKecCode,
+              page: page,
+            ),
+            label: 'Sudah Bayar',
             page: page,
+            maxRetries: maxRetriesPerPage,
+            retryBaseDelay: retryBaseDelay,
+            notify: notifyProgress,
+            shouldCancel: shouldCancel,
           );
+          final tableResult = fetched.result;
 
           if (tableResult.errorMessage != null && tableResult.rows.isEmpty) {
             sbErrorMessage ??= (page == 1)
@@ -648,8 +778,13 @@ class StaffDhkpSyncService {
 
           if (tableResult.hasNextPage && page < maxPages) {
             page++;
-            if (pacingDelay > Duration.zero) {
-              await Future.delayed(pacingDelay);
+            var adaptiveDelay = pacingDelay;
+            if (pacingDelay > Duration.zero &&
+                fetched.elapsed.inMilliseconds > 2000) {
+              adaptiveDelay += const Duration(milliseconds: 500);
+            }
+            if (adaptiveDelay > Duration.zero) {
+              await Future.delayed(adaptiveDelay);
             }
           } else {
             hasMore = false;
@@ -735,38 +870,124 @@ class StaffDhkpSyncService {
       }
 
       // -------------------------------------------------------------
-      // PENGOLAHAN DATA KE MEMORI LOKAL
+      // PENGOLAHAN DATA KE MEMORI LOKAL SECARA MENYELURUH
       // -------------------------------------------------------------
+
       // 1. TAHAP BELUM BAYAR:
-      // Memperbarui informasi rincian objek pajak untuk NOP yang belum lunas.
-      // Sesuai aturan: NOP tak dikenal di Belum Bayar diabaikan (hanya dari Sudah Bayar).
+      // Memperbarui informasi rincian objek pajak (nama, alamat, luas, NJOP, ketetapan)
+      // untuk NOP yang ada di DHKP lokal dan belum lunas. NOP tidak dikenal di Belum Bayar
+      // diabaikan agar NOP nonaktif/blokir di server tidak mencemari DHKP aktif.
       for (final parsed in bbRows) {
         final b = nopBlok(parsed.nop);
-        if (!isAllBloks &&
-            targetBlokSet.isNotEmpty &&
-            !targetBlokSet.contains(b)) {
+        if (!isBlokAllowed(b)) {
           continue;
         }
 
-        final key = '${parsed.nop}|$tahun';
+        final rowTahun = parsed.tahun.isNotEmpty ? parsed.tahun : tahun;
+        final key = '${parsed.nop}|$rowTahun';
         final existing = keyToExisting[key];
 
+        if (existing != null && !existing.isPaid) {
+          final parsedPbbVal = parseNominalRupiah(parsed.jumlahPbb);
+          final existingPbbVal = existing.jumlahPbbValue;
+          final priorPbb = nopToPriorPbb[parsed.nop] ?? '';
+
+          String resolvedPbb = existing.jumlahPbb;
+          num effectivePbbVal = existingPbbVal;
+          if (parsedPbbVal > 0) {
+            resolvedPbb = formatRupiah(parsedPbbVal);
+            effectivePbbVal = parsedPbbVal;
+          } else if (existingPbbVal > 0) {
+            resolvedPbb = existing.jumlahPbb;
+          } else if (priorPbb.isNotEmpty) {
+            resolvedPbb = formatRupiah(priorPbb);
+            effectivePbbVal = parseNominalRupiah(priorPbb);
+          }
+
+          final updated = existing.copyWith(
+            namaWajibPajak: parsed.namaWp.isNotEmpty
+                ? parsed.namaWp
+                : existing.namaWajibPajak,
+            alamatObjek: parsed.alamatOp.isNotEmpty
+                ? parsed.alamatOp
+                : existing.alamatObjek,
+            alamatWp: parsed.alamatWp.isNotEmpty
+                ? parsed.alamatWp
+                : existing.alamatWp,
+            rtObjek: parsed.rtOp.isNotEmpty ? parsed.rtOp : existing.rtObjek,
+            kecamatan: existing.kecamatan.isNotEmpty
+                ? existing.kecamatan
+                : effKecName,
+            kelurahan: existing.kelurahan.isNotEmpty
+                ? existing.kelurahan
+                : effDesaName,
+            luasBumi: parsed.luasBumi.isNotEmpty
+                ? parsed.luasBumi
+                : existing.luasBumi,
+            njopBumi: parsed.njopBumi.isNotEmpty
+                ? parsed.njopBumi
+                : existing.njopBumi,
+            luasBangunan: parsed.luasBangunan.isNotEmpty
+                ? parsed.luasBangunan
+                : existing.luasBangunan,
+            njopBangunan: parsed.njopBangunan.isNotEmpty
+                ? parsed.njopBangunan
+                : existing.njopBangunan,
+            jumlahPbb: resolvedPbb,
+            isTargetPemda:
+                effectivePbbVal >= 2000000 || existing.isTargetPemda,
+          );
+          keyToExisting[key] = updated;
+          recordsToUpsertMap[key] = updated;
+        }
+      }
+
+      // 2. TAHAP SUDAH BAYAR:
+      // Memperbarui status pembayaran menjadi 'Sudah Bayar' beserta seluruh metadata objek,
+      // serta mencatat NOP baru yang terbit dan telah lunas.
+      for (final parsed in sbRows) {
+        final b = nopBlok(parsed.nop);
+        if (!isBlokAllowed(b)) {
+          continue;
+        }
+
+        final rowTahun = parsed.tahun.isNotEmpty ? parsed.tahun : tahun;
+        final key = '${parsed.nop}|$rowTahun';
+        final existing = keyToExisting[key];
+
+        final parsedPbbVal = parseNominalRupiah(parsed.jumlahPbb);
+        final priorPbb = nopToPriorPbb[parsed.nop] ?? '';
+
         if (existing != null) {
+          final existingPbbVal = existing.jumlahPbbValue;
+          String resolvedPbb = existing.jumlahPbb;
+          num effectivePbbVal = existingPbbVal;
+
+          if (parsedPbbVal > 0) {
+            resolvedPbb = cleanNominalRupiah(parsedPbbVal);
+            effectivePbbVal = parsedPbbVal;
+          } else if (existingPbbVal > 0) {
+            resolvedPbb = cleanNominalRupiah(existing.jumlahPbb);
+          } else if (priorPbb.isNotEmpty) {
+            resolvedPbb = cleanNominalRupiah(priorPbb);
+            effectivePbbVal = parseNominalRupiah(priorPbb);
+          }
+
+          final effTgl = parsed.tanggalBayar.isNotEmpty
+              ? parsed.tanggalBayar
+              : existing.tanggalBayar;
+          final catatanBayar =
+              (existing.catatan.isNotEmpty &&
+                  !existing.catatan.startsWith('Sudah bayar') &&
+                  !existing.catatan.startsWith('SPPT Baru'))
+              ? existing.catatan
+              : formatCatatanSudahBayar(effTgl, rowTahun);
+
           if (!existing.isPaid) {
-            final parsedPbbVal = parseNominalRupiah(parsed.jumlahPbb);
-            final existingPbbVal = existing.jumlahPbbValue;
-            final priorPbb = nopToPriorPbb[parsed.nop] ?? '';
-
-            String resolvedPbb = existing.jumlahPbb;
-            if (parsedPbbVal > 0) {
-              resolvedPbb = formatRupiah(parsedPbbVal);
-            } else if (existingPbbVal > 0) {
-              resolvedPbb = existing.jumlahPbb;
-            } else if (priorPbb.isNotEmpty) {
-              resolvedPbb = formatRupiah(priorPbb);
-            }
-
             final updated = existing.copyWith(
+              statusBayar: 'Sudah Bayar',
+              tanggalBayar: effTgl,
+              jumlahPbb: resolvedPbb,
               namaWajibPajak: parsed.namaWp.isNotEmpty
                   ? parsed.namaWp
                   : existing.namaWajibPajak,
@@ -777,6 +998,12 @@ class StaffDhkpSyncService {
                   ? parsed.alamatWp
                   : existing.alamatWp,
               rtObjek: parsed.rtOp.isNotEmpty ? parsed.rtOp : existing.rtObjek,
+              kecamatan: existing.kecamatan.isNotEmpty
+                  ? existing.kecamatan
+                  : effKecName,
+              kelurahan: existing.kelurahan.isNotEmpty
+                  ? existing.kelurahan
+                  : effDesaName,
               luasBumi: parsed.luasBumi.isNotEmpty
                   ? parsed.luasBumi
                   : existing.luasBumi,
@@ -789,52 +1016,9 @@ class StaffDhkpSyncService {
               njopBangunan: parsed.njopBangunan.isNotEmpty
                   ? parsed.njopBangunan
                   : existing.njopBangunan,
-              jumlahPbb: resolvedPbb,
-            );
-            keyToExisting[key] = updated;
-            recordsToUpsertMap[key] = updated;
-          }
-        }
-      }
-
-      // 2. TAHAP SUDAH BAYAR:
-      // Memperbarui status pembayaran menjadi 'Sudah Bayar' dan
-      // mencatat NOP baru yang terbit dan telah lunas.
-      for (final parsed in sbRows) {
-        final b = nopBlok(parsed.nop);
-        if (!isAllBloks &&
-            targetBlokSet.isNotEmpty &&
-            !targetBlokSet.contains(b)) {
-          continue;
-        }
-
-        final key = '${parsed.nop}|$tahun';
-        final existing = keyToExisting[key];
-
-        final parsedPbbVal = parseNominalRupiah(parsed.jumlahPbb);
-        final priorPbb = nopToPriorPbb[parsed.nop] ?? '';
-
-        if (existing != null) {
-          if (!existing.isPaid) {
-            final existingPbbVal = existing.jumlahPbbValue;
-            String resolvedPbb = existing.jumlahPbb;
-            if (parsedPbbVal > 0) {
-              resolvedPbb = cleanNominalRupiah(parsedPbbVal);
-            } else if (existingPbbVal > 0) {
-              resolvedPbb = cleanNominalRupiah(existing.jumlahPbb);
-            } else if (priorPbb.isNotEmpty) {
-              resolvedPbb = cleanNominalRupiah(priorPbb);
-            }
-
-            final updated = existing.copyWith(
-              statusBayar: 'Sudah Bayar',
-              tanggalBayar: parsed.tanggalBayar.isNotEmpty
-                  ? parsed.tanggalBayar
-                  : existing.tanggalBayar,
-              jumlahPbb: resolvedPbb,
-              namaWajibPajak: parsed.namaWp.isNotEmpty
-                  ? parsed.namaWp
-                  : existing.namaWajibPajak,
+              isTargetPemda:
+                  effectivePbbVal >= 2000000 || existing.isTargetPemda,
+              catatan: catatanBayar,
             );
             keyToExisting[key] = updated;
             recordsToUpsertMap[key] = updated;
@@ -843,6 +1027,47 @@ class StaffDhkpSyncService {
             updatedRecords.add(updated);
           } else {
             alreadyPaidCount++;
+            // Tetap lengkapi metadata bila record Sudah Bayar lokal sebelumnya belum lengkap
+            final enriched = existing.copyWith(
+              tanggalBayar: existing.tanggalBayar.isNotEmpty
+                  ? existing.tanggalBayar
+                  : effTgl,
+              jumlahPbb: resolvedPbb,
+              namaWajibPajak: parsed.namaWp.isNotEmpty
+                  ? parsed.namaWp
+                  : existing.namaWajibPajak,
+              alamatObjek: parsed.alamatOp.isNotEmpty
+                  ? parsed.alamatOp
+                  : existing.alamatObjek,
+              alamatWp: parsed.alamatWp.isNotEmpty
+                  ? parsed.alamatWp
+                  : existing.alamatWp,
+              rtObjek: parsed.rtOp.isNotEmpty ? parsed.rtOp : existing.rtObjek,
+              kecamatan: existing.kecamatan.isNotEmpty
+                  ? existing.kecamatan
+                  : effKecName,
+              kelurahan: existing.kelurahan.isNotEmpty
+                  ? existing.kelurahan
+                  : effDesaName,
+              luasBumi: parsed.luasBumi.isNotEmpty
+                  ? parsed.luasBumi
+                  : existing.luasBumi,
+              njopBumi: parsed.njopBumi.isNotEmpty
+                  ? parsed.njopBumi
+                  : existing.njopBumi,
+              luasBangunan: parsed.luasBangunan.isNotEmpty
+                  ? parsed.luasBangunan
+                  : existing.luasBangunan,
+              njopBangunan: parsed.njopBangunan.isNotEmpty
+                  ? parsed.njopBangunan
+                  : existing.njopBangunan,
+              isTargetPemda:
+                  effectivePbbVal >= 2000000 || existing.isTargetPemda,
+            );
+            if (enriched != existing) {
+              keyToExisting[key] = enriched;
+              recordsToUpsertMap[key] = enriched;
+            }
           }
         } else {
           final finalPbb = parsedPbbVal > 0
@@ -856,7 +1081,7 @@ class StaffDhkpSyncService {
             namaWajibPajak: parsed.namaWp.isNotEmpty
                 ? parsed.namaWp
                 : 'WP Baru (Bapenda)',
-            tahunBayar: tahun,
+            tahunBayar: rowTahun,
             tanggalBayar: parsed.tanggalBayar,
             jumlahPbb: finalPbb,
             statusBayar: 'Sudah Bayar',
@@ -865,6 +1090,8 @@ class StaffDhkpSyncService {
                 : 'Kp. Terdata Server',
             alamatWp: parsed.alamatWp,
             rtObjek: parsed.rtOp,
+            kecamatan: effKecName,
+            kelurahan: effDesaName,
             luasBumi: parsed.luasBumi,
             njopBumi: parsed.njopBumi,
             luasBangunan: parsed.luasBangunan,
@@ -933,3 +1160,4 @@ class StaffDhkpSyncService {
     }
   }
 }
+

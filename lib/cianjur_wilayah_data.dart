@@ -556,39 +556,155 @@ const List<KecamatanOption> cianjurWilayahCatalog = [
   ),
 ];
 
-/// Helper pencarian opsi kecamatan berdasarkan kode 3 digit.
+/// Mengekstrak 3 digit kode kecamatan dari input 3 digit ('200'),
+/// 7 digit V-Tax ('3205200'), atau 10+ digit NOP/kelurahan ('3205200004').
+String extractKecamatanCode3(String raw) {
+  final digits = raw.replaceAll(RegExp(r'[^0-9]'), '');
+  if (digits.isEmpty) return '';
+  if (digits.length >= 7 && digits.startsWith('3205')) {
+    return digits.substring(4, 7);
+  }
+  if (digits.length > 3) {
+    return digits.substring(digits.length - 3);
+  }
+  return digits.padLeft(3, '0');
+}
+
+/// Mengekstrak 3 digit kode desa/kelurahan dari input 3 digit ('004')
+/// atau 10+ digit V-Tax/NOP ('3205200004').
+String extractKelurahanCode3(String raw) {
+  final digits = raw.replaceAll(RegExp(r'[^0-9]'), '');
+  if (digits.isEmpty) return '';
+  if (digits.length >= 10 && digits.startsWith('3205')) {
+    return digits.substring(7, 10);
+  }
+  if (digits.length > 3) {
+    return digits.substring(digits.length - 3);
+  }
+  return digits.padLeft(3, '0');
+}
+
+/// Helper pencarian opsi kecamatan berdasarkan kode (3 digit atau 7/10 digit V-Tax).
 KecamatanOption? findKecamatanByCode(String code) {
-  final clean = code.replaceAll(RegExp(r'[^0-9]'), '').padLeft(3, '0');
+  final clean = extractKecamatanCode3(code);
+  if (clean.isEmpty) return null;
   for (final kec in cianjurWilayahCatalog) {
     if (kec.code == clean) return kec;
   }
   return null;
 }
 
+/// Helper pencarian opsi kecamatan berdasarkan nama kecamatan (case-insensitive).
+KecamatanOption? findKecamatanByName(String name) {
+  final norm = name
+      .trim()
+      .toUpperCase()
+      .replaceFirst(RegExp(r'^KECAMATAN\s+'), '')
+      .replaceFirst(RegExp(r'^KEC\.?\s+'), '')
+      .trim();
+  if (norm.isEmpty) return null;
+  for (final kec in cianjurWilayahCatalog) {
+    if (kec.name.toUpperCase() == norm) return kec;
+  }
+  return null;
+}
+
 /// Helper pencarian nama kecamatan.
 String lookupCatalogKecamatanName(String code) {
-  return findKecamatanByCode(code)?.name ?? 'Kecamatan ';
+  final clean = extractKecamatanCode3(code);
+  return findKecamatanByCode(clean)?.name ?? 'Kecamatan $clean';
 }
 
 /// Helper pencarian opsi desa berdasarkan kode kecamatan & kode desa.
 DesaOption? findDesaByCode(String kecCode, String desaCode) {
   final kec = findKecamatanByCode(kecCode);
   if (kec == null) return null;
-  final cleanDesa = desaCode.replaceAll(RegExp(r'[^0-9]'), '').padLeft(3, '0');
+  final cleanDesa = extractKelurahanCode3(desaCode);
+  if (cleanDesa.isEmpty) return null;
   for (final desa in kec.desaList) {
     if (desa.code == cleanDesa) return desa;
   }
   return null;
 }
 
+/// Helper pencarian pasangan (KecamatanOption, DesaOption) berdasarkan nama desa
+/// dan opsional nama atau kode kecamatan.
+(KecamatanOption, DesaOption)? findWilayahByName({
+  required String desaName,
+  String? kecamatanName,
+  String? kecamatanCode,
+}) {
+  final normDesa = desaName
+      .trim()
+      .toUpperCase()
+      .replaceFirst(RegExp(r'^(DESA|KELURAHAN|KEL\.?)\s+'), '')
+      .trim();
+  if (normDesa.isEmpty) return null;
+
+  KecamatanOption? targetKec;
+  if (kecamatanCode != null && kecamatanCode.trim().isNotEmpty) {
+    targetKec = findKecamatanByCode(kecamatanCode);
+  }
+  if (targetKec == null &&
+      kecamatanName != null &&
+      kecamatanName.trim().isNotEmpty) {
+    targetKec = findKecamatanByName(kecamatanName);
+  }
+
+  if (targetKec != null) {
+    for (final d in targetKec.desaList) {
+      if (d.name.toUpperCase() == normDesa) {
+        return (targetKec, d);
+      }
+    }
+  }
+
+  for (final kec in cianjurWilayahCatalog) {
+    for (final d in kec.desaList) {
+      if (d.name.toUpperCase() == normDesa) {
+        return (kec, d);
+      }
+    }
+  }
+  return null;
+}
+
 /// Helper pencarian nama desa.
 String lookupCatalogDesaName(String kecCode, String desaCode) {
-  return findDesaByCode(kecCode, desaCode)?.name ?? 'Desa $desaCode';
+  return findDesaByCode(kecCode, desaCode)?.name ??
+      'Desa ${extractKelurahanCode3(desaCode)}';
 }
 
 /// Hitung prefix NOP 10 digit (3205 + kecCode + desaCode).
 String calculateNopPrefix(String kecCode, String desaCode) {
-  final cleanKec = kecCode.replaceAll(RegExp(r'[^0-9]'), '').padLeft(3, '0');
-  final cleanDesa = desaCode.replaceAll(RegExp(r'[^0-9]'), '').padLeft(3, '0');
+  final cleanKec = extractKecamatanCode3(kecCode).padLeft(3, '0');
+  final cleanDesa = extractKelurahanCode3(desaCode).padLeft(3, '0');
   return '3205$cleanKec$cleanDesa';
 }
+
+/// Format kode kecamatan 7 digit untuk parameter API V-Tax ('3205xxx').
+String toVtaxKecamatanCode(String kecCode) {
+  final cleanKec = extractKecamatanCode3(kecCode);
+  if (cleanKec.isEmpty) return '';
+  return '3205${cleanKec.padLeft(3, '0')}';
+}
+
+/// Format kode kelurahan 10 digit untuk parameter API V-Tax ('3205xxxxxx').
+String toVtaxKelurahanCode({
+  required String kelCode,
+  String? kecCode,
+}) {
+  final digits = kelCode.replaceAll(RegExp(r'[^0-9]'), '');
+  if (digits.length == 10 && digits.startsWith('3205')) {
+    return digits;
+  }
+  final cleanKel = extractKelurahanCode3(kelCode);
+  final cleanKec = kecCode != null && kecCode.trim().isNotEmpty
+      ? extractKecamatanCode3(kecCode)
+      : (digits.length >= 7 && digits.startsWith('3205')
+            ? digits.substring(4, 7)
+            : '');
+  if (cleanKec.isEmpty || cleanKel.isEmpty) return '';
+  return '3205${cleanKec.padLeft(3, '0')}${cleanKel.padLeft(3, '0')}';
+}
+

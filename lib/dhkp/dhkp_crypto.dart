@@ -1,46 +1,79 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
-import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart' as legacy_crypto;
 import 'package:cryptography/cryptography.dart';
 import 'package:encrypt/encrypt.dart' as enc;
+import 'package:flutter/foundation.dart';
 
 /// Enkripsi paket `.dkhp` menggunakan PBKDF2-HMAC-SHA256 dan AES-256-GCM.
+///
+/// Struktur Biner Format `DKH2` (Header 32 Byte):
+/// - `[0..3]`     (4 B)  : Magic ASCII `"DKH2"` (`0x44, 0x4B, 0x48, 0x32`)
+/// - `[4..19]`    (16 B) : Salt acak CSPRNG untuk `PBKDF2-HMAC-SHA256`
+/// - `[20..31]`   (12 B) : Nonce acak CSPRNG untuk `AES-256-GCM`
+/// - `[32..N-17]` (Var)  : Ciphertext `AES-256-GCM` dengan `AAD = header[0..31]`
+/// - `[N-16..N-1]`(16 B) : GCM Authentication Tag (MAC)
 class DhkpCrypto {
   DhkpCrypto._();
 
-  static const magic = [0x44, 0x4B, 0x48, 0x50]; // Legacy "DKHP"
-  static const _passwordMagic = [0x44, 0x4B, 0x48, 0x32]; // "DKH2"
-  static const _saltLength = 16;
-  static const _nonceLength = 12;
-  static const _tagLength = 16;
-  static const _iterations = 600000;
+  static const magic = [0x44, 0x4B, 0x48, 0x50]; // Legacy "DKHP" (AES-256-CBC)
+  static const dkh2Magic = [0x44, 0x4B, 0x48, 0x32]; // Default "DKH2" (AES-256-GCM)
+  static const _passwordMagic = dkh2Magic;
+  static const int saltLength = 16;
+  static const int nonceLength = 12;
+  static const int tagLength = 16;
+  static const int saltOffset = 4;
+  static const int nonceOffset = saltOffset + saltLength; // 20
+  static const int headerLength = nonceOffset + nonceLength; // 32
+  static const int ciphertextOffset = headerLength; // 32
+  static const int minPasswordLength = 8;
+  static const int pbkdf2Iterations = 600000;
   static const _legacySecret = 'CekPBBCianjur-DKHP-Package-Secret-v1';
   static final _pbkdf2 = Pbkdf2(
     macAlgorithm: Hmac.sha256(),
-    iterations: _iterations,
+    iterations: pbkdf2Iterations,
     bits: 256,
   );
   static final _aesGcm = AesGcm.with256bits();
 
+  /// Memvalidasi kata sandi enkripsi opsional dari input form atau parameter layanan.
+  ///
+  /// Mengembalikan pesan error berbahasa Indonesia jika kata sandi diisi namun kurang
+  /// dari [minPasswordLength] karakter, atau `null` jika kosong/valid.
+  static String? validateOptionalPassword(String? rawPassword) {
+    final trimmed = rawPassword?.trim() ?? '';
+    if (trimmed.isNotEmpty && trimmed.length < minPasswordLength) {
+      return 'Kata sandi enkripsi .dkhp minimal $minPasswordLength karakter '
+          '(saat ini ${trimmed.length}/$minPasswordLength), atau kosongkan untuk memakai Kunci Pemulihan aktif.';
+    }
+    return null;
+  }
+
+  /// Mengenkripsi data paket `.dkhp` menggunakan format `DKH2` (`PBKDF2-HMAC-SHA256` + `AES-256-GCM`).
+  ///
+  /// Setiap berkas `.dkhp` memiliki tepat satu kunci enkripsi yang diturunkan dari [password]
+  /// (baik Kata Sandi Backup kustom pengguna maupun Recovery Key unik instalasi) yang aktif
+  /// saat backup dibuat. Tidak pernah menggunakan hardcoded shared secret.
   static Future<Uint8List> encryptBytes(
     Uint8List plainBytes, {
     required String password,
   }) async {
-    if (password.length < 8) {
+    final trimmedPassword = password.trim();
+    if (trimmedPassword.length < minPasswordLength) {
       throw const FormatException(
-        'Kata sandi backup harus terdiri dari minimal 8 karakter.',
+        'Kata sandi backup harus terdiri dari minimal $minPasswordLength karakter.',
       );
     }
+
     final salt = Uint8List.fromList(
-      List<int>.generate(_saltLength, (_) => Random.secure().nextInt(256)),
+      List<int>.generate(saltLength, (_) => Random.secure().nextInt(256)),
     );
     final nonce = _aesGcm.newNonce();
     final header = Uint8List.fromList([..._passwordMagic, ...salt, ...nonce]);
     final key = await _pbkdf2.deriveKey(
-      secretKey: SecretKey(utf8.encode(password)),
+      secretKey: SecretKey(utf8.encode(trimmedPassword)),
       nonce: salt,
     );
     final box = await _aesGcm.encrypt(
@@ -52,7 +85,9 @@ class DhkpCrypto {
     return Uint8List.fromList([...header, ...box.cipherText, ...box.mac.bytes]);
   }
 
-  /// Enkripsi bawaan AES-256-CBC (`DKHP`) saat pengguna belum mengatur kata sandi kustom.
+  /// Enkripsi warisan AES-256-CBC (`DKHP`) — HANYA untuk pengujian regresi pembacaan backup lama.
+  /// Dilarang digunakan untuk membuat backup baru di kode produksi.
+  @visibleForTesting
   static Uint8List encryptLegacyBytes(Uint8List plainBytes) {
     final digest = legacy_crypto.sha256.convert(utf8.encode(_legacySecret));
     final key = enc.Key(Uint8List.fromList(digest.bytes));
@@ -65,49 +100,57 @@ class DhkpCrypto {
     return Uint8List.fromList([...magic, ...ivBytes, ...encrypted.bytes]);
   }
 
+  static Future<Uint8List?> _tryDecryptDkh2WithSecret(
+    Uint8List fileBytes,
+    String secret,
+  ) async {
+    final salt = fileBytes.sublist(saltOffset, nonceOffset);
+    final nonce = fileBytes.sublist(nonceOffset, headerLength);
+    final header = fileBytes.sublist(0, headerLength);
+    final body = fileBytes.sublist(ciphertextOffset);
+    final cipherText = body.sublist(0, body.length - tagLength);
+    final tag = body.sublist(body.length - tagLength);
+    final key = await _pbkdf2.deriveKey(
+      secretKey: SecretKey(utf8.encode(secret)),
+      nonce: salt,
+    );
+    try {
+      final plainBytes = await _aesGcm.decrypt(
+        SecretBox(cipherText, nonce: nonce, mac: Mac(tag)),
+        secretKey: key,
+        aad: header,
+      );
+      return Uint8List.fromList(plainBytes);
+    } on SecretBoxAuthenticationError {
+      return null;
+    }
+  }
+
   static Future<Uint8List?> decryptBytes(
     Uint8List fileBytes, {
     String? password,
   }) async {
     if (_hasMagic(fileBytes, _passwordMagic)) {
-      final headerLength = _passwordMagic.length + _saltLength + _nonceLength;
-      if (fileBytes.length < headerLength + _tagLength) {
+      if (fileBytes.length < headerLength + tagLength) {
         throw const FormatException('Berkas backup terenkripsi tidak lengkap.');
       }
-      if (password == null || password.isEmpty) {
+
+      final trimmedPassword = password?.trim();
+      if (trimmedPassword == null || trimmedPassword.isEmpty) {
         throw const DkhpPasswordException(
-          'Kata sandi diperlukan untuk membuka backup ini.',
+          'Kata sandi atau kunci pemulihan diperlukan untuk membuka backup ini.',
         );
       }
 
-      final salt = fileBytes.sublist(
-        _passwordMagic.length,
-        _passwordMagic.length + _saltLength,
+      final decrypted = await _tryDecryptDkh2WithSecret(
+        fileBytes,
+        trimmedPassword,
       );
-      final nonce = fileBytes.sublist(
-        _passwordMagic.length + _saltLength,
-        headerLength,
+      if (decrypted != null) return decrypted;
+
+      throw const DkhpPasswordException(
+        'Kata sandi salah atau berkas backup telah berubah/rusak.',
       );
-      final header = fileBytes.sublist(0, headerLength);
-      final body = fileBytes.sublist(headerLength);
-      final cipherText = body.sublist(0, body.length - _tagLength);
-      final tag = body.sublist(body.length - _tagLength);
-      final key = await _pbkdf2.deriveKey(
-        secretKey: SecretKey(utf8.encode(password)),
-        nonce: salt,
-      );
-      try {
-        final plainBytes = await _aesGcm.decrypt(
-          SecretBox(cipherText, nonce: nonce, mac: Mac(tag)),
-          secretKey: key,
-          aad: header,
-        );
-        return Uint8List.fromList(plainBytes);
-      } on SecretBoxAuthenticationError {
-        throw const DkhpPasswordException(
-          'Kata sandi salah atau berkas backup telah berubah/rusak.',
-        );
-      }
     }
 
     if (!_hasMagic(fileBytes, magic) || fileBytes.length < magic.length + 16) {
@@ -140,6 +183,10 @@ class DhkpCrypto {
   static bool isEncrypted(List<int> bytes) {
     return _hasMagic(bytes, magic) || _hasMagic(bytes, _passwordMagic);
   }
+
+  static bool isDkh2Format(List<int> bytes) => _hasMagic(bytes, _passwordMagic);
+
+  static bool isLegacyCbcFormat(List<int> bytes) => _hasMagic(bytes, magic);
 
   static bool isPasswordProtected(List<int> bytes) =>
       _hasMagic(bytes, _passwordMagic);

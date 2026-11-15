@@ -147,7 +147,7 @@ class _LegalDocumentScreenState extends State<LegalDocumentScreen>
                 children: [
                   _buildSubHeading('A. Data Pajak & Catatan Kolektor (Lokal)'),
                   const Text(
-                    'Aplikasi memproses Nomor Objek Pajak (NOP), nama wajib pajak, alamat objek pajak, ketetapan tagihan, serta status pembayaran (lunas / titip bayar) dari berkas DHKP resmi desa atau portal publik PBB Bapenda Cianjur. Seluruh data ini disimpan di penyimpanan lokal perangkat dalam basis data terenkripsi dan TIDAK PERNAH dikirim ke server pihak ketiga mana pun.',
+                    'Aplikasi memproses Nomor Objek Pajak (NOP), nama wajib pajak, alamat objek pajak, ketetapan tagihan, serta status pembayaran (lunas / titip bayar) dari berkas DHKP resmi desa atau portal publik PBB Bapenda Cianjur. Data kerja disimpan di direktori privat aplikasi pada perangkat dan cadangan paket (.dkhp / .dat / .bin) dilindungi dengan enkripsi kriptografi.',
                     style: TextStyle(fontSize: 13, height: 1.5),
                   ),
                   const Divider(height: 24),
@@ -156,6 +156,14 @@ class _LegalDocumentScreenState extends State<LegalDocumentScreen>
                   ),
                   const Text(
                     'Jika Anda secara sukarela menautkan akun Google untuk sinkronisasi cadangan DHKP, aplikasi hanya menerima data profil dasar: alamat email, nama tampilan profil, dan URL foto profil. Data ini semata-mata digunakan untuk menampilkan identitas akun aktif dan memvalidasi kepemilikan cadangan data.',
+                    style: TextStyle(fontSize: 13, height: 1.5),
+                  ),
+                  const Divider(height: 24),
+                  _buildSubHeading(
+                    'C. Deteksi Wilayah Otomatis (Lokasi & Reverse Geocoding)',
+                  ),
+                  const Text(
+                    'Saat fitur deteksi wilayah desa/kecamatan digunakan, aplikasi membaca koordinat GPS perangkat (atau estimasi lokasi berbasis IP melalui layanan HTTPS publik ipwho.is / ipapi.co pada perangkat desktop tanpa modul GPS) dan menerjemahkan koordinat menjadi nama desa/kecamatan menggunakan layanan OpenStreetMap Nominatim. Koordinat lokasi tidak disimpan di server eksternal mana pun.',
                     style: TextStyle(fontSize: 13, height: 1.5),
                   ),
                 ],
@@ -168,9 +176,9 @@ class _LegalDocumentScreenState extends State<LegalDocumentScreen>
                 isDark: isDark,
                 children: [
                   _buildCalloutBox(
-                    title: 'Prinsip Akses Minimum Terisolasi:',
+                    title: 'Prinsip Akses Minimum Terbatas:',
                     body:
-                        'Aplikasi HANYA meminta izin "drive.file" (akses terbatas per-berkas) dan "drive.appdata". Aplikasi DIBATASI SECARA SISTEM dan TIDAK MEMILIKI AKSES TEKNIS untuk membaca, mengunduh, melihat, atau memodifikasi dokumen, foto, atau folder pribadi lainnya di Google Drive Anda.',
+                        'Aplikasi meminta izin "drive.file" (akses tulis/kelola khusus berkas cadangan yang dibuat aplikasi) serta "drive.readonly" (akses baca-saja untuk mendeteksi berkas paket .dkhp/.dat yang dibagikan ke akun Anda). Aplikasi TIDAK PERNAH meminta izin tulis penuh ke seluruh Google Drive Anda.',
                     color: Colors.green,
                     isDark: isDark,
                   ),
@@ -181,10 +189,10 @@ class _LegalDocumentScreenState extends State<LegalDocumentScreen>
                   ),
                   const SizedBox(height: 6),
                   _buildBulletItem(
-                    'Folder khusus bernama "Cek PBB Cianjur" yang dibuat di Google Drive Anda.',
+                    'Folder khusus bernama "Cek PBB Cianjur" (serta subfolder "backup") di Google Drive Anda.',
                   ),
                   _buildBulletItem(
-                    'Berkas paket cadangan DHKP (.dkhp atau .zip) yang dibuat oleh aplikasi ini sendiri.',
+                    'Berkas paket cadangan DHKP (.dkhp, .dhkp, .dat, atau tabel DHKP) yang dikelola atau dipilih oleh pengguna.',
                   ),
                 ],
               ),

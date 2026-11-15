@@ -275,8 +275,8 @@ class BlokDataStore {
       outputPath: outputPath,
       records: records,
       baseRecords: records,
-      includePhotos: true,
-      deltaOnly: true,
+      includePhotos: includePhotos,
+      deltaOnly: deltaOnly,
     );
     return file.path;
   }

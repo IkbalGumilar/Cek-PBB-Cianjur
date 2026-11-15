@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../app_security_service.dart';
+import '../backup_password_store.dart';
 
 /// Halaman terpisah untuk pengaturan Keamanan Aplikasi.
 class SecuritySettingsScreen extends StatelessWidget {
@@ -43,6 +44,7 @@ class _SecuritySettingsSectionState extends State<SecuritySettingsSection> {
   bool _biometricSupported = false;
   bool _hasPin = false;
   bool _hasPassword = false;
+  bool _hasBackupPassword = false;
 
   @override
   void initState() {
@@ -58,6 +60,7 @@ class _SecuritySettingsSectionState extends State<SecuritySettingsSection> {
     final bioSupported = await service.isDeviceSupported();
     final hasPin = await service.hasCustomPin();
     final hasPassword = await service.hasCustomPassword();
+    final hasBackupPass = await BackupPasswordStore.instance.hasPassword();
 
     if (!mounted) return;
     setState(() {
@@ -67,6 +70,7 @@ class _SecuritySettingsSectionState extends State<SecuritySettingsSection> {
       _biometricSupported = bioSupported;
       _hasPin = hasPin;
       _hasPassword = hasPassword;
+      _hasBackupPassword = hasBackupPass;
     });
   }
 
@@ -680,7 +684,216 @@ class _SecuritySettingsSectionState extends State<SecuritySettingsSection> {
             ),
           ),
         ],
+        const SizedBox(height: 14),
+        Card(
+          elevation: 0,
+          color: scheme.surfaceContainerLow,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(
+              color: scheme.outlineVariant.withValues(alpha: 0.5),
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.enhanced_encryption_outlined, color: scheme.primary),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Enkripsi & Pemulihan Backup (.dkhp)',
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Setiap berkas cadangan (.dkhp) dienkripsi (DKH2 AES-256-GCM) menggunakan satu kunci aktif saat cadangan dibuat: Kata Sandi Backup kustom Anda (jika diatur), atau Kunci Pemulihan (Recovery Key) perangkat ini (jika kata sandi kustom tidak diatur).',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 8),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.vpn_key_outlined),
+                  title: Text(
+                    _hasBackupPassword
+                        ? 'Ubah Kata Sandi Backup (.dkhp)'
+                        : 'Atur Kata Sandi Backup (.dkhp)',
+                  ),
+                  subtitle: Text(
+                    _hasBackupPassword
+                        ? 'Aktif • Backup baru hanya dapat dibuka dengan kata sandi kustom ini (bukan Recovery Key)'
+                        : 'Tidak diatur • Backup baru dienkripsi dengan Kunci Pemulihan perangkat ini',
+                  ),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: _showBackupPasswordSetupDialog,
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.key_rounded),
+                  title: const Text('Lihat Kunci Pemulihan (Recovery Key)'),
+                  subtitle: Text(
+                    _hasBackupPassword
+                        ? 'Hanya untuk membuka backup yang dibuat saat kata sandi kustom tidak aktif'
+                        : 'Wajib disimpan untuk membuka backup perangkat ini di HP/komputer lain',
+                  ),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: _showRecoveryKeyDialog,
+                ),
+              ],
+            ),
+          ),
+        ),
       ],
     );
+  }
+
+  Future<void> _showRecoveryKeyDialog() async {
+    String recoveryKey;
+    try {
+      recoveryKey = await BackupPasswordStore.instance.ensureRecoveryKey();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Gagal mengakses Kunci Pemulihan di Secure Storage: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        icon: const Icon(Icons.key_rounded, size: 36),
+        title: const Text('Kunci Pemulihan Backup'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Simpan Kunci Pemulihan ini di tempat aman. Kunci ini dipakai untuk membuka berkas backup (.dkhp) yang dibuat tanpa Kata Sandi Kustom saat dipulihkan di perangkat lain. Jika kunci ini hilang, backup tersebut tidak dapat dibuka. (Catatan: Backup yang dibuat dengan Kata Sandi Kustom hanya dapat dibuka dengan kata sandi kustom tersebut, bukan dengan kunci ini):',
+              style: TextStyle(fontSize: 13),
+            ),
+            const SizedBox(height: 12),
+            SelectableText(
+              recoveryKey,
+              style: const TextStyle(
+                fontFamily: 'monospace',
+                fontWeight: FontWeight.bold,
+                fontSize: 13,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Tutup'),
+          ),
+          FilledButton.icon(
+            onPressed: () async {
+              await Clipboard.setData(ClipboardData(text: recoveryKey));
+              if (!ctx.mounted) return;
+              Navigator.pop(ctx);
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Kunci Pemulihan disalin ke papan klip.'),
+                ),
+              );
+            },
+            icon: const Icon(Icons.copy_rounded, size: 18),
+            label: const Text('Salin Kunci'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showBackupPasswordSetupDialog() async {
+    final controller = TextEditingController();
+    var obscure = true;
+    String? errorText;
+    try {
+      final saved = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => StatefulBuilder(
+          builder: (ctx, setDialogState) => AlertDialog(
+            title: const Text('Kata Sandi Backup (.dkhp)'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Masukkan kata sandi minimal 8 karakter untuk mengenkripsi berkas cadangan .dkhp Anda:',
+                  style: TextStyle(fontSize: 13),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: controller,
+                  obscureText: obscure,
+                  autofocus: true,
+                  decoration: InputDecoration(
+                    labelText: 'Kata Sandi Backup (min. 8 karakter)',
+                    errorText: errorText,
+                    border: const OutlineInputBorder(),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        obscure ? Icons.visibility : Icons.visibility_off,
+                      ),
+                      onPressed: () =>
+                          setDialogState(() => obscure = !obscure),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              if (_hasBackupPassword)
+                TextButton(
+                  onPressed: () async {
+                    await BackupPasswordStore.instance.clear();
+                    if (ctx.mounted) Navigator.pop(ctx, true);
+                  },
+                  child: const Text('Gunakan Kunci Pemulihan'),
+                ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Batal'),
+              ),
+              FilledButton(
+                onPressed: () async {
+                  final text = controller.text.trim();
+                  if (text.length < 8) {
+                    setDialogState(() {
+                      errorText = 'Minimal 8 karakter.';
+                    });
+                    return;
+                  }
+                  await BackupPasswordStore.instance.save(text);
+                  if (ctx.mounted) Navigator.pop(ctx, true);
+                },
+                child: const Text('Simpan'),
+              ),
+            ],
+          ),
+        ),
+      );
+      if (saved == true && mounted) {
+        await _loadSecuritySettings();
+      }
+    } finally {
+      controller.dispose();
+    }
   }
 }

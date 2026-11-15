@@ -1,11 +1,14 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
 import '../app_storage.dart';
 import '../blok_data_store.dart';
 import '../blok_record.dart';
+import '../cianjur_wilayah_data.dart';
 import '../dhkp_widget_sync_service.dart';
+import '../dkhp_package_helper.dart';
 import '../dusun_data.dart';
 import '../nop_helper.dart';
 import '../staff_portal_client.dart';
@@ -44,6 +47,10 @@ class StaffDhkpGenerateOutcome {
   final int totalBloks;
   final String tahun;
   final String desaName;
+  final String kecamatanName;
+  final String kecamatanCode;
+  final String kelurahanCode;
+  final SplitDkhpExportResult? splitExportResult;
   final String? errorMessage;
   final bool isCancelled;
 
@@ -56,6 +63,10 @@ class StaffDhkpGenerateOutcome {
     this.totalBloks = 0,
     required this.tahun,
     required this.desaName,
+    this.kecamatanName = '',
+    this.kecamatanCode = '',
+    this.kelurahanCode = '',
+    this.splitExportResult,
     this.errorMessage,
     this.isCancelled = false,
   });
@@ -66,6 +77,142 @@ class StaffDhkpGenerateOutcome {
 class StaffDhkpGenerateService {
   StaffDhkpGenerateService._();
   static final instance = StaffDhkpGenerateService._();
+
+  /// Menormalisasi kode kecamatan & kode desa/kelurahan dari input form, manifest,
+  /// katalog wilayah Cianjur, maupun sesi login Portal Staf (Bapenda / Kecamatan / Desa).
+  static ({
+    String kecCode3,
+    String kelCode3,
+    String vtaxKecCode,
+    String vtaxKelCode,
+    String kecName,
+    String desaName,
+  })
+  resolveWilayahParameters({
+    required String kelurahanCode,
+    required String kecamatanCode,
+    required String desaName,
+    required String kecamatanName,
+    String clientKelurahanCode = '',
+    String clientKecamatanCode = '',
+  }) {
+    final cleanDesaInput = desaName.trim().toUpperCase();
+    final cleanKecInput = kecamatanName.trim().toUpperCase();
+
+    var kec3 = extractKecamatanCode3(kecamatanCode);
+    var kel3 = extractKelurahanCode3(kelurahanCode);
+
+    // Cari dari katalog resmi Kabupaten Cianjur berdasarkan nama desa & kecamatan bila ada
+    final catalogByName = findWilayahByName(
+      desaName: cleanDesaInput,
+      kecamatanName: cleanKecInput,
+      kecamatanCode: kec3,
+    );
+
+    if (catalogByName != null) {
+      final (catKec, catDesa) = catalogByName;
+      // Jika kode belum diisi atau masih memakai kode sesi default yang berbeda dari nama desa yang diketik
+      final clientKel3 = extractKelurahanCode3(clientKelurahanCode);
+      final clientKec3 = extractKecamatanCode3(clientKecamatanCode);
+      if (kec3.isEmpty ||
+          (kec3 == clientKec3 &&
+              cleanKecInput.isNotEmpty &&
+              catKec.name.toUpperCase() == cleanKecInput)) {
+        kec3 = catKec.code;
+      }
+      if (kel3.isEmpty ||
+          (kel3 == clientKel3 &&
+              cleanDesaInput.isNotEmpty &&
+              catDesa.name.toUpperCase() == cleanDesaInput)) {
+        kel3 = catDesa.code;
+      }
+    }
+
+    if (kec3.isEmpty) {
+      final byKecName = findKecamatanByName(cleanKecInput);
+      if (byKecName != null) {
+        kec3 = byKecName.code;
+      }
+    }
+
+    if (kec3.isEmpty) {
+      kec3 = extractKecamatanCode3(clientKecamatanCode);
+    }
+    if (kel3.isEmpty) {
+      kel3 = extractKelurahanCode3(clientKelurahanCode);
+    }
+    if (kec3.isEmpty) {
+      kec3 = activeKecamatanCode.isNotEmpty ? activeKecamatanCode : '200';
+    }
+    if (kel3.isEmpty) {
+      kel3 = activeKelurahanCode.isNotEmpty ? activeKelurahanCode : '004';
+    }
+
+    final resolvedKecName = cleanKecInput.isNotEmpty
+        ? cleanKecInput
+        : lookupKecamatanName(kec3);
+    final resolvedDesaName = cleanDesaInput.isNotEmpty
+        ? cleanDesaInput
+        : lookupKelurahanName(kel3, kecamatanCode: kec3);
+
+    final vtaxKec = toVtaxKecamatanCode(kec3);
+    final vtaxKel = toVtaxKelurahanCode(kelCode: kel3, kecCode: kec3);
+
+    return (
+      kecCode3: kec3,
+      kelCode3: kel3,
+      vtaxKecCode: vtaxKec,
+      vtaxKelCode: vtaxKel,
+      kecName: resolvedKecName,
+      desaName: resolvedDesaName,
+    );
+  }
+
+  Future<({MonitoringTableResult result, Duration elapsed})> _fetchPageWithRetry({
+    required Future<MonitoringTableResult> Function() fetcher,
+    required String label,
+    required int page,
+    required int maxRetries,
+    required Duration retryBaseDelay,
+    required void Function(String status) notify,
+    bool Function()? shouldCancel,
+  }) async {
+    var attempt = 0;
+    while (true) {
+      attempt++;
+      final sw = Stopwatch()..start();
+      MonitoringTableResult tableResult;
+      try {
+        tableResult = await fetcher();
+      } catch (e) {
+        tableResult = MonitoringTableResult(
+          headers: const [],
+          rows: const [],
+          errorMessage: 'Kesalahan jaringan pada halaman $page: $e',
+        );
+      }
+      sw.stop();
+
+
+      final hasError =
+          tableResult.errorMessage != null && tableResult.rows.isEmpty;
+      if (!hasError || attempt > maxRetries) {
+        return (result: tableResult, elapsed: sw.elapsed);
+      }
+
+      if (shouldCancel?.call() ?? false) {
+        return (result: tableResult, elapsed: sw.elapsed);
+      }
+
+      final backoffMs = retryBaseDelay.inMilliseconds * attempt;
+      notify(
+        'Server sibuk saat memuat $label Hal $page. Mencoba ulang ($attempt/$maxRetries)...',
+      );
+      if (backoffMs > 0) {
+        await Future.delayed(Duration(milliseconds: backoffMs));
+      }
+    }
+  }
 
   Future<StaffDhkpGenerateOutcome> generateAndApply({
     required StaffPortalClient client,
@@ -85,8 +232,14 @@ class StaffDhkpGenerateService {
     String bukuMax = '',
     void Function(StaffDhkpGenerateProgress)? onProgress,
     bool Function()? shouldCancel,
-    Duration pacingDelay = const Duration(milliseconds: 500),
+    Duration pacingDelay = const Duration(milliseconds: 550),
+    Duration retryBaseDelay = const Duration(milliseconds: 1500),
+    int maxRetriesPerPage = 3,
     int maxPages = 2000,
+    bool exportSplitByDusun = false,
+    bool includeMasterInSplit = true,
+    Directory? splitOutputDirectory,
+    String? encryptionPassword,
   }) async {
     final effTahunAwal = (tahunAwal != null && tahunAwal.isNotEmpty)
         ? tahunAwal
@@ -98,18 +251,46 @@ class StaffDhkpGenerateService {
         ? effTahunAwal
         : '$effTahunAwal s/d $effTahunAkhir';
 
+    final resolvedWilayah = resolveWilayahParameters(
+      kelurahanCode: kelurahanCode,
+      kecamatanCode: kecamatanCode,
+      desaName: desaName,
+      kecamatanName: kecamatanName,
+      clientKelurahanCode: client.activeKelurahanCode,
+      clientKecamatanCode: client.activeKecamatanCode,
+    );
+
+    final trimmedEncryptionPassword = encryptionPassword?.trim();
+    final effectiveEncryptionPassword =
+        (trimmedEncryptionPassword != null &&
+            trimmedEncryptionPassword.isNotEmpty)
+        ? trimmedEncryptionPassword
+        : null;
+    if (exportSplitByDusun && dusuns.isNotEmpty) {
+      final passwordError = DhkpCrypto.validateOptionalPassword(
+        effectiveEncryptionPassword,
+      );
+      if (passwordError != null) {
+        return StaffDhkpGenerateOutcome(
+          success: false,
+          tahun: effTahunLabel,
+          desaName: resolvedWilayah.desaName,
+          kecamatanName: resolvedWilayah.kecName,
+          kecamatanCode: resolvedWilayah.kecCode3,
+          kelurahanCode: resolvedWilayah.kelCode3,
+          errorMessage: passwordError,
+        );
+      }
+    }
+
     try {
-      final effKel = kelurahanCode.isNotEmpty
-          ? kelurahanCode
-          : client.activeKelurahanCode;
-      final effKec = kecamatanCode.isNotEmpty
-          ? kecamatanCode
-          : client.activeKecamatanCode;
+      final effKel = resolvedWilayah.vtaxKelCode;
+      final effKec = resolvedWilayah.vtaxKecCode;
 
       final allowedBlocks = <String>{};
       for (final d in dusuns) {
         for (final b in d.bloks) {
-          final cb = b.padLeft(3, '0');
+          final cb = b.replaceAll(RegExp(r'[^0-9]'), '').padLeft(3, '0');
           if (cb.isNotEmpty) allowedBlocks.add(cb);
         }
       }
@@ -150,7 +331,10 @@ class StaffDhkpGenerateService {
           return StaffDhkpGenerateOutcome(
             success: false,
             tahun: effTahunLabel,
-            desaName: desaName,
+            desaName: resolvedWilayah.desaName,
+            kecamatanName: resolvedWilayah.kecName,
+            kecamatanCode: resolvedWilayah.kecCode3,
+            kelurahanCode: resolvedWilayah.kelCode3,
             isCancelled: true,
           );
         }
@@ -158,16 +342,25 @@ class StaffDhkpGenerateService {
         pageBb = page;
         notify('Memuat Belum Bayar (Halaman $page)...');
 
-        final tableResult = await client.fetchBelumBayar(
-          tglCutoff: effectiveCutoff,
-          tahunAwal: effTahunAwal,
-          tahunAkhir: effTahunAkhir,
-          bukuMin: bukuMin,
-          bukuMax: bukuMax,
-          kelurahan: effKel,
-          kecamatan: effKec,
+        final fetched = await _fetchPageWithRetry(
+          fetcher: () => client.fetchBelumBayar(
+            tglCutoff: effectiveCutoff,
+            tahunAwal: effTahunAwal,
+            tahunAkhir: effTahunAkhir,
+            bukuMin: bukuMin,
+            bukuMax: bukuMax,
+            kelurahan: effKel,
+            kecamatan: effKec,
+            page: page,
+          ),
+          label: 'Belum Bayar',
           page: page,
+          maxRetries: maxRetriesPerPage,
+          retryBaseDelay: retryBaseDelay,
+          notify: notify,
+          shouldCancel: shouldCancel,
         );
+        final tableResult = fetched.result;
 
         if (tableResult.errorMessage != null && tableResult.rows.isEmpty) {
           bbError = tableResult.errorMessage;
@@ -203,12 +396,31 @@ class StaffDhkpGenerateService {
 
         if (tableResult.hasNextPage && page < maxPages) {
           page++;
-          if (pacingDelay > Duration.zero) {
-            await Future.delayed(pacingDelay);
+          // Pacing adaptif agar server V-Tax Bapenda tidak mengalami overload / crash
+          var adaptiveDelay = pacingDelay;
+          if (pacingDelay > Duration.zero &&
+              fetched.elapsed.inMilliseconds > 2000) {
+            adaptiveDelay += const Duration(milliseconds: 650);
+          }
+          if (adaptiveDelay > Duration.zero) {
+            await Future.delayed(adaptiveDelay);
           }
         } else {
           hasMoreBb = false;
         }
+      }
+
+      if (bbError != null) {
+        return StaffDhkpGenerateOutcome(
+          success: false,
+          tahun: effTahunLabel,
+          desaName: resolvedWilayah.desaName,
+          kecamatanName: resolvedWilayah.kecName,
+          kecamatanCode: resolvedWilayah.kecCode3,
+          kelurahanCode: resolvedWilayah.kelCode3,
+          errorMessage:
+              'Pengunduhan Belum Bayar terhenti pada halaman $pageBb ($bbError). Data lokal tidak ditimpa demi menjaga keutuhan data.',
+        );
       }
 
       // 2. UNDUH SELURUH SUDAH BAYAR (SB) DARI SERVER BAPENDA
@@ -216,14 +428,22 @@ class StaffDhkpGenerateService {
       bool hasMoreSb = true;
       String? sbError;
       final tglAwal = '$effTahunAwal-01-01';
-      final tglAkhir = '$effTahunAkhir-12-31';
+      final endOfTargetYear = '$effTahunAkhir-12-31';
+      // Gunakan tanggal hari ini bila lebih baru dari akhir tahun pajak agar pembayaran
+      // piutang/tunggakan lintas tahun tetap terambil 100%.
+      final tglAkhir = effectiveCutoff.compareTo(endOfTargetYear) > 0
+          ? effectiveCutoff
+          : endOfTargetYear;
 
       while (hasMoreSb) {
         if (shouldCancel?.call() ?? false) {
           return StaffDhkpGenerateOutcome(
             success: false,
             tahun: effTahunLabel,
-            desaName: desaName,
+            desaName: resolvedWilayah.desaName,
+            kecamatanName: resolvedWilayah.kecName,
+            kecamatanCode: resolvedWilayah.kecCode3,
+            kelurahanCode: resolvedWilayah.kelCode3,
             isCancelled: true,
           );
         }
@@ -231,17 +451,26 @@ class StaffDhkpGenerateService {
         pageSb = page;
         notify('Memuat Sudah Bayar (Halaman $page)...');
 
-        final tableResult = await client.fetchSudahBayar(
-          tglBayarAwal: tglAwal,
-          tglBayarAkhir: tglAkhir,
-          tahunAwal: effTahunAwal,
-          tahunAkhir: effTahunAkhir,
-          bukuMin: bukuMin,
-          bukuMax: bukuMax,
-          kelurahan: effKel,
-          kecamatan: effKec,
+        final fetched = await _fetchPageWithRetry(
+          fetcher: () => client.fetchSudahBayar(
+            tglBayarAwal: tglAwal,
+            tglBayarAkhir: tglAkhir,
+            tahunAwal: effTahunAwal,
+            tahunAkhir: effTahunAkhir,
+            bukuMin: bukuMin,
+            bukuMax: bukuMax,
+            kelurahan: effKel,
+            kecamatan: effKec,
+            page: page,
+          ),
+          label: 'Sudah Bayar',
           page: page,
+          maxRetries: maxRetriesPerPage,
+          retryBaseDelay: retryBaseDelay,
+          notify: notify,
+          shouldCancel: shouldCancel,
         );
+        final tableResult = fetched.result;
 
         if (tableResult.errorMessage != null && tableResult.rows.isEmpty) {
           sbError = tableResult.errorMessage;
@@ -277,28 +506,53 @@ class StaffDhkpGenerateService {
 
         if (tableResult.hasNextPage && page < maxPages) {
           page++;
-          if (pacingDelay > Duration.zero) {
-            await Future.delayed(pacingDelay);
+          var adaptiveDelay = pacingDelay;
+          if (pacingDelay > Duration.zero &&
+              fetched.elapsed.inMilliseconds > 2000) {
+            adaptiveDelay += const Duration(milliseconds: 650);
+          }
+          if (adaptiveDelay > Duration.zero) {
+            await Future.delayed(adaptiveDelay);
           }
         } else {
           hasMoreSb = false;
         }
       }
 
-      if (bbRows.isEmpty && sbRows.isEmpty) {
-        final err =
-            bbError ??
-            sbError ??
-            'Tidak ada data SPPT yang ditemukan untuk tahun $effTahunLabel di portal staf.';
+      if (sbError != null) {
         return StaffDhkpGenerateOutcome(
           success: false,
           tahun: effTahunLabel,
-          desaName: desaName,
-          errorMessage: err,
+          desaName: resolvedWilayah.desaName,
+          kecamatanName: resolvedWilayah.kecName,
+          kecamatanCode: resolvedWilayah.kecCode3,
+          kelurahanCode: resolvedWilayah.kelCode3,
+          errorMessage:
+              'Pengunduhan Sudah Bayar terhenti pada halaman $pageSb ($sbError). Data lokal tidak ditimpa demi menjaga keutuhan data.',
+        );
+      }
+
+      if (bbRows.isEmpty && sbRows.isEmpty) {
+        return StaffDhkpGenerateOutcome(
+          success: false,
+          tahun: effTahunLabel,
+          desaName: resolvedWilayah.desaName,
+          kecamatanName: resolvedWilayah.kecName,
+          kecamatanCode: resolvedWilayah.kecCode3,
+          kelurahanCode: resolvedWilayah.kelCode3,
+          errorMessage:
+              'Tidak ada data SPPT yang ditemukan untuk Desa ${resolvedWilayah.desaName} (${resolvedWilayah.vtaxKelCode}) tahun $effTahunLabel di portal staf.',
         );
       }
 
       notify('Menyusun struktur data DHKP master baru...');
+
+      // Muat catatan/foto petugas lokal yang sudah ada agar tidak hilang bila NOP sama
+      final previousRecords = await BlokDataStore.instance.loadAll();
+      final previousByKey = <String, BlokRecord>{
+        for (final r in previousRecords)
+          '${r.nop.replaceAll(RegExp(r'[^0-9]'), '')}|${r.tahunBayar}': r,
+      };
 
       // 3. BANGUN RECORD DHKP
       final recordsMap = <String, BlokRecord>{};
@@ -309,6 +563,7 @@ class StaffDhkpGenerateService {
             ? parsed.tahun
             : (effTahunAwal == effTahunAkhir ? effTahunAwal : effTahunAkhir);
         final key = '${parsed.nop}|$rowTahun';
+        final prev = previousByKey[key];
         final pokokVal = parseNominalRupiah(parsed.jumlahPbb);
         final isTp = pokokVal >= targetPemdaThreshold;
         final isZeroNominal = pokokVal == 0;
@@ -330,12 +585,21 @@ class StaffDhkpGenerateService {
               : 'Kp. Terdata Server',
           alamatWp: parsed.alamatWp,
           rtObjek: parsed.rtOp,
+          kecamatan: resolvedWilayah.kecName,
+          kelurahan: resolvedWilayah.desaName,
           luasBumi: parsed.luasBumi,
           njopBumi: parsed.njopBumi,
           luasBangunan: parsed.luasBangunan,
           njopBangunan: parsed.njopBangunan,
           isTargetPemda: isTp,
-          catatan: isZeroNominal ? 'Sudah bayar (Ketetapan Rp 0 / Nihil)' : '',
+          namaFoto: prev?.namaFoto,
+          catatan: isZeroNominal
+              ? 'Sudah bayar (Ketetapan Rp 0 / Nihil)'
+              : (prev != null &&
+                        prev.catatan.isNotEmpty &&
+                        !prev.catatan.startsWith('Sudah bayar tanggal'))
+              ? prev.catatan
+              : '',
         );
       }
 
@@ -345,6 +609,7 @@ class StaffDhkpGenerateService {
             ? parsed.tahun
             : (effTahunAwal == effTahunAkhir ? effTahunAwal : effTahunAkhir);
         final key = '${parsed.nop}|$rowTahun';
+        final prev = previousByKey[key];
         final pokokVal = parseNominalRupiah(parsed.jumlahPbb);
         final isTp = pokokVal >= targetPemdaThreshold;
         final cleanNominal = pokokVal > 0
@@ -372,6 +637,21 @@ class StaffDhkpGenerateService {
             alamatWp: parsed.alamatWp.isNotEmpty
                 ? parsed.alamatWp
                 : existing.alamatWp,
+            rtObjek: parsed.rtOp.isNotEmpty ? parsed.rtOp : existing.rtObjek,
+            kecamatan: resolvedWilayah.kecName,
+            kelurahan: resolvedWilayah.desaName,
+            luasBumi: parsed.luasBumi.isNotEmpty
+                ? parsed.luasBumi
+                : existing.luasBumi,
+            njopBumi: parsed.njopBumi.isNotEmpty
+                ? parsed.njopBumi
+                : existing.njopBumi,
+            luasBangunan: parsed.luasBangunan.isNotEmpty
+                ? parsed.luasBangunan
+                : existing.luasBangunan,
+            njopBangunan: parsed.njopBangunan.isNotEmpty
+                ? parsed.njopBangunan
+                : existing.njopBangunan,
             isTargetPemda: isTp,
             catatan: catatanBayar,
           );
@@ -390,11 +670,14 @@ class StaffDhkpGenerateService {
                 : 'Kp. Terdata Server',
             alamatWp: parsed.alamatWp,
             rtObjek: parsed.rtOp,
+            kecamatan: resolvedWilayah.kecName,
+            kelurahan: resolvedWilayah.desaName,
             luasBumi: parsed.luasBumi,
             njopBumi: parsed.njopBumi,
             luasBangunan: parsed.luasBangunan,
             njopBangunan: parsed.njopBangunan,
             isTargetPemda: isTp,
+            namaFoto: prev?.namaFoto,
             catatan: catatanBayar,
           );
         }
@@ -423,7 +706,14 @@ class StaffDhkpGenerateService {
       await BlokDataStore.instance.clearAll();
       await BlokDataStore.instance.upsertAll(recordList);
 
-      // 6. SIMPAN PEMBAGIAN DUSUN & KOORDINAT
+      // 6. SIMPAN PEMBAGIAN DUSUN, WILAYAH AKTIF, & KOORDINAT
+      await saveActiveWilayah(
+        kecCode: resolvedWilayah.kecCode3,
+        kelCode: resolvedWilayah.kelCode3,
+        desaName: resolvedWilayah.desaName,
+        kecName: resolvedWilayah.kecName,
+      );
+      await DusunData.instance.clearScope();
       if (dusuns.isNotEmpty) {
         await DusunData.instance.setDusuns(dusuns);
       }
@@ -431,6 +721,30 @@ class StaffDhkpGenerateService {
         await DusunData.instance.setKantorDesaLocation(
           kantorDesaLat,
           kantorDesaLng,
+        );
+      }
+
+      // 7. EKSPOR & PECAH FILE .DKHP TERENKRIPSI PER DUSUN BILA DIMINTA
+      SplitDkhpExportResult? splitResult;
+      if (exportSplitByDusun && dusuns.isNotEmpty) {
+        notify(
+          'Mengenkripsi & memecah paket .dkhp untuk ${dusuns.length} Kedusunan...',
+        );
+        final targetDir =
+            splitOutputDirectory ?? await AppStorage.getBackupsDirectory();
+        splitResult = await DhkpPackageHelper.packSplitDkhpByDusun(
+          outputDirectory: targetDir,
+          records: recordList,
+          dusuns: dusuns,
+          kecamatanCode: resolvedWilayah.kecCode3,
+          kecamatanName: resolvedWilayah.kecName,
+          kelurahanCode: resolvedWilayah.kelCode3,
+          desaName: resolvedWilayah.desaName,
+          kantorDesaLat: kantorDesaLat,
+          kantorDesaLng: kantorDesaLng,
+          tahunPajak: effTahunAkhir,
+          password: effectiveEncryptionPassword,
+          includeMasterDesa: includeMasterInSplit,
         );
       }
 
@@ -456,16 +770,24 @@ class StaffDhkpGenerateService {
         targetPemdaCount: tpCount,
         totalBloks: totalBloks,
         tahun: effTahunLabel,
-        desaName: desaName,
+        desaName: resolvedWilayah.desaName,
+        kecamatanName: resolvedWilayah.kecName,
+        kecamatanCode: resolvedWilayah.kecCode3,
+        kelurahanCode: resolvedWilayah.kelCode3,
+        splitExportResult: splitResult,
       );
     } catch (e, stack) {
       debugPrint('Error generateAndApply: $e\n$stack');
       return StaffDhkpGenerateOutcome(
         success: false,
         tahun: effTahunLabel,
-        desaName: desaName,
+        desaName: resolvedWilayah.desaName,
+        kecamatanName: resolvedWilayah.kecName,
+        kecamatanCode: resolvedWilayah.kecCode3,
+        kelurahanCode: resolvedWilayah.kelCode3,
         errorMessage: 'Terjadi kesalahan saat generate DHKP: $e',
       );
     }
   }
 }
+

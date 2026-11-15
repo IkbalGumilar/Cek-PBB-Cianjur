@@ -63,40 +63,41 @@ class FieldLocationResult {
   });
 }
 
-/// Titik koordinat acuan perkiraan pusat masing-masing 32 Kecamatan di Kabupaten Cianjur.
+/// Titik koordinat acuan perkiraan pusat masing-masing 32 Kecamatan di Kabupaten Cianjur
+/// sesuai kode resmi Bapenda pada [cianjurWilayahCatalog].
 const Map<String, ({double lat, double lng})> kecamatanCentroids = {
   '010': (lat: -7.3486, lng: 106.9142), // AGRABINTA
   '060': (lat: -6.8523, lng: 107.2514), // BOJONGPICUNG
   '150': (lat: -7.0253, lng: 107.1354), // CAMPAKA
   '250': (lat: -7.0628, lng: 107.1189), // CAMPAKAMULYA
   '011': (lat: -6.8219, lng: 107.1398), // CIANJUR
-  '110': (lat: -6.9015, lng: 107.1392), // CIBEBER
-  '040': (lat: -7.2185, lng: 107.0392), // CIBINONG
-  '020': (lat: -7.4984, lng: 107.3421), // CIDAUN
-  '170': (lat: -7.1842, lng: 106.9854), // CIJATI
-  '180': (lat: -7.3489, lng: 107.2285), // CIKADU
-  '190': (lat: -6.6784, lng: 107.1643), // CIKALONGKULON
-  '120': (lat: -6.8574, lng: 107.1685), // CILAKU
-  '230': (lat: -6.7452, lng: 107.0421), // CIPANAS
-  '070': (lat: -6.8124, lng: 107.2412), // CIRANJANG
-  '140': (lat: -6.8045, lng: 107.0854), // CUGENANG
-  '240': (lat: -6.8854, lng: 107.0821), // GEKBRONG
-  '080': (lat: -6.8321, lng: 107.2842), // HAURWANGI
-  '050': (lat: -7.1425, lng: 106.9742), // KADUPANDAK
-  '090': (lat: -6.8125, lng: 107.1852), // KARANGTENGAH
-  '260': (lat: -7.3821, lng: 107.0542), // LELES
+  '030': (lat: -6.9015, lng: 107.1392), // CIBEBER
+  '201': (lat: -7.2185, lng: 107.0392), // CIBINONG
+  '230': (lat: -7.4984, lng: 107.3421), // CIDAUN
+  '290': (lat: -7.1842, lng: 106.9854), // CIJATI
+  '260': (lat: -7.3489, lng: 107.2285), // CIKADU
+  '120': (lat: -6.6784, lng: 107.1643), // CIKALONGKULON
+  '040': (lat: -6.8574, lng: 107.1685), // CILAKU
+  '280': (lat: -6.7452, lng: 107.0421), // CIPANAS
+  '050': (lat: -6.8124, lng: 107.2412), // CIRANJANG
+  '330': (lat: -6.8045, lng: 107.0854), // CUGENANG
+  '310': (lat: -6.8854, lng: 107.0821), // GEKBRONG
+  '300': (lat: -6.8321, lng: 107.2842), // HAURWANGI
+  '180': (lat: -7.1425, lng: 106.9742), // KADUPANDAK
+  '070': (lat: -6.8125, lng: 107.1852), // KARANGTENGAH
+  '350': (lat: -7.3821, lng: 107.0542), // LELES
   '200': (lat: -6.7584, lng: 107.2341), // MANDE
-  '030': (lat: -7.3854, lng: 107.3985), // NARINGGUL
-  '130': (lat: -6.7582, lng: 107.0712), // PACET
-  '160': (lat: -7.1845, lng: 107.1854), // PAGELARAN
-  '270': (lat: -7.1852, lng: 107.2841), // PASIRKUDA
+  '270': (lat: -7.3854, lng: 107.3985), // NARINGGUL
+  '140': (lat: -6.7582, lng: 107.0712), // PACET
+  '190': (lat: -7.1845, lng: 107.1854), // PAGELARAN
+  '320': (lat: -7.1852, lng: 107.2841), // PASIRKUDA
   '210': (lat: -7.4521, lng: 107.2045), // SINDANGBARANG
-  '100': (lat: -6.8642, lng: 107.2085), // SUKALUYU
-  '280': (lat: -7.0842, lng: 107.1542), // SUKANAGARA
-  '220': (lat: -6.7142, lng: 107.0842), // SUKARESMI
-  '290': (lat: -6.9984, lng: 107.0421), // TAKOKAK
-  '300': (lat: -7.2452, lng: 107.1084), // TANGGEUNG
-  '310': (lat: -6.8542, lng: 107.1085), // WARUNGKONDANG
+  '130': (lat: -6.8642, lng: 107.2085), // SUKALUYU
+  '160': (lat: -7.0842, lng: 107.1542), // SUKANAGARA
+  '340': (lat: -6.7142, lng: 107.0842), // SUKARESMI
+  '170': (lat: -6.9984, lng: 107.0421), // TAKOKAK
+  '240': (lat: -7.2452, lng: 107.1084), // TANGGEUNG
+  '020': (lat: -6.8542, lng: 107.1085), // WARUNGKONDANG
 };
 
 class LocationService {
@@ -397,30 +398,27 @@ class LocationService {
 
     // A. Cocokkan nama Kecamatan jika terdeteksi dari reverse geocoding
     if (matchedKecName != null) {
-      for (final kec in cianjurWilayahCatalog) {
-        if (matchedKecName.contains(kec.name) ||
-            kec.name.contains(matchedKecName)) {
-          targetKec = kec;
-          break;
-        }
-      }
+      targetKec = _matchByName(
+        cianjurWilayahCatalog,
+        matchedKecName,
+        (kec) => kec.name,
+      );
     }
 
     // B. Jika nama kecamatan belum dapat tapi nama desa/kelurahan ada, cari kecamatan yang memuat desa tersebut
     if (targetKec == null && matchedDesaName != null) {
       final desaName = matchedDesaName;
       for (final kec in cianjurWilayahCatalog) {
-        final hasDesa = kec.desaList.any(
-          (d) =>
-              d.name == desaName ||
-              desaName.contains(d.name) ||
-              d.name.contains(desaName),
-        );
-        if (hasDesa) {
+        if (kec.desaList.any((d) => d.name == desaName)) {
           targetKec = kec;
           break;
         }
       }
+      targetKec ??= cianjurWilayahCatalog.cast<KecamatanOption?>().firstWhere(
+        (kec) =>
+            _matchByName(kec!.desaList, desaName, (d) => d.name) != null,
+        orElse: () => null,
+      );
     }
 
     // C. Jika belum ketemu atau nama tidak cocok langsung, gunakan jarak centroid terdekat
@@ -447,17 +445,12 @@ class LocationService {
     targetKec ??= findKecamatanByCode('200');
 
     if (targetKec != null) {
-      // Cari desa yang cocok di dalam kecamatan tersebut
       if (matchedDesaName != null) {
-        final desaName = matchedDesaName;
-        for (final d in targetKec.desaList) {
-          if (d.name == desaName ||
-              desaName.contains(d.name) ||
-              d.name.contains(desaName)) {
-            targetDesa = d;
-            break;
-          }
-        }
+        targetDesa = _matchByName(
+          targetKec.desaList,
+          matchedDesaName,
+          (d) => d.name,
+        );
       }
       // Jika tidak ada nama desa yang cocok persis, pilih desa pertama di kecamatan
       targetDesa ??= targetKec.desaList.isNotEmpty
@@ -478,5 +471,22 @@ class LocationService {
       longitude: lng,
       sourceDescription: source,
     );
+  }
+
+  static T? _matchByName<T>(
+    Iterable<T> items,
+    String query,
+    String Function(T) getName,
+  ) {
+    for (final item in items) {
+      if (getName(item) == query) return item;
+    }
+    final sorted = items.toList()
+      ..sort((a, b) => getName(b).length.compareTo(getName(a).length));
+    for (final item in sorted) {
+      final name = getName(item);
+      if (query.contains(name) || name.contains(query)) return item;
+    }
+    return null;
   }
 }

@@ -89,6 +89,64 @@ class GoogleDriveService {
     mockUploader = null;
   }
 
+  static String _escapeDriveQueryValue(String value) {
+    return value.replaceAll(r'\', r'\\').replaceAll("'", r"\'");
+  }
+
+  static String _sanitizeFileName(String name) =>
+      name.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
+
+  static String _extractDriveErrorMessage(String body, String fallback) {
+    try {
+      final errJson = json.decode(body);
+      if (errJson is Map && errJson['error'] is Map) {
+        final m = errJson['error']['message'] as String?;
+        if (m != null && m.isNotEmpty) return m;
+      }
+    } catch (_) {}
+    return fallback;
+  }
+
+  Future<T> _withAuthRetry<T extends http.BaseResponse>({
+    required Map<String, String> initialHeaders,
+    required Future<T> Function(Map<String, String> headers) send,
+    bool interactiveIfNeeded = false,
+  }) async {
+    var res = await send(initialHeaders);
+    if (res.statusCode == 401) {
+      final refreshed = await GoogleAuthService.instance.getAuthHeaders(
+        interactiveIfNeeded: interactiveIfNeeded,
+        forceRefresh: true,
+      );
+      if (refreshed != null) {
+        res = await send(refreshed);
+      }
+    }
+    return res;
+  }
+
+  Future<void> _writeStreamToFile(
+    http.StreamedResponse streamedResponse,
+    File targetFile, {
+    void Function(int received, int total)? onProgress,
+  }) async {
+    final contentLength = streamedResponse.contentLength ?? 0;
+    var receivedBytes = 0;
+    final sink = targetFile.openWrite();
+    try {
+      await for (final chunk in streamedResponse.stream) {
+        sink.add(chunk);
+        receivedBytes += chunk.length;
+        if (onProgress != null && contentLength > 0) {
+          onProgress(receivedBytes, contentLength);
+        }
+      }
+      await sink.flush();
+    } finally {
+      await sink.close();
+    }
+  }
+
   /// Mencari folder di Google Drive berdasarkan nama.
   Future<String?> findFolder(
     String folderName, {
@@ -104,13 +162,15 @@ class GoogleDriveService {
     final authHeaders = await GoogleAuthService.instance.getAuthHeaders();
     if (authHeaders == null) return null;
 
+    final escapedFolderName = _escapeDriveQueryValue(folderName);
     final queries = <String>[
       "mimeType = 'application/vnd.google-apps.folder'",
-      "name = '$folderName'",
+      "name = '$escapedFolderName'",
       "trashed = false",
     ];
     if (parentFolderId != null && parentFolderId.isNotEmpty) {
-      queries.add("'$parentFolderId' in parents");
+      final escapedParentId = _escapeDriveQueryValue(parentFolderId);
+      queries.add("'$escapedParentId' in parents");
     }
 
     final uri = Uri.parse('https://www.googleapis.com/drive/v3/files').replace(
@@ -122,9 +182,12 @@ class GoogleDriveService {
     );
 
     try {
-      final res = await _httpClient
-          .get(uri, headers: authHeaders)
-          .timeout(const Duration(seconds: 15));
+      final res = await _withAuthRetry(
+        initialHeaders: authHeaders,
+        send: (headers) => _httpClient
+            .get(uri, headers: headers)
+            .timeout(const Duration(seconds: 15)),
+      );
       if (res.statusCode == 200) {
         final data =
             json.decode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
@@ -165,16 +228,22 @@ class GoogleDriveService {
     if (parentFolderId != null && parentFolderId.isNotEmpty) {
       bodyMap['parents'] = [parentFolderId];
     }
-
-    final headers = {
-      ...authHeaders,
-      'Content-Type': 'application/json; charset=UTF-8',
-    };
+    final encodedBody = json.encode(bodyMap);
 
     try {
-      final res = await _httpClient
-          .post(uri, headers: headers, body: json.encode(bodyMap))
-          .timeout(const Duration(seconds: 15));
+      final res = await _withAuthRetry(
+        initialHeaders: authHeaders,
+        send: (headers) => _httpClient
+            .post(
+              uri,
+              headers: {
+                ...headers,
+                'Content-Type': 'application/json; charset=UTF-8',
+              },
+              body: encodedBody,
+            )
+            .timeout(const Duration(seconds: 15)),
+      );
 
       if (res.statusCode == 200 || res.statusCode == 201) {
         final data =
@@ -275,7 +344,6 @@ class GoogleDriveService {
     final boundary =
         '----BoundaryUpload${DateTime.now().millisecondsSinceEpoch}';
     final metadataJson = json.encode(metadata);
-
     final fileBytes = await file.readAsBytes();
 
     final headerBytes = utf8.encode(
@@ -286,41 +354,39 @@ class GoogleDriveService {
       'Content-Type: $mimeType\r\n\r\n',
     );
     final footerBytes = utf8.encode('\r\n--$boundary--\r\n');
-
     final fullBody = <int>[...headerBytes, ...fileBytes, ...footerBytes];
 
     final uri = Uri.parse(
       'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,size',
     );
 
-    final req = http.Request('POST', uri);
-    req.headers.addAll(authHeaders);
-    req.headers['Content-Type'] = 'multipart/related; boundary=$boundary';
-    req.headers['Content-Length'] = fullBody.length.toString();
-    req.bodyBytes = fullBody;
-
-    final streamedRes = await _httpClient
-        .send(req)
-        .timeout(const Duration(seconds: 45));
-    final res = await http.Response.fromStream(streamedRes);
+    final res = await _withAuthRetry(
+      initialHeaders: authHeaders,
+      interactiveIfNeeded: true,
+      send: (headers) async {
+        final req = http.Request('POST', uri)
+          ..headers.addAll(headers)
+          ..headers['Content-Type'] = 'multipart/related; boundary=$boundary'
+          ..headers['Content-Length'] = fullBody.length.toString()
+          ..bodyBytes = fullBody;
+        final streamedRes = await _httpClient
+            .send(req)
+            .timeout(const Duration(seconds: 45));
+        return http.Response.fromStream(streamedRes);
+      },
+    );
 
     if (res.statusCode == 200 || res.statusCode == 201) {
       final resData =
           json.decode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
       return resData['id'] as String?;
-    } else {
-      String errorMsg = 'Google Drive upload error ${res.statusCode}';
-      try {
-        final errJson = json.decode(res.body);
-        if (errJson is Map && errJson['error'] is Map) {
-          final m = errJson['error']['message'] as String?;
-          if (m != null && m.isNotEmpty) {
-            errorMsg = m;
-          }
-        }
-      } catch (_) {}
-      throw Exception(errorMsg);
     }
+    throw Exception(
+      _extractDriveErrorMessage(
+        res.body,
+        'Google Drive upload error ${res.statusCode}',
+      ),
+    );
   }
 
   static bool isSupportedDkhpFileName(String name, {bool isFolder = false}) {
@@ -369,7 +435,7 @@ class GoogleDriveService {
   Future<List<GoogleDriveItem>> listDkhpFiles({String? folderId}) async {
     if (mockItems != null) return mockItems!;
 
-    final authHeaders = await GoogleAuthService.instance.getAuthHeaders(
+    var authHeaders = await GoogleAuthService.instance.getAuthHeaders(
       interactiveIfNeeded: true,
     );
     if (authHeaders == null) {
@@ -382,14 +448,14 @@ class GoogleDriveService {
           .getGoogleDriveFolderLink();
       targetFolderId = GoogleDriveBackupPolicy.extractFolderId(sharedLink);
       if (targetFolderId == null || targetFolderId.isEmpty) {
-        // Cek apakah folder "Cek PBB Cianjur" ada, jika tidak ada maka buat folder baru
         targetFolderId = await ensureDedicatedFolder();
       }
     }
 
     final queries = <String>['trashed = false'];
     if (targetFolderId != null && targetFolderId.isNotEmpty) {
-      queries.add("'$targetFolderId' in parents");
+      final escapedTargetId = _escapeDriveQueryValue(targetFolderId);
+      queries.add("'$escapedTargetId' in parents");
     }
 
     final q = queries.join(' and ');
@@ -403,9 +469,16 @@ class GoogleDriveService {
     );
 
     try {
-      final response = await _httpClient
-          .get(uri, headers: authHeaders)
-          .timeout(const Duration(seconds: 20));
+      final response = await _withAuthRetry(
+        initialHeaders: authHeaders,
+        interactiveIfNeeded: true,
+        send: (headers) {
+          authHeaders = headers;
+          return _httpClient
+              .get(uri, headers: headers)
+              .timeout(const Duration(seconds: 20));
+        },
+      );
 
       if (response.statusCode == 200) {
         final data =
@@ -451,17 +524,10 @@ class GoogleDriveService {
 
         return itemsById.values.toList();
       } else {
-        String errorMsg =
-            'Google Drive REST API merespons status ${response.statusCode}';
-        try {
-          final errJson = json.decode(response.body);
-          if (errJson is Map && errJson['error'] is Map) {
-            final m = errJson['error']['message'] as String?;
-            if (m != null && m.isNotEmpty) {
-              errorMsg = m;
-            }
-          }
-        } catch (_) {}
+        final errorMsg = _extractDriveErrorMessage(
+          response.body,
+          'Google Drive REST API merespons status ${response.statusCode}',
+        );
         if (response.statusCode == 403) {
           throw Exception(
             'Google Drive API (403): $errorMsg\n\n'
@@ -487,7 +553,7 @@ class GoogleDriveService {
     }
 
     final tempDir = await getTemporaryDirectory();
-    final safeName = fileName.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
+    final safeName = _sanitizeFileName(fileName);
     final targetFile = File('${tempDir.path}/gdrive_$safeName');
 
     final authHeaders = await GoogleAuthService.instance.getAuthHeaders(
@@ -497,29 +563,23 @@ class GoogleDriveService {
       final url = Uri.parse(
         'https://www.googleapis.com/drive/v3/files/$fileId?alt=media',
       );
-      final request = http.Request('GET', url);
-      request.headers.addAll(authHeaders);
-
-      final streamedResponse = await _httpClient.send(request);
+      final streamedResponse = await _withAuthRetry(
+        initialHeaders: authHeaders,
+        interactiveIfNeeded: true,
+        send: (headers) =>
+            _httpClient.send(http.Request('GET', url)..headers.addAll(headers)),
+      );
       if (streamedResponse.statusCode != 200) {
         throw Exception(
           'Gagal mengunduh berkas Drive (Status ${streamedResponse.statusCode}).',
         );
       }
 
-      final contentLength = streamedResponse.contentLength ?? 0;
-      int receivedBytes = 0;
-      final sink = targetFile.openWrite();
-
-      await for (final chunk in streamedResponse.stream) {
-        sink.add(chunk);
-        receivedBytes += chunk.length;
-        if (onProgress != null && contentLength > 0) {
-          onProgress(receivedBytes, contentLength);
-        }
-      }
-      await sink.flush();
-      await sink.close();
+      await _writeStreamToFile(
+        streamedResponse,
+        targetFile,
+        onProgress: onProgress,
+      );
       return targetFile;
     }
 
@@ -541,30 +601,20 @@ class GoogleDriveService {
     }
 
     final tempDir = await getTemporaryDirectory();
-    final actualName = (fileName != null && fileName.isNotEmpty)
+    final rawName = (fileName != null && fileName.isNotEmpty)
         ? fileName
         : 'dkhp_drive_$fileId.dkhp';
-    final targetFile = File('${tempDir.path}/$actualName');
+    final targetFile = File('${tempDir.path}/${_sanitizeFileName(rawName)}');
 
     final url = Uri.parse(
       'https://drive.google.com/uc?export=download&id=$fileId&confirm=t',
     );
-    final request = http.Request('GET', url);
-    final streamedResponse = await _httpClient.send(request);
-
-    final contentLength = streamedResponse.contentLength ?? 0;
-    int receivedBytes = 0;
-    final sink = targetFile.openWrite();
-
-    await for (final chunk in streamedResponse.stream) {
-      sink.add(chunk);
-      receivedBytes += chunk.length;
-      if (onProgress != null && contentLength > 0) {
-        onProgress(receivedBytes, contentLength);
-      }
-    }
-    await sink.flush();
-    await sink.close();
+    final streamedResponse = await _httpClient.send(http.Request('GET', url));
+    await _writeStreamToFile(
+      streamedResponse,
+      targetFile,
+      onProgress: onProgress,
+    );
 
     // Periksa jika respons merupakan halaman HTML peringatan scan virus Google
     if (await targetFile.exists() && await targetFile.length() < 50000) {
@@ -581,20 +631,14 @@ class GoogleDriveService {
           final confirmUrl = Uri.parse(
             'https://drive.google.com/uc?export=download&confirm=$confirmCode&id=$fileId',
           );
-          final retryRequest = http.Request('GET', confirmUrl);
-          final retryStream = await _httpClient.send(retryRequest);
-          final retryLength = retryStream.contentLength ?? 0;
-          int retryReceived = 0;
-          final retrySink = targetFile.openWrite();
-          await for (final chunk in retryStream.stream) {
-            retrySink.add(chunk);
-            retryReceived += chunk.length;
-            if (onProgress != null && retryLength > 0) {
-              onProgress(retryReceived, retryLength);
-            }
-          }
-          await retrySink.flush();
-          await retrySink.close();
+          final retryStream = await _httpClient.send(
+            http.Request('GET', confirmUrl),
+          );
+          await _writeStreamToFile(
+            retryStream,
+            targetFile,
+            onProgress: onProgress,
+          );
         }
       }
     }

@@ -17,6 +17,7 @@ import 'pbb/check_result_cards.dart';
 import 'pbb_client.dart';
 import 'tagihan_result.dart';
 import 'ui/app_design_system.dart';
+import 'unity_lerp_widgets.dart';
 
 class CheckFormView extends StatefulWidget {
   final CheckMode mode;
@@ -82,6 +83,7 @@ class _CheckFormViewState extends State<CheckFormView> {
   bool _scanningOcr = false;
   bool _ready = false;
   bool _submitting = false;
+  int _validationShakeTrigger = 0;
   PbbResult? _statusBayarResult;
   TagihanResult? _tagihanResult;
   String? _errorText;
@@ -350,6 +352,7 @@ class _CheckFormViewState extends State<CheckFormView> {
               await file.writeAsString(newContent);
             }
 
+            if (!mounted) return;
             widget.onImportPressed();
           } else if (checkMassal == false) {
             final nop = nops.first;
@@ -643,6 +646,7 @@ class _CheckFormViewState extends State<CheckFormView> {
   }
 
   Future<void> _submit() async {
+    if (_submitting) return;
     final blokDigits = _blokController.text.replaceAll(RegExp(r'[^0-9]'), '');
     final wilayahDigits = _wilayahController.text.replaceAll(
       RegExp(r'[^0-9]'),
@@ -654,10 +658,18 @@ class _CheckFormViewState extends State<CheckFormView> {
 
     final blokError = blokDigits.isEmpty ? 'Data belum diisi' : null;
     final wilayahError = wilayahDigits.isEmpty ? 'Data belum diisi' : null;
-    final tahunError =
-        (widget.mode == CheckMode.statusBayar && tahunDigits.isEmpty)
-        ? 'Data belum diisi'
-        : null;
+    final String? tahunError;
+    if (widget.mode == CheckMode.statusBayar) {
+      if (tahunDigits.isEmpty) {
+        tahunError = 'Data belum diisi';
+      } else if (tahunDigits.length != 4) {
+        tahunError = 'Tahun harus 4 digit angka';
+      } else {
+        tahunError = null;
+      }
+    } else {
+      tahunError = null;
+    }
     final captchaError = manualCaptcha.isEmpty ? 'Data belum diisi' : null;
 
     final nop = buildNop(
@@ -676,6 +688,7 @@ class _CheckFormViewState extends State<CheckFormView> {
         _tahunError = tahunError;
         _captchaError = captchaError;
         _errorText = 'Lengkapi dulu semua kolom yang wajib diisi.';
+        _validationShakeTrigger++;
       });
       if (blokError != null) {
         _blokFocusNode.requestFocus();
@@ -697,7 +710,7 @@ class _CheckFormViewState extends State<CheckFormView> {
       _captchaError = null;
     });
 
-    await _submitManual(nop: nop, tahun: tahun, captcha: manualCaptcha);
+    await _submitManual(nop: nop, tahun: tahunDigits, captcha: manualCaptcha);
   }
 
   Future<void> _submitManual({
@@ -1151,28 +1164,35 @@ class _CheckFormViewState extends State<CheckFormView> {
                       ),
                       if (_errorText != null) ...[
                         const SizedBox(height: 14),
-                        AppAlertBanner(
-                          message: _errorText!,
-                          tone: AppBadgeTone.error,
+                        LerpShakePosition(
+                          shakeTrigger: _validationShakeTrigger,
+                          child: AppAlertBanner(
+                            message: _errorText!,
+                            tone: AppBadgeTone.error,
+                          ),
                         ),
                       ],
                       const SizedBox(height: 18),
-                      FilledButton.icon(
-                        key: _submitButtonKey,
-                        onPressed: _submitting ? null : _submit,
-                        icon: _submitting
-                            ? SizedBox(
-                                height: 18,
-                                width: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: scheme.onPrimary,
-                                ),
-                              )
-                            : const Icon(Icons.search),
-                        label: const Text('Cek'),
-                        style: FilledButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 14),
+                      LerpPunchScale(
+                        punchOnTap: !_submitting,
+                        punch: 0.04,
+                        child: FilledButton.icon(
+                          key: _submitButtonKey,
+                          onPressed: _submitting ? null : _submit,
+                          icon: _submitting
+                              ? SizedBox(
+                                  height: 18,
+                                  width: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: scheme.onPrimary,
+                                  ),
+                                )
+                              : const Icon(Icons.search),
+                          label: const Text('Cek'),
+                          style: FilledButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                          ),
                         ),
                       ),
                     ],

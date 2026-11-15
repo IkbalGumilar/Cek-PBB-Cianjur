@@ -30,8 +30,18 @@ jobs:
       - name: Get Dependencies
         run: flutter pub get
 
+      - name: Run Static Analysis
+        run: flutter analyze
+
+      - name: Run Unit & Widget Tests
+        run: flutter test
+
       - name: Build Windows Desktop
-        run: flutter build windows --release
+        run: |
+          if (-not (Test-Path "build\native_assets\windows")) {
+            New-Item -ItemType Directory -Force -Path "build\native_assets\windows" | Out-Null
+          }
+          flutter build windows --release --obfuscate --split-debug-info=build\symbols\windows --tree-shake-icons
 
       - name: Package Windows Binary
         shell: pwsh
@@ -40,16 +50,21 @@ jobs:
           $packageDir = "Cek-PBB-Cianjur-Windows-x64"
           $zipName = "Cek-PBB-Cianjur-Windows-x64.zip"
 
+          # Bersihkan residu debug/linker agar biner rilis ramping dan bersih
+          Get-ChildItem -Path $buildDir -Recurse -Include *.pdb,*.ilk,*.exp,*.lib,*.obj,kernel_blob.bin -File | Remove-Item -Force
+
           # Buat folder distribusi
-          New-Item -ItemType Directory -Force -Path $packageDir
+          New-Item -ItemType Directory -Force -Path $packageDir | Out-Null
 
           # Salin seluruh berkas biner dan aset dependensi
-          Copy-Item -Path "$buildDir\*" -Destination $packageDir -Recurse
+          Copy-Item -Path "$buildDir\*" -Destination $packageDir -Recurse -Force
 
           # Arsipkan menjadi berkas zip portabel
           Compress-Archive -Path "$packageDir\*" -DestinationPath $zipName -Force
 
-          Write-Host "Paket rilis Windows berhasil dibuat: $zipName"
+          $dirMb = [math]::Round(((Get-ChildItem $buildDir -Recurse -File | Measure-Object Length -Sum).Sum / 1MB), 2)
+          $zipMb = [math]::Round(((Get-Item $zipName).Length / 1MB), 2)
+          Write-Host "Paket rilis Windows berhasil dibuat: $zipName ($zipMb MB, Release dir: $dirMb MB)"
 
       - name: Install Inno Setup
         run: choco install innosetup -y --no-progress

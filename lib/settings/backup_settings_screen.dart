@@ -10,6 +10,7 @@ import '../dkhp_package_helper.dart';
 import '../google_auth_service.dart';
 import '../google_drive_backup_policy.dart';
 import '../google_drive_picker_dialog.dart';
+import '../incoming_file_service.dart';
 import '../native_file_helper.dart';
 import '../shared_storage_link_service.dart';
 import '../unity_lerp_widgets.dart';
@@ -228,7 +229,7 @@ class _BackupSettingsSectionState extends State<BackupSettingsSection> {
     }
   }
 
-  Future<void> _restoreFromFilePath(String path) async {
+  Future<void> _restoreFromFilePath(String path, {String? password}) async {
     setState(() {
       _isBackingUp = true;
       _busyMessage = 'Memulihkan & mencocokkan berkas DHKP...';
@@ -236,6 +237,7 @@ class _BackupSettingsSectionState extends State<BackupSettingsSection> {
     try {
       final count = await BlokDataStore.instance.importCsv(
         path,
+        password: password,
         requireBaseDhkp: true,
       );
       await _loadBackupSettings();
@@ -246,6 +248,20 @@ class _BackupSettingsSectionState extends State<BackupSettingsSection> {
           backgroundColor: Colors.green[800],
         ),
       );
+    } on DkhpPasswordException {
+      if (mounted) {
+        setState(() {
+          _isBackingUp = false;
+          _busyMessage = '';
+        });
+      }
+      if (!mounted) return;
+      final enteredPassword = await IncomingFileService.promptBackupPassword(
+        context,
+      );
+      if (enteredPassword != null && enteredPassword.isNotEmpty && mounted) {
+        await _restoreFromFilePath(path, password: enteredPassword);
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

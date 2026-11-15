@@ -26,6 +26,10 @@ abstract class BaseSecureStore {
   FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
   static final Map<String, String> _testMemoryStore = <String, String>{};
 
+  /// Flag pengujian untuk mensimulasikan kegagalan penuh pada Keystore / Secure Storage.
+  @visibleForTesting
+  static bool simulateStorageFailureForTesting = false;
+
   static bool get _isFlutterTest =>
       !kIsWeb && Platform.environment.containsKey('FLUTTER_TEST');
 
@@ -33,6 +37,7 @@ abstract class BaseSecureStore {
   @visibleForTesting
   static void clearTestMemoryStore() {
     _testMemoryStore.clear();
+    simulateStorageFailureForTesting = false;
   }
 
   @protected
@@ -43,6 +48,14 @@ abstract class BaseSecureStore {
 
   @protected
   Future<String?> readSecure(String key, {bool throwOnError = false}) async {
+    if (simulateStorageFailureForTesting) {
+      if (throwOnError) {
+        throw SecureStorageException(
+          'Simulasi kegagalan Secure Storage saat membaca "$key".',
+        );
+      }
+      return null;
+    }
     try {
       return await _secureStorage.read(key: key);
     } on MissingPluginException catch (e) {
@@ -74,6 +87,11 @@ abstract class BaseSecureStore {
 
   @protected
   Future<void> writeSecure(String key, String value) async {
+    if (simulateStorageFailureForTesting) {
+      throw SecureStorageException(
+        'Simulasi kegagalan Secure Storage saat menyimpan "$key".',
+      );
+    }
     try {
       await _secureStorage.write(key: key, value: value);
     } on MissingPluginException catch (e) {
@@ -99,6 +117,11 @@ abstract class BaseSecureStore {
 
   @protected
   Future<void> deleteSecure(String key) async {
+    if (simulateStorageFailureForTesting) {
+      throw SecureStorageException(
+        'Simulasi kegagalan Secure Storage saat menghapus "$key".',
+      );
+    }
     try {
       await _secureStorage.delete(key: key);
     } on MissingPluginException catch (e) {

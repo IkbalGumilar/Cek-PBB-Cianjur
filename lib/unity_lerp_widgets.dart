@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import 'ui/app_design_system.dart';
@@ -12,6 +14,74 @@ double unityLerp(double a, double b, double t) {
   return a + (b - a) * t;
 }
 
+/// Inverse Linear Interpolation persis seperti `Mathf.InverseLerp(a, b, value)` di Unity Engine:
+/// Menghasilkan nilai normalisasi $t \in [0.0, 1.0]$ dari posisi [value] di antara [a] dan [b].
+double unityInverseLerp(double a, double b, double value) {
+  if ((b - a).abs() < 1e-9) return 0.0;
+  return ((value - a) / (b - a)).clamp(0.0, 1.0);
+}
+
+/// Hermite SmoothStep Interpolation persis seperti `Mathf.SmoothStep(from, to, t)` di Unity Engine:
+///
+/// $$t' = t^2 (3 - 2t)$$
+///
+/// Memberikan percepatan lembut di awal dan perlambatan halus di akhir tanpa patahan kecepatan.
+double unitySmoothStep(double from, double to, double t) {
+  final clamped = t.clamp(0.0, 1.0);
+  final smoothed = clamped * clamped * (3.0 - 2.0 * clamped);
+  return unityLerp(from, to, smoothed);
+}
+
+/// Critically-Damped Spring Smoothing persis seperti `Mathf.SmoothDamp` di Unity Engine.
+///
+/// Mengembalikan pasangan `(value, velocity)` baru untuk langkah waktu `deltaTime` (detik).
+({double value, double velocity}) unitySmoothDamp({
+  required double current,
+  required double target,
+  required double currentVelocity,
+  required double smoothTime,
+  required double deltaTime,
+  double maxSpeed = double.infinity,
+}) {
+  final effectiveSmoothTime = math.max(0.0001, smoothTime);
+  final omega = 2.0 / effectiveSmoothTime;
+  final x = omega * deltaTime;
+  final exp = 1.0 / (1.0 + x + 0.48 * x * x + 0.235 * x * x * x);
+
+  var change = current - target;
+  final originalTo = target;
+
+  final maxChange = maxSpeed * effectiveSmoothTime;
+  change = change.clamp(-maxChange, maxChange);
+  final adjustedTarget = current - change;
+
+  final temp = (currentVelocity + omega * change) * deltaTime;
+  var newVelocity = (currentVelocity - omega * temp) * exp;
+  var output = adjustedTarget + (change + temp) * exp;
+
+  if ((originalTo - current > 0.0) == (output > originalTo)) {
+    output = originalTo;
+    newVelocity = deltaTime > 0 ? (output - originalTo) / deltaTime : 0.0;
+  }
+
+  return (value: output, velocity: newVelocity);
+}
+
+/// Kurva animasi kustom bergaya `AnimationCurve` di Unity Engine.
+/// Mendukung mode Hermite SmoothStep dengan opsi overshoot tipis yang terkontrol.
+class UnityAnimationCurve extends Curve {
+  final double overshoot;
+
+  const UnityAnimationCurve({this.overshoot = 0.0});
+
+  @override
+  double transformInternal(double t) {
+    final base = t * t * (3.0 - 2.0 * t);
+    if (overshoot == 0.0) return base;
+    return base + math.sin(t * math.pi) * overshoot * (1.0 - t);
+  }
+}
+
 /// Widget angka atau nilai nominal yang bertransisi halus menggunakan formula `Mathf.Lerp` ala Unity.
 ///
 /// Setiap kali [value] diperbarui, angka akan "menggelinding" secara halus dari nilai sebelumnya
@@ -23,6 +93,7 @@ class LerpAnimatedCounter extends StatefulWidget {
   final TextStyle? style;
   final String Function(num value)? formatter;
   final TextAlign? textAlign;
+  final bool resetToZeroOnUpdate;
 
   const LerpAnimatedCounter({
     super.key,
@@ -32,6 +103,7 @@ class LerpAnimatedCounter extends StatefulWidget {
     this.style,
     this.formatter,
     this.textAlign,
+    this.resetToZeroOnUpdate = false,
   });
 
   @override
@@ -77,12 +149,15 @@ class _LerpAnimatedCounterState extends State<LerpAnimatedCounter>
   void didUpdateWidget(LerpAnimatedCounter oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.value != widget.value) {
-      _startValue = _displayValue;
+      _startValue = widget.resetToZeroOnUpdate ? 0.0 : _displayValue;
       _targetValue = widget.value.toDouble();
       if (AppMotion.isReducedMotion(context)) {
         _controller.stop();
         _displayValue = _targetValue;
       } else {
+        if (widget.resetToZeroOnUpdate) {
+          _displayValue = 0.0;
+        }
         _controller.duration = widget.duration;
         _controller.forward(from: 0.0);
       }
@@ -334,11 +409,10 @@ class SmoothActivityBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final color = accentColor ?? scheme.primary;
-    final sizeDuration = AppMotion.resolve(context, AppMotion.component);
     final switchDuration = AppMotion.resolve(context, AppMotion.component);
 
-    return AnimatedSize(
-      duration: sizeDuration,
+    return AppAnimatedSize(
+      duration: AppMotion.component,
       curve: AppMotion.enterCurve,
       alignment: Alignment.topCenter,
       child: AnimatedSwitcher(
@@ -598,3 +672,249 @@ class SmoothLoadingCard extends StatelessWidget {
     );
   }
 }
+
+/// Widget efek memantul elastis bergaya `DOPunchScale` (DOTween / Unity).
+///
+/// Saat [trigger] bertambah atau widget diketuk (bila [punchOnTap] aktif),
+/// skala widget berdenyut halus mengikuti gelombang sinus teredam:
+/// $$\text{scale}(t) = 1.0 + \text{punch} \cdot (1 - t) \cdot \sin(2\pi \cdot \text{vibrato} \cdot t)$$
+class LerpPunchScale extends StatefulWidget {
+  final Widget child;
+  final int trigger;
+  final double punch;
+  final int vibrato;
+  final Duration duration;
+  final bool punchOnTap;
+  final VoidCallback? onTap;
+
+  const LerpPunchScale({
+    super.key,
+    required this.child,
+    this.trigger = 0,
+    this.punch = 0.06,
+    this.vibrato = 2,
+    this.duration = AppMotion.dialog,
+    this.punchOnTap = false,
+    this.onTap,
+  });
+
+  @override
+  State<LerpPunchScale> createState() => _LerpPunchScaleState();
+}
+
+class _LerpPunchScaleState extends State<LerpPunchScale>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this, duration: widget.duration);
+  }
+
+  @override
+  void didUpdateWidget(LerpPunchScale oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.trigger != widget.trigger &&
+        !AppMotion.isReducedMotion(context)) {
+      _controller.duration = widget.duration;
+      _controller.forward(from: 0.0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _handleTap() {
+    if (widget.punchOnTap && !AppMotion.isReducedMotion(context)) {
+      _controller.forward(from: 0.0);
+    }
+    widget.onTap?.call();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    Widget content = AnimatedBuilder(
+      animation: _controller,
+      child: widget.child,
+      builder: (context, child) {
+        final t = _controller.value;
+        if (t <= 0.0 || t >= 1.0 || AppMotion.isReducedMotion(context)) {
+          return child!;
+        }
+        final damping = 1.0 - t;
+        final wave = math.sin(t * math.pi * 2 * widget.vibrato);
+        final scale = 1.0 + widget.punch * damping * wave;
+        return Transform.scale(scale: scale, child: child);
+      },
+    );
+
+    if (widget.punchOnTap || widget.onTap != null) {
+      content = GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: _handleTap,
+        child: content,
+      );
+    }
+    return content;
+  }
+}
+
+/// Widget getaran horizontal halus bergaya `DOShakePosition` (DOTween / Unity).
+///
+/// Digunakan untuk memberi umpan balik visual yang lembut ketika validasi input
+/// gagal tanpa mengaburkan fokus pengguna. Setiap kali [shakeTrigger] bertambah,
+/// widget berosilasi ke kiri/kanan dengan amplitudo yang meluruh ke nol.
+class LerpShakePosition extends StatefulWidget {
+  final Widget child;
+  final int shakeTrigger;
+  final double strength;
+  final int vibrato;
+  final Duration duration;
+
+  const LerpShakePosition({
+    super.key,
+    required this.child,
+    required this.shakeTrigger,
+    this.strength = 6.0,
+    this.vibrato = 3,
+    this.duration = AppMotion.dialog,
+  });
+
+  @override
+  State<LerpShakePosition> createState() => _LerpShakePositionState();
+}
+
+class _LerpShakePositionState extends State<LerpShakePosition>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this, duration: widget.duration);
+  }
+
+  @override
+  void didUpdateWidget(LerpShakePosition oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.shakeTrigger != widget.shakeTrigger &&
+        widget.shakeTrigger > 0 &&
+        !AppMotion.isReducedMotion(context)) {
+      _controller.duration = widget.duration;
+      _controller.forward(from: 0.0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      child: widget.child,
+      builder: (context, child) {
+        final t = _controller.value;
+        if (t <= 0.0 || t >= 1.0 || AppMotion.isReducedMotion(context)) {
+          return child!;
+        }
+        final damping = 1.0 - t;
+        final dx =
+            math.sin(t * math.pi * 2 * widget.vibrato) *
+            widget.strength *
+            damping;
+        return Transform.translate(offset: Offset(dx, 0), child: child);
+      },
+    );
+  }
+}
+
+/// Kemunculan berurutan (staggered sequence) bergaya `DOTween.Sequence` di Unity.
+///
+/// Mengatur transisi fade + slide ringan untuk daftar kartu/komponen secara
+/// berurutan menggunakan satu `AnimationController` terpusat yang hemat memori.
+class SequenceStaggerReveal extends StatefulWidget {
+  final List<Widget> children;
+  final Duration totalDuration;
+  final double slideOffsetY;
+  final CrossAxisAlignment crossAxisAlignment;
+  final MainAxisSize mainAxisSize;
+
+  const SequenceStaggerReveal({
+    super.key,
+    required this.children,
+    this.totalDuration = AppMotion.complex,
+    this.slideOffsetY = 10.0,
+    this.crossAxisAlignment = CrossAxisAlignment.stretch,
+    this.mainAxisSize = MainAxisSize.min,
+  });
+
+  @override
+  State<SequenceStaggerReveal> createState() => _SequenceStaggerRevealState();
+}
+
+class _SequenceStaggerRevealState extends State<SequenceStaggerReveal>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: widget.totalDuration,
+    )..forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.children.isEmpty || AppMotion.isReducedMotion(context)) {
+      return Column(
+        mainAxisSize: widget.mainAxisSize,
+        crossAxisAlignment: widget.crossAxisAlignment,
+        children: widget.children,
+      );
+    }
+
+    final count = widget.children.length;
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        return Column(
+          mainAxisSize: widget.mainAxisSize,
+          crossAxisAlignment: widget.crossAxisAlignment,
+          children: List<Widget>.generate(count, (index) {
+            final start = (index / count) * 0.5;
+            final end = (start + 0.5).clamp(0.0, 1.0);
+            final localT = Interval(
+              start,
+              end,
+              curve: AppMotion.enterCurve,
+            ).transform(_controller.value);
+            return Opacity(
+              opacity: localT,
+              child: Transform.translate(
+                offset: Offset(0, unityLerp(widget.slideOffsetY, 0.0, localT)),
+                child: widget.children[index],
+              ),
+            );
+          }),
+        );
+      },
+    );
+  }
+}
+

@@ -3,8 +3,11 @@
 /// Format angka bilangan bulat menjadi string dengan pemisah ribuan titik.
 /// Contoh: 1250000 -> "1.250.000"
 String formatRibuan(num value) {
-  final s = value.toInt().toString();
+  final intVal = value.toInt();
+  final isNegative = intVal < 0;
+  final s = intVal.abs().toString();
   final buf = StringBuffer();
+  if (isNegative) buf.write('-');
   for (var i = 0; i < s.length; i++) {
     if (i > 0 && (s.length - i) % 3 == 0) buf.write('.');
     buf.write(s[i]);

@@ -263,6 +263,40 @@ class AppPageTransitionsBuilder extends PageTransitionsBuilder {
   }
 }
 
+/// Pembungkus [AnimatedSize] yang aman terhadap mode Reduced Motion.
+///
+/// Memberikan `Duration.zero` langsung ke [AnimatedSize] dapat memicu asersi
+/// `RenderAnimatedSize` saat ukuran child berubah selama layout. Ketika
+/// Reduced Motion aktif, widget ini mengembalikan [child] secara langsung.
+class AppAnimatedSize extends StatelessWidget {
+  final Widget child;
+  final Duration duration;
+  final Curve curve;
+  final AlignmentGeometry alignment;
+
+  const AppAnimatedSize({
+    super.key,
+    required this.child,
+    this.duration = AppMotion.component,
+    this.curve = AppMotion.standardCurve,
+    this.alignment = Alignment.center,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final resolved = AppMotion.resolve(context, duration);
+    if (resolved <= Duration.zero) {
+      return child;
+    }
+    return AnimatedSize(
+      duration: resolved,
+      curve: curve,
+      alignment: alignment,
+      child: child,
+    );
+  }
+}
+
 /// Kategori warna semantik untuk lencana status, kartu KPI, dan pesan sistem.
 enum AppBadgeTone {
   /// Sudah Bayar / Lunas / Sukses (Hijau)
@@ -623,10 +657,9 @@ class AppAlertBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = AppSemanticColors.of(context, tone);
-    final duration = AppMotion.resolve(context, AppMotion.component);
 
-    return AnimatedSize(
-      duration: duration,
+    return AppAnimatedSize(
+      duration: AppMotion.component,
       curve: AppMotion.standardCurve,
       child: Padding(
         padding: margin,
@@ -834,8 +867,8 @@ class _AppCollapsibleFilterSectionState
               ),
             ),
           ),
-          AnimatedSize(
-            duration: duration,
+          AppAnimatedSize(
+            duration: AppMotion.component,
             curve: AppMotion.standardCurve,
             alignment: Alignment.topCenter,
             child: !_expanded

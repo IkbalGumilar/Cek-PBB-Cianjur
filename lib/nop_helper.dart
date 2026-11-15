@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'cianjur_wilayah_data.dart';
+
 const defaultNopPrefix = '3205200004';
 String _activeNopPrefix = defaultNopPrefix;
 String _activeKecamatanCode = '200';
@@ -21,13 +23,18 @@ String get activeKelurahanCode => _activeKelurahanCode;
 String get activeDesaName => _activeDesaName;
 String get activeKecamatanName => _activeKecamatanName;
 
+String _digitsOnly(String value) => value.replaceAll(RegExp(r'[^0-9]'), '');
+
+String _effectivePrefix(String? prefix) =>
+    (prefix != null && prefix.length == 10) ? prefix : nopPrefix;
+
 set activeNopPrefix(String value) {
-  final clean = value.replaceAll(RegExp(r'[^0-9]'), '');
+  final clean = _digitsOnly(value);
   if (clean.length == 10) {
-    _activeNopPrefix = clean;
-    _activeKecamatanCode = clean.substring(4, 7);
-    _activeKelurahanCode = clean.substring(7, 10);
-    activeWilayahRevision.value++;
+    setActiveWilayah(
+      kecCode: clean.substring(4, 7),
+      kelCode: clean.substring(7, 10),
+    );
   }
 }
 
@@ -37,17 +44,17 @@ void setActiveWilayah({
   String? desaName,
   String? kecName,
 }) {
-  final cleanKec = kecCode.replaceAll(RegExp(r'[^0-9]'), '').padLeft(3, '0');
-  final cleanKel = kelCode.replaceAll(RegExp(r'[^0-9]'), '').padLeft(3, '0');
+  final cleanKec = _digitsOnly(kecCode).padLeft(3, '0');
+  final cleanKel = _digitsOnly(kelCode).padLeft(3, '0');
   _activeKecamatanCode = cleanKec;
   _activeKelurahanCode = cleanKel;
   _activeNopPrefix = '3205$cleanKec$cleanKel';
-  if (desaName != null && desaName.isNotEmpty) {
-    _activeDesaName = desaName.toUpperCase();
-  }
-  if (kecName != null && kecName.isNotEmpty) {
-    _activeKecamatanName = kecName.toUpperCase();
-  }
+  _activeDesaName = (desaName != null && desaName.trim().isNotEmpty)
+      ? desaName.trim().toUpperCase()
+      : lookupKelurahanName(cleanKel, kecamatanCode: cleanKec);
+  _activeKecamatanName = (kecName != null && kecName.trim().isNotEmpty)
+      ? kecName.trim().toUpperCase()
+      : lookupKecamatanName(cleanKec);
   activeWilayahRevision.value++;
 }
 
@@ -74,12 +81,12 @@ Future<void> saveActiveWilayah({
 }
 
 void resetNopPrefix() {
-  _activeNopPrefix = defaultNopPrefix;
-  _activeKecamatanCode = '200';
-  _activeKelurahanCode = '004';
-  _activeDesaName = 'BOBOJONG';
-  _activeKecamatanName = 'MANDE';
-  activeWilayahRevision.value++;
+  setActiveWilayah(
+    kecCode: '200',
+    kelCode: '004',
+    desaName: 'BOBOJONG',
+    kecName: 'MANDE',
+  );
 }
 
 /// Membaca konfigurasi wilayah yang tersimpan di SharedPreferences saat aplikasi dimulai.
@@ -127,7 +134,7 @@ const nopShortcutExamples = [
 /// - 7 digits: 3 for blok, 4 for nomor wilayah
 /// Anything else (including an already-complete 18-digit NOP) passes through unchanged.
 String expandNop(String rawInput, [String? prefix]) {
-  final digits = rawInput.replaceAll(RegExp(r'[^0-9]'), '');
+  final digits = _digitsOnly(rawInput);
   if (digits.length != 5 && digits.length != 6 && digits.length != 7) {
     return digits;
   }
@@ -135,10 +142,7 @@ String expandNop(String rawInput, [String? prefix]) {
   final blokLen = digits.length == 7 ? 3 : 2;
   final blok = digits.substring(0, blokLen).padLeft(3, '0');
   final wilayah = digits.substring(blokLen).padLeft(4, '0');
-  final effPrefix = (prefix != null && prefix.length == 10)
-      ? prefix
-      : nopPrefix;
-  return '$effPrefix$blok${wilayah}0';
+  return '${_effectivePrefix(prefix)}$blok${wilayah}0';
 }
 
 /// Menyusun NOP lengkap dari input blok & nomor wilayah terpisah (dipakai di
@@ -151,20 +155,14 @@ String buildNop({
   required String wilayah,
   String? prefix,
 }) {
-  final blokDigits = blok.replaceAll(RegExp(r'[^0-9]'), '');
-  final wilayahDigits = wilayah.replaceAll(RegExp(r'[^0-9]'), '');
+  final blokDigits = _digitsOnly(blok);
+  final wilayahDigits = _digitsOnly(wilayah);
   if (blokDigits.isEmpty || wilayahDigits.isEmpty) return '';
-  final effPrefix = (prefix != null && prefix.length == 10)
-      ? prefix
-      : nopPrefix;
-  return '$effPrefix${blokDigits.padLeft(3, '0')}${wilayahDigits.padLeft(4, '0')}0';
+  return '${_effectivePrefix(prefix)}${blokDigits.padLeft(3, '0')}${wilayahDigits.padLeft(4, '0')}0';
 }
 
 /// Memeriksa apakah input merupakan NOP 18 digit yang valid.
-bool isValidNop(String rawInput) {
-  final digits = rawInput.replaceAll(RegExp(r'[^0-9]'), '');
-  return digits.length == 18;
-}
+bool isValidNop(String rawInput) => _digitsOnly(rawInput).length == 18;
 
 /// Segmen Propinsi (2 digit pertama, mis. "32").
 String nopPropinsi(String fullNop) =>
@@ -194,36 +192,27 @@ String nopWilayah(String fullNop) =>
 /// Memformat 18 digit NOP menjadi format resmi standar Bapenda:
 /// 32.05.200.004.026-0038.0
 String formatNop(String nop) {
-  final d = nop.replaceAll(RegExp(r'[^0-9]'), '');
+  final d = _digitsOnly(nop);
   if (d.length != 18) return nop;
   return '${d.substring(0, 2)}.${d.substring(2, 4)}.${d.substring(4, 7)}.${d.substring(7, 10)}.${d.substring(10, 13)}-${d.substring(13, 17)}.${d.substring(17, 18)}';
 }
 
 /// Nama desa bawaan untuk Kecamatan Mande berdasarkan 3 digit kode kelurahan (001-012).
 String lookupMandeKelurahanName(String kelurahanCode) {
-  final clean = kelurahanCode.replaceAll(RegExp(r'[^0-9]'), '').padLeft(3, '0');
-  return switch (clean) {
-    '001' => 'MEKARJAYA',
-    '002' => 'SUKAMANAH',
-    '003' => 'KADEMANGAN',
-    '004' => 'BOBOJONG',
-    '005' => 'CIKIDANGBAYABANG',
-    '006' => 'MANDE',
-    '007' => 'MURNISARI',
-    '008' => 'MULYASARI',
-    '009' => 'JAMALI',
-    '010' => 'CIANDAM',
-    '011' => 'KUTAWARINGIN',
-    '012' => 'LEUWIKOJA',
-    _ => 'Desa $clean',
-  };
+  return lookupKelurahanName(kelurahanCode, kecamatanCode: '200');
 }
 
-/// Nama kecamatan bawaan untuk Kabupaten Cianjur berdasarkan 3 digit kode kecamatan (misal 200 -> MANDE).
+/// Nama desa/kelurahan untuk Kabupaten Cianjur berdasarkan 3 digit kode kelurahan dan opsional kode kecamatan.
+String lookupKelurahanName(String kelurahanCode, {String? kecamatanCode}) {
+  final cleanKel = _digitsOnly(kelurahanCode).padLeft(3, '0');
+  final cleanKec = _digitsOnly(
+    kecamatanCode ?? _activeKecamatanCode,
+  ).padLeft(3, '0');
+  return lookupCatalogDesaName(cleanKec, cleanKel);
+}
+
+/// Nama kecamatan untuk Kabupaten Cianjur berdasarkan 3 digit kode kecamatan (seluruh 32 kecamatan).
 String lookupKecamatanName(String kecamatanCode) {
-  final clean = kecamatanCode.replaceAll(RegExp(r'[^0-9]'), '').padLeft(3, '0');
-  return switch (clean) {
-    '200' => 'MANDE',
-    _ => 'Kecamatan $clean',
-  };
+  final clean = _digitsOnly(kecamatanCode).padLeft(3, '0');
+  return lookupCatalogKecamatanName(clean);
 }

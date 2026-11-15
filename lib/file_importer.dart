@@ -219,7 +219,7 @@ class FileImporter {
           ? rawKec
           : (nopDigits.length == 18
                 ? lookupKecamatanName(nopKecamatan(nopDigits))
-                : 'MANDE');
+                : activeKecamatanName);
 
       final rawKel =
           kelCol != -1 &&
@@ -230,8 +230,11 @@ class FileImporter {
       final kel = rawKel.isNotEmpty
           ? rawKel
           : (nopDigits.length == 18
-                ? lookupMandeKelurahanName(nopKelurahan(nopDigits))
-                : 'BOBOJONG');
+                ? lookupKelurahanName(
+                    nopKelurahan(nopDigits),
+                    kecamatanCode: nopKecamatan(nopDigits),
+                  )
+                : activeDesaName);
       final almtObj = almtObjCol != -1 && row.length > almtObjCol
           ? row[almtObjCol].toString().trim()
           : '';

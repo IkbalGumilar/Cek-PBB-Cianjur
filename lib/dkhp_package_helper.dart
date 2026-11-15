@@ -11,14 +11,63 @@ import 'backup_crypto.dart';
 import 'backup_password_store.dart';
 import 'blok_data_store.dart';
 import 'blok_record.dart';
+import 'cianjur_wilayah_data.dart';
 import 'dhkp/blok_csv_codec.dart';
 import 'dhkp/dhkp_crypto.dart';
 import 'dusun_data.dart';
 import 'map/kml_parser.dart';
 import 'map/map_pin_store.dart';
 import 'nop_helper.dart';
+import 'wilayah_kerja_store.dart';
 
 export 'dhkp/dhkp_crypto.dart';
+
+/// Informasi satu berkas `.dkhp` hasil pemecahan (Master Desa atau per Dusun).
+class SplitDkhpExportEntry {
+  final bool isMaster;
+  final int? dusunNumber;
+  final String label;
+  final File file;
+  final int recordCount;
+  final List<String> blokList;
+
+  const SplitDkhpExportEntry({
+    required this.isMaster,
+    this.dusunNumber,
+    required this.label,
+    required this.file,
+    required this.recordCount,
+    required this.blokList,
+  });
+}
+
+/// Hasil keseluruhan proses pemecahan (split) paket `.dkhp` terenkripsi per Kedusunan.
+class SplitDkhpExportResult {
+  final Directory outputDirectory;
+  final SplitDkhpExportEntry? masterEntry;
+  final List<SplitDkhpExportEntry> dusunEntries;
+  final int totalRecords;
+  final int assignedRecordCount;
+  final int unassignedRecordCount;
+  final List<String> unassignedBloks;
+
+  const SplitDkhpExportResult({
+    required this.outputDirectory,
+    this.masterEntry,
+    required this.dusunEntries,
+    required this.totalRecords,
+    required this.assignedRecordCount,
+    required this.unassignedRecordCount,
+    required this.unassignedBloks,
+  });
+
+  List<SplitDkhpExportEntry> get allEntries => [
+    ?masterEntry,
+    ...dusunEntries,
+  ];
+}
+
+
 
 /// Pengelola berkas paket `.dkhp` / `.dhkp` — format arsip terenkripsi khusus aplikasi Cek PBB Cianjur.
 ///
@@ -49,13 +98,25 @@ class DhkpPackageHelper {
         lower.endsWith('.zip');
   }
 
+  static String _digitsOnly(String value) =>
+      value.replaceAll(RegExp(r'[^0-9]'), '');
+
+  static Map<String, dynamic>? _decodeManifestEntry(ArchiveFile entry) {
+    try {
+      final text = utf8.decode(entry.content as List<int>);
+      final decoded = jsonDecode(text);
+      if (decoded is Map<String, dynamic>) return decoded;
+    } catch (_) {}
+    return null;
+  }
+
   /// Menghitung sidik jari (SHA-256 fingerprint) langsung dari daftar NOP di dalam berkas DHKP.
   /// Murni dihitung dari isi berkas DHKP (bukan ID perangkat/HP), sehingga tetap cocok 100%
   /// saat berpindah HP selama berkas DHKP dasarnya sama, dan otomatis menolak jika berkas DHKP berbeda.
   static String computeDhkpFingerprint(Iterable<BlokRecord> records) {
     final sortedNops =
         records
-            .map((r) => r.nop.replaceAll(RegExp(r'[^0-9]'), ''))
+            .map((r) => _digitsOnly(r.nop))
             .where((n) => n.length == 18)
             .toSet()
             .toList()
@@ -87,16 +148,45 @@ class DhkpPackageHelper {
     required String errorMsgOnNull,
   }) async {
     if (DhkpCrypto.isEncrypted(rawBytes)) {
-      final effectivePassword =
-          password ?? await BackupPasswordStore.instance.read();
-      final decrypted = await DhkpCrypto.decryptBytes(
-        rawBytes,
-        password: effectivePassword,
-      );
-      if (decrypted == null) {
-        throw FormatException(errorMsgOnNull);
+      if (DhkpCrypto.isLegacyCbcFormat(rawBytes)) {
+        final decrypted = await DhkpCrypto.decryptBytes(rawBytes);
+        if (decrypted == null) {
+          throw FormatException(errorMsgOnNull);
+        }
+        return decrypted;
       }
-      return decrypted;
+
+      final explicitPass = password?.trim();
+      if (explicitPass != null && explicitPass.isNotEmpty) {
+        final decrypted = await DhkpCrypto.decryptBytes(
+          rawBytes,
+          password: explicitPass,
+        );
+        if (decrypted == null) {
+          throw FormatException(errorMsgOnNull);
+        }
+        return decrypted;
+      }
+
+      final candidates = await BackupPasswordStore.instance
+          .readCandidateSecrets();
+      for (final secret in candidates) {
+        try {
+          final decrypted = await DhkpCrypto.decryptBytes(
+            rawBytes,
+            password: secret,
+          );
+          if (decrypted != null) {
+            return decrypted;
+          }
+        } on DkhpPasswordException {
+          continue;
+        }
+      }
+
+      throw const DkhpPasswordException(
+        'Kata sandi atau kunci pemulihan diperlukan untuk membuka backup ini.',
+      );
     }
 
     final cpbbDecrypted = BackupCrypto.tryDecrypt(
@@ -115,26 +205,16 @@ class DhkpPackageHelper {
     if (!await file.exists()) return null;
     try {
       final rawBytes = await file.readAsBytes();
-      Uint8List zipBytes;
-      if (DhkpCrypto.isEncrypted(rawBytes)) {
-        final effectivePass =
-            password ?? await BackupPasswordStore.instance.read();
-        final decrypted = await DhkpCrypto.decryptBytes(
-          rawBytes,
-          password: effectivePass,
-        );
-        if (decrypted == null) return null;
-        zipBytes = decrypted;
-      } else {
-        zipBytes = rawBytes;
-      }
+      final zipBytes = await _resolveArchiveZipBytes(
+        rawBytes,
+        password: password,
+        errorMsgOnNull: '',
+      );
       final archive = ZipDecoder().decodeBytes(zipBytes);
       for (final entry in archive.files) {
         if (!entry.isFile) continue;
         if (entry.name.toLowerCase().endsWith('manifest.json')) {
-          final text = utf8.decode(entry.content as List<int>);
-          final decoded = jsonDecode(text);
-          if (decoded is Map<String, dynamic>) return decoded;
+          return _decodeManifestEntry(entry);
         }
       }
     } catch (_) {}
@@ -170,13 +250,7 @@ class DhkpPackageHelper {
       if (!entry.isFile) continue;
       final nameLower = entry.name.toLowerCase();
       if (nameLower.endsWith('manifest.json')) {
-        try {
-          final text = utf8.decode(entry.content as List<int>);
-          final decoded = jsonDecode(text);
-          if (decoded is Map<String, dynamic>) {
-            manifest = decoded;
-          }
-        } catch (_) {}
+        manifest = _decodeManifestEntry(entry) ?? manifest;
       } else if (nameLower.endsWith('.csv')) {
         try {
           final content = utf8.decode(entry.content as List<int>);
@@ -359,28 +433,49 @@ class DhkpPackageHelper {
       }
     }
 
-    Map<String, dynamic>? manifest;
-    if (manifestFile != null) {
-      try {
-        final manifestContent = utf8.decode(manifestFile.content as List<int>);
-        final decoded = jsonDecode(manifestContent);
-        if (decoded is Map<String, dynamic>) {
-          manifest = decoded;
-        }
-      } catch (_) {}
-    }
+    final manifest = manifestFile != null
+        ? _decodeManifestEntry(manifestFile)
+        : null;
 
     final isDatReport =
         filePath.toLowerCase().endsWith('.dat') ||
         (manifest != null && manifest['format'] == 'laporan_dat_v1');
 
-    // Pengaturan dusun & scope hanya diterapkan untuk paket DHKP dasar (.dkhp).
+    final records = <BlokRecord>[];
+    final currentYear = '${DateTime.now().year}';
+
+    if (dataFile != null && dataFile.name.toLowerCase().endsWith('.csv')) {
+      final content = utf8.decode(dataFile.content as List<int>);
+      records.addAll(
+        BlokCsvCodec.decodeArchiveCsv(content, fallbackYear: currentYear),
+      );
+    }
+
+    // Validasi kecocokan berkas DHKP dasar sebelum mengekstrak foto & menerapkan perubahan
+    // (Termasuk sebelum memodifikasi konfigurasi dusun/wilayah aktif dari manifest)
+    final existingRecords = await BlokDataStore.instance.loadAll();
+    final isDeltaArchive =
+        manifest != null && (manifest['isDeltaOnly'] == true);
+
+    _validateArchiveCompatibility(
+      isDatReport: isDatReport,
+      requireBaseDhkp: requireBaseDhkp,
+      isDeltaArchive: isDeltaArchive,
+      records: records,
+      existingRecords: existingRecords,
+      manifest: manifest,
+    );
+
+    // Pengaturan dusun & scope hanya diterapkan untuk paket DHKP dasar (.dkhp)
+    // setelah validasi kompatibilitas berhasil dilalui.
     // Berkas laporan .dat TIDAK boleh menimpa scope/dusun pengguna aplikasi.
     if (!isDatReport && manifest != null) {
-      if (manifest['dusuns'] is List) {
-        final rawList = manifest['dusuns'] as List;
+      final rawDusunList = manifest['dusuns'] is List
+          ? manifest['dusuns'] as List
+          : (manifest['kadus'] is List ? manifest['kadus'] as List : null);
+      if (rawDusunList != null) {
         final parsedDusuns = <Dusun>[];
-        for (final item in rawList) {
+        for (final item in rawDusunList) {
           if (item is Map) {
             parsedDusuns.add(Dusun.fromJson(Map<String, dynamic>.from(item)));
           }
@@ -391,21 +486,30 @@ class DhkpPackageHelper {
       }
       if (manifest['scope'] is Map) {
         final scopeMap = Map<String, dynamic>.from(manifest['scope'] as Map);
-        await DusunData.instance.setScope(DusunScope.fromJson(scopeMap));
+        final parsedScope = DusunScope.fromJson(scopeMap);
+        await DusunData.instance.setScope(parsedScope);
+        if (parsedScope.isDusunScope && parsedScope.dusunNumber != null) {
+          await WilayahKerjaStore.instance.setSelectedDusun(
+            parsedScope.dusunNumber,
+          );
+          await WilayahKerjaStore.instance.markAsked();
+        }
       }
 
       // Sinkronisasi wilayah & NOP aktif dari manifest
       if (manifest['desa'] is Map) {
         final desaMap = manifest['desa'] as Map;
         final kecMap = manifest['kecamatan'] as Map?;
-        final kecCode = kecMap?['kode']?.toString() ?? '200';
-        final kelCode = desaMap['kode']?.toString() ?? '004';
+        final rawKecCode = kecMap?['kode']?.toString() ?? activeKecamatanCode;
+        final rawKelCode = desaMap['kode']?.toString() ?? activeKelurahanCode;
+        final kecCode = extractKecamatanCode3(rawKecCode);
+        final kelCode = extractKelurahanCode3(rawKelCode);
         final kecName = kecMap?['nama']?.toString();
         final desaName = desaMap['nama']?.toString();
 
         await saveActiveWilayah(
-          kecCode: kecCode,
-          kelCode: kelCode,
+          kecCode: kecCode.isNotEmpty ? kecCode : activeKecamatanCode,
+          kelCode: kelCode.isNotEmpty ? kelCode : activeKelurahanCode,
           desaName: desaName,
           kecName: kecName,
         );
@@ -431,44 +535,18 @@ class DhkpPackageHelper {
       }
     }
 
-    final records = <BlokRecord>[];
-    final currentYear = '${DateTime.now().year}';
-
-    if (dataFile != null && dataFile.name.toLowerCase().endsWith('.csv')) {
-      final content = utf8.decode(dataFile.content as List<int>);
-      records.addAll(
-        BlokCsvCodec.decodeArchiveCsv(content, fallbackYear: currentYear),
-      );
-    }
-
-    // Validasi kecocokan berkas DHKP dasar sebelum mengekstrak foto & menerapkan perubahan
-    final existingRecords = await BlokDataStore.instance.loadAll();
-    final isDeltaArchive =
-        manifest != null && (manifest['isDeltaOnly'] == true);
-
-    _validateArchiveCompatibility(
-      isDatReport: isDatReport,
-      requireBaseDhkp: requireBaseDhkp,
-      isDeltaArchive: isDeltaArchive,
-      records: records,
-      existingRecords: existingRecords,
-      manifest: manifest,
-    );
-
     // Indeks data lokal yang sudah ada:
     // 1. Berdasarkan NOP + tahunBayar (kunci unik pasti)
     // 2. Berdasarkan NOP saja (untuk rincian objek jika NOP baru pada tahun berjalan)
     final existingByKey = <String, BlokRecord>{
-      for (final r in existingRecords)
-        '${r.nop.replaceAll(RegExp(r'[^0-9]'), '')}|${r.tahunBayar}': r,
+      for (final r in existingRecords) '${_digitsOnly(r.nop)}|${r.tahunBayar}': r,
     };
     final existingByNopLatest = <String, BlokRecord>{
-      for (final r in existingRecords)
-        r.nop.replaceAll(RegExp(r'[^0-9]'), ''): r,
+      for (final r in existingRecords) _digitsOnly(r.nop): r,
     };
     final existingByBlokNomor = <String, BlokRecord>{
       for (final r in existingRecords)
-        '${r.blok.replaceAll(RegExp(r'[^0-9]'), '').padLeft(3, '0')}_${r.wilayah.replaceAll(RegExp(r'[^0-9]'), '').padLeft(4, '0')}':
+        '${_digitsOnly(r.blok).padLeft(3, '0')}_${_digitsOnly(r.wilayah).padLeft(4, '0')}':
             r,
     };
 
@@ -489,7 +567,7 @@ class DhkpPackageHelper {
     if (records.isEmpty && photoFiles.isNotEmpty) {
       for (final p in photoFiles) {
         final baseName = p.name.split('/').last;
-        final digits = baseName.replaceAll(RegExp(r'[^0-9]'), '');
+        final digits = _digitsOnly(baseName);
         if (digits.length == 18) {
           records.add(
             BlokRecord(
@@ -524,9 +602,9 @@ class DhkpPackageHelper {
     // - Jika NOP + Tahun sudah ada: cocokkan dan perbarui status/tanggal/foto/catatan
     // - Jika NOP sudah ada di tahun lain: gunakan rincian objek dari tahun lain, tapi buat baris baru untuk tahun ini
     // - Jika NOP belum ada sama sekali: tambahkan NOP baru ke database
-    final mergedRecords = <BlokRecord>[];
+    var mergedRecords = <BlokRecord>[];
     for (final r in records) {
-      final cleanNop = r.nop.replaceAll(RegExp(r'[^0-9]'), '');
+      final cleanNop = _digitsOnly(r.nop);
       final key = '$cleanNop|${r.tahunBayar}';
       final exactBase = existingByKey[key];
       final anyBase = existingByNopLatest[cleanNop];
@@ -545,13 +623,40 @@ class DhkpPackageHelper {
             isTargetPemda: r.isTargetPemda,
           ),
         );
+      } else if (exactBase != null) {
+        // Saat memuat berkas DHKP dasar baru, pertahankan catatan/foto lokal jika di arsip kosong
+        mergedRecords.add(
+          r.copyWith(
+            catatan: r.catatan.isNotEmpty ? r.catatan : exactBase.catatan,
+            namaFoto: (r.namaFoto != null && r.namaFoto!.isNotEmpty)
+                ? r.namaFoto
+                : exactBase.namaFoto,
+          ),
+        );
       } else {
         // NOP baru, tambahkan langsung
         mergedRecords.add(r);
       }
     }
 
-    if (mergedRecords.isNotEmpty) {
+    // Jika paket yang dibuka adalah DHKP dasar yang dikunci ke Dusun tertentu (hasil Split Dusun),
+    // saring hanya blok yang diizinkan oleh Dusun tersebut dan bersihkan data dusun lain.
+    final activeScope = DusunData.instance.scope;
+    if (!isDatReport &&
+        !isDeltaArchive &&
+        activeScope.isDusunScope &&
+        activeScope.allowedBloks.isNotEmpty) {
+      final allowedSet = activeScope.allowedBloks
+          .map((b) => _digitsOnly(b).padLeft(3, '0'))
+          .toSet();
+      mergedRecords = mergedRecords
+          .where((r) => allowedSet.contains(_digitsOnly(r.blok).padLeft(3, '0')))
+          .toList();
+      await BlokDataStore.instance.clearAll();
+      if (mergedRecords.isNotEmpty) {
+        await BlokDataStore.instance.upsertAll(mergedRecords);
+      }
+    } else if (mergedRecords.isNotEmpty) {
       await BlokDataStore.instance.upsertAll(mergedRecords);
     }
 
@@ -601,13 +706,55 @@ class DhkpPackageHelper {
       if (existingRecords.isNotEmpty && manifest != null) {
         final backupFingerprint =
             (manifest['dhkpFingerprint'] as String?)?.trim() ?? '';
+        final masterFingerprint =
+            (manifest['masterDhkpFingerprint'] as String?)?.trim() ?? '';
         final localFingerprint = computeDhkpFingerprint(existingRecords);
-        if (backupFingerprint.isNotEmpty &&
-            localFingerprint.isNotEmpty &&
-            localFingerprint != backupFingerprint) {
-          throw const DhkpBackupValidationException(
-            'Berkas cadangan ditolak: Data perubahan ini berasal dari berkas DHKP yang berbeda dengan data DHKP di aplikasi.',
-          );
+
+        if (backupFingerprint.isNotEmpty && localFingerprint.isNotEmpty) {
+          var isCompatible =
+              localFingerprint == backupFingerprint ||
+              (masterFingerprint.isNotEmpty &&
+                  localFingerprint == masterFingerprint);
+
+          // Cek kecocokan lintas Master Desa <-> Split Dusun:
+          // 1. Jika perangkat memegang Master Desa dan cadangan berasal dari salah satu Dusun
+          if (!isCompatible && manifest['scope'] is Map) {
+            final backupScope = DusunScope.fromJson(
+              Map<String, dynamic>.from(manifest['scope'] as Map),
+            );
+            if (backupScope.allowedBloks.isNotEmpty) {
+              final allowedSet = backupScope.allowedBloks
+                  .map((b) => _digitsOnly(b).padLeft(3, '0'))
+                  .toSet();
+              final scopedExisting = existingRecords
+                  .where(
+                    (r) =>
+                        allowedSet.contains(_digitsOnly(r.blok).padLeft(3, '0')),
+                  )
+                  .toList();
+              if (scopedExisting.isNotEmpty &&
+                  computeDhkpFingerprint(scopedExisting) == backupFingerprint) {
+                isCompatible = true;
+              }
+            }
+          }
+
+          // 2. Jika perangkat memegang salah satu Split Dusun dan cadangan memuat peta dusunFingerprints
+          if (!isCompatible && manifest['dusunFingerprints'] is Map) {
+            final fpMap = manifest['dusunFingerprints'] as Map;
+            for (final val in fpMap.values) {
+              if (val?.toString().trim() == localFingerprint) {
+                isCompatible = true;
+                break;
+              }
+            }
+          }
+
+          if (!isCompatible) {
+            throw const DhkpBackupValidationException(
+              'Berkas cadangan ditolak: Data perubahan ini berasal dari berkas DHKP yang berbeda dengan data DHKP di aplikasi.',
+            );
+          }
         }
       }
     }
@@ -623,18 +770,9 @@ class DhkpPackageHelper {
     final records = <BlokRecord>[];
     for (final item in changesList) {
       if (item is! Map) continue;
-      final rawBlok = (item['blok'] ?? '').toString().trim().replaceAll(
-        RegExp(r'[^0-9]'),
-        '',
-      );
-      final rawNomor = (item['nomor'] ?? '').toString().trim().replaceAll(
-        RegExp(r'[^0-9]'),
-        '',
-      );
-      final rawNop = (item['nop'] ?? '').toString().trim().replaceAll(
-        RegExp(r'[^0-9]'),
-        '',
-      );
+      final rawBlok = _digitsOnly((item['blok'] ?? '').toString());
+      final rawNomor = _digitsOnly((item['nomor'] ?? '').toString());
+      final rawNop = _digitsOnly((item['nop'] ?? '').toString());
 
       BlokRecord? baseRecord;
       if (rawBlok.isNotEmpty && rawNomor.isNotEmpty) {
@@ -676,10 +814,7 @@ class DhkpPackageHelper {
           rawBlok.isNotEmpty &&
           rawNomor.isNotEmpty &&
           existingRecords.isNotEmpty) {
-        final sampleNop = existingRecords.first.nop.replaceAll(
-          RegExp(r'[^0-9]'),
-          '',
-        );
+        final sampleNop = _digitsOnly(existingRecords.first.nop);
         if (sampleNop.length == 18) {
           final prefix = sampleNop.substring(0, 10);
           final suffix = sampleNop.substring(17);
@@ -756,6 +891,15 @@ class DhkpPackageHelper {
     List<Dusun>? dusuns,
     DusunScope? scope,
     List<MapPinEntry>? mapPins,
+    String? kecamatanCode,
+    String? kecamatanName,
+    String? kelurahanCode,
+    String? desaName,
+    double? kantorDesaLat,
+    double? kantorDesaLng,
+    String? tahunPajak,
+    String? masterDhkpFingerprint,
+    Map<String, String>? dusunFingerprints,
   }) async {
     final archive = Archive();
     final isDatReport = outputPath.toLowerCase().endsWith('.dat');
@@ -766,15 +910,82 @@ class DhkpPackageHelper {
         ? changedList
         : records;
 
+    final rawKecCode =
+        (kecamatanCode != null && kecamatanCode.trim().isNotEmpty)
+        ? kecamatanCode.trim()
+        : (activeKecamatanCode.isNotEmpty ? activeKecamatanCode : '200');
+    final kecCode3 = extractKecamatanCode3(rawKecCode).isNotEmpty
+        ? extractKecamatanCode3(rawKecCode)
+        : '200';
+    final resolvedKecName =
+        (kecamatanName != null && kecamatanName.trim().isNotEmpty)
+        ? kecamatanName.trim().toUpperCase()
+        : (activeKecamatanName.isNotEmpty
+              ? activeKecamatanName
+              : lookupKecamatanName(kecCode3));
+
+    final rawKelCode =
+        (kelurahanCode != null && kelurahanCode.trim().isNotEmpty)
+        ? kelurahanCode.trim()
+        : (activeKelurahanCode.isNotEmpty ? activeKelurahanCode : '004');
+    final kelCode3 = extractKelurahanCode3(rawKelCode).isNotEmpty
+        ? extractKelurahanCode3(rawKelCode)
+        : '004';
+    final resolvedDesaName = (desaName != null && desaName.trim().isNotEmpty)
+        ? desaName.trim().toUpperCase()
+        : (activeDesaName.isNotEmpty
+              ? activeDesaName
+              : lookupKelurahanName(kelCode3, kecamatanCode: kecCode3));
+
+    final effectiveTahun = (tahunPajak != null && tahunPajak.trim().isNotEmpty)
+        ? tahunPajak.trim()
+        : (records.isNotEmpty && records.first.tahunBayar.trim().isNotEmpty
+              ? records.first.tahunBayar.trim()
+              : '${DateTime.now().year}');
+
     // 1. Buat manifest.json
-    if (effectiveBase.isNotEmpty || isDatReport) {
+    if (effectiveBase.isNotEmpty || isDatReport || (dusuns?.isNotEmpty ?? false)) {
       final effectiveDusuns = dusuns ?? DusunData.instance.allDusuns;
       final effectiveScope = scope ?? DusunData.instance.scope;
+      final kantorLat =
+          kantorDesaLat ?? DusunData.instance.kantorDesaLat ?? -6.763587;
+      final kantorLng =
+          kantorDesaLng ?? DusunData.instance.kantorDesaLng ?? 107.238769;
+      final kantorDesaMap = <String, dynamic>{
+        'nama': 'Kantor Desa $resolvedDesaName',
+        'lat': kantorLat,
+        'lng': kantorLng,
+        'zoom_fokus': 17.5,
+      };
+
+      double pusatLat = kantorLat;
+      double pusatLng = kantorLng;
+      double pusatZoom = 14.5;
+      if (effectiveScope.isDusunScope && effectiveScope.dusunNumber != null) {
+        for (final d in effectiveDusuns) {
+          if (d.number == effectiveScope.dusunNumber &&
+              d.focusLat != null &&
+              d.focusLng != null) {
+            pusatLat = d.focusLat!;
+            pusatLng = d.focusLng!;
+            pusatZoom = d.focusZoom ?? 16.0;
+            break;
+          }
+        }
+      }
+
+      final dusunJsonList = effectiveDusuns.map((d) => d.toJson()).toList();
       final manifestMap = <String, dynamic>{
         'format': isDatReport ? 'laporan_dat_v1' : 'dhkp_delta_v1',
         'versi_manifest': '2.0',
+        'tahun': effectiveTahun,
+        'tahun_pajak': effectiveTahun,
         'isDeltaOnly': deltaOnly,
         'dhkpFingerprint': dhkpFingerprint,
+        'masterDhkpFingerprint':
+            masterDhkpFingerprint ?? dhkpFingerprint,
+        if (dusunFingerprints != null && dusunFingerprints.isNotEmpty)
+          'dusunFingerprints': dusunFingerprints,
         'baseTotalNop': effectiveBase.length,
         'changedCount': changedList.length,
         'timestamp': DateTime.now().millisecondsSinceEpoch,
@@ -783,34 +994,29 @@ class DhkpPackageHelper {
           'nama': 'CIANJUR',
           'provinsi': 'JAWA BARAT',
         },
-        'kecamatan': {'kode': '200', 'nama': 'MANDE'},
+        'kecamatan': {
+          'kode': kecCode3,
+          'kode_vtax': '3205$kecCode3',
+          'nama': resolvedKecName,
+        },
         'desa': {
-          'kode': '004',
-          'nama': 'BOBOJONG',
-          'prefix_nop': '3205200004',
-          'kantor_desa': {
-            'nama': 'Kantor Desa Bobojong',
-            'lat': -6.763587,
-            'lng': 107.238769,
-            'zoom_fokus': 17.5,
-          },
+          'kode': kelCode3,
+          'kode_vtax': '3205$kecCode3$kelCode3',
+          'nama': resolvedDesaName,
+          'prefix_nop': '3205$kecCode3$kelCode3',
+          'kantor_desa': kantorDesaMap,
         },
         'geospasial': {
           'pusat_peta': {
-            'lat': -6.7535737,
-            'lng': 107.260056,
-            'zoom_awal': 14.5,
+            'lat': pusatLat,
+            'lng': pusatLng,
+            'zoom_awal': pusatZoom,
           },
-          'kantor_desa': {
-            'nama': 'Kantor Desa Bobojong',
-            'lat': -6.763587,
-            'lng': 107.238769,
-            'zoom_fokus': 17.5,
-          },
+          'kantor_desa': kantorDesaMap,
         },
-        if (effectiveDusuns.isNotEmpty) ...{
-          'dusuns': effectiveDusuns.map((d) => d.toJson()).toList(),
-          'kadus': effectiveDusuns.map((d) => d.toJson()).toList(),
+        if (dusunJsonList.isNotEmpty) ...{
+          'dusuns': dusunJsonList,
+          'kadus': dusunJsonList,
         },
         'scope': effectiveScope.toJson(),
         'changes': [
@@ -874,7 +1080,10 @@ class DhkpPackageHelper {
       );
       if (groupedDots.isNotEmpty) {
         final kmlBytes = utf8.encode(
-          KmlParser.exportToKml(villageName: activeDesaName, dots: groupedDots),
+          KmlParser.exportToKml(
+            villageName: resolvedDesaName,
+            dots: groupedDots,
+          ),
         );
         archive.addFile(ArchiveFile('map_pins.kml', kmlBytes.length, kmlBytes));
       }
@@ -885,21 +1094,261 @@ class DhkpPackageHelper {
       throw Exception('Gagal mengompresi data ke arsip ZIP.');
     }
 
-    final explicitPassword = password?.trim();
     final Uint8List outputBytes;
     if (!encrypt) {
       outputBytes = Uint8List.fromList(zipBytes);
-    } else if (explicitPassword != null && explicitPassword.length >= 8) {
+    } else {
+      final explicitPassword = password?.trim();
+      final effectivePassword =
+          (explicitPassword != null && explicitPassword.isNotEmpty)
+          ? explicitPassword
+          : await BackupPasswordStore.instance.getOrCreateActiveSecret();
       outputBytes = await DhkpCrypto.encryptBytes(
         Uint8List.fromList(zipBytes),
-        password: explicitPassword,
+        password: effectivePassword,
       );
-    } else {
-      outputBytes = DhkpCrypto.encryptLegacyBytes(Uint8List.fromList(zipBytes));
     }
 
     final file = File(outputPath);
     file.writeAsBytesSync(outputBytes);
     return file;
   }
+
+  static String _sanitizeFileSegment(String raw) {
+    final cleaned = raw
+        .trim()
+        .replaceAll(RegExp(r'[^a-zA-Z0-9_\-]+'), '_')
+        .replaceAll(RegExp(r'_+'), '_')
+        .replaceAll(RegExp(r'^_|_$'), '');
+    return cleaned.isEmpty ? 'DESA' : cleaned;
+  }
+
+  /// Memecah (split) data DHKP menjadi beberapa berkas `.dkhp` terenkripsi (`DKH2` `AES-256-GCM`)
+  /// sesuai jumlah Kedusunan di dalam manifest/konfigurasi (misal: 3 Dusun -> 3 berkas Dusun,
+  /// atau Desa Bobojong 5 Dusun -> 5 berkas Dusun, ditambah opsional 1 berkas Master Desa).
+  ///
+  /// Setiap berkas Dusun hanya berisi baris `BlokRecord` untuk blok-blok pada Dusun tersebut,
+  /// serta `manifest.json` lengkap dengan `scope: { role: 'dusun', dusunNumber, dusunName, allowedBloks }`.
+  static Future<SplitDkhpExportResult> packSplitDkhpByDusun({
+    required Directory outputDirectory,
+    required List<BlokRecord> records,
+    required List<Dusun> dusuns,
+    String? kecamatanCode,
+    String? kecamatanName,
+    String? kelurahanCode,
+    String? desaName,
+    double? kantorDesaLat,
+    double? kantorDesaLng,
+    String? tahunPajak,
+    String? password,
+    bool includeMasterDesa = true,
+    bool includePhotos = true,
+    Directory? photosDir,
+    List<MapPinEntry>? mapPins,
+  }) async {
+    if (dusuns.isEmpty) {
+      throw ArgumentError(
+        'Daftar dusun tidak boleh kosong saat memecah (split) berkas .dkhp.',
+      );
+    }
+    final pwdError = DhkpCrypto.validateOptionalPassword(password);
+    if (pwdError != null) {
+      throw FormatException(pwdError);
+    }
+    if (!await outputDirectory.exists()) {
+      await outputDirectory.create(recursive: true);
+    }
+
+    final rawKecCode =
+        (kecamatanCode != null && kecamatanCode.trim().isNotEmpty)
+        ? kecamatanCode.trim()
+        : (activeKecamatanCode.isNotEmpty ? activeKecamatanCode : '200');
+    final kecCode3 = extractKecamatanCode3(rawKecCode).isNotEmpty
+        ? extractKecamatanCode3(rawKecCode)
+        : '200';
+    final resolvedKecName =
+        (kecamatanName != null && kecamatanName.trim().isNotEmpty)
+        ? kecamatanName.trim().toUpperCase()
+        : (activeKecamatanName.isNotEmpty
+              ? activeKecamatanName
+              : lookupKecamatanName(kecCode3));
+
+    final rawKelCode =
+        (kelurahanCode != null && kelurahanCode.trim().isNotEmpty)
+        ? kelurahanCode.trim()
+        : (activeKelurahanCode.isNotEmpty ? activeKelurahanCode : '004');
+    final kelCode3 = extractKelurahanCode3(rawKelCode).isNotEmpty
+        ? extractKelurahanCode3(rawKelCode)
+        : '004';
+    final resolvedDesaName = (desaName != null && desaName.trim().isNotEmpty)
+        ? desaName.trim().toUpperCase()
+        : (activeDesaName.isNotEmpty
+              ? activeDesaName
+              : lookupKelurahanName(kelCode3, kecamatanCode: kecCode3));
+
+    final effectiveTahun = (tahunPajak != null && tahunPajak.trim().isNotEmpty)
+        ? tahunPajak.trim()
+        : (records.isNotEmpty && records.first.tahunBayar.trim().isNotEmpty
+              ? records.first.tahunBayar.trim()
+              : '${DateTime.now().year}');
+
+    final safeDesa = _sanitizeFileSegment(resolvedDesaName);
+    final safeTahun = _sanitizeFileSegment(effectiveTahun);
+    final allPins = mapPins ?? await MapPinStore.instance.loadAll();
+
+    // Hitung fingerprint Master Desa dan masing-masing Dusun agar kompatibilitas dua arah terjamin.
+    final masterFingerprint = computeDhkpFingerprint(records);
+    final dusunFingerprints = <String, String>{};
+    final dusunRecordsByNumber = <int, List<BlokRecord>>{};
+    final dusunBloksByNumber = <int, List<String>>{};
+    final allAssignedBloks = <String>{};
+
+    for (final d in dusuns) {
+      final normalizedBloks =
+          d.bloks
+              .map((b) => _digitsOnly(b))
+              .where((b) => b.isNotEmpty)
+              .map((b) => b.padLeft(3, '0'))
+              .toSet()
+              .toList()
+            ..sort();
+      final blokSet = normalizedBloks.toSet();
+      allAssignedBloks.addAll(blokSet);
+
+      final filtered = records
+          .where((r) => blokSet.contains(_digitsOnly(r.blok).padLeft(3, '0')))
+          .toList();
+      dusunRecordsByNumber[d.number] = filtered;
+      dusunBloksByNumber[d.number] = normalizedBloks;
+      dusunFingerprints['${d.number}'] = computeDhkpFingerprint(filtered);
+    }
+
+    SplitDkhpExportEntry? masterEntry;
+    if (includeMasterDesa) {
+      final masterFileName = 'DHKP_MASTER_${safeDesa}_$safeTahun.dkhp';
+      final masterPath =
+          '${outputDirectory.path}${Platform.pathSeparator}$masterFileName';
+      final allBlokSet =
+          records
+              .map((r) => _digitsOnly(r.blok))
+              .where((b) => b.isNotEmpty)
+              .map((b) => b.padLeft(3, '0'))
+              .toSet()
+              .toList()
+            ..sort();
+      final masterFile = await packDkhp(
+        outputPath: masterPath,
+        records: records,
+        baseRecords: records,
+        photosDir: photosDir,
+        encrypt: true,
+        includePhotos: includePhotos,
+        deltaOnly: false,
+        password: password,
+        dusuns: dusuns,
+        scope: const DusunScope(role: 'desa'),
+        mapPins: allPins,
+        kecamatanCode: kecCode3,
+        kecamatanName: resolvedKecName,
+        kelurahanCode: kelCode3,
+        desaName: resolvedDesaName,
+        kantorDesaLat: kantorDesaLat,
+        kantorDesaLng: kantorDesaLng,
+        tahunPajak: effectiveTahun,
+        masterDhkpFingerprint: masterFingerprint,
+        dusunFingerprints: dusunFingerprints,
+      );
+      masterEntry = SplitDkhpExportEntry(
+        isMaster: true,
+        label: 'Master Desa $resolvedDesaName',
+        file: masterFile,
+        recordCount: records.length,
+        blokList: allBlokSet,
+      );
+    }
+
+    final dusunEntries = <SplitDkhpExportEntry>[];
+    var assignedCount = 0;
+
+    for (final d in dusuns) {
+      final filteredRecords = dusunRecordsByNumber[d.number] ?? const [];
+      final normalizedBloks = dusunBloksByNumber[d.number] ?? const [];
+      final blokSet = normalizedBloks.toSet();
+      assignedCount += filteredRecords.length;
+
+      final filteredPins = allPins
+          .where((p) => blokSet.contains(nopBlok(_digitsOnly(p.nop))))
+          .toList();
+
+
+      final safeDusunName = _sanitizeFileSegment(d.name);
+      final dusunFileName =
+          'DHKP_${safeDesa}_Dusun_${d.number}_${safeDusunName}_$safeTahun.dkhp';
+      final dusunPath =
+          '${outputDirectory.path}${Platform.pathSeparator}$dusunFileName';
+
+      final dusunScope = DusunScope(
+        role: 'dusun',
+        dusunNumber: d.number,
+        dusunName: d.name,
+        allowedBloks: normalizedBloks,
+      );
+
+      final dusunFile = await packDkhp(
+        outputPath: dusunPath,
+        records: filteredRecords,
+        baseRecords: filteredRecords,
+        photosDir: photosDir,
+        encrypt: true,
+        includePhotos: includePhotos,
+        deltaOnly: false,
+        password: password,
+        dusuns: dusuns,
+        scope: dusunScope,
+        mapPins: filteredPins,
+        kecamatanCode: kecCode3,
+        kecamatanName: resolvedKecName,
+        kelurahanCode: kelCode3,
+        desaName: resolvedDesaName,
+        kantorDesaLat: kantorDesaLat,
+        kantorDesaLng: kantorDesaLng,
+        tahunPajak: effectiveTahun,
+        masterDhkpFingerprint: masterFingerprint,
+        dusunFingerprints: dusunFingerprints,
+      );
+
+      dusunEntries.add(
+        SplitDkhpExportEntry(
+          isMaster: false,
+          dusunNumber: d.number,
+          label: d.name,
+          file: dusunFile,
+          recordCount: filteredRecords.length,
+          blokList: normalizedBloks,
+        ),
+      );
+    }
+
+    final unassignedBlokSet = <String>{};
+    var unassignedCount = 0;
+    for (final r in records) {
+      final b = _digitsOnly(r.blok).padLeft(3, '0');
+      if (!allAssignedBloks.contains(b)) {
+        unassignedCount++;
+        unassignedBlokSet.add(b);
+      }
+    }
+    final unassignedBloks = unassignedBlokSet.toList()..sort();
+
+    return SplitDkhpExportResult(
+      outputDirectory: outputDirectory,
+      masterEntry: masterEntry,
+      dusunEntries: dusunEntries,
+      totalRecords: records.length,
+      assignedRecordCount: assignedCount,
+      unassignedRecordCount: unassignedCount,
+      unassignedBloks: unassignedBloks,
+    );
+  }
 }
+

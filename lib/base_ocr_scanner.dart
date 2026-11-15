@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -35,8 +36,16 @@ abstract class BaseOcrScanner<T> {
         InputImage.fromFilePath(image.path),
       );
       return await parseRecognizedText(image, recognizedText);
+    } on MissingPluginException {
+      throw UnsupportedError(
+        'Fitur pemindaian teks otomatis (OCR) hanya tersedia pada perangkat Android dan iOS.',
+      );
     } finally {
-      await recognizer.close();
+      try {
+        await recognizer.close();
+      } on MissingPluginException {
+        // Abaikan jika plugin native MLKit tidak tersedia di platform desktop
+      }
     }
   }
 

@@ -69,9 +69,10 @@ void main() {
       expect(lookupMandeKelurahanName('999'), 'Desa 999');
     });
 
-    test('lookupKecamatanName maps 200 to MANDE', () {
+    test('lookupKecamatanName maps 200 to MANDE and 010 to AGRABINTA', () {
       expect(lookupKecamatanName('200'), 'MANDE');
-      expect(lookupKecamatanName('010'), 'Kecamatan 010');
+      expect(lookupKecamatanName('010'), 'AGRABINTA');
+      expect(lookupKecamatanName('999'), 'Kecamatan 999');
     });
 
     test(

@@ -4,6 +4,38 @@ Dokumentasi perubahan, peningkatan, dan perbaikan pada setiap rilis aplikasi. Fo
 
 ---
 
+## [v0.1.7-beta] - 2026-11-15
+
+### ✨ Ditingkatkan & Fitur Baru
+- **Desain Responsif & Sistem Gerak (`AppDesignSystem` + `AppMotion`)**: Penambahan sistem breakpoint (`Mobile < 600dp`, `Tablet 600–1023dp`, `Desktop >= 1024dp`), `AppSemanticColors` aman Dark/AMOLED `#000000`, `AppCollapsibleFilterSection` untuk filter lipat mobile, perbaikan tata letak `360dp`, serta animasi `Lerp` dengan dukungan *Reduced Motion*.
+- **Generate DHKP Universal & Pecah Paket per Kedusunan (`DKH2`)**: Penambahan `DhkpPackageHelper.packSplitDkhpByDusun` (pemecahan paket `.dkhp` terenkripsi per dusun + Master Desa), resolusi dinamis 32 kecamatan / 337 desa (`CianjurWilayahData`, `NopHelper`), muat konfigurasi dari `manifest.json`, dan sinkronisasi menyeluruh lingkup dusun (`StaffDhkpSyncService`).
+- **Validasi Kata Sandi Enkripsi Minimal 8 Karakter**: Pemberitahuan syarat minimal 8 karakter sejak awal pada `StaffDhkpGenerateDialog` & `DhkpCrypto.validateOptionalPassword`, memfokuskan kolom sandi dan memblokir proses sebelum memanggil Portal Staf atau menimpa data lokal.
+- **Analitik Grafik Multi-Entitas & Pin Peta GIS**: Penambahan *Semi-Circular Gauge*, *Mini Sparkline*, tren bulanan per Dusun / Blok / Desa dalam 1 kecamatan / lintas tahun (`DhkpGrafikView`, `DhkpGrafikAnalytics`), serta manajemen pin koordinat `MapPinStore` & `MapNopPickerDialog` dengan ekspor/impor KML.
+- **Keamanan Berlapis & Siklus Hidup Widget**: Enkripsi v2 log sinkronisasi perubahan `.bin` (`CPBB` AES-256-GCM + AAD), isolasi penuh kredensial/hash di `FlutterSecureStorage` (`android:allowBackup="false"`), *exponential backoff lockout* persisten, sanitasi *formula injection* ekspor CSV/XLSX (`BaseTableExporter`, `BlokCsvCodec.encodeReportCsv`), *XML/CDATA escaping* pada KML, pencegahan *open redirect* (`StaffPortalClient`), endpoint geolokasi HTTPS (`LocationService`), pengamanan OAuth loopback (`GoogleAuthService`), serta verifikasi **SHA-256 + magic bytes header + directory confinement** pada *self-updater*.
+- **Build Rilis Ramping, Dokumentasi Desktop, & Panduan Windows**: Penambahan 58 galeri tangkapan layar Desktop berdampingan dengan Mobile di `README.md`, pembuatan `BUILD_WINDOWS.md`, skrip sinkronisasi plugin dinamis `tool/sync_windows_plugins.dart`, serta aktivasi `--obfuscate --split-debug-info --tree-shake-icons` + *strip* biner.
+
+### 🔄 Diubah
+- Versi aplikasi dinaikkan dari `0.1.6-beta` menjadi `0.1.7-beta+13` (`pubspec.yaml`, `windows/installer.iss`, `tool/build_windows.bat`).
+- Pembatasan eksplisit daftar aset di `pubspec.yaml` (19 `.webp` panduan dan 5 `.geojson` peta yang aktif direferensikan).
+- Skrip `tool/build_windows.bat`, `windows/installer.iss`, dan `.github/workflows/build-windows.yml` diperbarui untuk memisahkan simbol debug dan menyaring residu `.pdb`/`.ilk`/`.exp`/`.lib`/`.obj`/`kernel_blob.bin`.
+
+### 🗑️ Dihapus
+- Dependensi tak terpakai di `pubspec.yaml`: `cupertino_icons` (termasuk font `CupertinoIcons.ttf`) dan `timezone`.
+- Kode Dart mati: `lib/captcha_ocr_helper.dart` dan `lib/wilayah_kerja_picker.dart`.
+- 3 aset `.webp` panduan dan 3 berkas `.geojson` tak terpakai dari bundel aplikasi di `pubspec.yaml`.
+- Default wilayah palsu `'MANDE'`/`'BOBOJONG'` di `BlokCsvCodec`, penyalinan rahasia teks biasa di `SharedPreferences`, kunci statis enkripsi baru delta v2, hardcode `Z:\` di skrip Windows, serta `262M+` cache mati workspace (`windows/flutter/ephemeral_old/`, `ephemeral_trash/`, `tool/__pycache__/`).
+
+---
+
+## [v0.1.6-beta] - 2026-11-11
+
+### 🚀 Fitur Baru & Peningkatan
+- **Sinkronisasi Penuh Portal Staf & Auto-Sync Kelola Anggota**: Sinkronisasi status lunas/belum lunas dengan akurasi V-Tax (2 angka desimal realisasi) serta auto-sync satu kali ketika membuka `KelolaAnggotaScreen`.
+- **Perombakan Pembaca PDF ala Google PDF / Camelot & Cetak Terpadu**: Lapisan teks transparan untuk seleksi/salin NOP 18-digit (`DocumentPreviewScreen`), *fast-scroll scrubber*, zoom fokus sentuh, serta tombol cetak langsung terpadu pada pratinjau dokumen, kolase foto, tabel monitoring, dan kartu hasil cek.
+- **Generator DHKP Portal Staf & Modul Kalkulator/Pacing**: Penambahan `StaffDhkpGenerateService`/`Dialog`, `DhkpNopKalkulatorDialog`, dan `DhkpTargetPacingDialog`.
+
+---
+
 ## [v0.1.5-beta] - 2026-11-08
 
 ### 🗺️ Peta Spasial DHKP Dinamis (Interactive GIS & Tax Polygon)

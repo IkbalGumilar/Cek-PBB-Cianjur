@@ -22,8 +22,16 @@ import 'document_preview_screen.dart';
 import 'download_helper.dart';
 import 'dusun_data.dart';
 import 'native_file_helper.dart';
+import 'nop_helper.dart'
+    show
+        lookupKecamatanName,
+        lookupKelurahanName,
+        nopKecamatan,
+        nopKelurahan;
 import 'feature_tour/feature_tour.dart';
 import 'tagihan_result.dart' show formatRupiah;
+import 'ui/app_design_system.dart';
+import 'unity_lerp_widgets.dart' show UnityAnimationCurve, unityLerp;
 
 export 'dhkp/dhkp_grafik_analytics.dart';
 
@@ -56,21 +64,32 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
   static const _prefKeyTab = 'dhkp_grafik_active_tab';
   static const _prefKeyStyle = 'dhkp_grafik_chart_style';
   static const _prefKeySort = 'dhkp_grafik_sort_mode';
-  static const _prefKeyGroupByDusun = 'dhkp_grafik_group_by_dusun';
+  static const _prefKeySeDesa = 'dhkp_grafik_se_desa_mode';
   static const _prefKeyCollapsed = 'dhkp_grafik_collapsed_sections';
   static const _prefKeyFitColumnBars = 'dhkp_grafik_fit_column_bars';
+
+  static const _maxCustomDesas = 5;
 
   // Default: Data = Jumlah Persentase, Diagram = Batang, Desa = Semua Dusun
   DhkpGrafikTab _activeTab = DhkpGrafikTab.persentase;
   ChartStyle _selectedStyle = ChartStyle.batang;
   GrafikSortMode _sortMode = GrafikSortMode.wilayah;
-  bool _groupByDusun = true;
+  bool _seDesaMode = false;
 
   /// Mode diagram batang: true = Pas Layar (dirapatkan muat semua blok), false = Bisa Digeser
   bool _fitColumnBars = true;
 
   /// Drill-down khusus ketika pengguna mengeklik salah satu Dusun dari grafik
   int? _drillDownDusun;
+
+  /// Drill-down khusus ketika data mencakup multi-desa dalam 1 kecamatan
+  String? _selectedDesaCode;
+
+  /// Satu tahun pembanding aktif pada tab Tren (khusus 1 entitas tunggal vs 1 tahun lain)
+  String? _compareYear;
+
+  /// Pilihan manual desa pembanding dalam 1 kecamatan (maks 5 desa)
+  final Set<String> _customCompareDesas = {};
 
   /// Filter tahun aktif khusus di dalam tampilan grafik (default ke data terbaru)
   late String _selectedTahun;
@@ -92,6 +111,8 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
 
   late AnimationController _animController;
   late Animation<double> _animation;
+  bool _didInitialAnimate = false;
+  bool _isCapturingExport = false;
 
   @override
   void initState() {
@@ -110,15 +131,14 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
             : '${DateTime.now().year}');
     _animController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 600),
+      duration: const Duration(milliseconds: 1500),
     );
     _animation = CurvedAnimation(
       parent: _animController,
-      curve: Curves.easeOutCubic,
+      curve: const UnityAnimationCurve(),
     );
     if (widget.selectedWilayah != null) {
       _drillDownDusun = widget.selectedWilayah;
-      _groupByDusun = false;
     }
     if (widget.selectedBlok != null) {
       _selectedItemLabel =
@@ -127,13 +147,38 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
     widget.onRegisterShowTour?.call(showTour);
     widget.onRegisterPrintShortcut?.call(printCurrentSelection);
     _loadSavedPreferences();
-    _animController.forward();
     DhkpWidgetSyncService.syncFromRecords(widget.records);
     FeatureTourController.startTourIfNeeded(
       context: context,
       tourId: 'dhkp_grafik_view',
       steps: _buildTourSteps(),
     );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final reducedMotion = AppMotion.isReducedMotion(context);
+    _animController.duration = reducedMotion
+        ? Duration.zero
+        : const Duration(milliseconds: 1500);
+    if (!_didInitialAnimate) {
+      _didInitialAnimate = true;
+      _replayAnimation();
+    } else if (reducedMotion && _animController.value < 1.0) {
+      _animController.value = 1.0;
+    }
+  }
+
+  void _replayAnimation() {
+    if (!mounted) return;
+    if (AppMotion.isReducedMotion(context)) {
+      _animController.duration = Duration.zero;
+      _animController.value = 1.0;
+    } else {
+      _animController.duration = const Duration(milliseconds: 1500);
+      _animController.forward(from: 0.0);
+    }
   }
 
   void showTour() {
@@ -165,9 +210,9 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
         title: 'Pilihan Cakupan Wilayah Cepat',
         description:
             'Atur wilayah mana yang ingin ditampilkan pada grafik:\n'
+            '• Se-Desa: Menggabungkan capaian seluruh wilayah desa menjadi satu.\n'
             '• Semua Dusun: Membandingkan capaian antar dusun se-desa.\n'
-            '• Semua Blok: Membandingkan seluruh blok dari semua dusun sekaligus.\n'
-            '• Dusun 1, 2, 3, dst.: Melihat rincian blok khusus di dalam dusun tersebut saja.',
+            '• Dusun 1, 2, 3, dst.: Melihat rincian per blok khusus di dalam dusun tersebut.',
         actionHint:
             'Anda juga bisa mengetuk batang dusun langsung pada grafik untuk melihat blok-blok di dalamnya.',
         icon: Icons.place_outlined,
@@ -209,7 +254,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
       final savedTabName = prefs.getString(_prefKeyTab);
       final savedStyleName = prefs.getString(_prefKeyStyle);
       final savedSortName = prefs.getString(_prefKeySort);
-      final savedGroupByDusun = prefs.getBool(_prefKeyGroupByDusun);
+      final savedSeDesa = prefs.getBool(_prefKeySeDesa);
       final savedCollapsed = prefs.getStringList(_prefKeyCollapsed);
       final savedFitColumnBars = prefs.getBool(_prefKeyFitColumnBars);
 
@@ -239,8 +284,8 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
             }
           }
         }
-        if (savedGroupByDusun != null) {
-          _groupByDusun = savedGroupByDusun;
+        if (widget.selectedWilayah == null && savedSeDesa != null) {
+          _seDesaMode = savedSeDesa;
         }
         if (savedCollapsed != null) {
           _collapsedSections
@@ -251,6 +296,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
           _fitColumnBars = savedFitColumnBars;
         }
       });
+      _replayAnimation();
     } catch (_) {}
   }
 
@@ -260,7 +306,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
       await prefs.setString(_prefKeyTab, _activeTab.name);
       await prefs.setString(_prefKeyStyle, _selectedStyle.name);
       await prefs.setString(_prefKeySort, _sortMode.name);
-      await prefs.setBool(_prefKeyGroupByDusun, _groupByDusun);
+      await prefs.setBool(_prefKeySeDesa, _seDesaMode);
       await prefs.setStringList(_prefKeyCollapsed, _collapsedSections.toList());
       await prefs.setBool(_prefKeyFitColumnBars, _fitColumnBars);
     } catch (_) {}
@@ -301,7 +347,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
       if (oldWidget.selectedWilayah != widget.selectedWilayah &&
           widget.selectedWilayah != null) {
         _drillDownDusun = widget.selectedWilayah;
-        _groupByDusun = false;
+        _seDesaMode = false;
       }
       if (oldWidget.selectedBlok != widget.selectedBlok) {
         _selectedItemLabel = widget.selectedBlok != null
@@ -309,14 +355,29 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
             : null;
       } else if (oldWidget.records != widget.records) {
         _selectedItemLabel = null;
+        _customCompareDesas.clear();
       }
       shouldAnimate = true;
       DhkpWidgetSyncService.syncFromRecords(widget.records);
     }
 
+    if (_compareYear != null) {
+      final currentYears =
+          widget.records
+              .map((r) => r.tahunBayar)
+              .where((y) => y.isNotEmpty)
+              .toSet()
+              .toList()
+            ..sort((a, b) => b.compareTo(a));
+      if (currentYears.length <= 1 || !currentYears.contains(_compareYear)) {
+        _compareYear = null;
+      } else if (_compareYear == _selectedTahun) {
+        _compareYear = _suggestDefaultCompareYear(currentYears);
+      }
+    }
+
     if (shouldAnimate) {
-      _animController.reset();
-      _animController.forward();
+      _replayAnimation();
     }
   }
 
@@ -333,8 +394,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
       _selectedItemLabel = null;
     });
     _savePreferences();
-    _animController.reset();
-    _animController.forward();
+    _replayAnimation();
   }
 
   void _switchStyle(ChartStyle style) {
@@ -345,8 +405,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
       if (style == ChartStyle.pie) _collapsedSections.remove('pie');
     });
     _savePreferences();
-    _animController.reset();
-    _animController.forward();
+    _replayAnimation();
   }
 
   void _toggleSection(String sectionKey) {
@@ -385,20 +444,106 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
     });
   }
 
+  String _formatKecamatanLabel(String kecCode) {
+    if (kecCode.isEmpty) return 'Se-Kecamatan';
+    final raw = lookupKecamatanName(kecCode).trim();
+    if (raw.isEmpty) return 'Kec. $kecCode';
+    final clean = raw.toLowerCase().startsWith('kec')
+        ? raw.replaceFirst(RegExp(r'^kecamatan\s*', caseSensitive: false), '')
+        : raw;
+    final words = clean
+        .split(RegExp(r'\s+'))
+        .where((w) => w.isNotEmpty)
+        .map((w) => '${w[0].toUpperCase()}${w.substring(1).toLowerCase()}')
+        .join(' ');
+    return words.isEmpty ? 'Kec. $kecCode' : 'Kec. $words';
+  }
+
+  String _formatGaugeScopeTitle(
+    _DhkpResolvedContext scope,
+    List<BlokRecord> murniRecords,
+    int distinctBlokCount,
+  ) {
+    if (scope.isKecamatanAggregate) {
+      return _formatKecamatanLabel(scope.primaryKecamatanCode);
+    }
+    final kelCode = scope.effectiveDesaCode ??
+        (scope.desaCodes.length == 1 ? scope.desaCodes.first : null);
+    String base = 'Realisasi DHKP';
+    if (kelCode != null) {
+      final raw = lookupKelurahanName(
+        kelCode,
+        kecamatanCode: scope.primaryKecamatanCode,
+      ).trim();
+      if (raw.isNotEmpty) {
+        final formatted = raw.startsWith('Desa ') || raw.startsWith('Kel')
+            ? raw
+            : 'Desa ${raw[0].toUpperCase()}${raw.substring(1).toLowerCase()}';
+        base = formatted;
+      }
+    }
+    if (_drillDownDusun != null) {
+      return '$base • Dusun $_drillDownDusun';
+    }
+    if (distinctBlokCount == 1 && murniRecords.isNotEmpty) {
+      final blokInt = int.tryParse(murniRecords.first.blok);
+      return '$base • Blok ${blokInt ?? murniRecords.first.blok}';
+    }
+    return base;
+  }
+
   List<DhkpGroupInfo> _groupData(
     List<BlokRecord> records, {
     required bool hasMultiDusun,
     double Function(DhkpGroupInfo)? sortValueFn,
     bool applySort = true,
   }) {
+    final allNonPemda = widget.records.where((r) => !r.isTargetPemda).toList();
+    final primaryKec = DhkpGrafikAnalytics.resolvePrimaryKecamatanCode(
+      allNonPemda,
+    );
+    final desaCodes = DhkpGrafikAnalytics.resolveDesaCodesInKecamatan(
+      allNonPemda,
+      primaryKec,
+    );
+    final effectiveDesa =
+        (desaCodes.length > 1 &&
+            _selectedDesaCode != null &&
+            desaCodes.contains(_selectedDesaCode))
+        ? _selectedDesaCode
+        : null;
+    final groupByDusun =
+        hasMultiDusun && _drillDownDusun == null && !_seDesaMode;
+    final isKecLevel = desaCodes.length > 1 && effectiveDesa == null;
+    if (isKecLevel) {
+      return DhkpGrafikAnalytics.groupData(
+        records,
+        hasMultiDusun: hasMultiDusun,
+        groupByDusun: groupByDusun,
+        drillDownDusun: null,
+        sortMode: _sortMode,
+        sortValueFn: sortValueFn,
+        applySort: applySort,
+        seDesaMode: _seDesaMode,
+        groupByDesa: !_seDesaMode,
+        singleEntityLabel: _formatKecamatanLabel(primaryKec),
+      );
+    }
+
+    final singleLabel = effectiveDesa != null
+        ? DhkpGrafikAnalytics.formatDesaLabel(effectiveDesa)
+        : 'Se-Desa';
+
     return DhkpGrafikAnalytics.groupData(
       records,
       hasMultiDusun: hasMultiDusun,
-      groupByDusun: _groupByDusun,
+      groupByDusun: groupByDusun,
       drillDownDusun: _drillDownDusun,
       sortMode: _sortMode,
       sortValueFn: sortValueFn,
       applySort: applySort,
+      seDesaMode: _seDesaMode && _drillDownDusun == null,
+      singleEntityLabel: singleLabel,
     );
   }
 
@@ -412,21 +557,32 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
       });
       await Future.delayed(const Duration(milliseconds: 320));
     }
-    if (_animController.value < 1.0) {
-      _animController.value = 1.0;
-      await Future.delayed(const Duration(milliseconds: 50));
+    var restoreCaptureFlag = false;
+    if (!_isCapturingExport) {
+      setState(() => _isCapturingExport = true);
+      restoreCaptureFlag = true;
     }
-    await WidgetsBinding.instance.endOfFrame;
+    try {
+      if (_animController.value < 1.0) {
+        _animController.value = 1.0;
+      }
+      await Future.delayed(const Duration(milliseconds: 50));
+      await WidgetsBinding.instance.endOfFrame;
 
-    final key = _getBoundaryKey(sectionKey);
-    final ctx = key.currentContext;
-    if (ctx == null || !ctx.mounted) return null;
-    final boundary = ctx.findRenderObject() as RenderRepaintBoundary?;
-    if (boundary == null) return null;
+      final key = _getBoundaryKey(sectionKey);
+      final ctx = key.currentContext;
+      if (ctx == null || !ctx.mounted) return null;
+      final boundary = ctx.findRenderObject() as RenderRepaintBoundary?;
+      if (boundary == null) return null;
 
-    final image = await boundary.toImage(pixelRatio: 3.0);
-    final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-    return byteData?.buffer.asUint8List();
+      final image = await boundary.toImage(pixelRatio: 3.0);
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      return byteData?.buffer.asUint8List();
+    } finally {
+      if (restoreCaptureFlag && mounted) {
+        setState(() => _isCapturingExport = false);
+      }
+    }
   }
 
   Future<Uint8List> _generateSectionPdf({
@@ -435,6 +591,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
     required String subtitle,
     required List<DhkpGroupInfo> groups,
   }) async {
+    final scope = _resolveScopeContext();
     final pngBytes = await _captureSectionPng(sectionKey);
     return DhkpGrafikExporter.generateSectionPdf(
       pngBytes: pngBytes,
@@ -442,7 +599,8 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
       subtitle: subtitle,
       groups: groups,
       activeTab: _activeTab,
-      groupByDusun: _groupByDusun,
+      groupByDusun:
+          scope.hasMultiDusun && _drillDownDusun == null && !_seDesaMode,
       drillDownDusun: _drillDownDusun,
     );
   }
@@ -569,16 +727,49 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
     }
   }
 
-  (
-    List<BlokRecord> murniRecords,
-    bool hasMultiDusun,
-    List<int> uniqueDusuns,
-    List<String> availableYears,
-  )
-  _resolveFilteredMurniRecords() {
+  _DhkpResolvedContext _resolveScopeContext() {
     final allMurni = widget.records.where((r) => !r.isTargetPemda).toList();
-    final uniqueDusuns = <int>{};
+
+    final kecSet = <String>{};
     for (final r in allMurni) {
+      final d = r.nop.replaceAll(RegExp(r'[^0-9]'), '');
+      if (d.length == 18) kecSet.add(nopKecamatan(d));
+    }
+    final primaryKecCode = DhkpGrafikAnalytics.resolvePrimaryKecamatanCode(
+      allMurni,
+    );
+    final hasMultipleKecamatans = kecSet.length > 1;
+
+    // Antisipasi data lintas kecamatan: batasi tampilan grafik ke 1 kecamatan utama saja.
+    final scopedKecRecords = primaryKecCode.isEmpty
+        ? allMurni
+        : allMurni.where((r) {
+            final d = r.nop.replaceAll(RegExp(r'[^0-9]'), '');
+            return d.length != 18 || nopKecamatan(d) == primaryKecCode;
+          }).toList();
+
+    final desaCodes = DhkpGrafikAnalytics.resolveDesaCodesInKecamatan(
+      scopedKecRecords,
+      primaryKecCode,
+    );
+    final hasMultiDesa = desaCodes.length > 1;
+    final effectiveDesaCode =
+        (hasMultiDesa &&
+            _selectedDesaCode != null &&
+            desaCodes.contains(_selectedDesaCode))
+        ? _selectedDesaCode
+        : null;
+
+    var entityAcrossYears = scopedKecRecords;
+    if (effectiveDesaCode != null) {
+      entityAcrossYears = entityAcrossYears.where((r) {
+        final d = r.nop.replaceAll(RegExp(r'[^0-9]'), '');
+        return d.length == 18 && nopKelurahan(d) == effectiveDesaCode;
+      }).toList();
+    }
+
+    final uniqueDusuns = <int>{};
+    for (final r in entityAcrossYears) {
       for (final d in dusunList) {
         if (d.bloks.contains(r.blok)) {
           uniqueDusuns.add(d.number);
@@ -587,8 +778,19 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
       }
     }
     final hasMultiDusun = uniqueDusuns.length > 1;
+
+    if (!hasMultiDesa || effectiveDesaCode != null) {
+      if (hasMultiDusun && _drillDownDusun != null) {
+        final dObj = dusunByNumber(_drillDownDusun!);
+        final dBloks = dObj?.bloks.toSet() ?? <String>{};
+        entityAcrossYears = entityAcrossYears
+            .where((r) => dBloks.contains(r.blok))
+            .toList();
+      }
+    }
+
     final availableYears =
-        allMurni
+        scopedKecRecords
             .map((r) => r.tahunBayar)
             .where((t) => t.isNotEmpty)
             .toSet()
@@ -603,25 +805,353 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
           : availableYears.first;
     }
 
-    var murniRecords = allMurni;
-    if (hasMultiDusun && _drillDownDusun != null) {
-      final dObj = dusunByNumber(_drillDownDusun!);
-      final dBloks = dObj?.bloks.toSet() ?? <String>{};
-      murniRecords = murniRecords
-          .where((r) => dBloks.contains(r.blok))
-          .toList();
-    }
+    var murniRecords = entityAcrossYears;
     if (availableYears.isNotEmpty) {
       murniRecords = murniRecords
           .where((r) => r.tahunBayar == _selectedTahun)
           .toList();
     }
-    return (
-      murniRecords,
-      hasMultiDusun,
-      uniqueDusuns.toList()..sort(),
-      availableYears,
+
+    return _DhkpResolvedContext(
+      murniRecords: murniRecords,
+      entityRecordsAcrossYears: entityAcrossYears,
+      allScopedRecordsAcrossYears: scopedKecRecords,
+      hasMultiDusun: hasMultiDusun,
+      uniqueDusuns: uniqueDusuns.toList()..sort(),
+      availableYears: availableYears,
+      primaryKecamatanCode: primaryKecCode,
+      hasMultipleKecamatans: hasMultipleKecamatans,
+      desaCodes: desaCodes,
+      hasMultiDesa: hasMultiDesa,
+      effectiveDesaCode: effectiveDesaCode,
     );
+  }
+
+  (
+    List<BlokRecord> murniRecords,
+    bool hasMultiDusun,
+    List<int> uniqueDusuns,
+    List<String> availableYears,
+  )
+  _resolveFilteredMurniRecords() {
+    final ctx = _resolveScopeContext();
+    return (
+      ctx.murniRecords,
+      ctx.hasMultiDusun,
+      ctx.uniqueDusuns,
+      ctx.availableYears,
+    );
+  }
+
+  bool _canCompareYearsForScope(_DhkpResolvedContext ctx) {
+    if (ctx.availableYears.length <= 1) return false;
+    if (ctx.isKecamatanAggregate) return _seDesaMode;
+    if (_drillDownDusun != null) return true;
+    if (_seDesaMode) return true;
+    final distinctBloks = ctx.entityRecordsAcrossYears
+        .map((r) => r.blok)
+        .toSet();
+    return !ctx.hasMultiDusun && distinctBloks.length <= 1;
+  }
+
+  String? _resolveValidCompareYear(List<String> availableYears) {
+    final target = _compareYear;
+    if (target == null ||
+        target == _selectedTahun ||
+        !availableYears.contains(target)) {
+      return null;
+    }
+    return target;
+  }
+
+  String? _suggestDefaultCompareYear(List<String> availableYears) {
+    final candidates = availableYears
+        .where((y) => y != _selectedTahun)
+        .toList();
+    if (candidates.isEmpty) return null;
+    final selectedInt = int.tryParse(_selectedTahun);
+    for (final y in candidates) {
+      final yInt = int.tryParse(y);
+      if (selectedInt != null && yInt != null) {
+        if (yInt < selectedInt) return y;
+      } else if (y.compareTo(_selectedTahun) < 0) {
+        return y;
+      }
+    }
+    return candidates.last;
+  }
+
+  void _applyCompareYear(String? year, {required _DhkpResolvedContext scope}) {
+    if (year == null) {
+      if (_compareYear == null) return;
+      setState(() {
+        _compareYear = null;
+        _selectedItemLabel = null;
+      });
+      _savePreferences();
+      return;
+    }
+
+    if (scope.availableYears.length <= 1) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Data perbandingan tahun belum tersedia di database. Membutuhkan minimal 2 tahun data.',
+            ),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      return;
+    }
+
+    final validTarget = year == _selectedTahun
+        ? _suggestDefaultCompareYear(scope.availableYears)
+        : (scope.availableYears.contains(year) ? year : null);
+    if (validTarget == null) return;
+
+    final canCompare = _canCompareYearsForScope(scope);
+    setState(() {
+      if (!canCompare) {
+        _drillDownDusun = null;
+        _seDesaMode = true;
+      }
+      _compareYear = validTarget;
+      _selectedItemLabel = null;
+    });
+    _savePreferences();
+  }
+
+  List<DhkpTrendSeries> _buildTrendSeriesForScope(
+    _DhkpResolvedContext ctx,
+    bool isDark,
+  ) {
+    final canCompare = _canCompareYearsForScope(ctx);
+    final activeCompareYear = canCompare
+        ? _resolveValidCompareYear(ctx.availableYears)
+        : null;
+    if (activeCompareYear != null) {
+      return DhkpGrafikAnalytics.buildYearComparisonSeries(
+        entityRecords: ctx.entityRecordsAcrossYears,
+        primaryYear: _selectedTahun,
+        compareYears: [_selectedTahun, activeCompareYear],
+        isDark: isDark,
+        maxYears: 2,
+      );
+    }
+
+    if (ctx.isKecamatanAggregate) {
+      if (_seDesaMode) {
+        final single = DhkpGrafikAnalytics.buildYearComparisonSeries(
+          entityRecords: ctx.entityRecordsAcrossYears,
+          primaryYear: _selectedTahun,
+          compareYears: [_selectedTahun],
+          isDark: isDark,
+          maxYears: 1,
+        );
+        if (single.isEmpty) return single;
+        final label = _formatKecamatanLabel(ctx.primaryKecamatanCode);
+        final s = single.first;
+        return [
+          DhkpTrendSeries(
+            id: 'kec:$label',
+            label: label,
+            monthlyNominal: s.monthlyNominal,
+            monthlyCounts: s.monthlyCounts,
+            totalNominal: s.totalNominal,
+            totalCount: s.totalCount,
+            color: s.color,
+            isPrimary: true,
+            isDashed: false,
+          ),
+        ];
+      }
+      return DhkpGrafikAnalytics.buildDesaMonthlySeries(
+        records: ctx.murniRecords,
+        tahun: _selectedTahun,
+        isDark: isDark,
+        customDesas: _customCompareDesas,
+        maxDesas: _maxCustomDesas,
+      );
+    }
+
+    if (_drillDownDusun != null && ctx.hasMultiDusun) {
+      return DhkpGrafikAnalytics.buildBlokMonthlySeries(
+        records: ctx.murniRecords,
+        tahun: _selectedTahun,
+        isDark: isDark,
+        dusunNumber: _drillDownDusun,
+      );
+    }
+
+    if (_seDesaMode) {
+      final single = DhkpGrafikAnalytics.buildYearComparisonSeries(
+        entityRecords: ctx.entityRecordsAcrossYears,
+        primaryYear: _selectedTahun,
+        compareYears: [_selectedTahun],
+        isDark: isDark,
+        maxYears: 1,
+      );
+      if (single.isEmpty) return single;
+      final label = ctx.effectiveDesaCode != null
+          ? DhkpGrafikAnalytics.formatDesaLabel(ctx.effectiveDesaCode!)
+          : 'Se-Desa ($_selectedTahun)';
+      final s = single.first;
+      return [
+        DhkpTrendSeries(
+          id: 'desa:$label',
+          label: label,
+          monthlyNominal: s.monthlyNominal,
+          monthlyCounts: s.monthlyCounts,
+          totalNominal: s.totalNominal,
+          totalCount: s.totalCount,
+          color: s.color,
+          isPrimary: true,
+          isDashed: false,
+        ),
+      ];
+    }
+
+    if (ctx.hasMultiDusun) {
+      return DhkpGrafikAnalytics.buildMultiDusunMonthlySeries(
+        records: ctx.murniRecords,
+        tahun: _selectedTahun,
+        isDark: isDark,
+      );
+    }
+
+    return DhkpGrafikAnalytics.buildBlokMonthlySeries(
+      records: ctx.murniRecords,
+      tahun: _selectedTahun,
+      isDark: isDark,
+      dusunNumber: ctx.uniqueDusuns.length == 1 ? ctx.uniqueDusuns.first : null,
+    );
+  }
+
+  Future<Set<String>?> _showChecklistCompareDialog({
+    required String title,
+    required String description,
+    required int maxItems,
+    required List<({String id, String label, int nominal})> items,
+    required Set<String> currentSelected,
+  }) async {
+    if (items.isEmpty) return null;
+    final initial = currentSelected
+        .where((id) => items.any((item) => item.id == id))
+        .toSet();
+    if (initial.isEmpty) {
+      final byTop = [...items]..sort((a, b) => b.nominal.compareTo(a.nominal));
+      initial.addAll(byTop.take(maxItems).map((e) => e.id));
+    }
+
+    return showDialog<Set<String>>(
+      context: context,
+      builder: (dlgCtx) {
+        final temp = Set<String>.from(initial);
+        return StatefulBuilder(
+          builder: (context, setDlgState) {
+            return AlertDialog(
+              title: Text('$title (${temp.length}/$maxItems)'),
+              content: SizedBox(
+                width: 340,
+                height: 360,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      description,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 8),
+                    Expanded(
+                      child: ListView.builder(
+                        itemCount: items.length,
+                        itemBuilder: (context, idx) {
+                          final item = items[idx];
+                          final checked = temp.contains(item.id);
+                          final blocked = !checked && temp.length >= maxItems;
+                          return CheckboxListTile(
+                            dense: true,
+                            value: checked,
+                            onChanged: blocked
+                                ? null
+                                : (val) {
+                                    setDlgState(() {
+                                      if (val == true) {
+                                        temp.add(item.id);
+                                      } else if (temp.length > 1) {
+                                        temp.remove(item.id);
+                                      }
+                                    });
+                                  },
+                            title: Text(item.label),
+                            subtitle: Text(
+                              'Lunas: ${formatRupiah(item.nominal)}',
+                              style: const TextStyle(fontSize: 11),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dlgCtx).pop(),
+                  child: const Text('Batal'),
+                ),
+                FilledButton(
+                  onPressed: temp.isEmpty
+                      ? null
+                      : () => Navigator.of(dlgCtx).pop(temp),
+                  child: const Text('Terapkan'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _openSelectDesaDialog(
+    List<BlokRecord> kecRecords,
+    List<String> desaCodes,
+  ) async {
+    final desaNom = <String, int>{for (final k in desaCodes) k: 0};
+    for (final r in kecRecords) {
+      final d = r.nop.replaceAll(RegExp(r'[^0-9]'), '');
+      if (d.length == 18 && r.isPaid) {
+        final k = nopKelurahan(d);
+        if (desaNom.containsKey(k)) {
+          desaNom[k] = (desaNom[k] ?? 0) + r.jumlahPbbValue;
+        }
+      }
+    }
+    final items = [
+      for (final k in desaCodes)
+        (
+          id: k,
+          label: DhkpGrafikAnalytics.formatDesaLabel(k),
+          nominal: desaNom[k] ?? 0,
+        ),
+    ];
+    final picked = await _showChecklistCompareDialog(
+      title: 'Pilih Desa Pembanding',
+      description:
+          'Pilih maksimal $_maxCustomDesas desa dalam 1 kecamatan agar perbandingan tetap rapi.',
+      maxItems: _maxCustomDesas,
+      items: items,
+      currentSelected: _customCompareDesas,
+    );
+    if (!mounted || picked == null || picked.isEmpty) return;
+    setState(() {
+      _customCompareDesas
+        ..clear()
+        ..addAll(picked.take(_maxCustomDesas));
+    });
   }
 
   Future<void> _printSingleSelectedMonth(
@@ -721,8 +1251,8 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
         ),
         ChartStyle.batang || ChartStyle.semua => (
           'batang',
-          'Diagram Batang & Garis Tren Bulanan',
-          'Penerimaan kas per bulan dengan garis poligon tren puncak (Jan - Des)',
+          'Grafik Garis Tren Pembayaran Bulanan',
+          'Pergerakan penerimaan kas dari awal hingga akhir tahun (Jan - Des)',
         ),
       };
       await _handlePrintSection(
@@ -917,8 +1447,19 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final colorScheme = Theme.of(context).colorScheme;
 
-    final (murniRecords, hasMultiDusun, sortedUniqueDusuns, availableYears) =
-        _resolveFilteredMurniRecords();
+    final scope = _resolveScopeContext();
+    final murniRecords = scope.murniRecords;
+    final hasMultiDusun = scope.hasMultiDusun;
+    final distinctBlokCount = scope.entityRecordsAcrossYears
+        .map((r) => r.blok)
+        .toSet()
+        .length;
+    final showScopeBar =
+        hasMultiDusun ||
+        scope.hasMultiDesa ||
+        scope.hasMultipleKecamatans ||
+        scope.availableYears.length > 1 ||
+        distinctBlokCount > 1;
 
     final totalNop = murniRecords.length;
     final sudahBayarList = murniRecords.where((r) => r.isPaid).toList();
@@ -965,30 +1506,59 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
               ),
               const SizedBox(height: 10),
 
-              // 2. FILTER CEPAT DUSUN (UNTUK DESA: SEMUA DUSUN / SEMUA BLOK / PER DUSUN)
-              if (hasMultiDusun) ...[
+              // 2. FILTER CEPAT WILAYAH (KECAMATAN/DESA/SE-DESA/DUSUN/BLOK)
+              if (showScopeBar) ...[
                 KeyedSubtree(
                   key: _scopeBarKey,
-                  child: _buildScopeQuickBar(
-                    sortedUniqueDusuns,
-                    isDark,
-                    colorScheme,
-                  ),
+                  child: _buildScopeQuickBar(scope, isDark, colorScheme),
                 ),
                 const SizedBox(height: 10),
               ],
 
-              // 2b. FILTER CEPAT TAHUN (JIKA DATA MENCAKUP LEBIH DARI 1 TAHUN)
-              if (availableYears.length > 1) ...[
-                _buildYearQuickBar(availableYears, isDark, colorScheme),
-                const SizedBox(height: 10),
-              ],
-
-              // 3. KARTU RINGKASAN UTAMA DI ATAS (3 METRIK KUNCI SESUAI TAB)
+              // 3. KARTU RINGKASAN UTAMA DI ATAS (GAUGE REALISASI + 3 METRIK SPARKLINE)
               KeyedSubtree(
                 key: _statCardsKey,
-                child: buildDhkpStatRow(
-                  DhkpGrafikAnalytics.buildHighlightStats(
+                child: () {
+                  final overviewGroups = _groupData(
+                    murniRecords,
+                    hasMultiDusun: hasMultiDusun,
+                    applySort: false,
+                  );
+                  String? prevYearLabel;
+                  List<BlokRecord>? prevYearRecords;
+                  if (scope.availableYears.length > 1 &&
+                      _selectedTahun.isNotEmpty) {
+                    final activeIdx = scope.availableYears.indexOf(
+                      _selectedTahun,
+                    );
+                    if (activeIdx >= 0 &&
+                        activeIdx + 1 < scope.availableYears.length) {
+                      prevYearLabel = scope.availableYears[activeIdx + 1];
+                      prevYearRecords = scope.entityRecordsAcrossYears
+                          .where((r) => r.tahunBayar == prevYearLabel)
+                          .toList();
+                    }
+                  }
+
+                  final gaugeScopeTitle = _formatGaugeScopeTitle(
+                    scope,
+                    murniRecords,
+                    distinctBlokCount,
+                  );
+                  final gaugeSummary = DhkpGrafikAnalytics.buildGaugeSummary(
+                    scopeTitle: gaugeScopeTitle,
+                    tahun: _selectedTahun,
+                    paidNominal: sudahBayarNominal,
+                    targetNominal: totalNominalTarget,
+                    paidCount: sudahBayarList.length,
+                    totalCount: totalNop,
+                    achievedPct: lunasNominalPct,
+                    objPct: lunasNopPct,
+                    accentColor: _activeTab.accentColor,
+                    previousYearRecords: prevYearRecords,
+                    previousYearLabel: prevYearLabel,
+                  );
+                  final highlightItems = DhkpGrafikAnalytics.buildHighlightStats(
                     activeTab: _activeTab,
                     totalNop: totalNop,
                     sudahBayarCount: sudahBayarList.length,
@@ -999,9 +1569,18 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
                     lunasNominalPct: lunasNominalPct,
                     lunasNopPct: lunasNopPct,
                     records: murniRecords,
-                  ),
-                  isDark,
-                ),
+                    tahun: _selectedTahun,
+                    previousYearRecords: prevYearRecords,
+                    previousYearLabel: prevYearLabel,
+                    groups: overviewGroups,
+                  );
+
+                  return buildDhkpKpiWithGaugeOverview(
+                    items: highlightItems,
+                    gauge: gaugeSummary,
+                    isDark: isDark,
+                  );
+                }(),
               ),
               const SizedBox(height: 10),
 
@@ -1013,10 +1592,29 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
               const SizedBox(height: 12),
 
               // 5. PANEL DETAIL INTERAKTIF (MUNCUL SAAT SALAH SATU WILAYAH DIKLIK)
-              if (_selectedItemLabel != null) ...[
-                _buildSelectedDetailBanner(murniRecords, hasMultiDusun, isDark),
-                const SizedBox(height: 12),
-              ],
+              AppAnimatedSize(
+                duration: AppMotion.component,
+                curve: AppMotion.smoothCurve,
+                alignment: Alignment.topCenter,
+                child: AnimatedSwitcher(
+                  duration: AppMotion.resolve(context, AppMotion.component),
+                  switchInCurve: AppMotion.enterCurve,
+                  switchOutCurve: AppMotion.exitCurve,
+                  child: _selectedItemLabel != null
+                      ? Padding(
+                          key: ValueKey(
+                            'banner:${_activeTab.name}:$_selectedItemLabel',
+                          ),
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: _buildSelectedDetailBanner(
+                            murniRecords,
+                            hasMultiDusun,
+                            isDark,
+                          ),
+                        )
+                      : const SizedBox.shrink(key: ValueKey('banner:empty')),
+                ),
+              ),
 
               // 6. KONTEN GRAFIK & TABEL DENGAN FITUR LIPAT + UNDUH/BAGIKAN/CETAK
               KeyedSubtree(
@@ -1024,39 +1622,65 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
                 child: AnimatedBuilder(
                   animation: _animation,
                   builder: (context, _) {
-                    return switch (_activeTab) {
-                      DhkpGrafikTab.pendapatan => _buildPendapatanSection(
-                        murniRecords,
-                        hasMultiDusun,
-                        sudahBayarNominal,
-                        totalNominalTarget,
-                        isDark,
+                    final tabContent = KeyedSubtree(
+                      key: ValueKey(_activeTab),
+                      child: switch (_activeTab) {
+                        DhkpGrafikTab.pendapatan => _buildPendapatanSection(
+                          murniRecords,
+                          hasMultiDusun,
+                          sudahBayarNominal,
+                          totalNominalTarget,
+                          isDark,
+                        ),
+                        DhkpGrafikTab.persentase => _buildPersentaseSection(
+                          murniRecords,
+                          hasMultiDusun,
+                          lunasNominalPct,
+                          isDark,
+                        ),
+                        DhkpGrafikTab.belumBayar => _buildBelumBayarSection(
+                          murniRecords,
+                          hasMultiDusun,
+                          belumBayarNominal,
+                          totalNominalTarget,
+                          isDark,
+                        ),
+                        DhkpGrafikTab.sudahBayar => _buildSudahBayarSection(
+                          murniRecords,
+                          hasMultiDusun,
+                          sudahBayarList.length,
+                          sudahBayarNominal,
+                          isDark,
+                        ),
+                        DhkpGrafikTab.trenBulanan => _buildTrenBulananSection(
+                          scope,
+                          isDark,
+                        ),
+                      },
+                    );
+                    return AnimatedSwitcher(
+                      duration: AppMotion.resolve(
+                        context,
+                        const Duration(milliseconds: 380),
                       ),
-                      DhkpGrafikTab.persentase => _buildPersentaseSection(
-                        murniRecords,
-                        hasMultiDusun,
-                        lunasNominalPct,
-                        isDark,
+                      switchInCurve: const UnityAnimationCurve(),
+                      switchOutCurve: AppMotion.exitCurve,
+                      layoutBuilder: (currentChild, previousChildren) => Stack(
+                        alignment: Alignment.topCenter,
+                        children: [...previousChildren, ?currentChild],
                       ),
-                      DhkpGrafikTab.belumBayar => _buildBelumBayarSection(
-                        murniRecords,
-                        hasMultiDusun,
-                        belumBayarNominal,
-                        totalNominalTarget,
-                        isDark,
-                      ),
-                      DhkpGrafikTab.sudahBayar => _buildSudahBayarSection(
-                        murniRecords,
-                        hasMultiDusun,
-                        sudahBayarList.length,
-                        sudahBayarNominal,
-                        isDark,
-                      ),
-                      DhkpGrafikTab.trenBulanan => _buildTrenBulananSection(
-                        murniRecords,
-                        isDark,
-                      ),
-                    };
+                      transitionBuilder: (child, anim) {
+                        final slide = Tween<Offset>(
+                          begin: const Offset(0, 0.015),
+                          end: Offset.zero,
+                        ).animate(anim);
+                        return FadeTransition(
+                          opacity: anim,
+                          child: SlideTransition(position: slide, child: child),
+                        );
+                      },
+                      child: tabContent,
+                    );
                   },
                 ),
               ),
@@ -1182,10 +1806,194 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
   }
 
   // =========================================================================
-  // 2. QUICK SCOPE BAR (SEMUA DUSUN vs SEMUA BLOK vs DRILL-DOWN PER DUSUN)
+  // 2. QUICK SCOPE BAR (KECAMATAN/PER DESA/SE-DESA/SEMUA DUSUN/BLOK/DUSUN)
   // =========================================================================
+  Widget _buildDesaSubScopeRow(
+    _DhkpResolvedContext scope,
+    MaterialColor accent,
+    bool isDark, {
+    String prefixLabel = 'Wilayah:',
+  }) {
+    final isAtDesaSubScope =
+        !scope.hasMultiDesa || scope.effectiveDesaCode != null;
+    final distinctBlokCount = scope.entityRecordsAcrossYears
+        .map((r) => r.blok)
+        .toSet()
+        .length;
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          Icon(Icons.place_rounded, size: 15, color: accent.shade700),
+          const SizedBox(width: 6),
+          Text(
+            prefixLabel,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              color: isDark ? Colors.grey.shade300 : Colors.grey.shade700,
+            ),
+          ),
+          const SizedBox(width: 8),
+          if (scope.hasMultipleKecamatans && !scope.hasMultiDesa) ...[
+            _buildScopeMetaBadge(
+              label:
+                  '${_formatKecamatanLabel(scope.primaryKecamatanCode)} (1 Kec)',
+              accent: accent,
+              isDark: isDark,
+              tooltip:
+                  'Data lintas kecamatan dibatasi ke 1 kecamatan utama agar grafik tetap fokus dan terbaca.',
+            ),
+            const SizedBox(width: 6),
+          ],
+          _buildScopeChip(
+            label: 'Se-Desa',
+            isSelected:
+                isAtDesaSubScope && _drillDownDusun == null && _seDesaMode,
+            accent: accent,
+            isDark: isDark,
+            onTap: () {
+              setState(() {
+                _drillDownDusun = null;
+                _seDesaMode = true;
+                _selectedItemLabel = null;
+              });
+              _savePreferences();
+              _replayAnimation();
+            },
+          ),
+          if (scope.hasMultiDusun) ...[
+            const SizedBox(width: 4),
+            _buildScopeChip(
+              label: 'Semua Dusun',
+              isSelected:
+                  isAtDesaSubScope && _drillDownDusun == null && !_seDesaMode,
+              accent: accent,
+              isDark: isDark,
+              onTap: () {
+                setState(() {
+                  _drillDownDusun = null;
+                  _seDesaMode = false;
+                  _compareYear = null;
+                  _selectedItemLabel = null;
+                });
+                _savePreferences();
+                _replayAnimation();
+              },
+            ),
+          ],
+          if (!scope.hasMultiDusun &&
+              scope.uniqueDusuns.isEmpty &&
+              distinctBlokCount > 1) ...[
+            const SizedBox(width: 4),
+            _buildScopeChip(
+              label: 'Per Blok',
+              isSelected:
+                  isAtDesaSubScope && _drillDownDusun == null && !_seDesaMode,
+              accent: accent,
+              isDark: isDark,
+              onTap: () {
+                setState(() {
+                  _drillDownDusun = null;
+                  _seDesaMode = false;
+                  _compareYear = null;
+                  _selectedItemLabel = null;
+                });
+                _savePreferences();
+                _replayAnimation();
+              },
+            ),
+          ],
+          if (scope.uniqueDusuns.isNotEmpty) ...[
+            Container(
+              height: 16,
+              width: 1,
+              margin: const EdgeInsets.symmetric(horizontal: 8),
+              color: isDark ? Colors.white24 : Colors.grey.shade300,
+            ),
+            for (final dNum in scope.uniqueDusuns)
+              Padding(
+                padding: const EdgeInsets.only(right: 4),
+                child: _buildScopeChip(
+                  label: 'Dusun $dNum',
+                  isSelected:
+                      isAtDesaSubScope &&
+                      (_drillDownDusun == dNum ||
+                          (!scope.hasMultiDusun &&
+                              _drillDownDusun == null &&
+                              !_seDesaMode)),
+                  accent: accent,
+                  isDark: isDark,
+                  onTap: () {
+                    setState(() {
+                      final isCurrentlySelected =
+                          _drillDownDusun == dNum ||
+                          (!scope.hasMultiDusun &&
+                              _drillDownDusun == null &&
+                              !_seDesaMode);
+                      if (isCurrentlySelected) {
+                        _drillDownDusun = null;
+                        _seDesaMode = !scope.hasMultiDusun;
+                      } else {
+                        _drillDownDusun = dNum;
+                        _seDesaMode = false;
+                      }
+                      _selectedItemLabel = null;
+                    });
+                    _savePreferences();
+                    _replayAnimation();
+                  },
+                ),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildScopeMetaBadge({
+    required String label,
+    required MaterialColor accent,
+    required bool isDark,
+    required String tooltip,
+  }) {
+    return Tooltip(
+      message: tooltip,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: accent.withValues(alpha: isDark ? 0.16 : 0.08),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: accent.withValues(alpha: isDark ? 0.42 : 0.30),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.shield_outlined,
+              size: 12,
+              color: isDark ? accent.shade200 : accent.shade700,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 10.5,
+                fontWeight: FontWeight.w700,
+                color: isDark ? accent.shade200 : accent.shade800,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildScopeQuickBar(
-    List<int> dusunNumbers,
+    _DhkpResolvedContext scope,
     bool isDark,
     ColorScheme colorScheme,
   ) {
@@ -1199,91 +2007,105 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
           color: isDark ? Colors.white10 : Colors.grey.shade200,
         ),
       ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: [
-            Icon(Icons.place_rounded, size: 15, color: accent.shade700),
-            const SizedBox(width: 6),
-            Text(
-              'Wilayah:',
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-                color: isDark ? Colors.grey.shade300 : Colors.grey.shade700,
-              ),
-            ),
-            const SizedBox(width: 8),
-            // Chip Semua Dusun (Default untuk Desa)
-            _buildScopeChip(
-              label: 'Semua Dusun',
-              isSelected: _drillDownDusun == null && _groupByDusun,
-              accent: accent,
-              isDark: isDark,
-              onTap: () {
-                setState(() {
-                  _drillDownDusun = null;
-                  _groupByDusun = true;
-                  _selectedItemLabel = null;
-                });
-                _savePreferences();
-                _animController.reset();
-                _animController.forward();
-              },
-            ),
-            const SizedBox(width: 4),
-            // Chip Semua Blok Se-Desa
-            _buildScopeChip(
-              label: 'Semua Blok',
-              isSelected: _drillDownDusun == null && !_groupByDusun,
-              accent: accent,
-              isDark: isDark,
-              onTap: () {
-                setState(() {
-                  _drillDownDusun = null;
-                  _groupByDusun = false;
-                  _selectedItemLabel = null;
-                });
-                _savePreferences();
-                _animController.reset();
-                _animController.forward();
-              },
-            ),
-            Container(
-              height: 16,
-              width: 1,
-              margin: const EdgeInsets.symmetric(horizontal: 8),
-              color: isDark ? Colors.white24 : Colors.grey.shade300,
-            ),
-            // Chip masing-masing Dusun untuk lihat blok di dalamnya
-            for (final dNum in dusunNumbers) ...[
-              Padding(
-                padding: const EdgeInsets.only(right: 4),
-                child: _buildScopeChip(
-                  label: 'Dusun $dNum',
-                  isSelected: _drillDownDusun == dNum,
-                  accent: accent,
-                  isDark: isDark,
-                  onTap: () {
-                    setState(() {
-                      if (_drillDownDusun == dNum) {
-                        _drillDownDusun = null;
-                        _groupByDusun = true;
-                      } else {
-                        _drillDownDusun = dNum;
-                        _groupByDusun = false;
-                      }
-                      _selectedItemLabel = null;
-                    });
-                    _animController.reset();
-                    _animController.forward();
-                  },
+      child: scope.hasMultiDesa
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      _buildScopeMetaBadge(
+                        label: scope.hasMultipleKecamatans
+                            ? '${_formatKecamatanLabel(scope.primaryKecamatanCode)} (Maks. 1 Kec)'
+                            : _formatKecamatanLabel(scope.primaryKecamatanCode),
+                        accent: accent,
+                        isDark: isDark,
+                        tooltip:
+                            'Antisipasi data kecamatan: grafik dibatasi 1 kecamatan (${_formatKecamatanLabel(scope.primaryKecamatanCode)}) dan dapat dilihat per desa.',
+                      ),
+                      const SizedBox(width: 8),
+                      _buildScopeChip(
+                        label: 'Se-Kecamatan',
+                        isSelected: scope.isKecamatanAggregate && _seDesaMode,
+                        accent: accent,
+                        isDark: isDark,
+                        onTap: () {
+                          setState(() {
+                            _selectedDesaCode = null;
+                            _drillDownDusun = null;
+                            _seDesaMode = true;
+                            _selectedItemLabel = null;
+                          });
+                          _savePreferences();
+                          _replayAnimation();
+                        },
+                      ),
+                      const SizedBox(width: 4),
+                      _buildScopeChip(
+                        label: 'Per Desa',
+                        isSelected: scope.isKecamatanAggregate && !_seDesaMode,
+                        accent: accent,
+                        isDark: isDark,
+                        onTap: () {
+                          setState(() {
+                            _selectedDesaCode = null;
+                            _drillDownDusun = null;
+                            _seDesaMode = false;
+                            _compareYear = null;
+                            _selectedItemLabel = null;
+                          });
+                          _savePreferences();
+                          _replayAnimation();
+                        },
+                      ),
+                      Container(
+                        height: 16,
+                        width: 1,
+                        margin: const EdgeInsets.symmetric(horizontal: 8),
+                        color: isDark ? Colors.white24 : Colors.grey.shade300,
+                      ),
+                      for (final kel in scope.desaCodes)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 4),
+                          child: _buildScopeChip(
+                            label: DhkpGrafikAnalytics.formatDesaLabel(kel),
+                            isSelected: scope.effectiveDesaCode == kel,
+                            accent: accent,
+                            isDark: isDark,
+                            onTap: () {
+                              setState(() {
+                                if (_selectedDesaCode == kel) {
+                                  _selectedDesaCode = null;
+                                  _drillDownDusun = null;
+                                  _seDesaMode = false;
+                                } else {
+                                  _selectedDesaCode = kel;
+                                  _drillDownDusun = null;
+                                  _seDesaMode = false;
+                                }
+                                _selectedItemLabel = null;
+                              });
+                              _savePreferences();
+                              _replayAnimation();
+                            },
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
-          ],
-        ),
-      ),
+                if (scope.effectiveDesaCode != null) ...[
+                  const SizedBox(height: 6),
+                  _buildDesaSubScopeRow(
+                    scope,
+                    accent,
+                    isDark,
+                    prefixLabel: 'Dalam Desa:',
+                  ),
+                ],
+              ],
+            )
+          : _buildDesaSubScopeRow(scope, accent, isDark),
     );
   }
 
@@ -1293,6 +2115,8 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
     required MaterialColor accent,
     required bool isDark,
     required VoidCallback onTap,
+    IconData? leadingIcon,
+    String? badgeSuffix,
   }) {
     return InkWell(
       onTap: onTap,
@@ -1312,76 +2136,46 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
             width: 1.2,
           ),
         ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-            color: isSelected
-                ? (isDark ? accent.shade200 : accent.shade800)
-                : (isDark ? Colors.grey.shade400 : Colors.grey.shade700),
-          ),
-        ),
-      ),
-    );
-  }
-
-  // =========================================================================
-  // 3. QUICK YEAR BAR (PILIH TAHUN PAJAK SECARA CEPAT)
-  // =========================================================================
-  Widget _buildYearQuickBar(
-    List<String> years,
-    bool isDark,
-    ColorScheme colorScheme,
-  ) {
-    final accent = _activeTab.accentColor;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: isDark ? colorScheme.surfaceContainerLow : Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isDark ? Colors.white10 : Colors.grey.shade200,
-        ),
-      ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
         child: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              Icons.calendar_month_rounded,
-              size: 15,
-              color: accent.shade700,
-            ),
-            const SizedBox(width: 6),
-            Text(
-              'Tahun:',
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-                color: isDark ? Colors.grey.shade300 : Colors.grey.shade700,
-              ),
-            ),
-            const SizedBox(width: 8),
-            for (final y in years) ...[
-              _buildScopeChip(
-                label: y,
-                isSelected: _selectedTahun == y,
-                accent: accent,
-                isDark: isDark,
-                onTap: () {
-                  if (_selectedTahun != y) {
-                    setState(() {
-                      _selectedTahun = y;
-                      _selectedItemLabel = null;
-                    });
-                    _animController.reset();
-                    _animController.forward();
-                    widget.onTahunChanged?.call(y);
-                  }
-                },
+            if (leadingIcon != null) ...[
+              Icon(
+                leadingIcon,
+                size: 13,
+                color: isSelected
+                    ? (isDark ? accent.shade200 : accent.shade800)
+                    : (isDark ? Colors.grey.shade400 : Colors.grey.shade700),
               ),
               const SizedBox(width: 4),
+            ],
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                color: isSelected
+                    ? (isDark ? accent.shade200 : accent.shade800)
+                    : (isDark ? Colors.grey.shade400 : Colors.grey.shade700),
+              ),
+            ),
+            if (badgeSuffix != null) ...[
+              const SizedBox(width: 4),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: isDark ? 0.35 : 0.18),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  badgeSuffix,
+                  style: TextStyle(
+                    fontSize: 9,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? accent.shade100 : accent.shade800,
+                  ),
+                ),
+              ),
             ],
           ],
         ),
@@ -1420,70 +2214,89 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                for (final style in ChartStyle.values)
-                  InkWell(
-                    onTap: () => _switchStyle(style),
-                    borderRadius: BorderRadius.circular(8),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: _selectedStyle == style
-                            ? (isDark ? colorScheme.surface : Colors.white)
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.circular(8),
-                        boxShadow: _selectedStyle == style
-                            ? [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.08),
-                                  blurRadius: 4,
-                                  offset: const Offset(0, 1),
-                                ),
-                              ]
-                            : null,
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            style.icon,
-                            size: 14,
-                            color: _selectedStyle == style
-                                ? accent.shade700
-                                : colorScheme.onSurfaceVariant,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            style.label,
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: _selectedStyle == style
-                                  ? FontWeight.bold
-                                  : FontWeight.w500,
+                for (final style in ChartStyle.values) ...[
+                  () {
+                    final isTrendLineChip =
+                        _activeTab == DhkpGrafikTab.trenBulanan &&
+                        style == ChartStyle.batang;
+                    final chipIcon = isTrendLineChip
+                        ? Icons.show_chart_rounded
+                        : style.icon;
+                    final chipLabel = isTrendLineChip
+                        ? 'Garis Tren'
+                        : style.label;
+                    return InkWell(
+                      onTap: () => _switchStyle(style),
+                      borderRadius: BorderRadius.circular(8),
+                      child: AnimatedContainer(
+                        duration: AppMotion.resolve(
+                          context,
+                          AppMotion.component,
+                        ),
+                        curve: AppMotion.smoothCurve,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: _selectedStyle == style
+                              ? (isDark ? colorScheme.surface : Colors.white)
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(8),
+                          boxShadow: _selectedStyle == style
+                              ? [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.08),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 1),
+                                  ),
+                                ]
+                              : null,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              chipIcon,
+                              size: 14,
                               color: _selectedStyle == style
                                   ? accent.shade700
                                   : colorScheme.onSurfaceVariant,
                             ),
-                          ),
-                        ],
+                            const SizedBox(width: 4),
+                            Text(
+                              chipLabel,
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: _selectedStyle == style
+                                    ? FontWeight.bold
+                                    : FontWeight.w500,
+                                color: _selectedStyle == style
+                                    ? accent.shade700
+                                    : colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  ),
+                    );
+                  }(),
+                ],
               ],
             ),
           ),
         ),
 
-        // Kanan: Pengurutan & Tombol Lipat/Buka Semua
-        Row(
-          mainAxisSize: MainAxisSize.min,
+        // Kanan: Pengurutan & Tombol Lipat/Buka Semua (Wrap aman di 360dp mobile)
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             // Mode Pas Layar / Bisa Digeser (Khusus Diagram Batang)
-            if (_selectedStyle == ChartStyle.batang ||
-                _selectedStyle == ChartStyle.semua) ...[
+            if (_activeTab != DhkpGrafikTab.trenBulanan &&
+                (_selectedStyle == ChartStyle.batang ||
+                    _selectedStyle == ChartStyle.semua))
               Tooltip(
                 message: _fitColumnBars
                     ? 'Mode Pas Layar: Semua blok dirapatkan agar muat dalam satu layar tanpa digeser. Ketuk untuk beralih ke Mode Geser.'
@@ -1542,9 +2355,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
                   ),
                 ),
               ),
-              const SizedBox(width: 6),
-            ],
-            if (_activeTab != DhkpGrafikTab.trenBulanan) ...[
+            if (_activeTab != DhkpGrafikTab.trenBulanan)
               PopupMenuButton<GrafikSortMode>(
                 tooltip: 'Urutkan Grafik & Tabel',
                 initialValue: _sortMode,
@@ -1611,8 +2422,6 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
                   ),
                 ),
               ),
-              const SizedBox(width: 6),
-            ],
 
             // Tombol Lipat Semua / Buka Semua
             InkWell(
@@ -1744,11 +2553,11 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
                   onPressed: () {
                     setState(() {
                       _drillDownDusun = dusunNum;
-                      _groupByDusun = false;
+                      _seDesaMode = false;
                       _selectedItemLabel = null;
                     });
-                    _animController.reset();
-                    _animController.forward();
+                    _savePreferences();
+                    _replayAnimation();
                   },
                   icon: Icon(
                     Icons.zoom_in_rounded,
@@ -1764,6 +2573,53 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
                     ),
                   ),
                 ),
+              if (match.label.startsWith('Desa ') && _selectedDesaCode == null)
+                () {
+                  final kelMatch =
+                      DhkpGrafikAnalytics.resolveDesaCodesInKecamatan(
+                            records,
+                            '',
+                          )
+                          .where(
+                            (k) =>
+                                DhkpGrafikAnalytics.formatDesaLabel(k) ==
+                                match.label,
+                          )
+                          .firstOrNull;
+                  if (kelMatch == null) return const SizedBox.shrink();
+                  return TextButton.icon(
+                    style: TextButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                    ),
+                    onPressed: () {
+                      setState(() {
+                        _selectedDesaCode = kelMatch;
+                        _drillDownDusun = null;
+                        _seDesaMode = false;
+                        _selectedItemLabel = null;
+                      });
+                      _savePreferences();
+                      _replayAnimation();
+                    },
+                    icon: Icon(
+                      Icons.zoom_in_rounded,
+                      size: 15,
+                      color: accent.shade700,
+                    ),
+                    label: Text(
+                      'Lihat Desa',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: accent.shade700,
+                      ),
+                    ),
+                  );
+                }(),
               if (_activeTab == DhkpGrafikTab.trenBulanan) ...[
                 () {
                   final mIdx =
@@ -1991,7 +2847,8 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
                     ),
                   ),
                   const SizedBox(width: 4),
-                  if (sectionKey == 'batang') ...[
+                  if (sectionKey == 'batang' &&
+                      _activeTab != DhkpGrafikTab.trenBulanan) ...[
                     IconButton(
                       visualDensity: VisualDensity.compact,
                       constraints: const BoxConstraints(
@@ -2088,7 +2945,8 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
                   const SizedBox(width: 2),
                   AnimatedRotation(
                     turns: isCollapsed ? 0.0 : 0.5,
-                    duration: const Duration(milliseconds: 250),
+                    duration: AppMotion.resolve(context, AppMotion.dialog),
+                    curve: AppMotion.smoothCurve,
                     child: Icon(
                       Icons.keyboard_arrow_down_rounded,
                       size: 22,
@@ -2099,21 +2957,31 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
               ),
             ),
           ),
-          AnimatedCrossFade(
-            firstChild: const SizedBox(width: double.infinity, height: 0),
-            secondChild: RepaintBoundary(
-              key: boundaryKey,
-              child: Container(
-                color: isDark ? Theme.of(context).cardColor : Colors.white,
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                child: child,
-              ),
-            ),
-            crossFadeState: isCollapsed
-                ? CrossFadeState.showFirst
-                : CrossFadeState.showSecond,
-            duration: const Duration(milliseconds: 260),
-            sizeCurve: Curves.easeInOutCubic,
+          Builder(
+            builder: (ctx) {
+              final expandedSection = RepaintBoundary(
+                key: boundaryKey,
+                child: Container(
+                  color: isDark ? Theme.of(ctx).cardColor : Colors.white,
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                  child: child,
+                ),
+              );
+              if (AppMotion.isReducedMotion(ctx)) {
+                return isCollapsed
+                    ? const SizedBox(width: double.infinity, height: 0)
+                    : expandedSection;
+              }
+              return AnimatedCrossFade(
+                firstChild: const SizedBox(width: double.infinity, height: 0),
+                secondChild: expandedSection,
+                crossFadeState: isCollapsed
+                    ? CrossFadeState.showFirst
+                    : CrossFadeState.showSecond,
+                duration: AppMotion.page,
+                sizeCurve: AppMotion.smoothCurve,
+              );
+            },
           ),
         ],
       ),
@@ -2166,6 +3034,8 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
                   .fold(0.0, math.max),
               topLabelExtractor: (g) =>
                   'Rp ${formatShortRupiah(g.lunasNominal)}',
+              animatedTopLabelBuilder: (g, t) =>
+                  'Rp ${formatShortRupiah(unityLerp(0.0, g.lunasNominal.toDouble(), t).round())}',
               subLabelExtractor: (g) => '${g.lunasPct.toStringAsFixed(0)}%',
               color1: Colors.teal.shade400,
               color2: Colors.teal.shade800,
@@ -2196,6 +3066,8 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
                   .map((g) => g.lunasNominal.toDouble())
                   .fold(0.0, math.max),
               labelRight: (g) => 'Rp ${formatShortRupiah(g.lunasNominal)}',
+              animatedLabelRightBuilder: (g, t) =>
+                  'Rp ${formatShortRupiah(unityLerp(0.0, g.lunasNominal.toDouble(), t).round())}',
               subRight: (g) => '${g.lunasPct.toStringAsFixed(1)}% dari target',
               color1: Colors.teal.shade400,
               color2: Colors.teal.shade700,
@@ -2226,6 +3098,8 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
                 totalPendapatanMasuk.toDouble(),
               ),
               centerLabel: 'Rp ${formatShortRupiah(totalPendapatanMasuk)}',
+              animatedCenterLabelBuilder: (t) =>
+                  'Rp ${formatShortRupiah(unityLerp(0.0, totalPendapatanMasuk.toDouble(), t).round())}',
               centerSub: 'TERKUMPUL',
               centerColor: Colors.teal,
               isDark: isDark,
@@ -2307,6 +3181,8 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
               valueExtractor: (g) => g.lunasPct,
               maxVal: 100.0,
               topLabelExtractor: (g) => '${g.lunasPct.toStringAsFixed(1)}%',
+              animatedTopLabelBuilder: (g, t) =>
+                  '${unityLerp(0.0, g.lunasPct, t).toStringAsFixed(1)}%',
               subLabelExtractor: (g) => '${g.lunasNop}/${g.totalNop}',
               color1: Colors.green.shade400,
               color2: Colors.green.shade700,
@@ -2335,6 +3211,8 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
               valueExtractor: (g) => g.lunasPct,
               maxVal: 100.0,
               labelRight: (g) => '${g.lunasPct.toStringAsFixed(1)}%',
+              animatedLabelRightBuilder: (g, t) =>
+                  '${unityLerp(0.0, g.lunasPct, t).toStringAsFixed(1)}%',
               subRight: (g) => '${g.lunasNop}/${g.totalNop} objek',
               color1: Colors.green.shade400,
               color2: Colors.green.shade700,
@@ -2366,6 +3244,8 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
               achievedColor: Colors.green.shade600,
               remainingColor: Colors.grey.shade400,
               centerLabel: '${overallPct.toStringAsFixed(1)}%',
+              animatedCenterLabelBuilder: (animatedPct) =>
+                  '${animatedPct.toStringAsFixed(1)}%',
               centerSub: 'TERCAPAI',
               isDark: isDark,
               selectedItemLabel: _selectedItemLabel,
@@ -2450,6 +3330,8 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
                   .fold(0.0, math.max),
               topLabelExtractor: (g) =>
                   'Rp ${formatShortRupiah(g.belumBayarNominal)}',
+              animatedTopLabelBuilder: (g, t) =>
+                  'Rp ${formatShortRupiah(unityLerp(0.0, g.belumBayarNominal.toDouble(), t).round())}',
               subLabelExtractor: (g) => '${g.belumBayarNop} objek',
               color1: Colors.orange.shade400,
               color2: Colors.deepOrange.shade700,
@@ -2480,6 +3362,8 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
                   .map((g) => g.belumBayarNominal.toDouble())
                   .fold(0.0, math.max),
               labelRight: (g) => 'Rp ${formatShortRupiah(g.belumBayarNominal)}',
+              animatedLabelRightBuilder: (g, t) =>
+                  'Rp ${formatShortRupiah(unityLerp(0.0, g.belumBayarNominal.toDouble(), t).round())}',
               subRight: (g) => '${g.belumBayarNop} objek belum lunas',
               color1: Colors.orange.shade400,
               color2: Colors.deepOrange.shade600,
@@ -2510,6 +3394,8 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
                 totalBelumBayarNominal.toDouble(),
               ),
               centerLabel: 'Rp ${formatShortRupiah(totalBelumBayarNominal)}',
+              animatedCenterLabelBuilder: (t) =>
+                  'Rp ${formatShortRupiah(unityLerp(0.0, totalBelumBayarNominal.toDouble(), t).round())}',
               centerSub: 'BELUM BAYAR',
               centerColor: Colors.orange,
               isDark: isDark,
@@ -2596,6 +3482,8 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
                   .map((g) => g.lunasNop.toDouble())
                   .fold(0.0, math.max),
               topLabelExtractor: (g) => '${g.lunasNop} objek',
+              animatedTopLabelBuilder: (g, t) =>
+                  '${unityLerp(0.0, g.lunasNop.toDouble(), t).round()} objek',
               subLabelExtractor: (g) =>
                   'Rp ${formatShortRupiah(g.lunasNominal)}',
               color1: Colors.blue.shade400,
@@ -2628,6 +3516,8 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
                   .map((g) => g.lunasNop.toDouble())
                   .fold(0.0, math.max),
               labelRight: (g) => '${g.lunasNop} objek',
+              animatedLabelRightBuilder: (g, t) =>
+                  '${unityLerp(0.0, g.lunasNop.toDouble(), t).round()} objek',
               subRight: (g) => 'Rp ${formatShortRupiah(g.lunasNominal)}',
               color1: Colors.blue.shade400,
               color2: Colors.blue.shade700,
@@ -2658,6 +3548,8 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
                 totalSudahBayarCount.toDouble(),
               ),
               centerLabel: '$totalSudahBayarCount',
+              animatedCenterLabelBuilder: (t) =>
+                  '${unityLerp(0.0, totalSudahBayarCount.toDouble(), t).round()}',
               centerSub: 'OBJEK LUNAS',
               centerColor: Colors.blue,
               isDark: isDark,
@@ -2700,14 +3592,112 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
   // =========================================================================
   // TAB: TREN PEMBAYARAN TIAP BULAN (JAN - DES)
   // =========================================================================
-  Widget _buildTrenBulananSection(List<BlokRecord> records, bool isDark) {
+  Widget _buildTrenBulananSection(_DhkpResolvedContext scope, bool isDark) {
+    final records = scope.murniRecords;
     final monthGroups = DhkpGrafikAnalytics.buildMonthGroups(
       records,
       tahun: _selectedTahun,
     );
+    final trendSeries = _buildTrendSeriesForScope(scope, isDark);
     final monthlyNominal = monthGroups.map((g) => g.lunasNominal).toList();
     final totalDatedNominal = monthlyNominal.fold<int>(0, (sum, v) => sum + v);
     final maxMonthVal = monthlyNominal.fold<int>(0, math.max);
+
+    var maxTrendVal = 0;
+    for (final s in trendSeries) {
+      for (final v in s.monthlyNominal) {
+        if (v > maxTrendVal) maxTrendVal = v;
+      }
+    }
+    if (maxTrendVal == 0) maxTrendVal = maxMonthVal;
+
+    final canCompare = _canCompareYearsForScope(scope);
+    final activeCompareYear = canCompare
+        ? _resolveValidCompareYear(scope.availableYears)
+        : null;
+    final isYearCompareActive = activeCompareYear != null;
+    final distinctBlokCount = records.map((r) => r.blok).toSet().length;
+    final showDesaPicker =
+        !isYearCompareActive &&
+        scope.isKecamatanAggregate &&
+        !_seDesaMode &&
+        scope.desaCodes.length > _maxCustomDesas;
+
+    final (cardTitle, cardSubtitle, cardBadge) = () {
+      if (isYearCompareActive) {
+        final entityName = _drillDownDusun != null
+            ? 'Total Dusun $_drillDownDusun'
+            : (scope.isKecamatanAggregate
+                  ? _formatKecamatanLabel(scope.primaryKecamatanCode)
+                  : (scope.effectiveDesaCode != null
+                        ? DhkpGrafikAnalytics.formatDesaLabel(
+                            scope.effectiveDesaCode!,
+                          )
+                        : 'Se-Desa'));
+        final primaryTotal = trendSeries.isNotEmpty
+            ? trendSeries.first.totalNominal
+            : 0;
+        final compareTotal = trendSeries.length > 1
+            ? trendSeries[1].totalNominal
+            : 0;
+        final deltaSuffix = compareTotal > 0
+            ? () {
+                final diffPct =
+                    ((primaryTotal - compareTotal) / compareTotal) * 100.0;
+                final sign = diffPct >= 0 ? '+' : '';
+                return ' • Selisih: $sign${diffPct.toStringAsFixed(1)}%';
+              }()
+            : '';
+        return (
+          'Tren $_selectedTahun vs $activeCompareYear ($entityName)',
+          'Garis solid: $_selectedTahun • Garis putus-putus: $activeCompareYear$deltaSuffix',
+          '$_selectedTahun vs $activeCompareYear',
+        );
+      }
+      if (scope.isKecamatanAggregate && !_seDesaMode) {
+        return (
+          'Grafik Tren Pembayaran Per Desa',
+          scope.desaCodes.length > _maxCustomDesas
+              ? 'Menampilkan maks. $_maxCustomDesas desa dalam ${_formatKecamatanLabel(scope.primaryKecamatanCode)}'
+              : 'Perbandingan penerimaan bulanan antar desa dalam 1 kecamatan',
+          '${trendSeries.length} Desa',
+        );
+      }
+      if (_drillDownDusun != null) {
+        return (
+          'Grafik Tren Pembayaran Dusun $_drillDownDusun (Per Blok)',
+          'Pergerakan bulanan tiap blok di Dusun $_drillDownDusun — ketuk legend untuk fokus',
+          '${trendSeries.length} Blok',
+        );
+      }
+      if (!_seDesaMode && scope.hasMultiDusun) {
+        return (
+          'Grafik Garis Tren per Dusun (Kadus)',
+          'Perbandingan tren pembayaran Dusun 1–${scope.uniqueDusuns.length} (Jan - Des $_selectedTahun)',
+          '${trendSeries.length} Dusun',
+        );
+      }
+      if (!_seDesaMode && !scope.hasMultiDusun && distinctBlokCount > 1) {
+        if (scope.uniqueDusuns.isNotEmpty) {
+          final activeDusun = scope.uniqueDusuns.first;
+          return (
+            'Grafik Tren Pembayaran Dusun $activeDusun (Per Blok)',
+            'Pergerakan bulanan tiap blok di Dusun $activeDusun — ketuk legend untuk fokus',
+            '${trendSeries.length} Blok',
+          );
+        }
+        return (
+          'Grafik Garis Tren per Blok',
+          'Perbandingan tren penerimaan tiap blok (Jan - Des $_selectedTahun)',
+          '${trendSeries.length} Blok',
+        );
+      }
+      return (
+        'Grafik Garis Tren Pembayaran Bulanan',
+        'Pergerakan penerimaan kas dari awal hingga akhir tahun (Jan - Des)',
+        'Jan - Des',
+      );
+    }();
 
     final showBatang =
         _selectedStyle == ChartStyle.batang ||
@@ -2720,25 +3710,82 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // 1. Diagram Batang & Garis Tren Bulanan (Jan - Des) - Menggantikan kurva rumput seperti gambar Brainly
+        // 1. Grafik Garis Tren Bulanan Halus (Jan - Des) tanpa batang
         if (showBatang) ...[
           _buildCollapsibleSectionCard(
             sectionKey: 'batang',
-            icon: Icons.bar_chart_rounded,
-            title: 'Diagram Batang & Garis Tren Bulanan',
-            subtitle:
-                'Penerimaan kas per bulan dengan garis poligon tren puncak (Jan - Des)',
-            badgeText: 'Jan - Des',
+            icon: Icons.show_chart_rounded,
+            title: cardTitle,
+            subtitle: cardSubtitle,
+            badgeText: cardBadge,
             accentColor: Colors.purple,
             isDark: isDark,
             groups: monthGroups,
-            child: renderDhkpComboBarLineTrend(
-              monthGroups: monthGroups,
-              maxMonthVal: maxMonthVal,
-              animationValue: _animation.value,
-              isDark: isDark,
-              selectedItemLabel: _selectedItemLabel,
-              onSelectLabel: _onSelectLabel,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (showDesaPicker) ...[
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Text(
+                          'Filter ${scope.desaCodes.length} Desa:',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: isDark
+                                ? Colors.grey.shade300
+                                : Colors.grey.shade700,
+                          ),
+                        ),
+                        _buildScopeChip(
+                          label: 'Top $_maxCustomDesas Desa',
+                          isSelected: _customCompareDesas.isEmpty,
+                          accent: Colors.purple,
+                          isDark: isDark,
+                          onTap: () {
+                            setState(() => _customCompareDesas.clear());
+                          },
+                        ),
+                        _buildScopeChip(
+                          label: _customCompareDesas.isEmpty
+                              ? 'Pilih Desa (Maks. $_maxCustomDesas)'
+                              : 'Desa Pilihan (${_customCompareDesas.length}/$_maxCustomDesas)',
+                          isSelected: _customCompareDesas.isNotEmpty,
+                          accent: Colors.purple,
+                          isDark: isDark,
+                          leadingIcon: Icons.checklist_rounded,
+                          onTap: () => _openSelectDesaDialog(
+                            scope.allScopedRecordsAcrossYears,
+                            scope.desaCodes,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                renderDhkpComboBarLineTrend(
+                  monthGroups: monthGroups,
+                  maxMonthVal: maxTrendVal,
+                  animationValue: _animation.value,
+                  isDark: isDark,
+                  selectedItemLabel: _selectedItemLabel,
+                  onSelectLabel: _onSelectLabel,
+                  tahun: _selectedTahun,
+                  forceCompleteAnimation: _isCapturingExport,
+                  seriesList: trendSeries,
+                  footerTrailing: _buildBottomComparisonControl(
+                    scope: scope,
+                    isDark: isDark,
+                    canCompare: canCompare,
+                    activeCompareYear: activeCompareYear,
+                  ),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 12),
@@ -2759,6 +3806,8 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
               valueExtractor: (g) => g.lunasNominal.toDouble(),
               maxVal: maxMonthVal.toDouble(),
               labelRight: (g) => 'Rp ${formatShortRupiah(g.lunasNominal)}',
+              animatedLabelRightBuilder: (g, t) =>
+                  'Rp ${formatShortRupiah(unityLerp(0.0, g.lunasNominal.toDouble(), t).round())}',
               subRight: (g) =>
                   '${g.lunasNop} objek (${g.lunasPct.toStringAsFixed(1)}%)',
               color1: Colors.purple.shade400,
@@ -2791,6 +3840,8 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
                 totalDatedNominal.toDouble(),
               ),
               centerLabel: 'Rp ${formatShortRupiah(totalDatedNominal)}',
+              animatedCenterLabelBuilder: (t) =>
+                  'Rp ${formatShortRupiah(unityLerp(0.0, totalDatedNominal.toDouble(), t).round())}',
               centerSub: 'TOTAL BULANAN',
               centerColor: Colors.purple,
               isDark: isDark,
@@ -2829,4 +3880,410 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
       ],
     );
   }
+
+  Widget _buildBottomComparisonControl({
+    required _DhkpResolvedContext scope,
+    required bool isDark,
+    required bool canCompare,
+    required String? activeCompareYear,
+  }) {
+    final years = scope.availableYears;
+    final candidateYears = years.where((y) => y != _selectedTahun).toList();
+    final suggestedYear = _suggestDefaultCompareYear(years);
+    const accent = Colors.purple;
+
+    if (candidateYears.isEmpty || suggestedYear == null) {
+      return Semantics(
+        container: true,
+        button: true,
+        label: 'Bandingkan Tahun (perlu minimal 2 tahun data)',
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: () => _applyCompareYear(_selectedTahun, scope: scope),
+            borderRadius: BorderRadius.circular(10),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.04)
+                    : Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: isDark ? Colors.white12 : Colors.grey.shade300,
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.compare_arrows_rounded,
+                    size: 14,
+                    color: isDark ? Colors.grey.shade500 : Colors.grey.shade600,
+                  ),
+                  const SizedBox(width: 5),
+                  Text(
+                    'Bandingkan',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: isDark
+                          ? Colors.grey.shade400
+                          : Colors.grey.shade600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    final palette = DhkpGrafikAnalytics.trendSeriesPalette(isDark: isDark);
+    final compareColor = palette.length > 1
+        ? palette[1]
+        : (isDark ? Colors.tealAccent.shade200 : Colors.teal.shade700);
+
+    List<PopupMenuEntry<String>> buildMenuItems({required bool includeClear}) {
+      return [
+        PopupMenuItem<String>(
+          enabled: false,
+          height: 30,
+          child: Text(
+            !canCompare
+                ? 'Bandingkan di ${scope.isKecamatanAggregate ? "Se-Kecamatan" : "Se-Desa"} vs $_selectedTahun'
+                : 'Bandingkan $_selectedTahun dengan:',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: isDark ? accent.shade200 : accent.shade700,
+            ),
+          ),
+        ),
+        const PopupMenuDivider(height: 6),
+        for (final y in candidateYears)
+          PopupMenuItem<String>(
+            value: y,
+            height: 36,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  activeCompareYear == y
+                      ? Icons.radio_button_checked_rounded
+                      : Icons.radio_button_unchecked_rounded,
+                  size: 15,
+                  color: activeCompareYear == y
+                      ? compareColor
+                      : Colors.grey.shade500,
+                ),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    'vs $y',
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: activeCompareYear == y
+                          ? FontWeight.w700
+                          : FontWeight.w500,
+                    ),
+                  ),
+                ),
+                if (y == suggestedYear) ...[
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 5,
+                      vertical: 1.5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: accent.withValues(alpha: isDark ? 0.25 : 0.12),
+                      borderRadius: BorderRadius.circular(5),
+                    ),
+                    child: Text(
+                      'Tahun lalu',
+                      style: TextStyle(
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? accent.shade100 : accent.shade800,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        if (includeClear) ...[
+          const PopupMenuDivider(height: 6),
+          PopupMenuItem<String>(
+            value: '__clear__',
+            height: 34,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.close_rounded,
+                  size: 15,
+                  color: isDark ? Colors.red.shade300 : Colors.red.shade700,
+                ),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    'Hentikan perbandingan',
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: isDark ? Colors.red.shade300 : Colors.red.shade700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ];
+    }
+
+    if (activeCompareYear == null) {
+      return Semantics(
+        container: true,
+        child: Material(
+          color: Colors.transparent,
+          child: Container(
+            decoration: BoxDecoration(
+              color: accent.withValues(alpha: isDark ? 0.18 : 0.08),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: accent.withValues(alpha: isDark ? 0.42 : 0.28),
+              ),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                InkWell(
+                  onTap: () => _applyCompareYear(suggestedYear, scope: scope),
+                  child: Padding(
+                    padding: const EdgeInsets.only(
+                      left: 10,
+                      right: 8,
+                      top: 6,
+                      bottom: 6,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.compare_arrows_rounded,
+                          size: 14,
+                          color: isDark ? accent.shade200 : accent.shade700,
+                        ),
+                        const SizedBox(width: 5),
+                        Text(
+                          'Bandingkan',
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w700,
+                            color: isDark ? accent.shade100 : accent.shade800,
+                          ),
+                        ),
+                        const SizedBox(width: 5),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 5,
+                            vertical: 1,
+                          ),
+                          decoration: BoxDecoration(
+                            color: accent.withValues(
+                              alpha: isDark ? 0.28 : 0.14,
+                            ),
+                            borderRadius: BorderRadius.circular(5),
+                          ),
+                          child: Text(
+                            'vs $suggestedYear',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: isDark ? accent.shade100 : accent.shade900,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                Container(
+                  width: 1,
+                  height: 20,
+                  color: accent.withValues(alpha: isDark ? 0.35 : 0.22),
+                ),
+                PopupMenuButton<String>(
+                  tooltip: '',
+                  padding: EdgeInsets.zero,
+                  position: PopupMenuPosition.over,
+                  constraints: const BoxConstraints(
+                    minWidth: 200,
+                    maxWidth: 320,
+                  ),
+                  onSelected: (value) => _applyCompareYear(value, scope: scope),
+                  itemBuilder: (_) => buildMenuItems(includeClear: false),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 6,
+                    ),
+                    child: Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      size: 16,
+                      color: isDark ? accent.shade100 : accent.shade800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Semantics(
+      container: true,
+      child: Material(
+        color: Colors.transparent,
+        child: Container(
+          decoration: BoxDecoration(
+            color: compareColor.withValues(alpha: isDark ? 0.16 : 0.10),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: compareColor.withValues(alpha: isDark ? 0.55 : 0.45),
+            ),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              PopupMenuButton<String>(
+                tooltip: '',
+                padding: EdgeInsets.zero,
+                position: PopupMenuPosition.over,
+                constraints: const BoxConstraints(minWidth: 200, maxWidth: 320),
+                onSelected: (value) {
+                  if (value == '__clear__') {
+                    _applyCompareYear(null, scope: scope);
+                  } else {
+                    _applyCompareYear(value, scope: scope);
+                  }
+                },
+                itemBuilder: (_) => buildMenuItems(includeClear: true),
+                child: Padding(
+                  padding: const EdgeInsets.only(
+                    left: 10,
+                    right: 6,
+                    top: 6,
+                    bottom: 6,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(
+                        width: 15,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            for (int i = 0; i < 3; i++)
+                              Container(
+                                width: 3.6,
+                                height: 2.2,
+                                decoration: BoxDecoration(
+                                  color: compareColor,
+                                  borderRadius: BorderRadius.circular(1),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        'vs $activeCompareYear',
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w700,
+                          color: isDark ? Colors.white : Colors.grey.shade900,
+                        ),
+                      ),
+                      const SizedBox(width: 2),
+                      Icon(
+                        Icons.keyboard_arrow_down_rounded,
+                        size: 16,
+                        color: isDark
+                            ? Colors.grey.shade200
+                            : Colors.grey.shade800,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              Container(
+                width: 1,
+                height: 20,
+                color: compareColor.withValues(alpha: isDark ? 0.35 : 0.30),
+              ),
+              Tooltip(
+                message: 'Hentikan perbandingan tahun',
+                child: InkWell(
+                  onTap: () => _applyCompareYear(null, scope: scope),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 7,
+                      vertical: 6,
+                    ),
+                    child: Icon(
+                      Icons.close_rounded,
+                      size: 15,
+                      color: isDark
+                          ? Colors.grey.shade200
+                          : Colors.grey.shade700,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DhkpResolvedContext {
+  final List<BlokRecord> murniRecords;
+  final List<BlokRecord> entityRecordsAcrossYears;
+  final List<BlokRecord> allScopedRecordsAcrossYears;
+  final bool hasMultiDusun;
+  final List<int> uniqueDusuns;
+  final List<String> availableYears;
+  final String primaryKecamatanCode;
+  final bool hasMultipleKecamatans;
+  final List<String> desaCodes;
+  final bool hasMultiDesa;
+  final String? effectiveDesaCode;
+
+  const _DhkpResolvedContext({
+    required this.murniRecords,
+    required this.entityRecordsAcrossYears,
+    required this.allScopedRecordsAcrossYears,
+    required this.hasMultiDusun,
+    required this.uniqueDusuns,
+    required this.availableYears,
+    required this.primaryKecamatanCode,
+    required this.hasMultipleKecamatans,
+    required this.desaCodes,
+    required this.hasMultiDesa,
+    required this.effectiveDesaCode,
+  });
+
+  bool get isKecamatanAggregate => hasMultiDesa && effectiveDesaCode == null;
 }

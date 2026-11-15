@@ -1,12 +1,13 @@
 /// Kebijakan Keamanan & Pembatasan Akses Google Drive untuk Cadangan Data DHKP.
 ///
 /// Prinsip Keamanan & Privasi (Least Privilege):
-/// 1. Aplikasi DILARANG KERAS meminta cakupan luas `https://www.googleapis.com/auth/drive`.
+/// 1. Aplikasi DILARANG KERAS meminta cakupan tulis penuh `https://www.googleapis.com/auth/drive`.
 /// 2. Aplikasi HANYA diizinkan menggunakan scope terbatas:
-///    - `https://www.googleapis.com/auth/drive.appdata` (Application Data folder rahasia/terisolasi), atau
-///    - `https://www.googleapis.com/auth/drive.file` (Akses per-file hanya ke berkas/folder yang dibuat oleh aplikasi ini).
+///    - `https://www.googleapis.com/auth/drive.appdata` (Application Data folder terisolasi),
+///    - `https://www.googleapis.com/auth/drive.file` (Akses tulis/kelola khusus berkas/folder yang dibuat oleh aplikasi ini), dan
+///    - `https://www.googleapis.com/auth/drive.readonly` (Akses baca-saja untuk menemukan berkas paket `.dkhp`/`.dat` yang dibagikan).
 /// 3. Folder khusus aplikasi di Google Drive dinamai [dedicatedFolderName] (`Cek PBB Cianjur`).
-/// 4. Aplikasi DILARANG KERAS mengakses, melihat, membaca, memodifikasi, atau menghapus berkas dan folder lain milik pengguna di Google Drive.
+/// 4. Aplikasi DILARANG KERAS memodifikasi atau menghapus berkas dan folder pribadi lain milik pengguna di Google Drive.
 /// 5. Kebijakan retensi Google Drive selaras dengan penyimpanan lokal: maksimal [maxCloudBackups] = 3 berkas cadangan terbaru.
 class GoogleDriveBackupPolicy {
   GoogleDriveBackupPolicy._();

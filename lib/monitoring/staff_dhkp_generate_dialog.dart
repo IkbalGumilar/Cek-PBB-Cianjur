@@ -4,8 +4,13 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
+import '../app_storage.dart';
+import '../blok_data_store.dart';
+import '../cianjur_wilayah_data.dart';
 import '../dkhp_package_helper.dart';
 import '../dusun_data.dart';
+import '../incoming_file_service.dart';
+import '../nop_helper.dart';
 import '../staff_portal_client.dart';
 import 'staff_dhkp_generate_service.dart';
 
@@ -64,9 +69,18 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
   late TextEditingController _desaController;
   late TextEditingController _kantorLatController;
   late TextEditingController _kantorLngController;
+  late TextEditingController _encryptionPasswordController;
+  final _passwordFieldKey = GlobalKey();
+  final _passwordFocusNode = FocusNode();
+
+  String _kecamatanCode = '';
+  String _kelurahanCode = '';
 
   final List<_DusunFormEntry> _dusunEntries = [];
   bool _filterByDusunBlocks = true;
+  bool _exportSplitByDusun = true;
+  bool _includeMasterInSplit = true;
+  bool _obscurePassword = true;
 
   bool _isProcessing = false;
   StaffDhkpGenerateProgress? _progress;
@@ -82,13 +96,21 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
 
     final kecName = widget.client.activeKecamatanName.isNotEmpty
         ? widget.client.activeKecamatanName
-        : 'MANDE';
+        : (activeKecamatanName.isNotEmpty ? activeKecamatanName : 'MANDE');
     final desaName = widget.client.activeKelurahanName.isNotEmpty
         ? widget.client.activeKelurahanName
-        : 'BOBOJONG';
+        : (activeDesaName.isNotEmpty ? activeDesaName : 'BOBOJONG');
+
+    _kecamatanCode = widget.client.activeKecamatanCode.isNotEmpty
+        ? extractKecamatanCode3(widget.client.activeKecamatanCode)
+        : activeKecamatanCode;
+    _kelurahanCode = widget.client.activeKelurahanCode.isNotEmpty
+        ? extractKelurahanCode3(widget.client.activeKelurahanCode)
+        : activeKelurahanCode;
 
     _kecamatanController = TextEditingController(text: kecName);
     _desaController = TextEditingController(text: desaName);
+    _encryptionPasswordController = TextEditingController();
 
     final kantorLat = DusunData.instance.kantorDesaLat ?? -6.763587;
     final kantorLng = DusunData.instance.kantorDesaLng ?? 107.238769;
@@ -130,10 +152,135 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
     _desaController.dispose();
     _kantorLatController.dispose();
     _kantorLngController.dispose();
+    _encryptionPasswordController.dispose();
+    _passwordFocusNode.dispose();
     for (final e in _dusunEntries) {
       e.dispose();
     }
     super.dispose();
+  }
+
+  ({
+    String kecCode3,
+    String kelCode3,
+    String vtaxKecCode,
+    String vtaxKelCode,
+    String kecName,
+    String desaName,
+  })
+  _currentResolvedWilayah() {
+    return StaffDhkpGenerateService.resolveWilayahParameters(
+      kelurahanCode: _kelurahanCode,
+      kecamatanCode: _kecamatanCode,
+      desaName: _desaController.text,
+      kecamatanName: _kecamatanController.text,
+      clientKelurahanCode: widget.client.activeKelurahanCode,
+      clientKecamatanCode: widget.client.activeKecamatanCode,
+    );
+  }
+
+  Future<void> _showCatalogWilayahPicker() async {
+    final resolved = _currentResolvedWilayah();
+    KecamatanOption selectedKec =
+        findKecamatanByCode(resolved.kecCode3) ??
+        findKecamatanByName(resolved.kecName) ??
+        cianjurWilayahCatalog.first;
+    DesaOption selectedDesa =
+        findDesaByCode(selectedKec.code, resolved.kelCode3) ??
+        (selectedKec.desaList.isNotEmpty
+            ? selectedKec.desaList.first
+            : const DesaOption(code: '001', name: 'DESA'));
+
+    final picked = await showDialog<(KecamatanOption, DesaOption)>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            return AlertDialog(
+              title: const Text('Pilih Wilayah Kabupaten Cianjur'),
+              content: SizedBox(
+                width: 400,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    DropdownButtonFormField<KecamatanOption>(
+                      initialValue: selectedKec,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Kecamatan (32 Kecamatan)',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      items: [
+                        for (final k in cianjurWilayahCatalog)
+                          DropdownMenuItem(
+                            value: k,
+                            child: Text('${k.name} (3205${k.code})'),
+                          ),
+                      ],
+                      onChanged: (val) {
+                        if (val == null) return;
+                        setDialogState(() {
+                          selectedKec = val;
+                          selectedDesa = val.desaList.first;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<DesaOption>(
+                      initialValue: selectedDesa,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Desa / Kelurahan',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      items: [
+                        for (final d in selectedKec.desaList)
+                          DropdownMenuItem(
+                            value: d,
+                            child: Text(
+                              '${d.name} (3205${selectedKec.code}${d.code})',
+                            ),
+                          ),
+                      ],
+                      onChanged: (val) {
+                        if (val == null) return;
+                        setDialogState(() {
+                          selectedDesa = val;
+                        });
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Batal'),
+                ),
+                FilledButton(
+                  onPressed: () =>
+                      Navigator.pop(ctx, (selectedKec, selectedDesa)),
+                  child: const Text('Gunakan Wilayah Ini'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (picked != null && mounted) {
+      final (kec, desa) = picked;
+      setState(() {
+        _kecamatanCode = kec.code;
+        _kelurahanCode = desa.code;
+        _kecamatanController.text = kec.name;
+        _desaController.text = desa.name;
+      });
+    }
   }
 
   void _addDusun() {
@@ -162,6 +309,7 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
       final path = files.first.path;
       if (path == null) return;
 
+
       Map<String, dynamic>? manifest;
       final lower = path.toLowerCase();
       if (lower.endsWith('.json')) {
@@ -170,6 +318,17 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
         if (decoded is Map<String, dynamic>) manifest = decoded;
       } else {
         manifest = await DhkpPackageHelper.readBackupManifest(path);
+        if (manifest == null &&
+            await DhkpCrypto.isPasswordProtectedFile(path) &&
+            mounted) {
+          final pwd = await IncomingFileService.promptBackupPassword(context);
+          if (pwd != null && pwd.isNotEmpty) {
+            manifest = await DhkpPackageHelper.readBackupManifest(
+              path,
+              password: pwd,
+            );
+          }
+        }
       }
 
       if (manifest == null) {
@@ -185,17 +344,37 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
         return;
       }
 
-      // 1. Ekstrak Wilayah
+      // 1. Ekstrak Wilayah (Nama & Kode Kecamatan/Desa)
       final kec = manifest['kecamatan'] as Map?;
       final desa = manifest['desa'] as Map?;
       final kecName = kec?['nama']?.toString();
       final desaName = desa?['nama']?.toString();
+      final kecKode =
+          kec?['kode']?.toString() ?? kec?['kode_vtax']?.toString() ?? '';
+      final desaKode =
+          desa?['kode']?.toString() ??
+          desa?['kode_vtax']?.toString() ??
+          desa?['prefix_nop']?.toString() ??
+          '';
 
+      if (kecKode.isNotEmpty) {
+        _kecamatanCode = extractKecamatanCode3(kecKode);
+      }
+      if (desaKode.isNotEmpty) {
+        _kelurahanCode = extractKelurahanCode3(desaKode);
+      }
       if (kecName != null && kecName.isNotEmpty) {
         _kecamatanController.text = kecName;
+      } else if (_kecamatanCode.isNotEmpty) {
+        _kecamatanController.text = lookupKecamatanName(_kecamatanCode);
       }
       if (desaName != null && desaName.isNotEmpty) {
         _desaController.text = desaName;
+      } else if (_kelurahanCode.isNotEmpty) {
+        _desaController.text = lookupKelurahanName(
+          _kelurahanCode,
+          kecamatanCode: _kecamatanCode,
+        );
       }
 
       // 2. Ekstrak Koordinat Kantor Desa
@@ -209,8 +388,9 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
         if (lng != null && lng.isNotEmpty) _kantorLngController.text = lng;
       }
 
-      // 3. Ekstrak Daftar Dusun & Blok
-      final rawDusuns = manifest['dusuns'] as List?;
+      // 3. Ekstrak Daftar Dusun & Blok (dukung key 'dusuns' maupun 'kadus')
+      final rawDusuns =
+          (manifest['dusuns'] as List?) ?? (manifest['kadus'] as List?);
       if (rawDusuns != null && rawDusuns.isNotEmpty) {
         for (final e in _dusunEntries) {
           e.dispose();
@@ -219,7 +399,10 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
 
         for (final item in rawDusuns) {
           if (item is Map) {
-            final name = item['name']?.toString() ?? 'Dusun ${item['number']}';
+            final name =
+                item['name']?.toString() ??
+                item['nama']?.toString() ??
+                'Dusun ${item['number'] ?? (_dusunEntries.length + 1)}';
             final titikFokus = item['titik_fokus'] as Map?;
             final lat =
                 titikFokus?['lat']?.toString() ??
@@ -229,7 +412,8 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
                 titikFokus?['lng']?.toString() ??
                 item['focusLng']?.toString() ??
                 '';
-            final bloksList = item['bloks'] as List?;
+            final bloksList =
+                (item['bloks'] as List?) ?? (item['daftar_blok'] as List?);
             final bloksStr = bloksList != null
                 ? bloksList
                       .map(
@@ -258,10 +442,11 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
       setState(() {});
 
       if (!mounted) return;
+      final resolved = _currentResolvedWilayah();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            '✅ Berhasil memuat manifest: Wilayah ${_desaController.text} (${_dusunEntries.length} Dusun terdeteksi)',
+            '✅ Manifest dimuat: Desa ${resolved.desaName} (${resolved.vtaxKelCode}) • ${_dusunEntries.length} Dusun',
           ),
           backgroundColor: Colors.green.shade700,
         ),
@@ -313,12 +498,271 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
     return list;
   }
 
+  Future<void> _copySplitFilesToDirectory(SplitDkhpExportResult split) async {
+    final selectedDir = await FilePicker.getDirectoryPath(
+      dialogTitle: 'Pilih Folder Tujuan Simpan Paket .dkhp per Dusun',
+    );
+    if (selectedDir == null || selectedDir.trim().isEmpty) return;
+
+    final destDir = Directory(selectedDir);
+    if (!await destDir.exists()) {
+      await destDir.create(recursive: true);
+    }
+
+    var copiedCount = 0;
+    for (final entry in split.allEntries) {
+      final fileName = entry.file.uri.pathSegments.last;
+      final targetPath = '${destDir.path}${Platform.pathSeparator}$fileName';
+      if (entry.file.path != targetPath) {
+        await entry.file.copy(targetPath);
+      }
+      copiedCount++;
+    }
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          '✅ $copiedCount berkas .dkhp terenkripsi berhasil disalin ke: ${destDir.path}',
+        ),
+        backgroundColor: Colors.green.shade700,
+      ),
+    );
+  }
+
+  bool _validateFormBeforeAction() {
+    final isValid = _formKey.currentState?.validate() ?? false;
+    if (isValid) return true;
+
+    final pwdError = DhkpCrypto.validateOptionalPassword(
+      _encryptionPasswordController.text,
+    );
+    if (pwdError != null) {
+      final fieldContext = _passwordFieldKey.currentContext;
+      if (fieldContext != null) {
+        Scrollable.ensureVisible(
+          fieldContext,
+          duration: const Duration(milliseconds: 250),
+          alignment: 0.4,
+        );
+      }
+      showDialog<void>(
+        context: context,
+        builder: (c) => AlertDialog(
+          icon: const Icon(
+            Icons.password_rounded,
+            color: Colors.orange,
+            size: 40,
+          ),
+          title: const Text('Kata Sandi Belum Memenuhi Syarat'),
+          content: Text(pwdError),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.pop(c),
+              child: const Text('Perbaiki'),
+            ),
+          ],
+        ),
+      ).then((_) {
+        if (mounted) _passwordFocusNode.requestFocus();
+      });
+    }
+    return false;
+  }
+
+  Future<void> _splitExistingLocalDhkp() async {
+    if (!_validateFormBeforeAction()) return;
+    final dusuns = _buildDusunsFromForm();
+    if (dusuns.isEmpty) return;
+
+    final localRecords = await BlokDataStore.instance.loadAll();
+    if (!mounted) return;
+    if (localRecords.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Data DHKP lokal masih kosong. Silakan Generate DHKP terlebih dahulu.',
+          ),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    final resolved = _currentResolvedWilayah();
+    final kantorLat = double.tryParse(_kantorLatController.text.trim());
+    final kantorLng = double.tryParse(_kantorLngController.text.trim());
+    final customPwd = _encryptionPasswordController.text.trim();
+
+    final selectedDirPath = await FilePicker.getDirectoryPath(
+      dialogTitle:
+          'Pilih Folder Tujuan Split ${dusuns.length} File Dusun (.dkhp)',
+    );
+    final targetDir =
+        (selectedDirPath != null && selectedDirPath.trim().isNotEmpty)
+        ? Directory(selectedDirPath)
+        : await AppStorage.getBackupsDirectory();
+
+    if (!mounted) return;
+    setState(() {
+      _isProcessing = true;
+      _progress = StaffDhkpGenerateProgress(
+        currentPage: 1,
+        estimatedTotalPages: 1,
+        checkedRecords: localRecords.length,
+        belumBayarCount: 0,
+        sudahBayarCount: 0,
+        currentStatus:
+            'Memecah & mengenkripsi ${dusuns.length} berkas .dkhp Kedusunan...',
+      );
+    });
+
+    try {
+      await DusunData.instance.setDusuns(dusuns);
+      if (kantorLat != null && kantorLng != null) {
+        await DusunData.instance.setKantorDesaLocation(kantorLat, kantorLng);
+      }
+      await saveActiveWilayah(
+        kecCode: resolved.kecCode3,
+        kelCode: resolved.kelCode3,
+        desaName: resolved.desaName,
+        kecName: resolved.kecName,
+      );
+
+      final splitResult = await DhkpPackageHelper.packSplitDkhpByDusun(
+        outputDirectory: targetDir,
+        records: localRecords,
+        dusuns: dusuns,
+        kecamatanCode: resolved.kecCode3,
+        kecamatanName: resolved.kecName,
+        kelurahanCode: resolved.kelCode3,
+        desaName: resolved.desaName,
+        kantorDesaLat: kantorLat,
+        kantorDesaLng: kantorLng,
+        tahunPajak: _tahunAkhirController.text.trim(),
+        password: customPwd.isNotEmpty ? customPwd : null,
+        includeMasterDesa: _includeMasterInSplit,
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _isProcessing = false;
+      });
+
+      await _showSplitResultDialog(splitResult, desaName: resolved.desaName);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isProcessing = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Gagal memecah paket .dkhp: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _showSplitResultDialog(
+    SplitDkhpExportResult split, {
+    required String desaName,
+  }) {
+    return showDialog<void>(
+      context: context,
+      builder: (c) => AlertDialog(
+        icon: const Icon(
+          Icons.enhanced_encryption_rounded,
+          color: Colors.teal,
+          size: 44,
+        ),
+        title: Text(
+          'Split ${split.dusunEntries.length} Dusun Selesai (Terenkripsi)',
+        ),
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 500),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Wilayah: Desa $desaName • Enkripsi: DKH2 (AES-256-GCM)',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Folder: ${split.outputDirectory.path}',
+                  style: const TextStyle(fontSize: 11, color: Colors.grey),
+                ),
+                const Divider(),
+                if (split.masterEntry != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: Text(
+                      '📦 [MASTER DESA] ${split.masterEntry!.file.uri.pathSegments.last}\n'
+                      '   └─ ${split.masterEntry!.recordCount} SPPT (${split.masterEntry!.blokList.length} blok)',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                for (final d in split.dusunEntries)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: Text(
+                      '🔐 [Dusun #${d.dusunNumber} - ${d.label}] ${d.file.uri.pathSegments.last}\n'
+                      '   └─ ${d.recordCount} SPPT • Blok: ${d.blokList.isEmpty ? "-" : d.blokList.join(", ")}',
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  ),
+                if (split.unassignedRecordCount > 0) ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      '⚠️ Terdapat ${split.unassignedRecordCount} SPPT pada blok (${split.unassignedBloks.join(", ")}) yang belum dimasukkan ke dusun mana pun.',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: Colors.orange,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          OutlinedButton.icon(
+            onPressed: () => _copySplitFilesToDirectory(split),
+            icon: const Icon(Icons.folder_copy_outlined, size: 18),
+            label: const Text('Salin ke Folder Lain...'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(c),
+            child: const Text('Selesai'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _startGenerate() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_validateFormBeforeAction()) return;
 
     final tAwal = _tahunAwalController.text.trim();
     final tAkhir = _tahunAkhirController.text.trim();
     final labelTahun = tAwal == tAkhir ? tAwal : '$tAwal s/d $tAkhir';
+    final resolvedWilayah = _currentResolvedWilayah();
 
     final dusuns = _buildDusunsFromForm();
     final allConfiguredBlocks = <String>{};
@@ -332,6 +776,15 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
     final cakupanKet = (_filterByDusunBlocks && allConfiguredBlocks.isNotEmpty)
         ? 'Hanya blok terdaftar pada dusun (${allConfiguredBlocks.length} blok: ${allConfiguredBlocks.join(", ")})'
         : 'Semua blok se-desa (tanpa filter blok dusun)';
+    final splitKet = _exportSplitByDusun
+        ? 'Otomatis dipecah ke ${dusuns.length} file .dkhp Kedusunan${_includeMasterInSplit ? " + 1 Master Desa" : ""} (Terenkripsi DKH2 AES-256-GCM)'
+        : 'Hanya terapkan ke database lokal';
+    final previewPwd = _encryptionPasswordController.text.trim();
+    final kunciKet = !_exportSplitByDusun
+        ? ''
+        : previewPwd.isNotEmpty
+        ? '\n🔑 Kunci Enkripsi: Kata Sandi Kustom (${previewPwd.length} karakter)'
+        : '\n🔑 Kunci Enkripsi: Kunci Pemulihan / Sandi Backup aktif (otomatis)';
 
     final confirm = await showDialog<bool>(
       context: context,
@@ -344,8 +797,11 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
           ],
         ),
         content: Text(
-          'Anda akan mengunduh seluruh data SPPT Tahun $labelTahun dari Portal Staf untuk Desa ${_desaController.text}.\n\n'
-          '📌 Cakupan: $cakupanKet\n\n'
+          'Anda akan mengunduh seluruh data SPPT Tahun $labelTahun dari Portal Staf untuk:\n'
+          '• Kecamatan: ${resolvedWilayah.kecName} (${resolvedWilayah.vtaxKecCode})\n'
+          '• Desa/Kel.: ${resolvedWilayah.desaName} (${resolvedWilayah.vtaxKelCode})\n\n'
+          '📌 Cakupan: $cakupanKet\n'
+          '🔐 Paket Split: $splitKet$kunciKet\n\n'
           '⚠️ Basis data DHKP di aplikasi saat ini akan DITIMPA dengan data baru. Salinan cadangan (backup) otomatis disimpan sebelum proses.\n\n'
           'Lanjutkan proses?',
         ),
@@ -369,6 +825,7 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
 
     final kantorLat = double.tryParse(_kantorLatController.text.trim());
     final kantorLng = double.tryParse(_kantorLngController.text.trim());
+    final customPwd = _encryptionPasswordController.text.trim();
 
     setState(() {
       _isProcessing = true;
@@ -380,15 +837,18 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
       client: widget.client,
       tahunAwal: tAwal,
       tahunAkhir: tAkhir,
-      kelurahanCode: widget.client.activeKelurahanCode,
-      kecamatanCode: widget.client.activeKecamatanCode,
-      desaName: _desaController.text.trim(),
-      kecamatanName: _kecamatanController.text.trim(),
+      kelurahanCode: resolvedWilayah.kelCode3,
+      kecamatanCode: resolvedWilayah.kecCode3,
+      desaName: resolvedWilayah.desaName,
+      kecamatanName: resolvedWilayah.kecName,
       dusuns: dusuns,
       filterByDusunBlocks: _filterByDusunBlocks,
       kantorDesaLat: kantorLat,
       kantorDesaLng: kantorLng,
       targetPemdaThreshold: 2000000,
+      exportSplitByDusun: _exportSplitByDusun,
+      includeMasterInSplit: _includeMasterInSplit,
+      encryptionPassword: customPwd.isNotEmpty ? customPwd : null,
       onProgress: (p) {
         if (mounted) {
           setState(() {
@@ -405,6 +865,7 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
     });
 
     if (outcome.success) {
+      final split = outcome.splitExportResult;
       Navigator.of(context).pop();
       await showDialog(
         context: context,
@@ -415,28 +876,69 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
             size: 48,
           ),
           title: const Text('DHKP Berhasil Digenerate!'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Tahun Pajak: ${outcome.tahun}'),
-              Text('Wilayah: Desa ${outcome.desaName}'),
-              const Divider(),
-              Text('• Total SPPT Terbit: ${outcome.totalRecords} objek pajak'),
-              Text('• Sudah Bayar: ${outcome.sudahBayarCount} NOP'),
-              Text('• Belum Bayar: ${outcome.belumBayarCount} NOP'),
-              Text(
-                '• Target Pemda (>= 2 Juta): ${outcome.targetPemdaCount} NOP',
+          content: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 500),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Tahun Pajak: ${outcome.tahun}'),
+                  Text(
+                    'Wilayah: Desa ${outcome.desaName}, Kec. ${outcome.kecamatanName} (3205${outcome.kecamatanCode}${outcome.kelurahanCode})',
+                  ),
+                  const Divider(),
+                  Text(
+                    '• Total SPPT Terbit: ${outcome.totalRecords} objek pajak',
+                  ),
+                  Text('• Sudah Bayar: ${outcome.sudahBayarCount} NOP'),
+                  Text('• Belum Bayar: ${outcome.belumBayarCount} NOP'),
+                  Text(
+                    '• Target Pemda (>= 2 Juta): ${outcome.targetPemdaCount} NOP',
+                  ),
+                  Text('• Terdeteksi: ${outcome.totalBloks} Blok aktif'),
+                  if (split != null) ...[
+                    const Divider(),
+                    Text(
+                      '🔐 Paket .dkhp Terenkripsi (${split.dusunEntries.length} Dusun${split.masterEntry != null ? " + 1 Master" : ""}):',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Lokasi: ${split.outputDirectory.path}',
+                      style: const TextStyle(fontSize: 11, color: Colors.grey),
+                    ),
+                    const SizedBox(height: 6),
+                    if (split.masterEntry != null)
+                      Text(
+                        '• [MASTER] ${split.masterEntry!.file.uri.pathSegments.last} (${split.masterEntry!.recordCount} NOP)',
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    for (final d in split.dusunEntries)
+                      Text(
+                        '• [Dusun #${d.dusunNumber} - ${d.label}] ${d.file.uri.pathSegments.last} (${d.recordCount} NOP)',
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                  ],
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Data baru telah aktif langsung di aplikasi. Anda dapat langsung membuka Buku Catatan Blok atau membagikan file .dkhp per Dusun ke masing-masing Kepala Dusun.',
+                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                ],
               ),
-              Text('• Terdeteksi: ${outcome.totalBloks} Blok aktif'),
-              const SizedBox(height: 12),
-              const Text(
-                'Data baru telah aktif langsung di aplikasi. Anda dapat langsung membuka Buku Catatan Blok atau Pantauan Grafik.',
-                style: TextStyle(fontSize: 12, color: Colors.grey),
-              ),
-            ],
+            ),
           ),
           actions: [
+            if (split != null)
+              OutlinedButton.icon(
+                onPressed: () => _copySplitFilesToDirectory(split),
+                icon: const Icon(Icons.folder_copy_outlined, size: 18),
+                label: const Text('Simpan File Split ke Folder Lain...'),
+              ),
             FilledButton(
               onPressed: () => Navigator.pop(c),
               child: const Text('Tutup & Selesai'),
@@ -471,6 +973,7 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
       );
     }
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -725,6 +1228,7 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
                             flex: 2,
                             child: TextFormField(
                               controller: _kecamatanController,
+                              onChanged: (_) => setState(() {}),
                               decoration: const InputDecoration(
                                 labelText: 'Kecamatan',
                                 border: OutlineInputBorder(),
@@ -739,17 +1243,54 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
                       ),
                       const SizedBox(height: 12),
 
-                      // DESA & KOORDINAT KANTOR
-                      TextFormField(
-                        controller: _desaController,
-                        decoration: const InputDecoration(
-                          labelText: 'Desa / Kelurahan',
-                          border: OutlineInputBorder(),
-                          isDense: true,
-                        ),
-                        validator: (v) => v == null || v.trim().isEmpty
-                            ? 'Wajib diisi'
-                            : null,
+                      // DESA & TOMBOL PILIH KATALOG WILAYAH
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: TextFormField(
+                              controller: _desaController,
+                              onChanged: (_) => setState(() {}),
+                              decoration: const InputDecoration(
+                                labelText: 'Desa / Kelurahan',
+                                border: OutlineInputBorder(),
+                                isDense: true,
+                              ),
+                              validator: (v) => v == null || v.trim().isEmpty
+                                  ? 'Wajib diisi'
+                                  : null,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          OutlinedButton.icon(
+                            onPressed: _showCatalogWilayahPicker,
+                            icon: const Icon(
+                              Icons.location_searching_rounded,
+                              size: 16,
+                            ),
+                            label: const Text('Pilih Wilayah'),
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 14,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Builder(
+                        builder: (context) {
+                          final resolved = _currentResolvedWilayah();
+                          return Text(
+                            'Kode V-Tax Bapenda: ${resolved.vtaxKelCode} (Kec. ${resolved.kecName} [${resolved.kecCode3}] • Desa ${resolved.desaName} [${resolved.kelCode3}])',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: theme.colorScheme.primary,
+                            ),
+                          );
+                        },
                       ),
                       const SizedBox(height: 12),
 
@@ -786,11 +1327,13 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text(
-                            'Pembagian Dusun & Blok',
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.bold,
+                          Expanded(
+                            child: Text(
+                              'Pembagian Dusun & Blok (${_dusunEntries.length} Dusun)',
+                              style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
                           TextButton.icon(
@@ -801,7 +1344,7 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
                         ],
                       ),
                       Text(
-                        'Tuliskan nama dusun, koordinat fokus, dan daftar bloknya (pisahkan dengan koma).',
+                        'Tuliskan nama dusun, koordinat fokus, dan daftar bloknya (pisahkan dengan koma). Misal 3 dusun dipecah 3, atau Desa Bobojong 5 dusun dipecah 5.',
                         style: TextStyle(
                           fontSize: 12,
                           color: isDark
@@ -957,7 +1500,169 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
                           ),
                         ),
                       ),
+                      const SizedBox(height: 12),
+
+                      // OPSI SPLIT (PECAH) PAKET .DKHP TERENKRIPSI PER KEDUSUNAN
+                      Material(
+                        color: Colors.teal.withValues(alpha: 0.08),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          side: BorderSide(
+                            color: Colors.teal.withValues(alpha: 0.35),
+                          ),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.call_split_rounded,
+                                    color: Colors.teal.shade600,
+                                    size: 20,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      'Split (Pecah) & Enkripsi File .dkhp per Kedusunan (${_dusunEntries.length} Dusun)',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              CheckboxListTile(
+                                contentPadding: EdgeInsets.zero,
+                                dense: true,
+                                title: Text(
+                                  'Otomatis pecah menjadi ${_dusunEntries.length} berkas .dkhp Kedusunan saat selesai Generate',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                                subtitle: const Text(
+                                  'Setiap berkas .dkhp dienkripsi (DKH2 AES-256-GCM) dan berisi manifest sesuai input serta terkunci khusus untuk blok dusun masing-masing.',
+                                  style: TextStyle(fontSize: 11),
+                                ),
+                                value: _exportSplitByDusun,
+                                onChanged: (val) {
+                                  if (val != null) {
+                                    setState(() => _exportSplitByDusun = val);
+                                  }
+                                },
+                              ),
+                              if (_exportSplitByDusun)
+                                CheckboxListTile(
+                                  contentPadding: EdgeInsets.zero,
+                                  dense: true,
+                                  title: const Text(
+                                    'Sertakan 1 berkas Master Desa utuh (DHKP_MASTER_...dkhp)',
+                                    style: TextStyle(fontSize: 12),
+                                  ),
+                                  value: _includeMasterInSplit,
+                                  onChanged: (val) {
+                                    if (val != null) {
+                                      setState(
+                                        () => _includeMasterInSplit = val,
+                                      );
+                                    }
+                                  },
+                                ),
+                              const SizedBox(height: 6),
+                              ValueListenableBuilder<TextEditingValue>(
+                                valueListenable: _encryptionPasswordController,
+                                builder: (context, val, _) {
+                                  final trimmedLen = val.text.trim().length;
+                                  final isReady =
+                                      trimmedLen >=
+                                      DhkpCrypto.minPasswordLength;
+                                  return Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      TextFormField(
+                                        key: _passwordFieldKey,
+                                        controller:
+                                            _encryptionPasswordController,
+                                        focusNode: _passwordFocusNode,
+                                        obscureText: _obscurePassword,
+                                        autovalidateMode:
+                                            AutovalidateMode.onUserInteraction,
+                                        validator: DhkpCrypto
+                                            .validateOptionalPassword,
+                                        decoration: InputDecoration(
+                                          labelText:
+                                              'Kata Sandi Enkripsi .dkhp (Opsional, min. ${DhkpCrypto.minPasswordLength} karakter)',
+                                          hintText:
+                                              'Minimal ${DhkpCrypto.minPasswordLength} karakter, atau kosongkan',
+                                          helperText:
+                                              'Jika diisi, wajib minimal ${DhkpCrypto.minPasswordLength} karakter. Kosongkan untuk memakai Kunci Pemulihan aktif.',
+                                          helperMaxLines: 2,
+                                          errorMaxLines: 2,
+                                          border: const OutlineInputBorder(),
+                                          isDense: true,
+                                          prefixIcon: const Icon(
+                                            Icons.lock_outline_rounded,
+                                            size: 18,
+                                          ),
+                                          suffixIcon: IconButton(
+                                            icon: Icon(
+                                              _obscurePassword
+                                                  ? Icons.visibility_outlined
+                                                  : Icons
+                                                        .visibility_off_outlined,
+                                              size: 18,
+                                            ),
+                                            onPressed: () {
+                                              setState(
+                                                () => _obscurePassword =
+                                                    !_obscurePassword,
+                                              );
+                                            },
+                                          ),
+                                        ),
+                                      ),
+                                      if (isReady) ...[
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          '✓ Kata sandi memenuhi syarat ($trimmedLen karakter).',
+                                          style: const TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w600,
+                                            color: Colors.teal,
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  );
+                                },
+                              ),
+                              const SizedBox(height: 10),
+                              OutlinedButton.icon(
+                                onPressed: _splitExistingLocalDhkp,
+                                icon: const Icon(
+                                  Icons.content_cut_rounded,
+                                  size: 17,
+                                ),
+                                label: Text(
+                                  'Pecah (Split) Data DHKP Aktif Sekarang ke ${_dusunEntries.length} File Dusun (.dkhp)',
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                                style: OutlinedButton.styleFrom(
+                                  minimumSize: const Size.fromHeight(38),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                       const SizedBox(height: 10),
+
 
                       // INFO BUKU 1, 2, 3 & TARGET PEMDA
                       Container(

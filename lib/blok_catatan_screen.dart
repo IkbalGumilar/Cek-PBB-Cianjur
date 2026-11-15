@@ -29,6 +29,7 @@ import 'file_importer.dart';
 import 'feature_tour/feature_tour.dart';
 import 'google_drive_picker_dialog.dart';
 import 'image_crop_helper.dart';
+import 'incoming_file_service.dart';
 import 'kolase_foto_screen.dart';
 import 'map/dhkp_map_screen.dart';
 import 'native_file_helper.dart';
@@ -64,6 +65,7 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
   BlokSortBy _sortBy = BlokSortBy.blokWilayah;
   List<BlokRecord> _records = [];
   List<BlokRecord> _allScopeRecords = [];
+  List<BlokRecord> _grafikScopeRecords = [];
   bool _tampilkanGrafik = false;
 
   // Paginasi & Optimasi Performa
@@ -314,8 +316,16 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
             sortBy: _sortBy,
           );
 
+    final allScopeMultiYear = blok == semuaBlokValue
+        ? await BlokDataStore.instance.byWhitelist(_whitelist, sortBy: _sortBy)
+        : await BlokDataStore.instance.byBlok(blok, sortBy: _sortBy);
+
     final filteredScope = DhkpSummaryMetrics.filterOutNihil(
       allScope,
+      excludeNihil: _sembunyikanNihil,
+    );
+    final filteredGrafikScope = DhkpSummaryMetrics.filterOutNihil(
+      allScopeMultiYear,
       excludeNihil: _sembunyikanNihil,
     );
     final metrics = DhkpSummaryMetrics.compute(filteredScope);
@@ -331,6 +341,7 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
       _cachedPhotoFileNames = photoNames;
       _records = records;
       _allScopeRecords = filteredScope;
+      _grafikScopeRecords = filteredGrafikScope;
       _summaryMetrics = metrics;
 
       final maxPage = _rowsPerPage > 0
@@ -858,6 +869,7 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
   Future<void> _importDkhpFromPath(
     String path, {
     required String sourceLabel,
+    String? password,
   }) async {
     if (mounted) {
       setState(() {
@@ -868,7 +880,10 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
     }
     try {
       if (DhkpPackageHelper.isDkhpArchivePath(path)) {
-        final newRecords = await DhkpPackageHelper.unpackDkhp(path);
+        final newRecords = await DhkpPackageHelper.unpackDkhp(
+          path,
+          password: password,
+        );
         await _load();
         if (!mounted) return;
         final isDat = path.toLowerCase().endsWith('.dat');
@@ -938,6 +953,21 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
           ),
         ),
       );
+    } on DkhpPasswordException {
+      if (mounted) {
+        setState(() => _busy = false);
+      }
+      if (!mounted) return;
+      final enteredPassword = await IncomingFileService.promptBackupPassword(
+        context,
+      );
+      if (enteredPassword != null && enteredPassword.isNotEmpty && mounted) {
+        await _importDkhpFromPath(
+          path,
+          sourceLabel: sourceLabel,
+          password: enteredPassword,
+        );
+      }
     } on DhkpBackupValidationException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -2214,9 +2244,11 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
                                     key: ValueKey(
                                       'dhkp_grafik_${_selectedBlok}_${_selectedWilayah}_$_selectedTahun',
                                     ),
-                                    records: _allScopeRecords.isNotEmpty
-                                        ? _allScopeRecords
-                                        : _records,
+                                    records: _grafikScopeRecords.isNotEmpty
+                                        ? _grafikScopeRecords
+                                        : (_allScopeRecords.isNotEmpty
+                                              ? _allScopeRecords
+                                              : _records),
                                     selectedBlok: _selectedBlok,
                                     selectedWilayah: _selectedWilayah,
                                     selectedTahun: _selectedTahun,
