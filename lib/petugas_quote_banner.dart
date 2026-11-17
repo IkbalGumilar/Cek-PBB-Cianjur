@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Model data untuk kata-kata pengingat dan motivasi petugas PBB
 class PetugasQuote {

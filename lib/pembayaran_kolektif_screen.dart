@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'document_preview_screen.dart';
 import 'feature_tour/feature_tour.dart';

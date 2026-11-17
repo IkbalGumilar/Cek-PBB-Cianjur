@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../currency_format.dart';
 import '../staff_portal/staff_portal_models.dart';

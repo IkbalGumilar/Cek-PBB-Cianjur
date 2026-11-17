@@ -6,7 +6,7 @@ echo =====================================================================
 echo.
 
 set "PROJECT_DIR=%~dp0.."
-set "APP_VERSION=v0.1.7-beta"
+set "APP_VERSION=v1.0.0"
 cd /d "%PROJECT_DIR%"
 
 echo [0/4] Mengunduh dependensi ^& memastikan plugin Windows tersinkron...
