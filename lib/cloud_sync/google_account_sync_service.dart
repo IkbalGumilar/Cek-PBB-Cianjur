@@ -21,6 +21,8 @@ class GoogleAccountSyncService extends BasePreferencesStore {
 
   static const String backupMasterKeyFileName = 'backup_master_key.json';
   static const String appPreferencesFileName = 'app_preferences.json';
+  static const String customEmergencyContactsPrefsKey =
+      'custom_emergency_contacts_v1';
 
   static const String _secureMasterKeyKey = 'google_backup_master_key_v1';
   static const String _prefsUpdatedAtKey = 'google_sync_prefs_updated_at_ms';
@@ -164,6 +166,17 @@ class GoogleAccountSyncService extends BasePreferencesStore {
     final frequencyDays = await scheduler.getFrequencyDays();
     final overCellular = await scheduler.getOverCellular();
 
+    final rawContacts = await getString(customEmergencyContactsPrefsKey);
+    List<dynamic> emergencyContacts = const [];
+    if (rawContacts != null && rawContacts.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(rawContacts);
+        if (decoded is List) {
+          emergencyContacts = decoded;
+        }
+      } catch (_) {}
+    }
+
     return <String, dynamic>{
       'schemaVersion': _schemaVersion,
       'updatedAtMs': effectiveTs,
@@ -180,6 +193,7 @@ class GoogleAccountSyncService extends BasePreferencesStore {
         'frequencyDays': frequencyDays,
         'overCellular': overCellular,
       },
+      'emergencyContacts': emergencyContacts,
     };
   }
 
@@ -238,6 +252,23 @@ class GoogleAccountSyncService extends BasePreferencesStore {
             syncCloud: false,
           );
         }
+      }
+
+      final rawEmergencyContacts = payload['emergencyContacts'];
+      if (rawEmergencyContacts is List) {
+        final validContacts = rawEmergencyContacts
+            .whereType<Map>()
+            .map((e) => e.map((k, v) => MapEntry(k.toString(), v)))
+            .where(
+              (m) =>
+                  (m['name']?.toString().trim().isNotEmpty ?? false) &&
+                  (m['phone']?.toString().trim().isNotEmpty ?? false),
+            )
+            .toList();
+        await setString(
+          customEmergencyContactsPrefsKey,
+          jsonEncode(validContacts),
+        );
       }
 
       final cloudTs = _extractTimestampMs(payload);

@@ -288,12 +288,19 @@ class BansosClient extends BaseHttpClient {
         customDio: dio,
       );
 
-  Future<Uint8List> fetchCaptchaImage() async {
+  Future<Uint8List> fetchCaptchaImage({bool forceNewSession = false}) async {
     try {
-      await _loadHome();
-      final targetUrl = (_captchaUrl != null && _captchaUrl!.isNotEmpty)
-          ? _captchaUrl!
-          : '$_baseUrl/captcha/flat';
+      String targetUrl;
+      if (forceNewSession || _csrfToken == null || _captchaUrl == null) {
+        await _loadHome();
+        targetUrl = (_captchaUrl != null && _captchaUrl!.isNotEmpty)
+            ? _captchaUrl!
+            : '$_baseUrl/captcha/flat';
+      } else {
+        // Sama seperti tombol refresh resmi Kemensos: pakai sesi aktif & cache-buster acak.
+        targetUrl =
+            '$_baseUrl/captcha/flat?${DateTime.now().millisecondsSinceEpoch}';
+      }
       final useQueryTimestamp = !targetUrl.contains('?');
       final response = await _dio.get<List<int>>(
         targetUrl,
@@ -342,6 +349,14 @@ class BansosClient extends BaseHttpClient {
       return BansosResult.fromHtml(responseHtml);
     } on DioException catch (error) {
       _logNetworkError('cek NIK', error);
+      if (error.response?.statusCode == 419) {
+        _csrfToken = null;
+        _captchaUrl = null;
+        throw const BansosException(
+          'Sesi captcha sudah kedaluwarsa. Kode baru sedang dimuat.',
+          kind: BansosErrorKind.captcha,
+        );
+      }
       throw BansosException(
         _networkMessage(error),
         kind: BansosErrorKind.network,

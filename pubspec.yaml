@@ -94,6 +94,8 @@ flutter:
 
   assets:
     - logo/kabupaten-cianjur.png
+    - logo/Kemensos logo.jpeg
+    - logo/Logo-Bapenda-Jabar.png
     - assets/guide/01_cek_tagihan.webp
     - assets/guide/02_cek_status_bayar.webp
     - assets/guide/03_cek_banyak_nop.webp

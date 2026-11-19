@@ -32,6 +32,7 @@ class CheckFormView extends StatefulWidget {
   final GlobalKey? headerMenuKey;
   final GlobalKey? headerSettingsKey;
   final GlobalKey? dhkpFabKey;
+  final GlobalKey? emergencyFabKey;
   final bool isActive;
   final ValueChanged<VoidCallback>? onRegisterShowTour;
 
@@ -48,6 +49,7 @@ class CheckFormView extends StatefulWidget {
     this.headerMenuKey,
     this.headerSettingsKey,
     this.dhkpFabKey,
+    this.emergencyFabKey,
     this.isActive = true,
     this.onRegisterShowTour,
   });
@@ -81,7 +83,7 @@ class _CheckFormViewState extends State<CheckFormView> {
   Uint8List? _captchaBytes;
   bool _loadingCaptcha = false;
   bool _scanningOcr = false;
-  bool _ready = false;
+  bool _ready = true;
   bool _submitting = false;
   int _validationShakeTrigger = 0;
   PbbResult? _statusBayarResult;
@@ -557,6 +559,20 @@ class _CheckFormViewState extends State<CheckFormView> {
           actionHint:
               'Angka kecil di pojok tombol menunjukkan jumlah data wajib pajak yang sudah tersimpan di perangkat Anda.',
           icon: Icons.table_chart_outlined,
+        ),
+      );
+    }
+
+    if (widget.emergencyFabKey?.currentContext != null) {
+      steps.add(
+        FeatureTourStep(
+          targetKey: widget.emergencyFabKey!,
+          title: 'Tombol Kontak Darurat 112 Cianjur',
+          description:
+              'Akses cepat satu ketuk ke Cianjur Siaga 112 (bebas pulsa 24 jam), Polres, BPBD, RSUD/PSC 119, 6 Pos Damkar, PLN, SP4N-LAPOR!, serta kontak darurat desa seperti Bidan Desa & Kepala Desa.',
+          actionHint:
+              'Anda juga dapat menambahkan kontak darurat desa sendiri yang otomatis tersinkron ke akun Google.',
+          icon: Icons.emergency_rounded,
         ),
       );
     }

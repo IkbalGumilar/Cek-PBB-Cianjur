@@ -17,6 +17,7 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
   final VoidCallback onDesilPressed;
   final VoidCallback onKendaraanPressed;
   final VoidCallback? onHelpPressed;
+  final VoidCallback? onBeforeOpenSettings;
   final GlobalKey? modeMenuKey;
   final GlobalKey? settingsButtonKey;
   final bool desilSelected;
@@ -32,6 +33,7 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
     required this.onDesilPressed,
     required this.onKendaraanPressed,
     this.onHelpPressed,
+    this.onBeforeOpenSettings,
     this.modeMenuKey,
     this.settingsButtonKey,
     this.desilSelected = false,
@@ -43,6 +45,7 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
   static const _narrowThreshold = 640.0;
 
   void _openSettings(BuildContext context) {
+    onBeforeOpenSettings?.call();
     Navigator.push(
       context,
       MaterialPageRoute(

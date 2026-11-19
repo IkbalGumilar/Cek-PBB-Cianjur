@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 
@@ -9,6 +11,7 @@ import 'blok_data_store.dart';
 import 'check_form_view.dart';
 import 'check_mode.dart';
 import 'desil/desil_view.dart';
+import 'emergency_contact_sheet.dart';
 import 'feature_tour/feature_tour.dart';
 import 'import_view.dart';
 import 'incoming_file_service.dart';
@@ -50,6 +53,7 @@ class _MainShellState extends State<MainShell> {
   final _headerMenuKey = GlobalKey(debugLabel: 'tour_header_menu');
   final _headerSettingsKey = GlobalKey(debugLabel: 'tour_header_settings');
   final _dhkpFabKey = GlobalKey(debugLabel: 'tour_dhkp_fab');
+  final _emergencyFabKey = GlobalKey(debugLabel: 'tour_emergency_fab');
   VoidCallback? _showCheckTour;
   VoidCallback? _showImportTour;
 
@@ -226,8 +230,14 @@ class _MainShellState extends State<MainShell> {
     });
   }
 
+  void _clearTransientServiceData() {
+    _desilKey.currentState?.clearSessionData();
+    _kendaraanKey.currentState?.clearSessionData();
+  }
+
   Future<void> _openBukuCatatan() async {
     FeatureTourController.dismissActiveTour();
+    _clearTransientServiceData();
     final request = await Navigator.push<BlokNavigationRequest>(
       context,
       MaterialPageRoute(
@@ -325,55 +335,77 @@ class _MainShellState extends State<MainShell> {
             setState(() => _view = _ActiveView.kendaraan);
           },
           onHelpPressed: _triggerActiveTour,
+          onBeforeOpenSettings: _clearTransientServiceData,
           modeMenuKey: _headerMenuKey,
           settingsButtonKey: _headerSettingsKey,
           desilSelected: _view == _ActiveView.desil,
           kendaraanSelected: _view == _ActiveView.kendaraan,
           viewportWidth: MediaQuery.sizeOf(context).width,
         ),
-        body: Column(
+        body: Stack(
           children: [
-            PetugasQuoteBanner(
-              triggerNonce: _quoteNonce,
-              visible: _view == _ActiveView.check,
+            Column(
+              children: [
+                PetugasQuoteBanner(
+                  triggerNonce: _quoteNonce,
+                  visible: _view == _ActiveView.check,
+                ),
+                Expanded(
+                  child: IndexedStack(
+                    index: _view.index,
+                    children: [
+                      CheckFormView(
+                        key: ValueKey('$_mode-$_formNonce'),
+                        mode: _mode,
+                        scrollController: _checkScrollController,
+                        onImportPressed: _openImport,
+                        onOpenStatusBayar: _openStatusBayar,
+                        initialBlok: _prefillBlok,
+                        initialWilayah: _prefillWilayah,
+                        initialTahun: _prefillTahun,
+                        headerMenuKey: _headerMenuKey,
+                        headerSettingsKey: _headerSettingsKey,
+                        dhkpFabKey: _dhkpFabKey,
+                        emergencyFabKey: _emergencyFabKey,
+                        isActive: _view == _ActiveView.check,
+                        onRegisterShowTour: (fn) => _showCheckTour = fn,
+                      ),
+                      _ImportWithBack(
+                        mode: _mode,
+                        onBack: _backToCheck,
+                        isActive: _view == _ActiveView.import,
+                        onRegisterShowTour: (fn) => _showImportTour = fn,
+                      ),
+                      DesilView(
+                        key: _desilKey,
+                        emergencyFabKey: _emergencyFabKey,
+                        isActive: _view == _ActiveView.desil,
+                      ),
+                      KendaraanView(
+                        key: _kendaraanKey,
+                        scrollController: _kendaraanScrollController,
+                        emergencyFabKey: _emergencyFabKey,
+                        isActive: _view == _ActiveView.kendaraan,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-            Expanded(
-              child: IndexedStack(
-                index: _view.index,
-                children: [
-                  CheckFormView(
-                    key: ValueKey('$_mode-$_formNonce'),
-                    mode: _mode,
-                    scrollController: _checkScrollController,
-                    onImportPressed: _openImport,
-                    onOpenStatusBayar: _openStatusBayar,
-                    initialBlok: _prefillBlok,
-                    initialWilayah: _prefillWilayah,
-                    initialTahun: _prefillTahun,
-                    headerMenuKey: _headerMenuKey,
-                    headerSettingsKey: _headerSettingsKey,
-                    dhkpFabKey: _dhkpFabKey,
-                    isActive: _view == _ActiveView.check,
-                    onRegisterShowTour: (fn) => _showCheckTour = fn,
+            if (!kIsWeb &&
+                (Platform.isAndroid || Platform.isIOS || kDebugMode) &&
+                _view != _ActiveView.import)
+              Positioned(
+                left: 16,
+                bottom: 16,
+                child: SafeArea(
+                  top: false,
+                  child: EmergencyContactFab(
+                    key: _emergencyFabKey,
+                    onPressed: () => showEmergencyContactSheet(context),
                   ),
-                  _ImportWithBack(
-                    mode: _mode,
-                    onBack: _backToCheck,
-                    isActive: _view == _ActiveView.import,
-                    onRegisterShowTour: (fn) => _showImportTour = fn,
-                  ),
-                  DesilView(
-                    key: _desilKey,
-                    isActive: _view == _ActiveView.desil,
-                  ),
-                  KendaraanView(
-                    key: _kendaraanKey,
-                    scrollController: _kendaraanScrollController,
-                    isActive: _view == _ActiveView.kendaraan,
-                  ),
-                ],
+                ),
               ),
-            ),
           ],
         ),
         floatingActionButton: _view == _ActiveView.check

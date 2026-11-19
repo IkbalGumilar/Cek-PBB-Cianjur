@@ -1,17 +1,17 @@
 # Cek PBB Cianjur
 
-[![Version](https://img.shields.io/badge/Version-v0.1.7--beta-orange.svg)](https://github.com/IkbalGumilar/Cek-PBB-Cianjur/releases/latest)
-[![Flutter](https://img.shields.io/badge/Flutter-%E2%89%A53.38-02569B?logo=flutter)](https://flutter.dev)
-[![Dart](https://img.shields.io/badge/Dart-^3.12.2-0175C2?logo=dart)](https://dart.dev)
-[![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20Windows%20%7C%20Linux-green.svg)]()
+[![Version](https://img.shields.io/badge/Version-v1.0.0-brightgreen.svg)](https://github.com/IkbalGumilar/Cek-PBB-Cianjur/releases/latest)
+[![Flutter](https://img.shields.io/badge/Flutter-%E2%89%A53.50-02569B?logo=flutter)](https://flutter.dev)
+[![Dart](https://img.shields.io/badge/Dart-^3.14.0-0175C2?logo=dart)](https://dart.dev)
+[![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20iOS%20%7C%20Windows%20%7C%20Linux-green.svg)]()
 [![Security](https://img.shields.io/badge/Security-AES--256--GCM%20%7C%20PBKDF2%20600k-red.svg)]()
 [![License](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](LICENSE)
 
 Aplikasi manajemen, pengecekan, monitoring, analisis realisasi, dan pelaporan Pajak Bumi dan Bangunan Perdesaan dan Perkotaan (PBB-P2) lintas platform untuk memfasilitasi kerja petugas/kolektor dan perangkat desa/kelurahan di seluruh **Kabupaten Cianjur** (**32 Kecamatan · 337 Desa/Kelurahan**). Aplikasi berkomunikasi langsung secara terenkripsi dengan portal layanan BAPENDA Kabupaten Cianjur, Bapenda Jawa Barat, dan Kemensos RI tanpa memerlukan navigasi manual di peramban web.
 
 > [!NOTE]
-> **Distribusi Mandiri Multi-Platform (`v0.1.7-beta`)**  
-> Tersedia di [GitHub Releases](https://github.com/IkbalGumilar/Cek-PBB-Cianjur/releases/latest) dalam bentuk **APK teroptimasi per arsitektur (*Split per ABI*, `19,7–21,0 MB`)** untuk Android, **Installer Mandiri Inno Setup (`16,22 MB`)** & **Portable (`.zip`, `19,67 MB`)** untuk Windows x64, serta arsip **Linux Desktop (`16,96 MB`)**.  
+> **Rilis Stabil Multi-Platform (`v1.0.0`)**  
+> Tersedia di [GitHub Releases](https://github.com/IkbalGumilar/Cek-PBB-Cianjur/releases/latest) dalam bentuk **APK teroptimasi per arsitektur (*Split per ABI*, `20,1–21,2 MB`)** untuk Android, **Installer Mandiri Inno Setup (`16 MB`)** & **Portable (`.zip`, `19 MB`)** untuk Windows x64, arsip **Linux Desktop (`17 MB`)**, serta konfigurasi siap rilis **iOS (App Store)**.  
 > Sistem pembaruan bawaan memverifikasi integritas berkas rilis menggunakan **checksum SHA-256** dan pemeriksaan **magic bytes** header biner sebelum instalasi dijalankan. Lihat rincian lengkap peningkatan di [`RELEASE_NOTES.md`](RELEASE_NOTES.md) dan [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
@@ -99,16 +99,19 @@ Antarmuka beradaptasi secara responsif (`AppBreakpoints`: Mobile `< 600dp`, Tabl
 5. **Pembaca PDF Camelot, Penampil Spreadsheet & Layanan Tambahan**:
    - **Pembaca PDF Camelot** internal dengan lapisan teks dapat dipilih (*Selectable Text Layer* — drag di Android / mouse + `Ctrl+C` di Desktop), zoom *double-tap* / `Ctrl+Scroll`, *fast-scroll scrubber*, serta **cetak langsung ke driver printer OS (`Ctrl+P`)** di Desktop.
    - **Penampil Spreadsheet** bawaan untuk `.xlsx`/`.xls`/`.csv` (*Hanya Lihat*) dan pratinjau paket `.dkhp`/`.dhkp`/`.dat` dengan tombol langsung **"Impor ke Buku Catatan"**.
-   - **Kolase Foto Dokumentasi PDF F4** (tata letak `1x2` s.d. `3x3`) & **Pencadangan Delta `.dat`** terenkripsi.
-   - Layanan publik pelengkap: **Cek Pajak Kendaraan Bermotor Jawa Barat (PKB Bapenda Jabar)** dan **Cek Desil Kesejahteraan & Bansos (DTSEN Kemensos)**.
+    - **Kolase Foto Dokumentasi PDF F4** (tata letak `1x2` s.d. `3x3`), **Checkpoint Pause/Resume 24 Jam** untuk Cek Massal & Sinkronisasi DHKP latar belakang, serta **Pencadangan Delta `.dat`** terenkripsi.
+    - Layanan publik pelengkap: **Cek Pajak Kendaraan Bermotor Jawa Barat (Sambara Bapenda Jabar)** dengan visual plat dinamis & deteksi plat luar Jawa Barat, serta **Cek Desil Kesejahteraan & Bansos (DTSEN Kemensos `cb-v4`)** dengan pemuatan captcha otomatis setelah 12 digit NIK.
+6. **Kontak Darurat Kabupaten Cianjur (`112`) & Sinkronisasi Akun Google (`appDataFolder`)**:
+    - Tombol mengambang **`112`** khusus perangkat seluler (Android & iOS) di seluruh tab utama untuk akses cepat ke **Cianjur Siaga 112**, **Polres Cianjur**, **BPBD Cianjur** (WhatsApp & Telepon), **PSC 119 / RSUD Sayang**, **PLN 123**, **6 Pos Damkar Cianjur**, **SP4N-LAPOR! (`lapor.go.id`)**, serta **Kontak Darurat Lokal/Desa** (Bidan Desa, Kepala Desa, Bhabinkamtibmas, Babinsa, Ambulans Desa).
+    - Sinkronisasi lintas perangkat melalui Google Drive `appDataFolder` (Master Key 256-bit, Tema, Jadwal Backup, & Kontak Darurat Lokal) dengan dukungan penuh **Google OAuth 2.0 Desktop (`127.0.0.1` loopback)** di Windows & Linux.
 
 ---
 
 ## 🎨 Desain Adaptif, Aksesibilitas & Sistem Gerak
 
 - **Breakpoint Responsif (`AppBreakpoints`)**: Tata letak otomatis menyesuaikan lebar layar menjadi mode **Mobile (`< 600dp`)**, **Tablet (`600–1023dp`)**, dan **Desktop (`>= 1024dp`)**. Filter panjang dikemas dalam komponen lipat (*Progressive Disclosure* `AppCollapsibleFilterSection`) berindikator filter aktif agar layar ponsel tidak sesak.
-- **Ergonomi Desktop (`AppScrollBehavior` & `AppHorizontalTableScroll`)**: Mendukung klik-seret (*mouse/trackpad drag*) pada tabel dan grafik batang, scrollbar horizontal interaktif, pintasan papan ketik `Ctrl+P` / `Ctrl+C`, serta dialog multi-kolom lebar.
-- **Sistem Tema & Material You (`ThemeController`)**: 4 mode tampilan (**Ikuti Sistem**, **Terang**, **Gelap**, dan **Hitam AMOLED `#000000`**), pemilihan **Warna Aksen Kustom**, serta dukungan warna dinamis **Material You** pada Android 12+.
+- **Ergonomi Desktop (`AppScrollBehavior` & `AppHorizontalTableScroll`)**: Mendukung klik-seret (*mouse/trackpad drag*) pada tabel dan grafik batang, scrollbar horizontal interaktif, pintasan papan ketik `Ctrl+P` / `Ctrl+C`, dukungan penuh DPI `PerMonitorV2` (Windows), serta stabilitas *fractional scaling* Linux (`GDK_BACKEND=x11`).
+- **Sistem Tema & Material You (`ThemeController`)**: 4 mode tampilan (**Ikuti Sistem**, **Terang**, **Gelap**, dan **Hitam AMOLED `#000000`**), pemilihan **Warna Aksen Kustom** yang terpadu hingga ke seluruh grafik DHKP, serta dukungan warna dinamis **Material You** pada Android 12+.
 - **Sistem Gerak Halus & Aksesibilitas (`AppMotion` & `unity_lerp_widgets.dart`)**: Transisi halaman seragam dan animasi progres angka, bar grafik, maupun diagram tren memakai interpolasi halus (`unityLerp`, `unitySmoothStep`, `unitySmoothDamp`), serta secara otomatis menghormati preferensi aksesibilitas **Kurangi Animasi / Reduced Motion** (`MediaQuery.maybeDisableAnimationsOf`).
 
 ---
@@ -116,7 +119,8 @@ Antarmuka beradaptasi secara responsif (`AppBreakpoints`: Mobile `< 600dp`, Tabl
 ## 🛡️ Arsitektur Keamanan & Kriptografi
 
 - **Enkripsi Arsip DHKP V2 (`DKH2` — `lib/dhkp/dhkp_crypto.dart`)**: Paket `.dkhp` dilindungi menggunakan **AES-256-GCM** dengan derivasi kunci **PBKDF2-HMAC-SHA256 sebanyak `600.000` iterasi**, *16-byte random salt*, *12-byte random nonce*, *32-byte header AAD*, dan *16-byte GCM authentication tag*. Mendukung **Kata Sandi Backup** terintegrasi maupun kata sandi kustom (minimal **8 karakter**), sembari menjaga kompatibilitas baca terhadap berkas arsip versi lama.
-- **Enkripsi Log Perubahan Delta (`CPBB` v2 — `lib/blok_sync_service.dart`)**: Setiap tiket perubahan NOP/foto `.bin` untuk sinkronisasi inkremental dienkripsi memakai **AES-256-GCM** terautentikasi (beserta pembaca kompatibilitas legacy AES-CBC pada `backup_crypto.dart`).
+- **Sinkronisasi Cloud & OAuth Non-Sensitive (`GoogleAccountSyncService`)**: Menggunakan *non-sensitive scopes* (`drive.file` & `drive.appdata`) tanpa izin baca seluruh Google Drive pengguna. Master Key cadangan 256-bit dan preferensi (`app_preferences.json`) disimpan terisolasi di ruang tersembunyi `appDataFolder` dan `FlutterSecureStorage`.
+- **Zero-Persistence & Auto-Clear Memori**: Data input & hasil **Cek Desil (NIK)** serta **Cek Kendaraan (Plat Nomor)** tidak pernah disimpan ke penyimpanan lokal maupun cloud, dan otomatis dibersihkan dari memori saat berpindah tab, masuk Setelan, atau saat aplikasi diminimize/ditutup — tanpa mengganggu proses Cek Massal & Sinkronisasi DHKP.
 - **Kunci Aplikasi & Penyimpanan Kredensial Aman (`AppSecurityService`)**:
   - Mendukung kunci **Sidik Jari / Biometrik / Kunci Perangkat**, **PIN 6 Angka**, dan **Kata Sandi** dengan *PBKDF2 `100.000` iterasi*.
   - Seluruh hash kredensial, token sesi, rahasia TOTP (`StaffAuthenticatorStore`), dan *Kata Sandi Cadangan* (`BackupPasswordStore`) disimpan di **`FlutterSecureStorage`** / keyring terenkripsi platform — tidak pernah disalin ke `SharedPreferences` teks biasa. Konfigurasi Android menetapkan `android:allowBackup="false"`.
@@ -130,20 +134,20 @@ Antarmuka beradaptasi secara responsif (`AppBreakpoints`: Mobile `< 600dp`, Tabl
 
 ## 💻 Matriks Dukungan Platform
 
-| Fitur & Kapabilitas | Android | Windows (`x64`) | Linux Desktop | Catatan Teknis |
-| :--- | :---: | :---: | :---: | :--- |
-| Cek Tagihan, Status Bayar, QRIS, VA, STTS, Cek PKB & Desil | ✅ | ✅ | ✅ | Komunikasi HTTPS langsung ke portal resmi |
-| Data DHKP (Tabel Ribuan Data, Filter, Export, Split `DKH2`) | ✅ | ✅ | ✅ | Komponen responsif + mouse drag tabel/grafik |
-| Kalkulator Pajak (Denda, Cicilan/TTD WP, AJB & Pacing) | ✅ | ✅ | ✅ | Perhitungan lokal + kanvas tanda tangan sentuh/mouse |
-| Diagram Capaian, Tren Jan–Des & Bandingkan Tahun | ✅ | ✅ | ✅ | Animasi `Lerp` halus + ekspor laporan |
-| Peta Spasial Objek Pajak (`flutter_map` & KML) | ✅ | ✅ | ✅ | 5 layer peta + koordinat pin `MapPinStore` |
-| Portal Staf V-Tax (MFA TOTP, Monitoring 7 Tab, Kolektif) | ✅ | ✅ | ✅ | Auto-TOTP & manajemen grup kolektif lengkap |
-| Sinkronisasi & Generate DHKP Baru V-Tax (`DKH2`) | ✅ | ✅ | ✅ | Penarikan multi-tahun + pecah otomatis per dusun |
-| Pembaca PDF Camelot & Penampil Spreadsheet | ✅ | ✅ | ✅ | Desktop mendukung Cetak Driver OS langsung (`Ctrl+P`) |
-| Pencadangan Lokal (`.dat`) & Unduh Paket via Link Drive | ✅ | ✅ | ✅ | Impor tautan Google Drive publik berjalan lintas OS |
-| Login Akun Google langsung di Menu Pencadangan | ✅ | ⏳ | ⏳ | Di UI Pencadangan saat ini diaktifkan khusus Android |
-| Pemindaian Kamera OCR (NOP / KTP / Plat) & AppWidget Home | ✅ | — | — | Memanfaatkan Google ML Kit, AppWidget & Foreground Service Android |
-| Pembaruan Mandiri (*Self-Updater* GitHub Releases) | ✅ | ✅ | ✅ | Verifikasi SHA-256 & magic header + Auto-ABI di Android |
+| Fitur & Kapabilitas | Android | iOS | Windows (`x64`) | Linux Desktop | Catatan Teknis |
+| :--- | :---: | :---: | :---: | :---: | :--- |
+| Cek Tagihan, Status Bayar, QRIS, VA, STTS, Cek PKB & Desil | ✅ | ✅ | ✅ | ✅ | Komunikasi HTTPS langsung ke portal resmi |
+| Data DHKP (Tabel Ribuan Data, Filter, Export, Split `DKH2`) | ✅ | ✅ | ✅ | ✅ | Komponen responsif + mouse drag tabel/grafik |
+| Kalkulator Pajak (Denda, Cicilan/TTD WP, AJB & Pacing) | ✅ | ✅ | ✅ | ✅ | Perhitungan lokal + kanvas tanda tangan sentuh/mouse |
+| Diagram Capaian, Tren Jan–Des & Bandingkan Tahun | ✅ | ✅ | ✅ | ✅ | Warna grafik seragam tema aktif + animasi `Lerp` |
+| Peta Spasial Objek Pajak (`flutter_map` & KML) | ✅ | ✅ | ✅ | ✅ | 5 layer peta + koordinat pin `MapPinStore` |
+| Portal Staf V-Tax (MFA TOTP, Monitoring 7 Tab, Kolektif) | ✅ | ✅ | ✅ | ✅ | Auto-TOTP & manajemen grup kolektif lengkap |
+| Sinkronisasi & Generate DHKP Baru V-Tax (`DKH2`) | ✅ | ✅ | ✅ | ✅ | Checkpoint pause/resume 24 jam + pecah per dusun |
+| Pembaca PDF Camelot & Penampil Spreadsheet | ✅ | ✅ | ✅ | ✅ | Desktop mendukung Cetak Driver OS langsung (`Ctrl+P`) |
+| Login Akun Google, Pencadangan Drive & `appDataFolder` Sync | ✅ | ✅ | ✅ | ✅ | OAuth Desktop via loopback `127.0.0.1` (`env.desktop.json`) |
+| Tombol Kontak Darurat `112` Cianjur & Kontak Desa | ✅ | ✅ | — | — | Khusus perangkat seluler (panggil/WA 1-ketuk + sync Google) |
+| Pemindaian Kamera OCR (NOP / KTP / Plat) & AppWidget Home | ✅ | ✅* | — | — | Google ML Kit di HP (*AppWidget & Foreground Service khusus Android) |
+| Pembaruan Mandiri (*Self-Updater* GitHub Releases) | ✅ | — | ✅ | ✅ | Verifikasi SHA-256 & magic header (iOS melalui App Store) |
 
 ---
 
@@ -565,9 +569,10 @@ Panel Pengaturan menyatukan kontrol wilayah kerja, 4 mode tema & Material You, p
 ## 🛠️ Panduan Pengembangan & Kompilasi
 
 ### Prasyarat
-- Flutter SDK versi `>= 3.38.0` (mengikuti constraint Dart SDK `^3.12.2` di [`pubspec.yaml`](pubspec.yaml))
-- Dart SDK versi `^3.12.2`
-- Android Studio / Android SDK Platform Tools (Compile SDK `36`, JDK `17`)
+- Flutter SDK versi `>= 3.50.0` (mengikuti constraint Dart SDK `^3.14.0` di [`pubspec.yaml`](pubspec.yaml))
+- Dart SDK versi `^3.14.0`
+- Android Studio / Android SDK Platform Tools (Compile SDK `36`, JDK `17`, Gradle `9.3.1`, AGP `9.1.1`)
+- Xcode (khusus kompilasi rilis iOS / App Store)
 - Visual Studio Community 2022 dengan C++ Desktop Development & Inno Setup 6/7 (khusus Windows)
 - GCC / Clang, CMake, Ninja, dan `libgtk-3-dev` (khusus Linux Desktop)
 
@@ -584,15 +589,18 @@ Panel Pengaturan menyatukan kontrol wilayah kerja, 4 mode tema & Material You, p
    flutter pub get
    ```
 
-3. **Kompilasi Biner Rilis (Ramping & Terobfuskasi)**:
+3. **Konfigurasi OAuth Desktop (Opsional untuk Windows/Linux Google Drive Sync)**:
+   Salin [`env.desktop.example.json`](env.desktop.example.json) menjadi `env.desktop.json` (diabaikan oleh `.gitignore`) lalu isi `GOOGLE_DESKTOP_CLIENT_ID` dan `GOOGLE_DESKTOP_CLIENT_SECRET`.
+
+4. **Kompilasi Biner Rilis (Ramping & Terobfuskasi)**:
    - **Android Split APK (Rekomendasi untuk efisiensi ukuran berkas)**:
      ```bash
      flutter build apk --release --split-per-abi --obfuscate --split-debug-info=build/symbols/android --tree-shake-icons
      ```
      Menghasilkan paket APK terpisah berdasarkan arsitektur CPU pada direktori `build/app/outputs/flutter-apk/`:
-     - `app-arm64-v8a-release.apk` (Smartphone Android 64-bit modern)
-     - `app-armeabi-v7a-release.apk` (Perangkat Android 32-bit legacy)
-     - `app-x86_64-release.apk` (Emulator / perangkat x86_64)
+     - `app-arm64-v8a-release.apk` (`20,9 MB` — Smartphone Android 64-bit modern)
+     - `app-armeabi-v7a-release.apk` (`20,1 MB` — Perangkat Android 32-bit legacy)
+     - `app-x86_64-release.apk` (`21,2 MB` — Emulator / perangkat x86_64)
      > [!TIP]
      > **Efisiensi Memori & Ukuran (`useLegacyPackaging` + `R8` + `split-debug-info`)**  
      > Konfigurasi [`android/app/build.gradle.kts`](android/app/build.gradle.kts) mengaktifkan `isMinifyEnabled = true`, `isShrinkResources = true`, serta `packaging { jniLibs { useLegacyPackaging = true } }`, dipadukan dengan `--split-debug-info` dan `--tree-shake-icons` agar biner tetap ramping dan simbol debug terpisah.
@@ -605,27 +613,27 @@ Panel Pengaturan menyatukan kontrol wilayah kerja, 4 mode tema & Material You, p
      ```cmd
      tool\build_windows.bat
      ```
-     Atau kompilasi manual (lihat panduan lengkap & prompt siap pakai di [`BUILD_WINDOWS.md`](BUILD_WINDOWS.md)):
+     Atau kompilasi manual (lihat panduan lengkap di [`BUILD_WINDOWS.md`](BUILD_WINDOWS.md)):
      ```cmd
-     flutter build windows --release --obfuscate --split-debug-info=build\symbols\windows --tree-shake-icons
+     flutter build windows --release --obfuscate --split-debug-info=build\symbols\windows --tree-shake-icons --dart-define-from-file=env.desktop.json
      "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" windows\installer.iss
      ```
      Hasil biner rilis di folder `dist\`:
-     - `dist\Cek-PBB-Cianjur-Setup-v0.1.7-beta.exe` (`16,22 MB` — Installer Mandiri Inno Setup)
-     - `dist\Cek-PBB-Cianjur-Portable-v0.1.7-beta.zip` (`19,67 MB` — Portable ZIP x64)
-     - `dist\Cek-PBB-Cianjur-v0.1.7-beta-checksums.sha256` (Checksum SHA-256 tergabung seluruh platform)
+     - `dist\Cek-PBB-Cianjur-Setup-v1.0.0.exe` (`16 MB` — Installer Mandiri Inno Setup)
+     - `dist\Cek-PBB-Cianjur-Portable-v1.0.0.zip` (`19 MB` — Portable ZIP x64)
+     - `dist\Cek-PBB-Cianjur-v1.0.0-checksums.sha256` (Checksum SHA-256 tergabung seluruh platform)
    - **Linux Desktop**:
      ```bash
-     flutter build linux --release --obfuscate --split-debug-info=build/symbols/linux --tree-shake-icons
+     flutter build linux --release --obfuscate --split-debug-info=build/symbols/linux --tree-shake-icons --dart-define-from-file=env.desktop.json
      ```
-     Biner rilis dan pustaka pendukung dihasilkan di `build/linux/x64/release/bundle/`, serta arsip portabel terkompresi di `dist/Cek-PBB-Cianjur-Linux-x64-v0.1.7-beta.tar.gz` (`16,96 MB`).
+     Biner rilis dan pustaka pendukung dihasilkan di `build/linux/x64/release/bundle/`, serta arsip portabel terkompresi di `dist/Cek-PBB-Cianjur-Linux-x64-v1.0.0.tar.gz` (`17 MB`).
 
-4. **Verifikasi Pengujian & Analisis Statis**:
+5. **Verifikasi Pengujian & Analisis Statis**:
    ```bash
    flutter analyze
    flutter test
    ```
-   *(Terverifikasi pada `v0.1.7-beta`: `0` isu analisis statis dan `266/266` Unit & Widget Tests lolos).*
+   *(Terverifikasi pada `v1.0.0`: `0` isu analisis statis dan `282/282` Unit & Widget Tests lolos).*
 
 > [!IMPORTANT]
 > **Penandatanganan Rilis Android (Keystore)**  
