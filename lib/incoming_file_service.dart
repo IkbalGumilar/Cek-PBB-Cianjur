@@ -1,12 +1,13 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 
 import 'batch_notification_service.dart';
 import 'blok_catatan_screen.dart';
 import 'blok_data_store.dart';
+import 'dhkp/blok_catatan_dialogs.dart';
 import 'dkhp_package_helper.dart';
 import 'document_preview_screen.dart';
 import 'spreadsheet_viewer_screen.dart';
@@ -157,6 +158,50 @@ class IncomingFileService {
   }) async {
     if (!context.mounted) return;
 
+    DhkpInstallPlan plan;
+    try {
+      plan = await DhkpPackageHelper.inspectInstallPlan(
+        filePath,
+        password: password,
+      );
+    } on DkhpPasswordException {
+      if (!context.mounted) return;
+      await _promptPassword(context, filePath, isDat);
+      return;
+    } catch (e) {
+      if (!context.mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          icon: const Icon(
+            Icons.error_outline_rounded,
+            color: Colors.red,
+            size: 36,
+          ),
+          title: const Text('Gagal Membuka Berkas'),
+          content: Text('$e'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Tutup'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    if (!context.mounted) return;
+    if (plan.willOverwriteSameYear) {
+      final fileName = filePath.split(RegExp(r'[\\/]')).last;
+      final confirmed = await confirmDhkpInstallPlanIfNeeded(
+        context,
+        plan,
+        fileName: fileName,
+      );
+      if (!confirmed || !context.mounted) return;
+    }
+
     // Tampilkan indikator proses
     showDialog<void>(
       context: context,
@@ -194,13 +239,16 @@ class IncomingFileService {
         password: password,
       );
       await BlokDataStore.instance.loadAll();
+      BlokCatatanScreen.refreshIfOpen();
 
       if (!context.mounted) return;
       Navigator.of(context, rootNavigator: true).pop(); // Tutup loading dialog
 
-      final msg = isDat
-          ? 'Laporan .dat berhasil dipasang: ${records.length} data diperbarui.'
-          : 'Paket DHKP berhasil diimpor: ${records.length} data & dokumentasi dimuat.';
+      final msg = buildDhkpInstallSuccessMessage(
+        plan: plan,
+        recordCount: records.length,
+        isDat: isDat,
+      );
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -215,7 +263,12 @@ class IncomingFileService {
                   rootNavigatorKey.currentState ??
                   (context.mounted ? Navigator.maybeOf(context) : null);
               nav?.push(
-                MaterialPageRoute(builder: (_) => const BlokCatatanScreen()),
+                MaterialPageRoute(
+                  settings: const RouteSettings(
+                    name: BlokCatatanScreen.routeName,
+                  ),
+                  builder: (_) => const BlokCatatanScreen(),
+                ),
               );
             },
           ),

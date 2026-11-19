@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -178,7 +178,7 @@ class _LegalDocumentScreenState extends State<LegalDocumentScreen>
                   _buildCalloutBox(
                     title: 'Prinsip Akses Minimum Terbatas:',
                     body:
-                        'Aplikasi meminta izin "drive.file" (akses tulis/kelola khusus berkas cadangan yang dibuat aplikasi) serta "drive.readonly" (akses baca-saja untuk mendeteksi berkas paket .dkhp/.dat yang dibagikan ke akun Anda). Aplikasi TIDAK PERNAH meminta izin tulis penuh ke seluruh Google Drive Anda.',
+                        'Aplikasi HANYA meminta izin non-sensitif "drive.file" (folder & berkas cadangan milik aplikasi) dan "drive.appdata" (penyimpanan konfigurasi tersembunyi untuk kunci cadangan & preferensi tema). Aplikasi TIDAK PERNAH meminta izin akses ke seluruh isi Google Drive Anda.',
                     color: Colors.green,
                     isDark: isDark,
                   ),

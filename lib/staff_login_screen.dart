@@ -1,6 +1,6 @@
 import 'dart:typed_data';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'monitoring_hub_screen.dart';
 import 'staff_credentials_store.dart';

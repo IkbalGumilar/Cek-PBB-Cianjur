@@ -1,18 +1,18 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
-import 'monitoring/monitoring_wilayah_screen.dart';
+import 'batch_check_manager.dart';
+import 'batch_check_screen.dart';
+import 'blok_catatan_screen.dart';
 import 'monitoring/staff_dhkp_sync_dialog.dart';
 import 'monitoring/staff_dhkp_sync_manager.dart';
 import 'monitoring/staff_dhkp_sync_service.dart';
 import 'result_screen.dart';
-import 'staff_portal_client.dart';
 import 'tax_record.dart';
-import 'theme_controller.dart';
 
 /// Global navigator key agar notifikasi dapat membuka halaman hasil (ResultScreen)
 /// langsung saat diketuk oleh pengguna dari notification drawer sistem.
@@ -574,70 +574,164 @@ class BatchNotificationService {
     }
   }
 
+  String? _lastHandledPayload;
+  DateTime? _lastHandledAt;
+
+  /// Reset status deduplikasi notifikasi untuk keperluan pengujian.
+  @visibleForTesting
+  void resetTapDeduplication() {
+    _lastHandledPayload = null;
+    _lastHandledAt = null;
+  }
+
   /// Handler ketika pengguna mengetuk notifikasi dari notification bar
   @visibleForTesting
   void onNotificationTapped(NotificationResponse response) =>
       _onNotificationTapped(response);
 
   void _onNotificationTapped(NotificationResponse response) {
-    if (response.payload == 'show_batch_result') {
-      _navigateToResult();
-    } else if (response.payload == 'staff_sync_completed') {
-      _navigateToStaffPortalAndReport(showReport: true);
-    } else if (response.payload == 'staff_sync_in_progress') {
-      _navigateToStaffPortalAndReport(showReport: false);
-    } else if (response.payload == 'staff_sync_cancelled') {
-      _navigateToStaffPortalAndReport(showReport: true);
+    final payload = response.payload;
+    if (payload == null || payload.isEmpty) return;
+
+    final now = DateTime.now();
+    if (_lastHandledPayload == payload &&
+        _lastHandledAt != null &&
+        now.difference(_lastHandledAt!) < const Duration(milliseconds: 1000)) {
+      return;
+    }
+    _lastHandledPayload = payload;
+    _lastHandledAt = now;
+
+    switch (payload) {
+      case 'show_batch_result':
+        openDhkpWithBatchResult();
+        break;
+      case 'batch_in_progress':
+        openActiveBatchCheck();
+        break;
+      case 'staff_sync_completed':
+      case 'staff_sync_cancelled':
+        openDhkpWithSyncReport();
+        break;
+      case 'staff_sync_in_progress':
+        openActiveStaffSync();
+        break;
     }
   }
 
-  void _navigateToResult() {
+  /// Membuka kembali layar Cek Massal yang sedang berjalan di latar belakang.
+  void openActiveBatchCheck() {
+    if (BatchCheckManager.instance.isScreenOpen) return;
     final nav = rootNavigatorKey.currentState;
-    if (nav == null || _activeRecords == null || _activeRecords!.isEmpty) {
+    if (nav == null || BatchCheckManager.instance.records.isEmpty) return;
+    nav.push(
+      MaterialPageRoute(
+        settings: const RouteSettings(name: BatchCheckScreen.routeName),
+        builder: (_) => BatchCheckScreen.attachActive(),
+      ),
+    );
+  }
+
+  /// Membuka kembali lembaran progres Sinkronisasi DHKP yang sedang berjalan.
+  void openActiveStaffSync() {
+    final nav = rootNavigatorKey.currentState;
+    final context = nav?.overlay?.context ?? rootNavigatorKey.currentContext;
+    if (context == null) return;
+    StaffDhkpSyncManager.instance.openSheet(context);
+  }
+
+  /// Mengarahkan pengguna dari layar mana pun (atau dari luar aplikasi) ke
+  /// halaman DHKP ([BlokCatatanScreen]) dan menampilkan rincian hasil Cek
+  /// Massal tepat SATU kali tanpa duplikasi widget.
+  void openDhkpWithBatchResult([List<TaxRecord>? overrideRecords]) {
+    final records =
+        overrideRecords ??
+        (BatchCheckManager.instance.records.isNotEmpty
+            ? BatchCheckManager.instance.records
+            : _activeRecords);
+    BatchCheckManager.instance.dismiss();
+
+    final nav = rootNavigatorKey.currentState;
+    if (nav == null) return;
+
+    if (ResultScreen.isCurrentlyOpen) {
+      BlokCatatanScreen.refreshIfOpen();
+      return;
+    }
+
+    if (BlokCatatanScreen.isCurrentlyOpen) {
+      nav.popUntil(
+        (route) =>
+            route.settings.name == BlokCatatanScreen.routeName || route.isFirst,
+      );
+      BlokCatatanScreen.refreshIfOpen();
+      if (records != null && records.isNotEmpty && !ResultScreen.isCurrentlyOpen) {
+        nav.push(
+          MaterialPageRoute(
+            settings: const RouteSettings(name: ResultScreen.routeName),
+            builder: (_) => ResultScreen(records: records),
+          ),
+        );
+      }
+      return;
+    }
+
+    if (BatchCheckManager.instance.isScreenOpen) {
+      nav.popUntil(
+        (route) =>
+            route.settings.name != BatchCheckScreen.routeName || route.isFirst,
+      );
+    }
+
+    nav.push(
+      MaterialPageRoute(
+        settings: const RouteSettings(name: BlokCatatanScreen.routeName),
+        builder: (_) => BlokCatatanScreen(initialBatchResultRecords: records),
+      ),
+    );
+  }
+
+  /// Mengarahkan pengguna dari layar mana pun (atau dari luar aplikasi) ke
+  /// halaman DHKP ([BlokCatatanScreen]) dan menampilkan laporan rincian hasil
+  /// Sinkronisasi tepat SATU kali tanpa duplikasi dialog.
+  void openDhkpWithSyncReport([StaffDhkpSyncOutcome? overrideOutcome]) {
+    final outcome =
+        overrideOutcome ??
+        StaffDhkpSyncService.lastOutcome ??
+        StaffDhkpSyncManager.instance.outcome;
+    if (StaffDhkpSyncManager.instance.isSheetOpen) {
+      StaffDhkpSyncManager.instance.hideSheet();
+    }
+    StaffDhkpSyncManager.instance.dismiss();
+
+    final nav = rootNavigatorKey.currentState;
+    if (nav == null) return;
+
+    if (isStaffDhkpSyncReportDialogOpen) {
+      BlokCatatanScreen.refreshIfOpen();
+      return;
+    }
+
+    if (BlokCatatanScreen.isCurrentlyOpen) {
+      nav.popUntil(
+        (route) =>
+            route.settings.name == BlokCatatanScreen.routeName || route.isFirst,
+      );
+      BlokCatatanScreen.refreshIfOpen();
+      final context = nav.overlay?.context ?? rootNavigatorKey.currentContext;
+      if (context != null &&
+          outcome != null &&
+          !isStaffDhkpSyncReportDialogOpen) {
+        showStaffDhkpSyncReportDialog(context, outcome);
+      }
       return;
     }
 
     nav.push(
-      MaterialPageRoute(builder: (_) => ResultScreen(records: _activeRecords!)),
+      MaterialPageRoute(
+        settings: const RouteSettings(name: BlokCatatanScreen.routeName),
+        builder: (_) => BlokCatatanScreen(initialSyncReportOutcome: outcome),
+      ),
     );
-  }
-
-  void _navigateToStaffPortalAndReport({bool showReport = true}) {
-    if (showReport) {
-      StaffDhkpSyncManager.instance.dismiss();
-    }
-
-    final nav = rootNavigatorKey.currentState;
-    if (nav == null) {
-      return;
-    }
-
-    final client = StaffDhkpSyncManager.instance.client ?? StaffPortalClient();
-    final themeController = ThemeController.current;
-    final outcome =
-        StaffDhkpSyncService.lastOutcome ??
-        StaffDhkpSyncManager.instance.outcome;
-
-    if (!MonitoringWilayahScreen.isCurrentlyOpen) {
-      nav.push(
-        MaterialPageRoute(
-          settings: const RouteSettings(name: 'MonitoringWilayahScreen'),
-          builder: (_) => MonitoringWilayahScreen(
-            client: client,
-            themeController: themeController,
-            initialReportOutcome: showReport ? outcome : null,
-          ),
-        ),
-      );
-    } else {
-      final context = nav.overlay?.context ?? rootNavigatorKey.currentContext;
-      if (context != null) {
-        if (showReport && outcome != null) {
-          showStaffDhkpSyncReportDialog(context, outcome);
-        } else if (!showReport) {
-          StaffDhkpSyncManager.instance.openSheet(context);
-        }
-      }
-    }
   }
 }

@@ -16,7 +16,19 @@ G_DEFINE_TYPE(MyApplication, my_application, GTK_TYPE_APPLICATION)
 
 // Called when first Flutter frame received.
 static void first_frame_cb(MyApplication* self, FlView* view) {
-  gtk_widget_show(gtk_widget_get_toplevel(GTK_WIDGET(view)));
+  GtkWidget* toplevel = gtk_widget_get_toplevel(GTK_WIDGET(view));
+  gtk_widget_show(toplevel);
+  gtk_widget_queue_resize(GTK_WIDGET(view));
+  gtk_widget_queue_draw(GTK_WIDGET(view));
+}
+
+static gboolean window_state_or_configure_cb(GtkWidget* window,
+                                             GdkEvent* event,
+                                             gpointer user_data) {
+  GtkWidget* view = GTK_WIDGET(user_data);
+  gtk_widget_queue_resize(view);
+  gtk_widget_queue_draw(view);
+  return FALSE;
 }
 
 // Implements GApplication::activate.
@@ -45,11 +57,11 @@ static void my_application_activate(GApplication* application) {
   if (use_header_bar) {
     GtkHeaderBar* header_bar = GTK_HEADER_BAR(gtk_header_bar_new());
     gtk_widget_show(GTK_WIDGET(header_bar));
-    gtk_header_bar_set_title(header_bar, "cek_pbb_app");
+    gtk_header_bar_set_title(header_bar, "Cek PBB Cianjur");
     gtk_header_bar_set_show_close_button(header_bar, TRUE);
     gtk_window_set_titlebar(window, GTK_WIDGET(header_bar));
   } else {
-    gtk_window_set_title(window, "cek_pbb_app");
+    gtk_window_set_title(window, "Cek PBB Cianjur");
   }
 
   gtk_window_set_default_size(window, 1280, 720);
@@ -64,8 +76,15 @@ static void my_application_activate(GApplication* application) {
   // for transparent.
   gdk_rgba_parse(&background_color, "#000000");
   fl_view_set_background_color(view, &background_color);
+  gtk_widget_set_hexpand(GTK_WIDGET(view), TRUE);
+  gtk_widget_set_vexpand(GTK_WIDGET(view), TRUE);
   gtk_widget_show(GTK_WIDGET(view));
   gtk_container_add(GTK_CONTAINER(window), GTK_WIDGET(view));
+
+  g_signal_connect(window, "window-state-event",
+                   G_CALLBACK(window_state_or_configure_cb), view);
+  g_signal_connect(window, "configure-event",
+                   G_CALLBACK(window_state_or_configure_cb), view);
 
   // Show the window when Flutter renders.
   // Requires the view to be realized so we can start rendering.

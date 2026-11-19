@@ -1,5 +1,9 @@
-import 'package:flutter/material.dart';
+import 'dart:async';
+
+import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import 'cloud_sync/google_account_sync_service.dart';
 
 enum AppThemeMode {
   system('Ikuti Sistem'),
@@ -44,6 +48,7 @@ class ThemeController extends ValueNotifier<AppThemeState> {
   static ThemeController? current;
 
   bool _disposed = false;
+  bool _hasLocalMutation = false;
 
   ThemeController() : super(const AppThemeState()) {
     current = this;
@@ -63,7 +68,7 @@ class ThemeController extends ValueNotifier<AppThemeState> {
 
   Future<void> _load() async {
     final prefs = await SharedPreferences.getInstance();
-    if (_disposed) return;
+    if (_disposed || _hasLocalMutation) return;
     final savedMode = prefs.getString(_prefsKeyMode);
     final savedColorInt = prefs.getInt(_prefsKeyAccentColor);
     final savedMaterialYou = prefs.getBool(_prefsKeyMaterialYou);
@@ -88,29 +93,47 @@ class ThemeController extends ValueNotifier<AppThemeState> {
     );
   }
 
-  Future<void> setMode(AppThemeMode mode) async {
+  Future<void> setMode(AppThemeMode mode, {bool syncCloud = true}) async {
+    _hasLocalMutation = true;
     value = value.copyWith(mode: mode);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_prefsKeyMode, mode.name);
+    if (syncCloud) {
+      unawaited(GoogleAccountSyncService.instance.pushPreferencesToCloud());
+    }
   }
 
   /// Memperbarui warna aksen di memori & UI langsung.
   /// Bila [saveToPrefs] bernilai true, simpan permanen ke SharedPreferences.
-  Future<void> setAccentColor(Color color, {bool saveToPrefs = true}) async {
+  Future<void> setAccentColor(
+    Color color, {
+    bool saveToPrefs = true,
+    bool syncCloud = true,
+  }) async {
+    _hasLocalMutation = true;
     value = value.copyWith(accentColor: color);
     if (saveToPrefs) {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setInt(_prefsKeyAccentColor, color.toARGB32());
+      if (syncCloud) {
+        unawaited(GoogleAccountSyncService.instance.pushPreferencesToCloud());
+      }
     }
   }
 
-  Future<void> setUseMaterialYou(bool enabled) async {
+  Future<void> setUseMaterialYou(
+    bool enabled, {
+    bool syncCloud = true,
+  }) async {
     value = value.copyWith(useMaterialYou: enabled);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_prefsKeyMaterialYou, enabled);
+    if (syncCloud) {
+      unawaited(GoogleAccountSyncService.instance.pushPreferencesToCloud());
+    }
   }
 
-  Future<void> resetToDefault() async {
+  Future<void> resetToDefault({bool syncCloud = true}) async {
     value = value.copyWith(
       accentColor: defaultAccentColor,
       useMaterialYou: false,
@@ -118,5 +141,8 @@ class ThemeController extends ValueNotifier<AppThemeState> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_prefsKeyAccentColor, defaultAccentColor.toARGB32());
     await prefs.setBool(_prefsKeyMaterialYou, false);
+    if (syncCloud) {
+      unawaited(GoogleAccountSyncService.instance.pushPreferencesToCloud());
+    }
   }
 }

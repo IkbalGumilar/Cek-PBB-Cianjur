@@ -2,12 +2,13 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'blok_record.dart';
+import 'dhkp/blok_catatan_models.dart' show semuaBlokValue;
 import 'dhkp/blok_catatan_widgets.dart'
     show
         BlokPrintCancelToken,
@@ -72,6 +73,19 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
 
   // Default: Data = Jumlah Persentase, Diagram = Batang, Desa = Semua Dusun
   DhkpGrafikTab _activeTab = DhkpGrafikTab.persentase;
+
+  /// Warna aksen monokromatik utama yang mengikuti warna tema pilihan pengguna.
+  MaterialColor get _themeAccent =>
+      buildThemeMaterialColor(Theme.of(context).colorScheme.primary);
+
+  MaterialColor get _themeSecondaryAccent =>
+      buildThemeMaterialColor(Theme.of(context).colorScheme.secondary);
+
+  MaterialColor get _themeTertiaryAccent =>
+      buildThemeMaterialColor(Theme.of(context).colorScheme.tertiary);
+
+  List<Color> get _themeSlicePalette =>
+      buildThemeSlicePalette(Theme.of(context).colorScheme);
   ChartStyle _selectedStyle = ChartStyle.batang;
   GrafikSortMode _sortMode = GrafikSortMode.wilayah;
   bool _seDesaMode = false;
@@ -114,6 +128,12 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
   bool _didInitialAnimate = false;
   bool _isCapturingExport = false;
 
+  bool get _isSpecificBlokFiltered {
+    final sb = widget.selectedBlok?.trim();
+    if (sb == null || sb.isEmpty) return false;
+    return sb != semuaBlokValue && sb != 'Semua' && sb != 'Semua Blok';
+  }
+
   @override
   void initState() {
     super.initState();
@@ -137,10 +157,11 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
       parent: _animController,
       curve: const UnityAnimationCurve(),
     );
-    if (widget.selectedWilayah != null) {
-      _drillDownDusun = widget.selectedWilayah;
+    if (widget.selectedWilayah != null || DusunData.instance.isDusunLocked) {
+      _drillDownDusun = null;
+      _seDesaMode = false;
     }
-    if (widget.selectedBlok != null) {
+    if (_isSpecificBlokFiltered) {
       _selectedItemLabel =
           'Blok ${int.tryParse(widget.selectedBlok!) ?? widget.selectedBlok}';
     }
@@ -194,55 +215,56 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
     return [
       FeatureTourStep(
         targetKey: _topTabsKey,
-        title: '5 Pilihan Jenis Laporan Grafik',
+        title: '5 Pilihan Kategori Laporan Grafik',
         description:
-            'Pilih sudut pandang laporan yang ingin Anda amati:\n'
-            '• Jumlah Persentase: Perbandingan persentase capaian lunas antar dusun/blok.\n'
-            '• Jumlah Pendapatan: Total uang pajak yang sudah terkumpul dibanding target.\n'
-            '• Sudah Bayar & Belum Bayar: Rincian jumlah warga yang sudah lunas dan yang masih menunggak.\n'
-            '• Tren Bulanan: Perkembangan penerimaan pembayaran pajak dari bulan ke bulan.',
+            'Pilih sudut pandang grafik yang ingin Anda pantau:\n'
+            '• Jumlah Persentase: Perbandingan persen lunas antar dusun atau blok.\n'
+            '• Jumlah Pendapatan: Total nominal pajak masuk dibandingkan target.\n'
+            '• Sudah Bayar & Belum Bayar: Rincian jumlah SPPT lunas dan tunggakan.\n'
+            '• Tren Pembayaran: Kurva realisasi bulanan serta perbandingan antar tahun.',
         actionHint:
-            'Ketuk salah satu tombol kategori di atas untuk langsung mengganti isi grafik.',
+            'Ketuk salah satu kategori di atas untuk langsung mengganti grafik.',
         icon: Icons.analytics_outlined,
       ),
       FeatureTourStep(
         targetKey: _scopeBarKey,
         title: 'Pilihan Cakupan Wilayah Cepat',
         description:
-            'Atur wilayah mana yang ingin ditampilkan pada grafik:\n'
-            '• Se-Desa: Menggabungkan capaian seluruh wilayah desa menjadi satu.\n'
-            '• Semua Dusun: Membandingkan capaian antar dusun se-desa.\n'
-            '• Dusun 1, 2, 3, dst.: Melihat rincian per blok khusus di dalam dusun tersebut.',
+            'Menyesuaikan tingkat wilayah yang sedang aktif:\n'
+            '• Wilayah Kedusunan: Hanya menampilkan 2 tab ringkas — "Se-Kedusunan" dan "Semua Blok".\n'
+            '• Wilayah Desa: Menampilkan Se-Desa, Semua Dusun, serta tab tiap Dusun.\n'
+            '• Filter 1 Blok: Bilah cakupan otomatis disembunyikan agar tampilan grafik blok lebih lega.',
         actionHint:
-            'Anda juga bisa mengetuk batang dusun langsung pada grafik untuk melihat blok-blok di dalamnya.',
+            'Anda juga dapat mengetuk batang dusun/blok langsung di grafik untuk melihat detailnya.',
         icon: Icons.place_outlined,
       ),
       FeatureTourStep(
         targetKey: _statCardsKey,
-        title: 'Kartu Ringkasan Capaian Utama',
+        title: 'Gauge Realisasi & 3 Kartu Tren KPI',
         description:
-            'Menampilkan 3 angka terpenting sesuai kategori grafik yang sedang Anda buka, lengkap dengan perbandingan jumlah warga (SPPT) dan nilai rupiah.',
+            'Menampilkan indikator setengah lingkaran (Gauge) capaian pelunasan beserta 3 kartu metrik utama (sparkline tren, perbandingan tahun sebelumnya, jumlah SPPT, dan nilai rupiah).',
         icon: Icons.assessment_outlined,
       ),
       FeatureTourStep(
         targetKey: _controlToolbarKey,
-        title: 'Pengaturan Bentuk Diagram & Urutan Data',
+        title: 'Bentuk Diagram, Pas Layar, Urutan & Lipat Kartu',
         description:
-            '• Bentuk Diagram: Pilih tampilan Batang Tegak, Batang Mendatar, Diagram Lingkaran, atau tampilkan Semuanya sekaligus.\n'
-            '• Urutkan: Urutkan wilayah berdasarkan Nomor Wilayah, Nilai Tertinggi, atau Nilai Terendah.\n'
-            '• Lipat / Buka Semua: Merapikan kartu-kartu grafik di bawah.',
+            '• Bentuk Diagram: Pilih Batang Tegak, Batang Mendatar, Diagram Lingkaran, atau Semua.\n'
+            '• Pas Layar / Geser: Rapatkan seluruh batang agar muat di satu layar atau ubah ke mode geser horizontal.\n'
+            '• Urutkan & Lipat/Buka Semua: Atur urutan wilayah dan rapikan kartu grafik.',
         actionHint:
-            'Pilihan bentuk diagram dan urutan Anda akan otomatis diingat oleh aplikasi.',
+            'Seluruh pilihan tampilan ini tersimpan otomatis saat Anda kembali membuka grafik.',
         icon: Icons.tune_rounded,
       ),
       FeatureTourStep(
         targetKey: _chartContentKey,
-        title: 'Grafik Interaktif & Ekspor Gambar/PDF',
+        title: 'Grafik Interaktif, Bandingkan Tahun & Ekspor PDF/PNG',
         description:
-            'Ketuk salah satu batang atau bagian grafik untuk melihat rincian lengkap wilayah tersebut. '
-            'Di pojok kanan atas setiap kartu grafik, tersedia tombol untuk mengunduh gambar grafik (PNG), menyimpan laporan PDF, mencetak, atau membagikannya ke WhatsApp.',
+            '• Ketuk batang atau titik bulan untuk melihat rincian wajib pajak.\n'
+            '• Pada tab Tren Pembayaran, gunakan tombol "Bandingkan" di pojok kanan bawah untuk membandingkan 2 tahun sekaligus.\n'
+            '• Di pojok kanan atas setiap kartu tersedia tombol Unduh PNG/PDF/Excel, Bagikan, dan Cetak (dilengkapi Batal Cetak).',
         actionHint:
-            'Geser layar ke bawah untuk melihat tabel perbandingan rincian di bawah grafik.',
+            'Geser layar ke bawah untuk melihat tabel perbandingan lengkap di bawah grafik.',
         icon: Icons.bar_chart_rounded,
       ),
     ];
@@ -284,7 +306,9 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
             }
           }
         }
-        if (widget.selectedWilayah == null && savedSeDesa != null) {
+        if (widget.selectedWilayah == null &&
+            !DusunData.instance.isDusunLocked &&
+            savedSeDesa != null) {
           _seDesaMode = savedSeDesa;
         }
         if (savedCollapsed != null) {
@@ -344,13 +368,12 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
     if (oldWidget.records != widget.records ||
         oldWidget.selectedBlok != widget.selectedBlok ||
         oldWidget.selectedWilayah != widget.selectedWilayah) {
-      if (oldWidget.selectedWilayah != widget.selectedWilayah &&
-          widget.selectedWilayah != null) {
-        _drillDownDusun = widget.selectedWilayah;
+      if (oldWidget.selectedWilayah != widget.selectedWilayah) {
+        _drillDownDusun = null;
         _seDesaMode = false;
       }
       if (oldWidget.selectedBlok != widget.selectedBlok) {
-        _selectedItemLabel = widget.selectedBlok != null
+        _selectedItemLabel = _isSpecificBlokFiltered
             ? 'Blok ${int.tryParse(widget.selectedBlok!) ?? widget.selectedBlok}'
             : null;
       } else if (oldWidget.records != widget.records) {
@@ -482,6 +505,17 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
         base = formatted;
       }
     }
+    if (scope.isKedusunanScope) {
+      final dusunNum = scope.activeKedusunanNumber;
+      final kedusunanTitle = dusunNum != null
+          ? '$base • Dusun $dusunNum'
+          : '$base • Kedusunan';
+      if (distinctBlokCount == 1 && murniRecords.isNotEmpty) {
+        final blokInt = int.tryParse(murniRecords.first.blok);
+        return '$kedusunanTitle • Blok ${blokInt ?? murniRecords.first.blok}';
+      }
+      return kedusunanTitle;
+    }
     if (_drillDownDusun != null) {
       return '$base • Dusun $_drillDownDusun';
     }
@@ -512,9 +546,17 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
             desaCodes.contains(_selectedDesaCode))
         ? _selectedDesaCode
         : null;
-    final groupByDusun =
-        hasMultiDusun && _drillDownDusun == null && !_seDesaMode;
     final isKecLevel = desaCodes.length > 1 && effectiveDesa == null;
+    final isKedusunanScope =
+        desaCodes.length <= 1 &&
+        (DusunData.instance.isDusunLocked ||
+            widget.selectedWilayah != null ||
+            !hasMultiDusun);
+    final groupByDusun =
+        hasMultiDusun &&
+        !isKedusunanScope &&
+        _drillDownDusun == null &&
+        !_seDesaMode;
     if (isKecLevel) {
       return DhkpGrafikAnalytics.groupData(
         records,
@@ -532,17 +574,19 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
 
     final singleLabel = effectiveDesa != null
         ? DhkpGrafikAnalytics.formatDesaLabel(effectiveDesa)
-        : 'Se-Desa';
+        : (isKedusunanScope ? 'Se-Kedusunan' : 'Se-Desa');
 
     return DhkpGrafikAnalytics.groupData(
       records,
-      hasMultiDusun: hasMultiDusun,
+      hasMultiDusun: isKedusunanScope ? false : hasMultiDusun,
       groupByDusun: groupByDusun,
-      drillDownDusun: _drillDownDusun,
+      drillDownDusun: isKedusunanScope ? null : _drillDownDusun,
       sortMode: _sortMode,
       sortValueFn: sortValueFn,
       applySort: applySort,
-      seDesaMode: _seDesaMode && _drillDownDusun == null,
+      seDesaMode: isKedusunanScope
+          ? _seDesaMode
+          : (_seDesaMode && _drillDownDusun == null),
       singleEntityLabel: singleLabel,
     );
   }
@@ -768,6 +812,16 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
       }).toList();
     }
 
+    if (!hasMultiDesa && widget.selectedWilayah != null) {
+      final dObj = dusunByNumber(widget.selectedWilayah!);
+      final dBloks = dObj?.bloks.toSet() ?? <String>{};
+      if (dBloks.isNotEmpty) {
+        entityAcrossYears = entityAcrossYears
+            .where((r) => dBloks.contains(r.blok))
+            .toList();
+      }
+    }
+
     final uniqueDusuns = <int>{};
     for (final r in entityAcrossYears) {
       for (final d in dusunList) {
@@ -778,9 +832,20 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
       }
     }
     final hasMultiDusun = uniqueDusuns.length > 1;
+    final isKedusunanScope =
+        !hasMultiDesa &&
+        (DusunData.instance.isDusunLocked ||
+            widget.selectedWilayah != null ||
+            (!hasMultiDusun && uniqueDusuns.length == 1));
+    final activeKedusunanNumber = isKedusunanScope
+        ? (DusunData.instance.isDusunLocked
+              ? DusunData.instance.lockedDusunNumber
+              : (widget.selectedWilayah ??
+                    (uniqueDusuns.length == 1 ? uniqueDusuns.first : null)))
+        : null;
 
     if (!hasMultiDesa || effectiveDesaCode != null) {
-      if (hasMultiDusun && _drillDownDusun != null) {
+      if (!isKedusunanScope && hasMultiDusun && _drillDownDusun != null) {
         final dObj = dusunByNumber(_drillDownDusun!);
         final dBloks = dObj?.bloks.toSet() ?? <String>{};
         entityAcrossYears = entityAcrossYears
@@ -816,7 +881,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
       murniRecords: murniRecords,
       entityRecordsAcrossYears: entityAcrossYears,
       allScopedRecordsAcrossYears: scopedKecRecords,
-      hasMultiDusun: hasMultiDusun,
+      hasMultiDusun: isKedusunanScope ? false : hasMultiDusun,
       uniqueDusuns: uniqueDusuns.toList()..sort(),
       availableYears: availableYears,
       primaryKecamatanCode: primaryKecCode,
@@ -824,6 +889,8 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
       desaCodes: desaCodes,
       hasMultiDesa: hasMultiDesa,
       effectiveDesaCode: effectiveDesaCode,
+      isKedusunanScope: isKedusunanScope,
+      activeKedusunanNumber: activeKedusunanNumber,
     );
   }
 
@@ -846,6 +913,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
   bool _canCompareYearsForScope(_DhkpResolvedContext ctx) {
     if (ctx.availableYears.length <= 1) return false;
     if (ctx.isKecamatanAggregate) return _seDesaMode;
+    if (ctx.isKedusunanScope) return _seDesaMode || _isSpecificBlokFiltered;
     if (_drillDownDusun != null) return true;
     if (_seDesaMode) return true;
     final distinctBloks = ctx.entityRecordsAcrossYears
@@ -996,7 +1064,9 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
       if (single.isEmpty) return single;
       final label = ctx.effectiveDesaCode != null
           ? DhkpGrafikAnalytics.formatDesaLabel(ctx.effectiveDesaCode!)
-          : 'Se-Desa ($_selectedTahun)';
+          : (ctx.isKedusunanScope
+                ? 'Se-Kedusunan ($_selectedTahun)'
+                : 'Se-Desa ($_selectedTahun)');
       final s = single.first;
       return [
         DhkpTrendSeries(
@@ -1025,7 +1095,9 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
       records: ctx.murniRecords,
       tahun: _selectedTahun,
       isDark: isDark,
-      dusunNumber: ctx.uniqueDusuns.length == 1 ? ctx.uniqueDusuns.first : null,
+      dusunNumber:
+          ctx.activeKedusunanNumber ??
+          (ctx.uniqueDusuns.length == 1 ? ctx.uniqueDusuns.first : null),
     );
   }
 
@@ -1455,11 +1527,11 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
         .toSet()
         .length;
     final showScopeBar =
-        hasMultiDusun ||
-        scope.hasMultiDesa ||
-        scope.hasMultipleKecamatans ||
-        scope.availableYears.length > 1 ||
-        distinctBlokCount > 1;
+        !_isSpecificBlokFiltered &&
+        (hasMultiDusun ||
+            scope.hasMultiDesa ||
+            scope.hasMultipleKecamatans ||
+            distinctBlokCount > 1);
 
     final totalNop = murniRecords.length;
     final sudahBayarList = murniRecords.where((r) => r.isPaid).toList();
@@ -1554,7 +1626,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
                     totalCount: totalNop,
                     achievedPct: lunasNominalPct,
                     objPct: lunasNopPct,
-                    accentColor: _activeTab.accentColor,
+                    accentColor: _themeAccent,
                     previousYearRecords: prevYearRecords,
                     previousYearLabel: prevYearLabel,
                   );
@@ -1573,6 +1645,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
                     previousYearRecords: prevYearRecords,
                     previousYearLabel: prevYearLabel,
                     groups: overviewGroups,
+                    colorScheme: colorScheme,
                   );
 
                   return buildDhkpKpiWithGaugeOverview(
@@ -1756,7 +1829,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
         decoration: BoxDecoration(
           gradient: isSelected
               ? LinearGradient(
-                  colors: [tab.accentColor.shade600, tab.accentColor.shade800],
+                  colors: [_themeAccent.shade600, _themeAccent.shade800],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 )
@@ -1766,7 +1839,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
           boxShadow: isSelected
               ? [
                   BoxShadow(
-                    color: tab.accentColor.withValues(alpha: 0.35),
+                    color: _themeAccent.withValues(alpha: 0.35),
                     blurRadius: 6,
                     offset: const Offset(0, 2),
                   ),
@@ -1782,7 +1855,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
               size: 16,
               color: isSelected
                   ? Colors.white
-                  : (isDark ? Colors.grey.shade300 : tab.accentColor.shade700),
+                  : (isDark ? Colors.grey.shade300 : _themeAccent.shade700),
             ),
             const SizedBox(width: 6),
             Flexible(
@@ -1847,28 +1920,26 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
             ),
             const SizedBox(width: 6),
           ],
-          _buildScopeChip(
-            label: 'Se-Desa',
-            isSelected:
-                isAtDesaSubScope && _drillDownDusun == null && _seDesaMode,
-            accent: accent,
-            isDark: isDark,
-            onTap: () {
-              setState(() {
-                _drillDownDusun = null;
-                _seDesaMode = true;
-                _selectedItemLabel = null;
-              });
-              _savePreferences();
-              _replayAnimation();
-            },
-          ),
-          if (scope.hasMultiDusun) ...[
+          if (scope.isKedusunanScope) ...[
+            _buildScopeChip(
+              label: 'Se-Kedusunan',
+              isSelected: _seDesaMode,
+              accent: accent,
+              isDark: isDark,
+              onTap: () {
+                setState(() {
+                  _drillDownDusun = null;
+                  _seDesaMode = true;
+                  _selectedItemLabel = null;
+                });
+                _savePreferences();
+                _replayAnimation();
+              },
+            ),
             const SizedBox(width: 4),
             _buildScopeChip(
-              label: 'Semua Dusun',
-              isSelected:
-                  isAtDesaSubScope && _drillDownDusun == null && !_seDesaMode,
+              label: 'Semua Blok',
+              isSelected: !_seDesaMode,
               accent: accent,
               isDark: isDark,
               onTap: () {
@@ -1882,70 +1953,107 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
                 _replayAnimation();
               },
             ),
-          ],
-          if (!scope.hasMultiDusun &&
-              scope.uniqueDusuns.isEmpty &&
-              distinctBlokCount > 1) ...[
-            const SizedBox(width: 4),
+          ] else ...[
             _buildScopeChip(
-              label: 'Per Blok',
+              label: 'Se-Desa',
               isSelected:
-                  isAtDesaSubScope && _drillDownDusun == null && !_seDesaMode,
+                  isAtDesaSubScope && _drillDownDusun == null && _seDesaMode,
               accent: accent,
               isDark: isDark,
               onTap: () {
                 setState(() {
                   _drillDownDusun = null;
-                  _seDesaMode = false;
-                  _compareYear = null;
+                  _seDesaMode = true;
                   _selectedItemLabel = null;
                 });
                 _savePreferences();
                 _replayAnimation();
               },
             ),
-          ],
-          if (scope.uniqueDusuns.isNotEmpty) ...[
-            Container(
-              height: 16,
-              width: 1,
-              margin: const EdgeInsets.symmetric(horizontal: 8),
-              color: isDark ? Colors.white24 : Colors.grey.shade300,
-            ),
-            for (final dNum in scope.uniqueDusuns)
-              Padding(
-                padding: const EdgeInsets.only(right: 4),
-                child: _buildScopeChip(
-                  label: 'Dusun $dNum',
-                  isSelected:
-                      isAtDesaSubScope &&
-                      (_drillDownDusun == dNum ||
-                          (!scope.hasMultiDusun &&
-                              _drillDownDusun == null &&
-                              !_seDesaMode)),
-                  accent: accent,
-                  isDark: isDark,
-                  onTap: () {
-                    setState(() {
-                      final isCurrentlySelected =
-                          _drillDownDusun == dNum ||
-                          (!scope.hasMultiDusun &&
-                              _drillDownDusun == null &&
-                              !_seDesaMode);
-                      if (isCurrentlySelected) {
-                        _drillDownDusun = null;
-                        _seDesaMode = !scope.hasMultiDusun;
-                      } else {
-                        _drillDownDusun = dNum;
-                        _seDesaMode = false;
-                      }
-                      _selectedItemLabel = null;
-                    });
-                    _savePreferences();
-                    _replayAnimation();
-                  },
-                ),
+            if (scope.hasMultiDusun) ...[
+              const SizedBox(width: 4),
+              _buildScopeChip(
+                label: 'Semua Dusun',
+                isSelected:
+                    isAtDesaSubScope && _drillDownDusun == null && !_seDesaMode,
+                accent: accent,
+                isDark: isDark,
+                onTap: () {
+                  setState(() {
+                    _drillDownDusun = null;
+                    _seDesaMode = false;
+                    _compareYear = null;
+                    _selectedItemLabel = null;
+                  });
+                  _savePreferences();
+                  _replayAnimation();
+                },
               ),
+            ],
+            if (!scope.hasMultiDusun &&
+                scope.uniqueDusuns.isEmpty &&
+                distinctBlokCount > 1) ...[
+              const SizedBox(width: 4),
+              _buildScopeChip(
+                label: 'Per Blok',
+                isSelected:
+                    isAtDesaSubScope && _drillDownDusun == null && !_seDesaMode,
+                accent: accent,
+                isDark: isDark,
+                onTap: () {
+                  setState(() {
+                    _drillDownDusun = null;
+                    _seDesaMode = false;
+                    _compareYear = null;
+                    _selectedItemLabel = null;
+                  });
+                  _savePreferences();
+                  _replayAnimation();
+                },
+              ),
+            ],
+            if (scope.uniqueDusuns.isNotEmpty) ...[
+              Container(
+                height: 16,
+                width: 1,
+                margin: const EdgeInsets.symmetric(horizontal: 8),
+                color: isDark ? Colors.white24 : Colors.grey.shade300,
+              ),
+              for (final dNum in scope.uniqueDusuns)
+                Padding(
+                  padding: const EdgeInsets.only(right: 4),
+                  child: _buildScopeChip(
+                    label: 'Dusun $dNum',
+                    isSelected:
+                        isAtDesaSubScope &&
+                        (_drillDownDusun == dNum ||
+                            (!scope.hasMultiDusun &&
+                                _drillDownDusun == null &&
+                                !_seDesaMode)),
+                    accent: accent,
+                    isDark: isDark,
+                    onTap: () {
+                      setState(() {
+                        final isCurrentlySelected =
+                            _drillDownDusun == dNum ||
+                            (!scope.hasMultiDusun &&
+                                _drillDownDusun == null &&
+                                !_seDesaMode);
+                        if (isCurrentlySelected) {
+                          _drillDownDusun = null;
+                          _seDesaMode = !scope.hasMultiDusun;
+                        } else {
+                          _drillDownDusun = dNum;
+                          _seDesaMode = false;
+                        }
+                        _selectedItemLabel = null;
+                      });
+                      _savePreferences();
+                      _replayAnimation();
+                    },
+                  ),
+                ),
+            ],
           ],
         ],
       ),
@@ -1997,7 +2105,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
     bool isDark,
     ColorScheme colorScheme,
   ) {
-    final accent = _activeTab.accentColor;
+    final accent = _themeAccent;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
@@ -2191,7 +2299,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
     bool isDark,
     ColorScheme colorScheme,
   ) {
-    final accent = _activeTab.accentColor;
+    final accent = _themeAccent;
 
     return Wrap(
       spacing: 8,
@@ -2484,7 +2592,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
         .firstOrNull;
     if (match == null) return const SizedBox.shrink();
 
-    final accent = _activeTab.accentColor;
+    final accent = _themeAccent;
     final isDusunItem = match.label.startsWith('Dusun ');
     final dusunNum = isDusunItem
         ? int.tryParse(match.label.replaceFirst('Dusun ', ''))
@@ -2704,20 +2812,20 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
               _buildMiniDetailStat(
                 'Sudah Bayar',
                 '${formatRupiah(match.lunasNominal)} (${match.lunasNop} objek)',
-                Colors.teal,
+                _themeAccent,
                 isDark,
               ),
               if (_activeTab != DhkpGrafikTab.trenBulanan) ...[
                 _buildMiniDetailStat(
                   'Belum Bayar',
                   '${formatRupiah(match.belumBayarNominal)} (${match.belumBayarNop} objek)',
-                  Colors.orange,
+                  _themeTertiaryAccent,
                   isDark,
                 ),
                 _buildMiniDetailStat(
                   'Total Ketetapan',
                   '${formatRupiah(match.totalNominal)} (${match.totalNop} objek)',
-                  Colors.indigo,
+                  _themeSecondaryAccent,
                   isDark,
                 ),
               ],
@@ -3023,7 +3131,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
             title: 'Diagram Batang: Pendapatan Masuk (Rp)',
             subtitle: 'Ketuk batang untuk melihat rincian wilayah',
             badgeText: '${groups.length} Wilayah',
-            accentColor: Colors.teal,
+            accentColor: _themeAccent,
             isDark: isDark,
             groups: groups,
             child: renderDhkpColumnBars(
@@ -3037,8 +3145,8 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
               animatedTopLabelBuilder: (g, t) =>
                   'Rp ${formatShortRupiah(unityLerp(0.0, g.lunasNominal.toDouble(), t).round())}',
               subLabelExtractor: (g) => '${g.lunasPct.toStringAsFixed(0)}%',
-              color1: Colors.teal.shade400,
-              color2: Colors.teal.shade800,
+              color1: _themeAccent.shade400,
+              color2: _themeAccent.shade800,
               isDark: isDark,
               selectedItemLabel: _selectedItemLabel,
               animationValue: _animation.value,
@@ -3056,7 +3164,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
             title: 'Diagram Mendatar: Peringkat Pendapatan (Rp)',
             subtitle: 'Perbandingan uang masuk antar wilayah',
             badgeText: _sortMode.label,
-            accentColor: Colors.teal,
+            accentColor: _themeAccent,
             isDark: isDark,
             groups: groups,
             child: renderDhkpHorizontalBars(
@@ -3069,8 +3177,8 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
               animatedLabelRightBuilder: (g, t) =>
                   'Rp ${formatShortRupiah(unityLerp(0.0, g.lunasNominal.toDouble(), t).round())}',
               subRight: (g) => '${g.lunasPct.toStringAsFixed(1)}% dari target',
-              color1: Colors.teal.shade400,
-              color2: Colors.teal.shade700,
+              color1: _themeAccent.shade400,
+              color2: _themeAccent.shade700,
               isDark: isDark,
               selectedItemLabel: _selectedItemLabel,
               animationValue: _animation.value,
@@ -3088,7 +3196,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
             title: 'Diagram Lingkaran: Porsi Pendapatan Masuk',
             subtitle: 'Perbandingan sumbangan penerimaan tiap wilayah',
             badgeText: 'Total Rp ${formatShortRupiah(totalPendapatanMasuk)}',
-            accentColor: Colors.teal,
+            accentColor: _themeAccent,
             isDark: isDark,
             groups: groups,
             child: renderDhkpPieChart(
@@ -3096,12 +3204,13 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
                 groups,
                 (g) => g.lunasNominal.toDouble(),
                 totalPendapatanMasuk.toDouble(),
+                palette: _themeSlicePalette,
               ),
               centerLabel: 'Rp ${formatShortRupiah(totalPendapatanMasuk)}',
               animatedCenterLabelBuilder: (t) =>
                   'Rp ${formatShortRupiah(unityLerp(0.0, totalPendapatanMasuk.toDouble(), t).round())}',
               centerSub: 'TERKUMPUL',
-              centerColor: Colors.teal,
+              centerColor: _themeAccent,
               isDark: isDark,
               selectedItemLabel: _selectedItemLabel,
               animationValue: _animation.value,
@@ -3117,7 +3226,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
           title: 'Tabel Rincian Pendapatan per Wilayah',
           subtitle: 'Daftar angka target dan uang yang sudah masuk',
           badgeText: '${groups.length} Baris',
-          accentColor: Colors.teal,
+          accentColor: _themeAccent,
           isDark: isDark,
           groups: groups,
           child: buildDhkpDetailTableContent(
@@ -3131,7 +3240,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
             col4Val: (g) => '${g.lunasPct.toStringAsFixed(1)}%',
             isDark: isDark,
             selectedItemLabel: _selectedItemLabel,
-            accentColor: _activeTab.accentColor,
+            accentColor: _themeAccent,
             onSelectLabel: _onSelectLabel,
           ),
         ),
@@ -3173,7 +3282,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
             title: 'Diagram Batang: Capaian Persentase (%)',
             subtitle: 'Skala capaian 0% sampai 100% per wilayah',
             badgeText: 'Rata-rata ${overallPct.toStringAsFixed(1)}%',
-            accentColor: Colors.green,
+            accentColor: _themeAccent,
             isDark: isDark,
             groups: groups,
             child: renderDhkpColumnBars(
@@ -3184,8 +3293,8 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
               animatedTopLabelBuilder: (g, t) =>
                   '${unityLerp(0.0, g.lunasPct, t).toStringAsFixed(1)}%',
               subLabelExtractor: (g) => '${g.lunasNop}/${g.totalNop}',
-              color1: Colors.green.shade400,
-              color2: Colors.green.shade700,
+              color1: _themeAccent.shade400,
+              color2: _themeAccent.shade700,
               isDark: isDark,
               selectedItemLabel: _selectedItemLabel,
               animationValue: _animation.value,
@@ -3203,7 +3312,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
             title: 'Diagram Mendatar: Capaian Persentase Wilayah',
             subtitle: 'Tingkat pencapaian pembayaran terhadap target 100%',
             badgeText: _sortMode.label,
-            accentColor: Colors.green,
+            accentColor: _themeAccent,
             isDark: isDark,
             groups: groups,
             child: renderDhkpHorizontalBars(
@@ -3214,8 +3323,8 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
               animatedLabelRightBuilder: (g, t) =>
                   '${unityLerp(0.0, g.lunasPct, t).toStringAsFixed(1)}%',
               subRight: (g) => '${g.lunasNop}/${g.totalNop} objek',
-              color1: Colors.green.shade400,
-              color2: Colors.green.shade700,
+              color1: _themeAccent.shade400,
+              color2: _themeAccent.shade700,
               isDark: isDark,
               selectedItemLabel: _selectedItemLabel,
               animationValue: _animation.value,
@@ -3234,14 +3343,14 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
             title: 'Diagram Lingkaran: Sudah Tercapai vs Sisa Target',
             subtitle: 'Perbandingan persentase lunas dan sisa yang belum masuk',
             badgeText: '${overallPct.toStringAsFixed(1)}% Lunas',
-            accentColor: Colors.green,
+            accentColor: _themeAccent,
             isDark: isDark,
             groups: groups,
             child: renderDhkpDonutTwoSlice(
               achievedPct: overallPct,
               achievedLabel: 'Sudah Lunas',
               remainingLabel: 'Sisa Target',
-              achievedColor: Colors.green.shade600,
+              achievedColor: _themeAccent.shade600,
               remainingColor: Colors.grey.shade400,
               centerLabel: '${overallPct.toStringAsFixed(1)}%',
               animatedCenterLabelBuilder: (animatedPct) =>
@@ -3262,7 +3371,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
           title: 'Tabel Rincian Persentase per Wilayah',
           subtitle: 'Perbandingan jumlah objek lunas dan persentase capaian',
           badgeText: '${groups.length} Baris',
-          accentColor: Colors.green,
+          accentColor: _themeAccent,
           isDark: isDark,
           groups: groups,
           child: buildDhkpDetailTableContent(
@@ -3276,7 +3385,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
             col4Val: (g) => '${g.lunasPct.toStringAsFixed(1)}%',
             isDark: isDark,
             selectedItemLabel: _selectedItemLabel,
-            accentColor: _activeTab.accentColor,
+            accentColor: _themeAccent,
             onSelectLabel: _onSelectLabel,
           ),
         ),
@@ -3319,7 +3428,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
             title: 'Diagram Batang: Tagihan Belum Bayar (Rp)',
             subtitle: 'Jumlah tagihan yang masih perlu ditagih per wilayah',
             badgeText: '${groups.length} Wilayah',
-            accentColor: Colors.orange,
+            accentColor: _themeAccent,
             isDark: isDark,
             groups: groups,
             child: renderDhkpColumnBars(
@@ -3333,8 +3442,8 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
               animatedTopLabelBuilder: (g, t) =>
                   'Rp ${formatShortRupiah(unityLerp(0.0, g.belumBayarNominal.toDouble(), t).round())}',
               subLabelExtractor: (g) => '${g.belumBayarNop} objek',
-              color1: Colors.orange.shade400,
-              color2: Colors.deepOrange.shade700,
+              color1: _themeAccent.shade400,
+              color2: _themeAccent.shade700,
               isDark: isDark,
               selectedItemLabel: _selectedItemLabel,
               animationValue: _animation.value,
@@ -3352,7 +3461,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
             title: 'Diagram Mendatar: Urutan Belum Bayar per Wilayah',
             subtitle: 'Wilayah dengan sisa tagihan belum lunas terbesar',
             badgeText: _sortMode.label,
-            accentColor: Colors.orange,
+            accentColor: _themeAccent,
             isDark: isDark,
             groups: groups,
             child: renderDhkpHorizontalBars(
@@ -3365,8 +3474,8 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
               animatedLabelRightBuilder: (g, t) =>
                   'Rp ${formatShortRupiah(unityLerp(0.0, g.belumBayarNominal.toDouble(), t).round())}',
               subRight: (g) => '${g.belumBayarNop} objek belum lunas',
-              color1: Colors.orange.shade400,
-              color2: Colors.deepOrange.shade600,
+              color1: _themeAccent.shade400,
+              color2: _themeAccent.shade600,
               isDark: isDark,
               selectedItemLabel: _selectedItemLabel,
               animationValue: _animation.value,
@@ -3384,7 +3493,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
             title: 'Diagram Lingkaran: Sebaran Belum Bayar',
             subtitle: 'Perbandingan sisa tagihan antar wilayah',
             badgeText: 'Total Rp ${formatShortRupiah(totalBelumBayarNominal)}',
-            accentColor: Colors.orange,
+            accentColor: _themeAccent,
             isDark: isDark,
             groups: groups,
             child: renderDhkpPieChart(
@@ -3392,12 +3501,13 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
                 groups,
                 (g) => g.belumBayarNominal.toDouble(),
                 totalBelumBayarNominal.toDouble(),
+                palette: _themeSlicePalette,
               ),
               centerLabel: 'Rp ${formatShortRupiah(totalBelumBayarNominal)}',
               animatedCenterLabelBuilder: (t) =>
                   'Rp ${formatShortRupiah(unityLerp(0.0, totalBelumBayarNominal.toDouble(), t).round())}',
               centerSub: 'BELUM BAYAR',
-              centerColor: Colors.orange,
+              centerColor: _themeAccent,
               isDark: isDark,
               selectedItemLabel: _selectedItemLabel,
               animationValue: _animation.value,
@@ -3413,7 +3523,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
           title: 'Tabel Rincian Belum Bayar per Wilayah',
           subtitle: 'Daftar jumlah objek dan nilai rupiah yang belum lunas',
           badgeText: '${groups.length} Baris',
-          accentColor: Colors.orange,
+          accentColor: _themeAccent,
           isDark: isDark,
           groups: groups,
           child: buildDhkpDetailTableContent(
@@ -3429,7 +3539,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
                 : '0%',
             isDark: isDark,
             selectedItemLabel: _selectedItemLabel,
-            accentColor: _activeTab.accentColor,
+            accentColor: _themeAccent,
             onSelectLabel: _onSelectLabel,
           ),
         ),
@@ -3472,7 +3582,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
             title: 'Diagram Batang: Jumlah Objek Sudah Bayar',
             subtitle: 'Banyaknya objek pajak yang sudah lunas per wilayah',
             badgeText: 'Total $totalSudahBayarCount Objek',
-            accentColor: Colors.blue,
+            accentColor: _themeAccent,
             isDark: isDark,
             groups: groups,
             child: renderDhkpColumnBars(
@@ -3486,8 +3596,8 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
                   '${unityLerp(0.0, g.lunasNop.toDouble(), t).round()} objek',
               subLabelExtractor: (g) =>
                   'Rp ${formatShortRupiah(g.lunasNominal)}',
-              color1: Colors.blue.shade400,
-              color2: Colors.blue.shade800,
+              color1: _themeAccent.shade400,
+              color2: _themeAccent.shade800,
               isDark: isDark,
               selectedItemLabel: _selectedItemLabel,
               animationValue: _animation.value,
@@ -3506,7 +3616,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
             subtitle:
                 'Urutan wilayah berdasarkan jumlah warga yang sudah bayar',
             badgeText: _sortMode.label,
-            accentColor: Colors.blue,
+            accentColor: _themeAccent,
             isDark: isDark,
             groups: groups,
             child: renderDhkpHorizontalBars(
@@ -3519,8 +3629,8 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
               animatedLabelRightBuilder: (g, t) =>
                   '${unityLerp(0.0, g.lunasNop.toDouble(), t).round()} objek',
               subRight: (g) => 'Rp ${formatShortRupiah(g.lunasNominal)}',
-              color1: Colors.blue.shade400,
-              color2: Colors.blue.shade700,
+              color1: _themeAccent.shade400,
+              color2: _themeAccent.shade700,
               isDark: isDark,
               selectedItemLabel: _selectedItemLabel,
               animationValue: _animation.value,
@@ -3538,7 +3648,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
             title: 'Diagram Lingkaran: Sebaran Objek Lunas',
             subtitle: 'Perbandingan jumlah wajib pajak yang telah membayar',
             badgeText: '$totalSudahBayarCount Objek',
-            accentColor: Colors.blue,
+            accentColor: _themeAccent,
             isDark: isDark,
             groups: groups,
             child: renderDhkpPieChart(
@@ -3546,12 +3656,13 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
                 groups,
                 (g) => g.lunasNop.toDouble(),
                 totalSudahBayarCount.toDouble(),
+                palette: _themeSlicePalette,
               ),
               centerLabel: '$totalSudahBayarCount',
               animatedCenterLabelBuilder: (t) =>
                   '${unityLerp(0.0, totalSudahBayarCount.toDouble(), t).round()}',
               centerSub: 'OBJEK LUNAS',
-              centerColor: Colors.blue,
+              centerColor: _themeAccent,
               isDark: isDark,
               selectedItemLabel: _selectedItemLabel,
               animationValue: _animation.value,
@@ -3567,7 +3678,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
           title: 'Tabel Rincian Sudah Bayar per Wilayah',
           subtitle: 'Rekapitulasi jumlah objek lunas dan uang terkumpul',
           badgeText: '${groups.length} Baris',
-          accentColor: Colors.blue,
+          accentColor: _themeAccent,
           isDark: isDark,
           groups: groups,
           child: buildDhkpDetailTableContent(
@@ -3581,7 +3692,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
             col4Val: (g) => 'Rp ${formatShortRupiah(g.lunasNominal)}',
             isDark: isDark,
             selectedItemLabel: _selectedItemLabel,
-            accentColor: _activeTab.accentColor,
+            accentColor: _themeAccent,
             onSelectLabel: _onSelectLabel,
           ),
         ),
@@ -3633,7 +3744,9 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
                         ? DhkpGrafikAnalytics.formatDesaLabel(
                             scope.effectiveDesaCode!,
                           )
-                        : 'Se-Desa'));
+                        : (scope.isKedusunanScope
+                              ? 'Se-Kedusunan'
+                              : 'Se-Desa')));
         final primaryTotal = trendSeries.isNotEmpty
             ? trendSeries.first.totalNominal
             : 0;
@@ -3718,7 +3831,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
             title: cardTitle,
             subtitle: cardSubtitle,
             badgeText: cardBadge,
-            accentColor: Colors.purple,
+            accentColor: _themeAccent,
             isDark: isDark,
             groups: monthGroups,
             child: Column(
@@ -3745,7 +3858,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
                         _buildScopeChip(
                           label: 'Top $_maxCustomDesas Desa',
                           isSelected: _customCompareDesas.isEmpty,
-                          accent: Colors.purple,
+                          accent: _themeAccent,
                           isDark: isDark,
                           onTap: () {
                             setState(() => _customCompareDesas.clear());
@@ -3756,7 +3869,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
                               ? 'Pilih Desa (Maks. $_maxCustomDesas)'
                               : 'Desa Pilihan (${_customCompareDesas.length}/$_maxCustomDesas)',
                           isSelected: _customCompareDesas.isNotEmpty,
-                          accent: Colors.purple,
+                          accent: _themeAccent,
                           isDark: isDark,
                           leadingIcon: Icons.checklist_rounded,
                           onTap: () => _openSelectDesaDialog(
@@ -3798,7 +3911,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
             title: 'Diagram Mendatar: Rincian Bulanan (Jan - Des)',
             subtitle: 'Daftar penerimaan kas dari awal hingga akhir tahun',
             badgeText: '12 Bulan',
-            accentColor: Colors.purple,
+            accentColor: _themeAccent,
             isDark: isDark,
             groups: monthGroups,
             child: renderDhkpHorizontalBars(
@@ -3810,8 +3923,8 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
                   'Rp ${formatShortRupiah(unityLerp(0.0, g.lunasNominal.toDouble(), t).round())}',
               subRight: (g) =>
                   '${g.lunasNop} objek (${g.lunasPct.toStringAsFixed(1)}%)',
-              color1: Colors.purple.shade400,
-              color2: Colors.indigo.shade600,
+              color1: _themeAccent.shade400,
+              color2: _themeAccent.shade700,
               isDark: isDark,
               selectedItemLabel: _selectedItemLabel,
               animationValue: _animation.value,
@@ -3830,7 +3943,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
             title: 'Diagram Lingkaran: Porsi Penerimaan per Bulan',
             subtitle: 'Kontribusi tiap bulan terhadap total penerimaan tahunan',
             badgeText: 'Rp ${formatShortRupiah(totalDatedNominal)}',
-            accentColor: Colors.purple,
+            accentColor: _themeAccent,
             isDark: isDark,
             groups: monthGroups,
             child: renderDhkpPieChart(
@@ -3838,12 +3951,13 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
                 monthGroups.where((g) => g.lunasNominal > 0).toList(),
                 (g) => g.lunasNominal.toDouble(),
                 totalDatedNominal.toDouble(),
+                palette: _themeSlicePalette,
               ),
               centerLabel: 'Rp ${formatShortRupiah(totalDatedNominal)}',
               animatedCenterLabelBuilder: (t) =>
                   'Rp ${formatShortRupiah(unityLerp(0.0, totalDatedNominal.toDouble(), t).round())}',
               centerSub: 'TOTAL BULANAN',
-              centerColor: Colors.purple,
+              centerColor: _themeAccent,
               isDark: isDark,
               selectedItemLabel: _selectedItemLabel,
               animationValue: _animation.value,
@@ -3859,7 +3973,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
           title: 'Tabel Rincian Penerimaan Bulanan (Jan - Des)',
           subtitle: 'Rekapitulasi jumlah pembayaran dan nilai rupiah per bulan',
           badgeText: '12 Bulan',
-          accentColor: Colors.purple,
+          accentColor: _themeAccent,
           isDark: isDark,
           groups: monthGroups,
           child: buildDhkpDetailTableContent(
@@ -3873,7 +3987,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
             col4Val: (g) => '${g.lunasPct.toStringAsFixed(1)}%',
             isDark: isDark,
             selectedItemLabel: _selectedItemLabel,
-            accentColor: _activeTab.accentColor,
+            accentColor: _themeAccent,
             onSelectLabel: _onSelectLabel,
           ),
         ),
@@ -3890,7 +4004,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
     final years = scope.availableYears;
     final candidateYears = years.where((y) => y != _selectedTahun).toList();
     final suggestedYear = _suggestDefaultCompareYear(years);
-    const accent = Colors.purple;
+    final accent = _themeAccent;
 
     if (candidateYears.isEmpty || suggestedYear == null) {
       return Semantics(
@@ -3943,7 +4057,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
     final palette = DhkpGrafikAnalytics.trendSeriesPalette(isDark: isDark);
     final compareColor = palette.length > 1
         ? palette[1]
-        : (isDark ? Colors.tealAccent.shade200 : Colors.teal.shade700);
+        : (isDark ? _themeAccent.shade200 : _themeAccent.shade700);
 
     List<PopupMenuEntry<String>> buildMenuItems({required bool includeClear}) {
       return [
@@ -3952,7 +4066,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
           height: 30,
           child: Text(
             !canCompare
-                ? 'Bandingkan di ${scope.isKecamatanAggregate ? "Se-Kecamatan" : "Se-Desa"} vs $_selectedTahun'
+                ? 'Bandingkan di ${scope.isKecamatanAggregate ? "Se-Kecamatan" : (scope.isKedusunanScope ? "Se-Kedusunan" : "Se-Desa")} vs $_selectedTahun'
                 : 'Bandingkan $_selectedTahun dengan:',
             style: TextStyle(
               fontSize: 11,
@@ -4270,6 +4384,8 @@ class _DhkpResolvedContext {
   final List<String> desaCodes;
   final bool hasMultiDesa;
   final String? effectiveDesaCode;
+  final bool isKedusunanScope;
+  final int? activeKedusunanNumber;
 
   const _DhkpResolvedContext({
     required this.murniRecords,
@@ -4283,6 +4399,8 @@ class _DhkpResolvedContext {
     required this.desaCodes,
     required this.hasMultiDesa,
     required this.effectiveDesaCode,
+    this.isKedusunanScope = false,
+    this.activeKedusunanNumber,
   });
 
   bool get isKecamatanAggregate => hasMultiDesa && effectiveDesaCode == null;

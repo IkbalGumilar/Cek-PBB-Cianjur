@@ -2,17 +2,18 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 
 import 'app_security_service.dart';
+import 'batch_check_manager.dart';
 import 'batch_check_screen.dart';
+import 'batch_notification_service.dart';
 import 'blok_data_store.dart';
 import 'blok_record.dart';
 import 'blok_report_exporter.dart';
 import 'blok_report_pdf.dart';
-import 'blok_sync_service.dart';
 import 'dhkp/dhkp_nop_kalkulator_dialog.dart';
 import 'dhkp/dhkp_target_pacing_dialog.dart';
 import 'calculator/pbb_calculator_models.dart';
@@ -32,9 +33,12 @@ import 'image_crop_helper.dart';
 import 'incoming_file_service.dart';
 import 'kolase_foto_screen.dart';
 import 'map/dhkp_map_screen.dart';
+import 'monitoring/staff_dhkp_sync_dialog.dart';
+import 'monitoring/staff_dhkp_sync_service.dart';
 import 'native_file_helper.dart';
 import 'nop_helper.dart';
 import 'operator_mode_store.dart';
+import 'result_screen.dart';
 import 'tax_record.dart';
 import 'ui/app_design_system.dart';
 import 'unity_lerp_widgets.dart';
@@ -42,7 +46,29 @@ import 'unity_lerp_widgets.dart';
 export 'dhkp/blok_catatan_models.dart';
 
 class BlokCatatanScreen extends StatefulWidget {
-  const BlokCatatanScreen({super.key});
+  static const String routeName = 'BlokCatatanScreen';
+  static bool isCurrentlyOpen = false;
+  static VoidCallback? _activeRefreshCallback;
+
+  /// Menyegarkan layar DHKP aktif bila sedang terbuka (mis. setelah sinkronisasi
+  /// atau cek massal di latar belakang selesai).
+  static void refreshIfOpen() {
+    _activeRefreshCallback?.call();
+  }
+
+  /// Jika diisi (mis. dari ketukan notifikasi Cek Massal selesai), layar DHKP
+  /// akan otomatis membuka rincian hasil [ResultScreen] tepat satu kali.
+  final List<TaxRecord>? initialBatchResultRecords;
+
+  /// Jika diisi (mis. dari ketukan notifikasi Sinkronisasi selesai), layar DHKP
+  /// akan otomatis menampilkan dialog laporan rincian sinkronisasi tepat satu kali.
+  final StaffDhkpSyncOutcome? initialSyncReportOutcome;
+
+  const BlokCatatanScreen({
+    super.key,
+    this.initialBatchResultRecords,
+    this.initialSyncReportOutcome,
+  });
 
   @override
   State<BlokCatatanScreen> createState() => _BlokCatatanScreenState();
@@ -51,6 +77,8 @@ class BlokCatatanScreen extends StatefulWidget {
 class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
   bool _loading = true;
   bool _busy = false;
+  bool _isPrinting = false;
+  bool _initialOverlayHandled = false;
   String _busyMessage = 'Memuat data DHKP...';
   IconData _busyIcon = Icons.sync_rounded;
   bool _isOperator = false;
@@ -83,6 +111,7 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
   final _horizontalScrollController = ScrollController();
 
   final _toggleGrafikButtonKey = GlobalKey(debugLabel: 'tour_dhkp_grafik_btn');
+  final _targetPacingTourKey = GlobalKey(debugLabel: 'tour_dhkp_target_pacing');
   final _moreMenuButtonKey = GlobalKey(debugLabel: 'tour_dhkp_more_btn');
   final _filterBlokTahunKey = GlobalKey(debugLabel: 'tour_dhkp_filter_bar');
   final _searchFilterSortKey = GlobalKey(debugLabel: 'tour_dhkp_search_bar');
@@ -94,17 +123,33 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
   @override
   void initState() {
     super.initState();
+    BlokCatatanScreen.isCurrentlyOpen = true;
+    BlokCatatanScreen._activeRefreshCallback = _refreshFromExternalUpdate;
+    BatchCheckManager.instance.onDataUpdated = BlokCatatanScreen.refreshIfOpen;
     _load();
   }
 
   @override
   void dispose() {
+    BlokCatatanScreen.isCurrentlyOpen = false;
+    if (BlokCatatanScreen._activeRefreshCallback == _refreshFromExternalUpdate) {
+      BlokCatatanScreen._activeRefreshCallback = null;
+    }
+    if (BatchCheckManager.instance.onDataUpdated ==
+        BlokCatatanScreen.refreshIfOpen) {
+      BatchCheckManager.instance.onDataUpdated = null;
+    }
     FeatureTourController.dismissActiveTour();
     AppSecurityService.instance.setScreenSecure(false);
     _searchController.dispose();
     _verticalScrollController.dispose();
     _horizontalScrollController.dispose();
     super.dispose();
+  }
+
+  void _refreshFromExternalUpdate() {
+    if (!mounted) return;
+    unawaited(_load());
   }
 
   void _onHelpPressed() {
@@ -128,60 +173,65 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
     return [
       FeatureTourStep(
         targetKey: _toggleGrafikButtonKey,
-        title: 'Tombol Beralih ke Tampilan Grafik',
+        title: 'Beralih ke Visual Grafik DHKP',
         description:
-            'Tekan ikon diagram ini untuk melihat laporan DHKP dalam bentuk grafik batang, diagram lingkaran, dan kurva tren bulanan yang mudah dipahami.',
+            'Tekan ikon diagram ini untuk membuka tampilan grafik DHKP: Gauge realisasi, 3 kartu tren KPI, grafik batang per Kedusunan/Blok, serta perbandingan lintas tahun.',
         actionHint:
-            'Tekan kembali tombol yang sama saat berada di layar grafik untuk kembali ke tabel catatan ini.',
+            'Tekan kembali ikon ini saat di layar grafik untuk kembali ke tabel catatan DHKP.',
         icon: Icons.bar_chart_rounded,
       ),
       FeatureTourStep(
-        targetKey: _moreMenuButtonKey,
-        title: 'Menu Aksi DHKP & Fitur Lanjutan',
+        targetKey: _targetPacingTourKey,
+        title: 'Target & Pacing Realisasi',
         description:
-            'Tekan ikon tiga titik ini untuk mengakses seluruh fitur utama:\n'
-            '• Unggah Berkas DHKP / Laporan (.dat): Memuat berkas daftar pajak.\n'
-            '• Buat Paket Laporan (.dat): Mengemas data DHKP dan foto STTS.\n'
-            '• Peta Objek Pajak: Menampilkan sebaran bidang tanah di peta.\n'
-            '• Cetak, Bagikan, & Unduh Laporan: Rekap PDF, Excel, atau CSV.\n'
-            '• Kolase Gambar Dokumentasi & Cek Status Bayar Massal.',
+            'Pantau target capaian harian/bulanan, proyeksi waktu tercapai, dan laju penagihan sesuai tanggal jatuh tempo wilayah Anda.',
+        icon: Icons.speed_rounded,
+      ),
+      FeatureTourStep(
+        targetKey: _moreMenuButtonKey,
+        title: 'Menu Aksi DHKP, Cek Massal & Kalkulator',
+        description:
+            'Tekan ikon tiga titik ini untuk mengakses fitur lengkap:\n'
+            '• Unggah Berkas DHKP (.dkhp) / Laporan (.dat): Tahun baru otomatis ditambahkan tanpa menghapus tahun lama; tahun sama meminta konfirmasi timpa.\n'
+            '• Cek Status Bayar Massal: Berjalan di latar belakang (bisa disembunyikan) dengan opsi Seluruh Blok khusus Kedusunan.\n'
+            '• Peta Objek Pajak, Cetak PDF (dengan Batal Cetak), Bagikan/Unduh Excel & CSV, Kolase STTS, serta Kalkulator AJB.',
         icon: Icons.more_vert_rounded,
       ),
       FeatureTourStep(
         targetKey: _filterBlokTahunKey,
-        title: 'Pilihan Wilayah Dusun, Blok, & Tahun Pajak',
+        title: 'Filter Wilayah Dusun, Blok, & Tahun Pajak',
         description:
-            'Pilih dusun (khusus operator), nomor Blok tertentu atau "Semua Blok", serta Tahun Pajak untuk menampilkan daftar wajib pajak yang ingin Anda periksa.',
+            'Pilih Kedusunan (khusus operator), nomor Blok atau "Semua Blok", serta Tahun Pajak. Pilihan ini juga ikut diterapkan saat beralih ke mode Grafik.',
         icon: Icons.filter_alt_outlined,
       ),
       FeatureTourStep(
         targetKey: _searchFilterSortKey,
-        title: 'Pencarian Cepat, Saring Kategori, & Urutan Baris',
+        title: 'Cari Cepat, Filter Kategori, Tanpa Rp 0, & Urutkan',
         description:
-            '• Kotak Cari: Ketik nama warga, nomor objek pajak, atau alamat untuk menemukan baris dengan cepat.\n'
-            '• Tombol Saring (Ikon Corong): Tampilkan hanya warga yang Sudah Bayar, Belum Bayar, khusus Target Pemda, atau yang sudah memiliki foto/catatan.\n'
-            '• Tombol Urutkan: Urutkan daftar berdasarkan nomor wilayah, abjad nama, nominal pajak tertinggi/terendah, atau status bayar.',
+            '• Kotak Cari: Cari nama WP, NOP, atau alamat objek.\n'
+            '• Filter Kategori: Saring Sudah Bayar, Belum Bayar, Target Pemda, atau objek berfoto/catatan.\n'
+            '• Opsi "Tanpa Rp 0" & Urutkan: Sembunyikan ketetapan nihil (Rp 0) dan urutkan baris sesuai kebutuhan penagihan.',
         icon: Icons.manage_search_rounded,
       ),
       FeatureTourStep(
         targetKey: _tableAreaKey,
-        title: 'Tabel Daftar Wajib Pajak & Tombol Aksi Baris',
+        title: 'Tabel Wajib Pajak, Celengan & Aksi Baris',
         description:
-            'Di setiap baris warga, Anda dapat:\n'
-            '• Kolom Gambar: Memotret atau mengunggah foto lembar STTS/bukti bayar.\n'
-            '• Kolom Aksi: Melihat rincian lengkap objek pajak, mencetak bukti lunas PDF, atau langsung memeriksa status bayar.\n'
-            '• Kolom Catatan: Menambahkan catatan keterangan petugas untuk wajib pajak tersebut.',
+            'Pada setiap baris wajib pajak Anda dapat:\n'
+            '• Kolom Gambar: Memotret/mengunggah foto STTS.\n'
+            '• Kolom Aksi: Cek rincian objek, cetak bukti lunas PDF, hitung tagihan/cicilan celengan warga, atau cek status langsung.\n'
+            '• Kolom Catatan: Mencatat keterangan lapangan & progres tabungan warga.',
         actionHint:
-            'Geser tabel ke kiri/kanan atau atas/bawah untuk melihat seluruh kolom dan baris.',
+            'Geser tabel ke kiri/kanan atau atas/bawah untuk melihat seluruh kolom.',
         icon: Icons.table_rows_outlined,
       ),
       FeatureTourStep(
         targetKey: _summaryFooterKey,
         title: 'Kartu Ringkasan Capaian & Target Pemda',
         description:
-            'Menampilkan rekap otomatis untuk daftar yang sedang dibuka: jumlah & rupiah Sudah Bayar, Kurang Bayar, persentase pelunasan, serta informasi Target Pemda yang dipisahkan secara khusus.',
+            'Menampilkan rekap otomatis untuk daftar aktif: jumlah & rupiah Sudah Bayar, Belum Bayar, persentase realisasi, dan pemisahan Target Pemda (>= Rp 2 Juta).',
         actionHint:
-            'Ketuk kepala kartu ringkasan ini untuk melipat atau membukanya agar ruang tabel lebih lega.',
+            'Ketuk bagian atas kartu ringkasan untuk melipat atau membukanya.',
         icon: Icons.summarize_outlined,
       ),
     ];
@@ -243,6 +293,33 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
     setState(() {
       _loading = false;
     });
+
+    if (!_initialOverlayHandled) {
+      _initialOverlayHandled = true;
+      final batchResults = widget.initialBatchResultRecords;
+      final syncOutcome = widget.initialSyncReportOutcome;
+      if (batchResults != null &&
+          batchResults.isNotEmpty &&
+          !ResultScreen.isCurrentlyOpen) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted || ResultScreen.isCurrentlyOpen) return;
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              settings: const RouteSettings(name: ResultScreen.routeName),
+              builder: (_) => ResultScreen(records: batchResults),
+            ),
+          );
+        });
+        return;
+      }
+      if (syncOutcome != null && !isStaffDhkpSyncReportDialogOpen) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted || isStaffDhkpSyncReportDialogOpen) return;
+          showStaffDhkpSyncReportDialog(context, syncOutcome);
+        });
+        return;
+      }
+    }
 
     if (!_tampilkanGrafik) {
       FeatureTourController.startTourIfNeeded(
@@ -459,12 +536,6 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
       }
       final newRecord = record.copyWith(catatan: newCatatan);
       await BlokDataStore.instance.upsert(newRecord);
-      unawaited(
-        BlokSyncService.instance.recordChange(
-          record: newRecord,
-          catatan: newCatatan,
-        ),
-      );
       await _loadRecords();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -496,12 +567,6 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
       onCekTagihan: () => _bukaTagihan(record),
       onRecordUpdated: (updated) async {
         await BlokDataStore.instance.upsert(updated);
-        unawaited(
-          BlokSyncService.instance.recordChange(
-            record: updated,
-            catatan: updated.catatan,
-          ),
-        );
         await _loadRecords();
       },
     );
@@ -524,7 +589,6 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
         alamatWp: res.alamatWp,
       );
       await BlokDataStore.instance.upsert(updatedRecord);
-      unawaited(BlokSyncService.instance.recordChange(record: updatedRecord));
       await _loadRecords();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -570,6 +634,11 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
   }
 
   Future<void> _cekStatusBayarMassal() async {
+    if (BatchCheckManager.instance.isActiveSession) {
+      BatchNotificationService.instance.openActiveBatchCheck();
+      return;
+    }
+
     final List<String> availableBloks;
     if (DusunData.instance.isDusunLocked &&
         DusunData.instance.lockedDusunNumber != null) {
@@ -612,21 +681,38 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
 
     if (!mounted) return;
 
+    final isKedusunanScope =
+        DusunData.instance.isDusunLocked || _selectedWilayah != null;
     final downloadSttsOption = ValueNotifier<bool>(false);
+    final selectedScopeTitle = ValueNotifier<String?>(null);
     final selectedRecords = await showPilihBlokCekMassalDialog(
       context,
       availableBloks: availableBloks,
       recordsByBlok: recordsByBlok,
       selectedWilayah: _selectedWilayah,
+      allowAllBlocks: isKedusunanScope,
       downloadSttsOption: downloadSttsOption,
+      selectedScopeTitleOut: selectedScopeTitle,
     );
     final downloadStts = downloadSttsOption.value;
+    final scopeTitle = selectedScopeTitle.value;
     downloadSttsOption.dispose();
+    selectedScopeTitle.dispose();
 
     if (selectedRecords == null || selectedRecords.isEmpty || !mounted) return;
 
+    final selectedBloksSet = selectedRecords
+        .map((r) => nopBlok(r.nop))
+        .where((b) => b.isNotEmpty)
+        .toSet();
+    final isMultiBlok = selectedBloksSet.length > 1;
+
     Directory? targetSttsDir;
     String? cleanBlok;
+    if (!isMultiBlok) {
+      final blokStr = nopBlok(selectedRecords.first.nop);
+      cleanBlok = blokStr.replaceAll(RegExp(r'[^0-9]'), '');
+    }
     if (downloadStts) {
       final pickedPath = await FilePicker.getDirectoryPath(
         dialogTitle: 'Pilih Folder Penyimpanan Berkas STTS',
@@ -644,11 +730,6 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
         return;
       }
 
-      final blokStr = nopBlok(selectedRecords.first.nop);
-      cleanBlok = blokStr.replaceAll(RegExp(r'[^0-9]'), '');
-      final blokFormatted = cleanBlok.isNotEmpty
-          ? cleanBlok.padLeft(3, '0')
-          : blokStr;
       final now = DateTime.now();
       const namaHariList = [
         'Senin',
@@ -663,7 +744,20 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
       final tgl = now.day.toString().padLeft(2, '0');
       final bln = now.month.toString().padLeft(2, '0');
       final thn = now.year.toString();
-      final folderName = 'STTS Blok $blokFormatted - $namaHari, $tgl-$bln-$thn';
+      final String folderLabel;
+      if (isMultiBlok) {
+        final safeScope = (scopeTitle ?? 'Seluruh_Blok')
+            .replaceAll(RegExp(r'[^a-zA-Z0-9_\- ]+'), ' ')
+            .replaceAll(RegExp(r'\s+'), ' ')
+            .trim();
+        folderLabel = safeScope.isNotEmpty ? safeScope : 'Seluruh Blok';
+      } else {
+        final blokFormatted = (cleanBlok != null && cleanBlok.isNotEmpty)
+            ? cleanBlok.padLeft(3, '0')
+            : nopBlok(selectedRecords.first.nop);
+        folderLabel = 'Blok $blokFormatted';
+      }
+      final folderName = 'STTS $folderLabel - $namaHari, $tgl-$bln-$thn';
 
       targetSttsDir = Directory('$pickedPath/$folderName');
       if (!await targetSttsDir.exists()) {
@@ -671,13 +765,15 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
       }
     }
 
+    // Status awal dikosongkan ('') agar sebelum diperiksa ke server, baris
+    // menampilkan ikon "Belum Dicek" (antrean), bukan Sudah/Belum Bayar lama.
     final taxRecords = selectedRecords
         .map(
           (r) => TaxRecord(
             nop: r.nop,
             namaWajibPajak: r.namaWajibPajak,
-            status: r.isPaid ? 'Sudah Bayar' : 'Belum Bayar',
-            tanggalBayar: r.tanggalBayar,
+            status: '',
+            tanggalBayar: null,
             jumlahPbb: r.jumlahPbb,
           ),
         )
@@ -688,17 +784,31 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
     await Navigator.push(
       context,
       MaterialPageRoute(
+        settings: const RouteSettings(name: BatchCheckScreen.routeName),
         builder: (_) => BatchCheckScreen(
           records: taxRecords,
           tahun: tahun,
           downloadStts: downloadStts,
           sttsTargetDirectory: targetSttsDir,
           sttsBlokNumber: cleanBlok,
+          scopeTitle: scopeTitle,
         ),
       ),
     );
 
     if (!mounted) return;
+    if (BatchCheckManager.instance.isActiveSession) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Pengecekan massal tetap berjalan di latar belakang. Ketuk gelembung atau notifikasi untuk membuka kembali.',
+          ),
+          backgroundColor: Color(0xFF1565C0),
+        ),
+      );
+      return;
+    }
+
     await _loadRecords(
       setBusy: true,
       busyMessage: 'Memperbarui status bayar dari hasil pengecekan...',
@@ -880,6 +990,28 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
     }
     try {
       if (DhkpPackageHelper.isDkhpArchivePath(path)) {
+        final plan = await DhkpPackageHelper.inspectInstallPlan(
+          path,
+          password: password,
+        );
+        if (plan.willOverwriteSameYear) {
+          if (mounted) {
+            setState(() => _busy = false);
+          }
+          if (!mounted) return;
+          final fileName = path.split(RegExp(r'[\\/]')).last;
+          final ok = await confirmDhkpInstallPlanIfNeeded(
+            context,
+            plan,
+            fileName: fileName,
+          );
+          if (!ok || !mounted) return;
+          setState(() {
+            _busy = true;
+            _busyMessage = 'Memasang & menimpa data DHKP ($sourceLabel)...';
+            _busyIcon = Icons.upload_file_rounded;
+          });
+        }
         final newRecords = await DhkpPackageHelper.unpackDkhp(
           path,
           password: password,
@@ -890,9 +1022,12 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              isDat
-                  ? 'Laporan .dat berhasil dipasang ($sourceLabel): ${newRecords.length} data & foto berhasil diperbarui.'
-                  : 'Paket DHKP berhasil diimpor ($sourceLabel): ${newRecords.length} data & gambar dokumentasi berhasil dimuat.',
+              buildDhkpInstallSuccessMessage(
+                plan: plan,
+                recordCount: newRecords.length,
+                isDat: isDat,
+                sourceLabel: sourceLabel,
+              ),
             ),
           ),
         );
@@ -1113,13 +1248,6 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
 
       final updatedRecord = record.copyWith(namaFoto: fileName);
       await BlokDataStore.instance.upsert(updatedRecord);
-      unawaited(
-        BlokSyncService.instance.recordChange(
-          record: updatedRecord,
-          namaFoto: fileName,
-          sourcePhotoFile: targetFile,
-        ),
-      );
       await _loadRecords();
 
       if (mounted) {
@@ -1159,9 +1287,6 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
       }
       final updated = record.copyWith(namaFoto: '');
       await BlokDataStore.instance.upsert(updated);
-      unawaited(
-        BlokSyncService.instance.recordChange(record: updated, namaFoto: ''),
-      );
       await _loadRecords();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1409,13 +1534,10 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
     required String emptyMessage,
     required String initialMessage,
   }) async {
+    if (_isPrinting) return;
+    _isPrinting = true;
     final cancelToken = BlokPrintCancelToken();
     var emptyRecords = false;
-    setState(() {
-      _busy = true;
-      _busyMessage = initialMessage;
-      _busyIcon = Icons.print_rounded;
-    });
     try {
       final bytes = await runCancellableDhkpPrint<Uint8List>(
         context: context,
@@ -1442,11 +1564,6 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
             cancelToken: cancelToken,
             onProgress: (current, total) async {
               reportProgress(current, total);
-              if (mounted && !cancelToken.isCancelled) {
-                setState(() {
-                  _busyMessage = 'Menyusun halaman $current dari $total...';
-                });
-              }
             },
           );
         },
@@ -1477,7 +1594,7 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
         context,
       ).showSnackBar(SnackBar(content: Text('Gagal menyiapkan cetakan: $e')));
     } finally {
-      if (mounted) setState(() => _busy = false);
+      _isPrinting = false;
     }
   }
 
@@ -1627,12 +1744,15 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
                     ? 'Beralih ke Buku Catatan (Tabel)'
                     : 'Beralih ke Visual Grafik',
               ),
-              IconButton(
-                key: const ValueKey('dhkp_target_pacing_btn'),
-                visualDensity: VisualDensity.compact,
-                icon: const Icon(Icons.speed_rounded),
-                tooltip: 'Target & Pacing Realisasi',
-                onPressed: _bukaTargetPacingDialog,
+              KeyedSubtree(
+                key: _targetPacingTourKey,
+                child: IconButton(
+                  key: const ValueKey('dhkp_target_pacing_btn'),
+                  visualDensity: VisualDensity.compact,
+                  icon: const Icon(Icons.speed_rounded),
+                  tooltip: 'Target & Pacing Realisasi',
+                  onPressed: _bukaTargetPacingDialog,
+                ),
               ),
               FeatureTourHelpButton(onPressed: _onHelpPressed),
               PopupMenuButton<String>(

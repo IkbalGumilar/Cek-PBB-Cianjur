@@ -784,23 +784,30 @@ class PbbClient extends BaseHttpClient {
     required String nop,
     required String tahun,
   }) async {
-    final response = await _dio.post<String>(
-      'https://cektagihan.cianjurkab.v-tax.id/svcGenerateQrcode.php',
-      data: {
-        'modul': 'pbb',
-        'kdbayar': nop,
-        'tahun': tahun,
-        'area': '3205',
-        'tax_type': '2',
-        'email': '',
-        'telp': '',
-        'kode_bank': '3202110',
-      },
-      options: Options(
-        contentType: Headers.formUrlEncodedContentType,
-        responseType: ResponseType.plain,
-      ),
-    );
+    final Response<String> response;
+    try {
+      response = await _dio.post<String>(
+        'https://cektagihan.cianjurkab.v-tax.id/svcGenerateQrcode.php',
+        data: {
+          'modul': 'pbb',
+          'kdbayar': nop,
+          'tahun': tahun,
+          'area': '3205',
+          'tax_type': '2',
+          'email': '',
+          'telp': '',
+          'kode_bank': '3202110',
+        },
+        options: Options(
+          contentType: Headers.formUrlEncodedContentType,
+          responseType: ResponseType.plain,
+        ),
+      );
+    } on DioException catch (e) {
+      throw QrisGenerationError(
+        BaseHttpClient.describeNetworkError(e, serviceName: 'QRIS Bapenda'),
+      );
+    }
 
     final raw = response.data ?? '';
 
@@ -832,27 +839,40 @@ class PbbClient extends BaseHttpClient {
     required String tahun,
     required String paymentCode,
   }) async {
-    final response = await _dio.post<String>(
-      'https://cektagihan.cianjurkab.v-tax.id/svcGenerateVA.php',
-      data: {
-        'modul': 'pbb',
-        'kdbayar': nop,
-        'tahun': tahun,
-        'area': '3205',
-        'tax_type': '2',
-        'payment_code': paymentCode,
-        'email': '',
-        'telp': '',
-        'kode_bank': '3202110',
-      },
-      options: Options(
-        contentType: Headers.formUrlEncodedContentType,
-        responseType: ResponseType.plain,
-      ),
-    );
+    final Response<String> response;
+    try {
+      response = await _dio.post<String>(
+        'https://cektagihan.cianjurkab.v-tax.id/svcGenerateVA.php',
+        data: {
+          'modul': 'pbb',
+          'kdbayar': nop,
+          'tahun': tahun,
+          'area': '3205',
+          'tax_type': '2',
+          'payment_code': paymentCode,
+          'email': '',
+          'telp': '',
+          'kode_bank': '3202110',
+        },
+        options: Options(
+          contentType: Headers.formUrlEncodedContentType,
+          responseType: ResponseType.plain,
+        ),
+      );
+    } on DioException catch (e) {
+      throw VaGenerationError(
+        BaseHttpClient.describeNetworkError(e, serviceName: 'VA Bapenda'),
+      );
+    }
 
     final raw = response.data ?? '';
-    final json = jsonDecode(raw);
+    final Object? json;
+    try {
+      json = jsonDecode(raw);
+    } on FormatException {
+      throw VaGenerationError('Respons server VA Bapenda tidak dapat dibaca.');
+    }
+
     if (json is! Map || json['rc'] != '0000') {
       final rc = json is Map ? json['rc'] : null;
       if (rc == '0014') {

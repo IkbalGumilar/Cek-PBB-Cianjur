@@ -67,6 +67,49 @@ class SplitDkhpExportResult {
   ];
 }
 
+/// Rencana pemasangan berkas `.dkhp`/`.dat` terhadap database DHKP lokal.
+/// Digunakan untuk mendeteksi apakah data tahun target masih kosong (langsung
+/// diisi/diperbarui tanpa konfirmasi) atau sudah terisi (wajib konfirmasi timpa).
+class DhkpInstallPlan {
+  final Set<String> incomingYears;
+  final Set<String> existingYears;
+  final Set<String> overlappingYears;
+  final int incomingRecordCount;
+  final int existingRecordCount;
+  final int existingOverlappingCount;
+  final bool isDatOrDelta;
+
+  const DhkpInstallPlan({
+    required this.incomingYears,
+    required this.existingYears,
+    required this.overlappingYears,
+    required this.incomingRecordCount,
+    required this.existingRecordCount,
+    required this.existingOverlappingCount,
+    required this.isDatOrDelta,
+  });
+
+  bool get isExistingEmpty => existingRecordCount == 0;
+
+  /// True jika tahun pajak pada paket DHKP sudah ada di database lokal
+  /// sehingga pemasangan akan menimpa data tahun tersebut dan perlu konfirmasi.
+  bool get willOverwriteSameYear =>
+      !isDatOrDelta && overlappingYears.isNotEmpty;
+
+  /// True jika database lokal sudah memiliki tahun pajak lain, tetapi tahun
+  /// pada paket `.dkhp` ini masih kosong (pembaruan tahun baru tanpa menimpa).
+  bool get isYearUpdateOnly =>
+      !isDatOrDelta &&
+      !isExistingEmpty &&
+      overlappingYears.isEmpty &&
+      incomingYears.isNotEmpty;
+
+  List<String> get sortedOverlappingYears =>
+      overlappingYears.toList()..sort();
+
+  List<String> get sortedIncomingYears => incomingYears.toList()..sort();
+}
+
 
 
 /// Pengelola berkas paket `.dkhp` / `.dhkp` — format arsip terenkripsi khusus aplikasi Cek PBB Cianjur.
@@ -316,8 +359,8 @@ class DhkpPackageHelper {
   static Future<Set<String>> refreshPhotoNamesCache() async {
     final dir = await photosDirectory();
     final names = <String>{};
-    if (await dir.exists()) {
-      await for (final entity in dir.list(followLinks: false)) {
+    if (dir.existsSync()) {
+      for (final entity in dir.listSync(followLinks: false)) {
         if (entity is File) {
           names.add(entity.uri.pathSegments.last.toLowerCase());
         }
@@ -383,6 +426,104 @@ class DhkpPackageHelper {
       }
     }
     return null;
+  }
+
+  /// Memeriksa isi berkas `.dkhp`/`.dat` tanpa memodifikasi database lokal
+  /// untuk mengetahui apakah tahun pajak pada paket masih kosong atau sudah
+  /// memiliki data di aplikasi (sehingga perlu konfirmasi timpa).
+  static Future<DhkpInstallPlan> inspectInstallPlan(
+    String filePath, {
+    String? password,
+  }) async {
+    final file = File(filePath);
+    if (!await file.exists()) {
+      throw FileSystemException('Berkas .dkhp tidak ditemukan', filePath);
+    }
+
+    final rawBytes = await file.readAsBytes();
+    final zipBytes = await _resolveArchiveZipBytes(
+      rawBytes,
+      password: password,
+      errorMsgOnNull:
+          'Gagal mendekripsi berkas .dkhp: Kunci atau format enkripsi tidak cocok.',
+    );
+
+    final archive = ZipDecoder().decodeBytes(zipBytes);
+    ArchiveFile? manifestFile;
+    ArchiveFile? dataFile;
+    for (final entry in archive.files) {
+      if (!entry.isFile) continue;
+      final nameLower = entry.name.toLowerCase();
+      if (nameLower.endsWith('manifest.json')) {
+        manifestFile = entry;
+      } else if (nameLower.endsWith('.csv') || nameLower.endsWith('.json')) {
+        if (!nameLower.endsWith('map_pins.json')) {
+          dataFile = entry;
+        }
+      }
+    }
+
+    final manifest = manifestFile != null
+        ? _decodeManifestEntry(manifestFile)
+        : null;
+    final isDatReport =
+        filePath.toLowerCase().endsWith('.dat') ||
+        (manifest != null && manifest['format'] == 'laporan_dat_v1');
+    final isDeltaArchive =
+        manifest != null && (manifest['isDeltaOnly'] == true);
+
+    final fallbackYear =
+        (manifest?['tahun_pajak']?.toString().trim().isNotEmpty ?? false)
+        ? manifest!['tahun_pajak'].toString().trim()
+        : ((manifest?['tahun']?.toString().trim().isNotEmpty ?? false)
+              ? manifest!['tahun'].toString().trim()
+              : '${DateTime.now().year}');
+
+    final incomingRecords = <BlokRecord>[];
+    if (dataFile != null && dataFile.name.toLowerCase().endsWith('.csv')) {
+      final content = utf8.decode(dataFile.content as List<int>);
+      incomingRecords.addAll(
+        BlokCsvCodec.decodeArchiveCsv(content, fallbackYear: fallbackYear),
+      );
+    }
+
+    final incomingYears = incomingRecords
+        .map((r) => r.tahunBayar.trim())
+        .where((y) => y.isNotEmpty)
+        .toSet();
+    if (incomingYears.isEmpty &&
+        manifest != null &&
+        manifest['changes'] is List) {
+      for (final item in (manifest['changes'] as List)) {
+        if (item is Map) {
+          final y = (item['tahunBayar'] ?? '').toString().trim();
+          if (y.isNotEmpty) incomingYears.add(y);
+        }
+      }
+    }
+    if (incomingYears.isEmpty && fallbackYear.isNotEmpty) {
+      incomingYears.add(fallbackYear);
+    }
+
+    final existingRecords = await BlokDataStore.instance.loadAll();
+    final existingYears = existingRecords
+        .map((r) => r.tahunBayar.trim())
+        .where((y) => y.isNotEmpty)
+        .toSet();
+    final overlappingYears = incomingYears.intersection(existingYears);
+    final existingOverlappingCount = existingRecords
+        .where((r) => overlappingYears.contains(r.tahunBayar.trim()))
+        .length;
+
+    return DhkpInstallPlan(
+      incomingYears: incomingYears,
+      existingYears: existingYears,
+      overlappingYears: overlappingYears,
+      incomingRecordCount: incomingRecords.length,
+      existingRecordCount: existingRecords.length,
+      existingOverlappingCount: existingOverlappingCount,
+      isDatOrDelta: isDatReport || isDeltaArchive,
+    );
   }
 
   /// Buka dan ekstrak berkas `.dkhp` (terenkripsi maupun tidak) atau `.zip`, lalu simpan datanya ke
@@ -639,23 +780,56 @@ class DhkpPackageHelper {
       }
     }
 
-    // Jika paket yang dibuka adalah DHKP dasar yang dikunci ke Dusun tertentu (hasil Split Dusun),
-    // saring hanya blok yang diizinkan oleh Dusun tersebut dan bersihkan data dusun lain.
+    // Terapkan hasil ekstraksi ke database lokal secara cerdas berbasis tahun:
+    // - Berkas laporan `.dat` / delta hanya melakukan upsert perubahan.
+    // - Paket `.dkhp` penuh:
+    //   • Tahun sama (mis. 2026 -> 2026): mencadangkan CSV lama lalu menimpa
+    //     khusus tahun tersebut tanpa merusak tahun pajak lain.
+    //   • Tahun berbeda (mis. 2026 di lokal, 2027 di paket): memperbarui/menambah
+    //     tahun 2027 tanpa menghapus data 2026.
+    //   • Paket split per Kedusunan tetap menyaring blok sesuai dusun aktif.
     final activeScope = DusunData.instance.scope;
-    if (!isDatReport &&
-        !isDeltaArchive &&
-        activeScope.isDusunScope &&
-        activeScope.allowedBloks.isNotEmpty) {
-      final allowedSet = activeScope.allowedBloks
-          .map((b) => _digitsOnly(b).padLeft(3, '0'))
-          .toSet();
-      mergedRecords = mergedRecords
-          .where((r) => allowedSet.contains(_digitsOnly(r.blok).padLeft(3, '0')))
-          .toList();
-      await BlokDataStore.instance.clearAll();
-      if (mergedRecords.isNotEmpty) {
-        await BlokDataStore.instance.upsertAll(mergedRecords);
+    if (!isDatReport && !isDeltaArchive) {
+      Set<String>? allowedSet;
+      if (activeScope.isDusunScope && activeScope.allowedBloks.isNotEmpty) {
+        allowedSet = activeScope.allowedBloks
+            .map((b) => _digitsOnly(b).padLeft(3, '0'))
+            .toSet();
+        mergedRecords = mergedRecords
+            .where(
+              (r) => allowedSet!.contains(_digitsOnly(r.blok).padLeft(3, '0')),
+            )
+            .toList();
       }
+
+      final incomingYears = mergedRecords
+          .map((r) => r.tahunBayar.trim())
+          .where((y) => y.isNotEmpty)
+          .toSet();
+      final existingYears = existingRecords
+          .map((r) => r.tahunBayar.trim())
+          .where((y) => y.isNotEmpty)
+          .toSet();
+      final hasOverlap = incomingYears.intersection(existingYears).isNotEmpty;
+
+      if (hasOverlap && existingRecords.isNotEmpty) {
+        try {
+          final currentFile = await AppStorage.getDatabaseFile();
+          if (await currentFile.exists()) {
+            final backupDir = await AppStorage.getBackupsDirectory();
+            final ts = DateTime.now().millisecondsSinceEpoch;
+            await currentFile.copy(
+              '${backupDir.path}/cadangan_sebelum_pasang_$ts.csv',
+            );
+          }
+        } catch (_) {}
+      }
+
+      await BlokDataStore.instance.replaceByYears(
+        targetYears: incomingYears,
+        newRecords: mergedRecords,
+        allowedBloks: allowedSet,
+      );
     } else if (mergedRecords.isNotEmpty) {
       await BlokDataStore.instance.upsertAll(mergedRecords);
     }

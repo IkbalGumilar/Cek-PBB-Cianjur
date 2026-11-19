@@ -16,10 +16,10 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 0.1.7-beta+13
+version: 1.0.0+14
 
 environment:
-  sdk: ^3.12.2
+  sdk: ^3.14.0
 
 # Dependencies specify other packages that your package needs in order to work.
 # To automatically upgrade your package dependencies to the latest versions
@@ -55,7 +55,7 @@ dependencies:
   image_picker: ^1.2.3
   image: ^4.3.0
   google_mlkit_text_recognition: ^0.17.1
-  dynamic_color: ^1.7.0
+  dynamic_color: ^2.1.0
   local_auth: ^3.0.2
   google_sign_in: ^6.3.0
   http: ^1.6.0
@@ -67,6 +67,7 @@ dependencies:
   geolocator: ^14.1.2
   permission_handler: 11.3.1
 
+  material_ui: any
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -93,6 +94,8 @@ flutter:
 
   assets:
     - logo/kabupaten-cianjur.png
+    - logo/Kemensos logo.jpeg
+    - logo/Logo-Bapenda-Jabar.png
     - assets/guide/01_cek_tagihan.webp
     - assets/guide/02_cek_status_bayar.webp
     - assets/guide/03_cek_banyak_nop.webp

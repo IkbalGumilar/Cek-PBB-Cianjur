@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../blok_record.dart';
 import '../dusun_data.dart';
@@ -47,6 +47,47 @@ class DhkpTrendSeries {
 /// 3. Belum Bayar
 /// 4. Sudah Bayar
 /// 5. Tren Pembayaran tiap bulan Jan-Des
+/// Membangun [MaterialColor] tonal monokromatis dari warna tema pengguna
+/// agar seluruh tab, kartu, batang grafik, dan aksen tetap seragam tanpa warna acak.
+MaterialColor buildThemeMaterialColor(Color seed) {
+  Color tint(double factor) => Color.lerp(seed, Colors.white, factor)!;
+  Color shade(double factor) => Color.lerp(seed, Colors.black, factor)!;
+  return MaterialColor(seed.toARGB32(), <int, Color>{
+    50: tint(0.90),
+    100: tint(0.76),
+    200: tint(0.58),
+    300: tint(0.38),
+    400: tint(0.18),
+    500: seed,
+    600: shade(0.12),
+    700: shade(0.24),
+    800: shade(0.36),
+    900: shade(0.48),
+  });
+}
+
+/// Membangun palet gradasi harmonis dari [ColorScheme] tema pengguna
+/// untuk diagram lingkaran dan multi-seri (tanpa warna pelangi acak).
+List<Color> buildThemeSlicePalette(ColorScheme scheme) {
+  final p = buildThemeMaterialColor(scheme.primary);
+  final s = buildThemeMaterialColor(scheme.secondary);
+  final t = buildThemeMaterialColor(scheme.tertiary);
+  return <Color>[
+    p.shade600,
+    p.shade400,
+    s.shade600,
+    p.shade800,
+    t.shade500,
+    s.shade400,
+    p.shade300,
+    t.shade700,
+    s.shade800,
+    p.shade700,
+    t.shade300,
+    s.shade300,
+  ];
+}
+
 enum DhkpGrafikTab {
   persentase(
     'Jumlah Persentase',
@@ -860,22 +901,22 @@ class DhkpGrafikAnalytics {
   static List<DhkpPieSliceInfo> makeSlices(
     List<DhkpGroupInfo> groups,
     double Function(DhkpGroupInfo) valFn,
-    double totalVal,
-  ) {
-    const colors = [
-      Colors.teal,
-      Colors.indigo,
-      Colors.amber,
-      Colors.purple,
-      Colors.cyan,
-      Colors.deepOrange,
-      Colors.blue,
-      Colors.green,
-      Colors.pink,
-      Colors.lime,
-      Colors.brown,
-      Colors.blueGrey,
-    ];
+    double totalVal, {
+    List<Color>? palette,
+  }) {
+    final fallbackBase = buildThemeMaterialColor(const Color(0xFF2E7D32));
+    final colors = (palette != null && palette.isNotEmpty)
+        ? palette
+        : <Color>[
+            fallbackBase.shade700,
+            fallbackBase.shade500,
+            fallbackBase.shade300,
+            fallbackBase.shade800,
+            fallbackBase.shade400,
+            fallbackBase.shade600,
+            fallbackBase.shade200,
+            fallbackBase.shade900,
+          ];
     final slices = <DhkpPieSliceInfo>[];
     for (int i = 0; i < groups.length; i++) {
       final g = groups[i];
@@ -1085,7 +1126,17 @@ class DhkpGrafikAnalytics {
     List<BlokRecord>? previousYearRecords,
     String? previousYearLabel,
     List<DhkpGroupInfo>? groups,
+    ColorScheme? colorScheme,
   }) {
+    final primaryTone = buildThemeMaterialColor(
+      colorScheme?.primary ?? const Color(0xFF2E7D32),
+    );
+    final secondaryTone = buildThemeMaterialColor(
+      colorScheme?.secondary ?? primaryTone.shade700,
+    );
+    final tertiaryTone = buildThemeMaterialColor(
+      colorScheme?.tertiary ?? primaryTone.shade400,
+    );
     final agg = _aggregateMonthly(records, tahun: tahun);
     final prev =
         (previousYearRecords != null &&
@@ -1153,7 +1204,7 @@ class DhkpGrafikAnalytics {
             label: 'Pendapatan Masuk',
             value: formatRupiah(sudahBayarNominal),
             sub: 'Uang pajak terkumpul',
-            color: Colors.teal,
+            color: primaryTone,
             icon: Icons.account_balance_wallet_rounded,
             sparklinePoints: paidNominalSpark,
             deltaText: dPaid?.text,
@@ -1165,7 +1216,7 @@ class DhkpGrafikAnalytics {
             label: 'Total Target',
             value: 'Rp ${formatShortRupiah(totalNominalTarget)}',
             sub: 'Ketetapan pokok wilayah',
-            color: Colors.indigo,
+            color: secondaryTone,
             icon: Icons.flag_rounded,
             sparklinePoints: _validSparkline(groupTargets ?? const []),
             deltaText: dTarget?.text,
@@ -1177,7 +1228,7 @@ class DhkpGrafikAnalytics {
             label: 'Belum Masuk',
             value: 'Rp ${formatShortRupiah(belumBayarNominal)}',
             sub: 'Selisih dari target',
-            color: Colors.orange,
+            color: tertiaryTone,
             icon: Icons.hourglass_bottom_rounded,
             sparklinePoints: _validSparkline(groupUnpaidNominal ?? const []),
             deltaText: dUnpaid?.text,
@@ -1216,7 +1267,7 @@ class DhkpGrafikAnalytics {
             label: 'Capaian Uang (%)',
             value: '${lunasNominalPct.toStringAsFixed(1)}%',
             sub: 'Dari total nilai target',
-            color: Colors.green,
+            color: primaryTone,
             icon: Icons.percent_rounded,
             sparklinePoints: paidNominalSpark ?? _validSparkline(groupPct ?? const []),
             deltaText: dPct?.text,
@@ -1229,7 +1280,7 @@ class DhkpGrafikAnalytics {
             label: 'Capaian Objek Pajak',
             value: '${lunasNopPct.toStringAsFixed(1)}%',
             sub: '$sudahBayarCount dari $totalNop objek',
-            color: Colors.teal,
+            color: primaryTone,
             icon: Icons.check_circle_outline_rounded,
             sparklinePoints: paidCountSpark ?? _validSparkline(groupNopPct ?? const []),
             deltaText: dNopPct?.text,
@@ -1242,7 +1293,7 @@ class DhkpGrafikAnalytics {
             label: 'Sisa Belum Tercapai',
             value: '${remPct.toStringAsFixed(1)}%',
             sub: 'Perlu ditagih',
-            color: Colors.amber,
+            color: tertiaryTone,
             icon: Icons.timelapse_rounded,
             sparklinePoints: _validSparkline(
               (groupPct ?? const []).map((p) => (100 - p).clamp(0.0, 100.0)).toList(),
@@ -1283,7 +1334,7 @@ class DhkpGrafikAnalytics {
             label: 'Tagihan Belum Bayar',
             value: formatRupiah(belumBayarNominal),
             sub: 'Total belum lunas',
-            color: Colors.orange,
+            color: tertiaryTone,
             icon: Icons.pending_actions_rounded,
             sparklinePoints: _validSparkline(groupUnpaidNominal ?? const []),
             deltaText: dUnpaid?.text,
@@ -1295,7 +1346,7 @@ class DhkpGrafikAnalytics {
             label: 'Objek Belum Lunas',
             value: '$belumBayarCount Objek',
             sub: 'Wajib pajak belum bayar',
-            color: Colors.deepOrange,
+            color: secondaryTone,
             icon: Icons.person_search_rounded,
             sparklinePoints: _validSparkline(groupUnpaidCount ?? const []),
             deltaText: dUnpaidCount?.text,
@@ -1346,7 +1397,7 @@ class DhkpGrafikAnalytics {
             label: 'Total Sudah Bayar',
             value: formatRupiah(sudahBayarNominal),
             sub: 'Uang sudah lunas',
-            color: Colors.blue,
+            color: primaryTone,
             icon: Icons.task_alt_rounded,
             sparklinePoints: paidNominalSpark,
             deltaText: dPaid?.text,
@@ -1358,7 +1409,7 @@ class DhkpGrafikAnalytics {
             label: 'Jumlah Objek Lunas',
             value: '$sudahBayarCount Objek',
             sub: 'Wajib pajak sudah bayar',
-            color: Colors.teal,
+            color: primaryTone,
             icon: Icons.receipt_rounded,
             sparklinePoints: paidCountSpark,
             deltaText: dPaidCount?.text,
@@ -1370,7 +1421,7 @@ class DhkpGrafikAnalytics {
             label: 'Rata-rata Pembayaran',
             value: 'Rp ${formatShortRupiah(avgNom)}',
             sub: 'Nilai rata-rata per objek',
-            color: Colors.indigo,
+            color: secondaryTone,
             icon: Icons.calculate_rounded,
             sparklinePoints: monthlyVelocitySpark,
             deltaText: dAvg?.text,
@@ -1409,7 +1460,7 @@ class DhkpGrafikAnalytics {
             label: 'Bulan Tertinggi',
             value: peakName,
             sub: 'Penerimaan terbanyak',
-            color: Colors.purple,
+            color: primaryTone,
             icon: Icons.trending_up_rounded,
             sparklinePoints: monthlyVelocitySpark,
             numericValue: peakMonth > 0 ? peakVal.toDouble() : null,
@@ -1422,7 +1473,7 @@ class DhkpGrafikAnalytics {
             label: 'Pembayaran Tercatat',
             value: '${agg.totalCount} Objek',
             sub: 'Memiliki tanggal bayar',
-            color: Colors.indigo,
+            color: secondaryTone,
             icon: Icons.calendar_today_rounded,
             sparklinePoints: monthlyCountVelocitySpark,
             deltaText: dDated?.text,
@@ -1434,7 +1485,7 @@ class DhkpGrafikAnalytics {
             label: 'Total Jan - Des',
             value: 'Rp ${formatShortRupiah(sudahBayarNominal)}',
             sub: 'Penerimaan tahun ini',
-            color: Colors.teal,
+            color: primaryTone,
             icon: Icons.date_range_rounded,
             sparklinePoints: paidNominalSpark,
             deltaText: dTotal?.text,

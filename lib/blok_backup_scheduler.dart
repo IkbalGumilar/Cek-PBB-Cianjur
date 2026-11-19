@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -5,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'app_storage.dart';
 import 'base_preferences_store.dart';
 import 'blok_data_store.dart';
+import 'cloud_sync/google_account_sync_service.dart';
 import 'dkhp_package_helper.dart';
 import 'google_drive_backup_policy.dart';
 
@@ -72,8 +74,11 @@ class BlokBackupScheduler extends BasePreferencesStore {
     return (await getInt(_frequencyDaysKey)) ?? 1;
   }
 
-  Future<void> setFrequencyDays(int days) async {
+  Future<void> setFrequencyDays(int days, {bool syncCloud = true}) async {
     await setInt(_frequencyDaysKey, days);
+    if (syncCloud) {
+      unawaited(GoogleAccountSyncService.instance.pushPreferencesToCloud());
+    }
   }
 
   /// Preferensi cadangan hanya data DHKP (tanpa foto). Default: true (hemat memori & cepat).
@@ -213,8 +218,11 @@ class BlokBackupScheduler extends BasePreferencesStore {
     return getBool(_overCellularKey, defaultValue: false);
   }
 
-  Future<void> setOverCellular(bool value) async {
+  Future<void> setOverCellular(bool value, {bool syncCloud = true}) async {
     await setBool(_overCellularKey, value);
+    if (syncCloud) {
+      unawaited(GoogleAccountSyncService.instance.pushPreferencesToCloud());
+    }
   }
 
   /// Timestamp cadangan terakhir (dalam DateTime).
@@ -394,12 +402,22 @@ class BlokBackupScheduler extends BasePreferencesStore {
         );
       }
 
+      final masterKey = await GoogleAccountSyncService.instance
+          .getOrCreateBackupMasterKey();
+
       if (enforcePreviousDhkpMatch) {
         final existingBackups = await getLocalBackups();
         if (existingBackups.isNotEmpty) {
-          final prevManifest = await DhkpPackageHelper.readBackupManifest(
-            existingBackups.first.path,
-          );
+          final prevManifest =
+              await DhkpPackageHelper.readBackupManifest(
+                existingBackups.first.path,
+                password: masterKey,
+              ) ??
+              (masterKey != null
+                  ? await DhkpPackageHelper.readBackupManifest(
+                      existingBackups.first.path,
+                    )
+                  : null);
           final prevFp =
               (prevManifest?['dhkpFingerprint'] as String?)?.trim() ?? '';
           final currentFp = DhkpPackageHelper.computeDhkpFingerprint(
@@ -419,6 +437,7 @@ class BlokBackupScheduler extends BasePreferencesStore {
         fileName: fileName,
         includePhotos: true,
         deltaOnly: true,
+        password: masterKey,
       );
     }
 

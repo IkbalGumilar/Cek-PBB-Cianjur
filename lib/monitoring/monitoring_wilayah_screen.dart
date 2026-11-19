@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../feature_tour/feature_tour.dart';
 import '../settings_screen.dart';
@@ -44,6 +44,12 @@ class MonitoringWilayahScreen extends StatefulWidget {
 class _MonitoringWilayahScreenState extends State<MonitoringWilayahScreen> {
   static const String _tourId = 'monitoring_wilayah_screen';
 
+  final GlobalKey _generateBtnKey = GlobalKey(
+    debugLabel: 'monitoring_wilayah_generate_btn',
+  );
+  final GlobalKey _syncBtnKey = GlobalKey(
+    debugLabel: 'monitoring_wilayah_sync_btn',
+  );
   final GlobalKey _tabBarKey = GlobalKey(
     debugLabel: 'monitoring_wilayah_tab_bar',
   );
@@ -101,6 +107,22 @@ class _MonitoringWilayahScreenState extends State<MonitoringWilayahScreen> {
   List<FeatureTourStep> _buildTourSteps() {
     return [
       FeatureTourStep(
+        targetKey: _generateBtnKey,
+        title: 'Generate Paket DHKP Baru (.dkhp)',
+        description:
+            'Unduh data SPPT desa dari Portal Staf untuk menghasilkan file master & split per Kedusunan (.dkhp terenkripsi DKH2). '
+            'Data lokal tidak dihapus saat generate; pemasangan/penimpaan baru berjalan saat Anda memasang file .dkhp hasilnya.',
+        icon: Icons.auto_awesome_rounded,
+      ),
+      FeatureTourStep(
+        targetKey: _syncBtnKey,
+        title: 'Sinkronisasi Status ke DHKP (Latar Belakang)',
+        description:
+            'Cocokkan pembayaran lunas terbaru dari server Bapenda ke buku DHKP lokal. '
+            'Proses dapat disembunyikan menjadi gelembung mengambang agar aplikasi tetap bebas dipakai; ketuk notifikasi selesai untuk langsung melihat rincian hasil di DHKP.',
+        icon: Icons.cloud_sync_rounded,
+      ),
+      FeatureTourStep(
         targetKey: _tabBarKey,
         title: '7 Jenis Laporan Pantauan Wilayah',
         description:
@@ -111,9 +133,10 @@ class _MonitoringWilayahScreenState extends State<MonitoringWilayahScreen> {
       ),
       FeatureTourStep(
         targetKey: _tabContentKey,
-        title: 'Formulir Penyaring & Tabel Hasil',
+        title: 'Formulir Penyaring & Tabel/Kartu Hasil',
         description:
-            'Pilih tahun pajak, buku ketetapan, atau tanggal, lalu ketuk tombol Tampilkan untuk melihat tabel data beserta tombol Unduh/Bagikan PDF & Excel.',
+            'Atur tahun pajak, buku ketetapan, atau tanggal, lalu ketuk Tampilkan. '
+            'Anda dapat melipat panel filter, beralih mode Kartu/Tabel, serta Unduh atau Bagikan PDF & Excel.',
         icon: Icons.table_view_rounded,
       ),
     ];
@@ -146,12 +169,14 @@ class _MonitoringWilayahScreenState extends State<MonitoringWilayahScreen> {
           ),
           actions: [
             IconButton(
+              key: _generateBtnKey,
               icon: const Icon(Icons.auto_awesome_rounded),
-              tooltip: 'Generate DHKP Baru (Timpa)',
+              tooltip: 'Generate Paket DHKP Baru',
               onPressed: () =>
                   showStaffDhkpGenerateDialog(context, client: widget.client),
             ),
             IconButton(
+              key: _syncBtnKey,
               icon: const Icon(Icons.cloud_sync_rounded),
               tooltip: 'Sinkronkan Status ke DHKP',
               onPressed: () =>

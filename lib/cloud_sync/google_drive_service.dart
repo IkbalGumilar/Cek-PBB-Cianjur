@@ -80,6 +80,10 @@ class GoogleDriveService {
   })?
   mockUploader;
 
+  /// Mock penyimpanan in-memory untuk berkas JSON di `appDataFolder` saat pengujian.
+  @visibleForTesting
+  static Map<String, Map<String, dynamic>>? mockAppDataStore;
+
   @visibleForTesting
   static void resetForTesting() {
     mockItems = null;
@@ -87,6 +91,7 @@ class GoogleDriveService {
     mockFolderFinder = null;
     mockFolderCreator = null;
     mockUploader = null;
+    mockAppDataStore = null;
   }
 
   static String _escapeDriveQueryValue(String value) {
@@ -444,12 +449,7 @@ class GoogleDriveService {
 
     String? targetFolderId = folderId;
     if (targetFolderId == null || targetFolderId.isEmpty) {
-      final sharedLink = await BlokBackupScheduler.instance
-          .getGoogleDriveFolderLink();
-      targetFolderId = GoogleDriveBackupPolicy.extractFolderId(sharedLink);
-      if (targetFolderId == null || targetFolderId.isEmpty) {
-        targetFolderId = await ensureDedicatedFolder();
-      }
+      targetFolderId = await ensureDedicatedFolder();
     }
 
     final queries = <String>['trashed = false'];
@@ -644,5 +644,138 @@ class GoogleDriveService {
     }
 
     return targetFile;
+  }
+
+  Future<String?> _findAppDataFileId(
+    String fileName,
+    Map<String, String> authHeaders,
+  ) async {
+    final escapedName = _escapeDriveQueryValue(fileName);
+    final uri = Uri.parse('https://www.googleapis.com/drive/v3/files').replace(
+      queryParameters: {
+        'spaces': GoogleDriveBackupPolicy.appDataFolderId,
+        'q': "name = '$escapedName' and trashed = false",
+        'fields': 'files(id, modifiedTime)',
+        'orderBy': 'modifiedTime desc',
+        'pageSize': '1',
+      },
+    );
+    final res = await _withAuthRetry(
+      initialHeaders: authHeaders,
+      send: (headers) => _httpClient.get(uri, headers: headers),
+    );
+    if (res.statusCode != 200) return null;
+    final data = json.decode(res.body);
+    if (data is Map && data['files'] is List && (data['files'] as List).isNotEmpty) {
+      final first = (data['files'] as List).first;
+      if (first is Map) {
+        return first['id'] as String?;
+      }
+    }
+    return null;
+  }
+
+  /// Membaca berkas JSON tersembunyi dari Google Drive `appDataFolder`.
+  /// Mengembalikan `null` jika berkas belum ada, belum login, atau offline.
+  Future<Map<String, dynamic>?> readAppDataJson(String fileName) async {
+    if (mockAppDataStore != null) {
+      final entry = mockAppDataStore![fileName];
+      return entry == null ? null : Map<String, dynamic>.from(entry);
+    }
+
+    final authHeaders = await GoogleAuthService.instance.getAuthHeaders();
+    if (authHeaders == null) return null;
+
+    try {
+      final fileId = await _findAppDataFileId(fileName, authHeaders);
+      if (fileId == null || fileId.isEmpty) return null;
+
+      final downloadUri = Uri.parse(
+        'https://www.googleapis.com/drive/v3/files/${Uri.encodeComponent(fileId)}?alt=media',
+      );
+      final res = await _withAuthRetry(
+        initialHeaders: authHeaders,
+        send: (headers) => _httpClient.get(downloadUri, headers: headers),
+      );
+      if (res.statusCode != 200 || res.body.trim().isEmpty) return null;
+      final decoded = json.decode(res.body);
+      if (decoded is Map<String, dynamic>) return decoded;
+      if (decoded is Map) return Map<String, dynamic>.from(decoded);
+      return null;
+    } catch (e) {
+      debugPrint('GoogleDriveService.readAppDataJson($fileName) error: $e');
+      return null;
+    }
+  }
+
+  /// Menulis atau memperbarui berkas JSON tersembunyi di Google Drive `appDataFolder`.
+  Future<bool> writeAppDataJson(
+    String fileName,
+    Map<String, dynamic> payload,
+  ) async {
+    if (mockAppDataStore != null) {
+      mockAppDataStore![fileName] = Map<String, dynamic>.from(payload);
+      return true;
+    }
+
+    final authHeaders = await GoogleAuthService.instance.getAuthHeaders();
+    if (authHeaders == null) return false;
+
+    try {
+      final jsonText = json.encode(payload);
+      final existingId = await _findAppDataFileId(fileName, authHeaders);
+
+      if (existingId != null && existingId.isNotEmpty) {
+        final patchUri = Uri.parse(
+          'https://www.googleapis.com/upload/drive/v3/files/${Uri.encodeComponent(existingId)}?uploadType=media',
+        );
+        final res = await _withAuthRetry(
+          initialHeaders: authHeaders,
+          send: (headers) => _httpClient.patch(
+            patchUri,
+            headers: {
+              ...headers,
+              'Content-Type': 'application/json; charset=utf-8',
+            },
+            body: jsonText,
+          ),
+        );
+        return res.statusCode == 200;
+      }
+
+      const boundary = 'cpbb_appdata_boundary_v1';
+      final metadata = json.encode({
+        'name': fileName,
+        'parents': [GoogleDriveBackupPolicy.appDataFolderId],
+        'mimeType': 'application/json',
+      });
+      final multipartBody =
+          '--$boundary\r\n'
+          'Content-Type: application/json; charset=UTF-8\r\n\r\n'
+          '$metadata\r\n'
+          '--$boundary\r\n'
+          'Content-Type: application/json; charset=UTF-8\r\n\r\n'
+          '$jsonText\r\n'
+          '--$boundary--';
+
+      final createUri = Uri.parse(
+        'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
+      );
+      final res = await _withAuthRetry(
+        initialHeaders: authHeaders,
+        send: (headers) => _httpClient.post(
+          createUri,
+          headers: {
+            ...headers,
+            'Content-Type': 'multipart/related; boundary=$boundary',
+          },
+          body: utf8.encode(multipartBody),
+        ),
+      );
+      return res.statusCode == 200 || res.statusCode == 201;
+    } catch (e) {
+      debugPrint('GoogleDriveService.writeAppDataJson($fileName) error: $e');
+      return false;
+    }
   }
 }

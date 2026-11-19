@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Layar daftar Lisensi Open Source (bukan showLicensePage() bawaan Flutter)
 /// dibuat manual dari LicenseRegistry untuk menampilkan data lisensi asli

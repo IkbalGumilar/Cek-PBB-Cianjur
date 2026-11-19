@@ -2,12 +2,14 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'app_storage.dart';
+import 'batch_check_manager.dart';
 import 'batch_check_screen.dart';
+import 'batch_notification_service.dart';
 import 'check_mode.dart';
 import 'feature_tour/feature_tour.dart';
 import 'file_importer.dart';
@@ -143,10 +145,10 @@ class ImportViewState extends State<ImportView> {
       ),
       FeatureTourStep(
         targetKey: _startBatchButtonKey,
-        title: 'Tombol Mulai Pemeriksaan Otomatis',
+        title: 'Mulai Pemeriksaan Massal (Latar Belakang)',
         description:
-            'Tekan tombol ini untuk memulai pemeriksaan seluruh daftar nomor pajak secara berurutan. '
-            'Hasil pemeriksaan yang sudah lunas akan otomatis memperbarui Buku Catatan DHKP Anda.',
+            'Tekan tombol ini untuk memeriksa seluruh daftar NOP secara berurutan dengan tampilan gulir otomatis terpusat. '
+            'Anda dapat menekan "Sembunyikan" agar pemeriksaan berjalan di latar belakang sambil memakai menu lain; ketuk notifikasi selesai untuk langsung membuka rincian hasil di DHKP.',
         actionHint:
             'Pastikan sudah ada daftar nomor dari berkas atau kotak catatan sebelum menekan tombol ini.',
         icon: Icons.play_circle_outline_rounded,
@@ -426,10 +428,16 @@ class ImportViewState extends State<ImportView> {
       return;
     }
 
+    if (BatchCheckManager.instance.isActiveSession) {
+      BatchNotificationService.instance.openActiveBatchCheck();
+      return;
+    }
+
     if (!mounted) return;
     Navigator.push(
       context,
       MaterialPageRoute(
+        settings: const RouteSettings(name: BatchCheckScreen.routeName),
         builder: (_) => BatchCheckScreen(
           records: records,
           tahun: tahun,

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'app_security_service.dart';
 import 'blok_backup_scheduler.dart';
@@ -36,6 +36,9 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   static const String _tourId = 'settings_screen';
 
+  final GlobalKey _wilayahCardKey = GlobalKey(
+    debugLabel: 'settings_wilayah_card',
+  );
   final GlobalKey _themeCardKey = GlobalKey(debugLabel: 'settings_theme_card');
   final GlobalKey _securityCardKey = GlobalKey(
     debugLabel: 'settings_security_card',
@@ -90,10 +93,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
   List<FeatureTourStep> _buildTourSteps() {
     return [
       FeatureTourStep(
-        targetKey: _themeCardKey,
-        title: 'Tema & Tampilan Aplikasi',
+        targetKey: _wilayahCardKey,
+        title: 'Wilayah Kerja & Profil Desa',
         description:
-            'Ubah suasana tampilan aplikasi menjadi Terang, Gelap, atau mengikuti pengaturan perangkat Anda, serta pilih warna favorit Anda.',
+            'Atur Kecamatan dan Desa/Kelurahan aktif dari katalog resmi Kabupaten Cianjur (32 Kecamatan & 360 Desa/Kelurahan) agar prefix NOP 18 digit terisi otomatis.',
+        icon: Icons.domain_rounded,
+      ),
+      FeatureTourStep(
+        targetKey: _themeCardKey,
+        title: 'Tema, Mode AMOLED & Warna Aplikasi',
+        description:
+            'Ubah mode tampilan (Ikuti Sistem, Terang, Gelap, atau Hitam Pekat AMOLED), aktifkan warna Material You dari wallpaper, atau racik warna aksen pilihan Anda.',
         icon: Icons.palette_outlined,
         actionHint: 'Gunakan mode Terang saat bertugas di bawah sinar matahari',
       ),
@@ -101,30 +111,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
         targetKey: _securityCardKey,
         title: 'Keamanan & Kunci Pengaman Aplikasi',
         description:
-            'Pasang pengaman Sidik Jari, PIN 6 Angka, atau Kata Sandi agar catatan pajak warga di perangkat Anda tidak bisa dibuka sembarang orang.',
+            'Pasang pengaman Sidik Jari, PIN 6 Angka, atau Kata Sandi agar data DHKP dan catatan pajak warga di perangkat Anda tetap terlindungi.',
         icon: Icons.lock_outline_rounded,
       ),
       FeatureTourStep(
         targetKey: _backupCardKey,
-        title: 'Pencadangan Data (Simpan Cadangan)',
+        title: 'Pencadangan Terenkripsi (DKH2) & Google Drive',
         description:
-            'Simpan salinan buku catatan DHKP Anda ke memori perangkat atau sambungkan ke Google Drive agar data tetap aman meski ganti HP.',
+            'Simpan salinan cadangan DHKP terenkripsi AES-256-GCM ke memori HP atau Google Drive, atur kata sandi cadangan, dan pulihkan data kapan saja saat berganti perangkat.',
         icon: Icons.cloud_sync_outlined,
         actionHint:
-            'Aktifkan cadangan otomatis agar tidak perlu repot menyimpan manual',
+            'Aktifkan cadangan otomatis agar perubahan DHKP selalu aman',
       ),
       FeatureTourStep(
         targetKey: _tourGuideCardKey,
         title: 'Buku Panduan & Pusat Bantuan',
         description:
-            'Buka buku panduan visual interaktif lengkap dengan tangkapan layar bertitik nomor, pencarian fitur, dan tanya jawab (FAQ).',
+            'Buka panduan visual interaktif bertitik nomor, cari topik fitur dengan cepat, baca tanya jawab (FAQ), atau reset seluruh tur petunjuk layar.',
         icon: Icons.menu_book_rounded,
       ),
       FeatureTourStep(
         targetKey: _aboutCardKey,
-        title: 'Tentang & Bagikan Aplikasi',
+        title: 'Tentang, Bagikan APK & Cek Pembaruan',
         description:
-            'Bagikan file aplikasi ke sesama perangkat desa/kolektor lewat WhatsApp, periksa versi aplikasi terbaru, dan lihat informasi pembuat aplikasi.',
+            'Bagikan file aplikasi ke sesama perangkat desa/kolektor lewat WhatsApp atau Bluetooth, periksa pembaruan versi terbaru, dan lihat informasi pengembang.',
         icon: Icons.info_outline_rounded,
       ),
     ];
@@ -179,6 +189,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           padding: const EdgeInsets.all(16),
           children: [
             _SettingsMenuCard(
+              key: _wilayahCardKey,
               icon: Icons.domain_rounded,
               iconColor: Colors.deepPurple.shade600,
               title: 'Wilayah Kerja & Profil Desa',

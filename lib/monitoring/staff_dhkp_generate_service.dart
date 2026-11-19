@@ -51,6 +51,7 @@ class StaffDhkpGenerateOutcome {
   final String kecamatanCode;
   final String kelurahanCode;
   final SplitDkhpExportResult? splitExportResult;
+  final File? generatedMasterFile;
   final String? errorMessage;
   final bool isCancelled;
 
@@ -67,13 +68,16 @@ class StaffDhkpGenerateOutcome {
     this.kecamatanCode = '',
     this.kelurahanCode = '',
     this.splitExportResult,
+    this.generatedMasterFile,
     this.errorMessage,
     this.isCancelled = false,
   });
 }
 
 /// Layanan penarikan seluruh data SPPT desa dari Portal Staf untuk
-/// menghasilkan (Generate) master DHKP baru dan langsung menimpa database lokal.
+/// menghasilkan (Generate) paket berkas `.dkhp` terenkripsi.
+/// Secara bawaan TIDAK menghapus/menimpa database lokal sebelum pengguna
+/// memasang berkas `.dkhp` yang dihasilkan.
 class StaffDhkpGenerateService {
   StaffDhkpGenerateService._();
   static final instance = StaffDhkpGenerateService._();
@@ -240,6 +244,7 @@ class StaffDhkpGenerateService {
     bool includeMasterInSplit = true,
     Directory? splitOutputDirectory,
     String? encryptionPassword,
+    bool applyToLocalDb = false,
   }) async {
     final effTahunAwal = (tahunAwal != null && tahunAwal.isNotEmpty)
         ? tahunAwal
@@ -266,7 +271,7 @@ class StaffDhkpGenerateService {
             trimmedEncryptionPassword.isNotEmpty)
         ? trimmedEncryptionPassword
         : null;
-    if (exportSplitByDusun && dusuns.isNotEmpty) {
+    if (effectiveEncryptionPassword != null) {
       final passwordError = DhkpCrypto.validateOptionalPassword(
         effectiveEncryptionPassword,
       );
@@ -683,55 +688,21 @@ class StaffDhkpGenerateService {
         }
       }
 
-      notify('Mencadangkan data lama dan menerapkan data baru ke aplikasi...');
-
-      // 4. CADANGKAN DATABASE LAMA TERLEBIH DAHULU (PENGAMAN)
-      try {
-        final currentFile = await AppStorage.getDatabaseFile();
-        if (await currentFile.exists()) {
-          final backupDir = await AppStorage.getBackupsDirectory();
-          final ts = DateTime.now().millisecondsSinceEpoch;
-          await currentFile.copy(
-            '${backupDir.path}/cadangan_sebelum_generate_$ts.csv',
-          );
-        }
-      } catch (e) {
-        debugPrint(
-          'Warning: gagal membuat file cadangan sebelum timpa DHKP: $e',
-        );
-      }
-
-      // 5. TIMPA DATABASE LOKAL DENGAN DATA BARU
       final recordList = recordsMap.values.toList();
-      await BlokDataStore.instance.clearAll();
-      await BlokDataStore.instance.upsertAll(recordList);
-
-      // 6. SIMPAN PEMBAGIAN DUSUN, WILAYAH AKTIF, & KOORDINAT
-      await saveActiveWilayah(
-        kecCode: resolvedWilayah.kecCode3,
-        kelCode: resolvedWilayah.kelCode3,
-        desaName: resolvedWilayah.desaName,
-        kecName: resolvedWilayah.kecName,
-      );
-      await DusunData.instance.clearScope();
-      if (dusuns.isNotEmpty) {
-        await DusunData.instance.setDusuns(dusuns);
-      }
-      if (kantorDesaLat != null && kantorDesaLng != null) {
-        await DusunData.instance.setKantorDesaLocation(
-          kantorDesaLat,
-          kantorDesaLng,
-        );
+      final targetDir =
+          splitOutputDirectory ?? await AppStorage.getBackupsDirectory();
+      if (!await targetDir.exists()) {
+        await targetDir.create(recursive: true);
       }
 
-      // 7. EKSPOR & PECAH FILE .DKHP TERENKRIPSI PER DUSUN BILA DIMINTA
+      // 4. EKSPOR PAKET .DKHP TERENKRIPSI (TIDAK MENGHAPUS/MENIMPA DB LOKAL)
       SplitDkhpExportResult? splitResult;
+      File? generatedMasterFile;
+
       if (exportSplitByDusun && dusuns.isNotEmpty) {
         notify(
           'Mengenkripsi & memecah paket .dkhp untuk ${dusuns.length} Kedusunan...',
         );
-        final targetDir =
-            splitOutputDirectory ?? await AppStorage.getBackupsDirectory();
         splitResult = await DhkpPackageHelper.packSplitDkhpByDusun(
           outputDirectory: targetDir,
           records: recordList,
@@ -746,10 +717,92 @@ class StaffDhkpGenerateService {
           password: effectiveEncryptionPassword,
           includeMasterDesa: includeMasterInSplit,
         );
+        generatedMasterFile = splitResult.masterEntry?.file;
       }
 
-      // Sinkronisasi widget
-      DhkpWidgetSyncService.syncFromRecords(recordList);
+      if (generatedMasterFile == null) {
+        notify('Mengemas berkas paket Master .dkhp terenkripsi...');
+        final safeDesa = resolvedWilayah.desaName
+            .trim()
+            .replaceAll(RegExp(r'[^a-zA-Z0-9_\-]+'), '_')
+            .replaceAll(RegExp(r'_+'), '_')
+            .replaceAll(RegExp(r'^_|_$'), '');
+        final safeTahun = effTahunAkhir.replaceAll(
+          RegExp(r'[^a-zA-Z0-9_\-]+'),
+          '_',
+        );
+        final masterPath =
+            '${targetDir.path}${Platform.pathSeparator}DHKP_MASTER_${safeDesa.isEmpty ? "DESA" : safeDesa}_$safeTahun.dkhp';
+        generatedMasterFile = await DhkpPackageHelper.packDkhp(
+          outputPath: masterPath,
+          records: recordList,
+          baseRecords: recordList,
+          deltaOnly: false,
+          includePhotos: true,
+          encrypt: true,
+          password: effectiveEncryptionPassword,
+          dusuns: dusuns,
+          scope: const DusunScope(role: 'desa'),
+          kecamatanCode: resolvedWilayah.kecCode3,
+          kecamatanName: resolvedWilayah.kecName,
+          kelurahanCode: resolvedWilayah.kelCode3,
+          desaName: resolvedWilayah.desaName,
+          kantorDesaLat: kantorDesaLat,
+          kantorDesaLng: kantorDesaLng,
+          tahunPajak: effTahunAkhir,
+        );
+      }
+
+      // 5. OPSIONAL: TERAPKAN KE DATABASE LOKAL HANYA JIKA DIMINTA SECARA EKSPLISIT
+      // Proses generate standar TIDAK menghapus/menimpa data lokal sebelum pengguna
+      // memasang file `.dkhp` yang dihasilkan.
+      if (applyToLocalDb) {
+        notify('Mencadangkan data lama dan menerapkan data baru ke aplikasi...');
+        try {
+          final currentFile = await AppStorage.getDatabaseFile();
+          if (await currentFile.exists()) {
+            final backupDir = await AppStorage.getBackupsDirectory();
+            final ts = DateTime.now().millisecondsSinceEpoch;
+            await currentFile.copy(
+              '${backupDir.path}/cadangan_sebelum_generate_$ts.csv',
+            );
+          }
+        } catch (e) {
+          debugPrint(
+            'Warning: gagal membuat file cadangan sebelum menerapkan DHKP: $e',
+          );
+        }
+
+        final incomingYears = recordList
+            .map((r) => r.tahunBayar.trim())
+            .where((y) => y.isNotEmpty)
+            .toSet();
+        await BlokDataStore.instance.replaceByYears(
+          targetYears: incomingYears,
+          newRecords: recordList,
+        );
+
+        await saveActiveWilayah(
+          kecCode: resolvedWilayah.kecCode3,
+          kelCode: resolvedWilayah.kelCode3,
+          desaName: resolvedWilayah.desaName,
+          kecName: resolvedWilayah.kecName,
+        );
+        await DusunData.instance.clearScope();
+        if (dusuns.isNotEmpty) {
+          await DusunData.instance.setDusuns(dusuns);
+        }
+        if (kantorDesaLat != null && kantorDesaLng != null) {
+          await DusunData.instance.setKantorDesaLocation(
+            kantorDesaLat,
+            kantorDesaLng,
+          );
+        }
+
+        DhkpWidgetSyncService.syncFromRecords(
+          await BlokDataStore.instance.loadAll(),
+        );
+      }
 
       // Hitung ringkasan
       final totalRecords = recordList.length;
@@ -775,6 +828,7 @@ class StaffDhkpGenerateService {
         kecamatanCode: resolvedWilayah.kecCode3,
         kelurahanCode: resolvedWilayah.kelCode3,
         splitExportResult: splitResult,
+        generatedMasterFile: generatedMasterFile,
       );
     } catch (e, stack) {
       debugPrint('Error generateAndApply: $e\n$stack');

@@ -247,6 +247,60 @@ class BlokDataStore {
     await BlokBackupScheduler.instance.markDirty();
   }
 
+  /// Mengganti catatan hanya untuk tahun pajak di [targetYears] dengan
+  /// [newRecords], sembari tetap mempertahankan data tahun pajak lain (mis.
+  /// data 2026 tetap tersimpan saat memasang DHKP tahun 2027).
+  ///
+  /// Jika [allowedBloks] diberikan (paket DHKP terkunci ke satu Kedusunan),
+  /// catatan di luar blok yang diizinkan juga ikut dibersihkan.
+  Future<void> replaceByYears({
+    required Set<String> targetYears,
+    required Iterable<BlokRecord> newRecords,
+    Set<String>? allowedBloks,
+  }) async {
+    final existing = List<BlokRecord>.from(await loadAll());
+    final normalizedYears = targetYears
+        .map((y) => y.trim())
+        .where((y) => y.isNotEmpty)
+        .toSet();
+    final normalizedAllowed = allowedBloks
+        ?.map((b) => b.replaceAll(RegExp(r'[^0-9]'), '').padLeft(3, '0'))
+        .where((b) => b.isNotEmpty)
+        .toSet();
+
+    final kept = existing.where((r) {
+      final year = r.tahunBayar.trim();
+      if (normalizedYears.isNotEmpty && normalizedYears.contains(year)) {
+        return false;
+      }
+      if (normalizedAllowed != null && normalizedAllowed.isNotEmpty) {
+        final blok = r.blok.replaceAll(RegExp(r'[^0-9]'), '').padLeft(3, '0');
+        if (!normalizedAllowed.contains(blok)) {
+          return false;
+        }
+      }
+      return true;
+    }).toList();
+
+    final keyToIndex = <String, int>{};
+    for (var i = 0; i < kept.length; i++) {
+      keyToIndex[kept[i].uniqueKey] = i;
+    }
+
+    for (final record in newRecords) {
+      final index = keyToIndex[record.uniqueKey];
+      if (index == null) {
+        keyToIndex[record.uniqueKey] = kept.length;
+        kept.add(record);
+      } else {
+        kept[index] = record;
+      }
+    }
+
+    await _persist(kept);
+    await BlokBackupScheduler.instance.markDirty();
+  }
+
   /// Seluruh data (opsional difilter per tahun), selalu terurut blok lalu
   /// nomor wilayah menaik — dipakai untuk laporan yang dicetak/diunduh, tidak
   /// terpengaruh filter urutan tampilan (nama/jumlah bayar) di layar.
@@ -264,6 +318,7 @@ class BlokDataStore {
     String? fileName,
     bool includePhotos = true,
     bool deltaOnly = true,
+    String? password,
   }) async {
     final records = await loadAll();
     final base =
@@ -277,6 +332,7 @@ class BlokDataStore {
       baseRecords: records,
       includePhotos: includePhotos,
       deltaOnly: deltaOnly,
+      password: password,
     );
     return file.path;
   }

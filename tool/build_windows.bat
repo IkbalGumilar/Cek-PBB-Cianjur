@@ -6,7 +6,7 @@ echo =====================================================================
 echo.
 
 set "PROJECT_DIR=%~dp0.."
-set "APP_VERSION=v0.1.7-beta"
+set "APP_VERSION=v1.0.0"
 cd /d "%PROJECT_DIR%"
 
 echo [0/4] Mengunduh dependensi ^& memastikan plugin Windows tersinkron...
@@ -23,7 +23,14 @@ echo.
 echo [1/4] Kompilasi rilis Flutter Windows (ramping ^& terobfuskasi) di %CD%...
 if not exist "build\native_assets\windows" mkdir "build\native_assets\windows"
 if not exist "build\symbols\windows" mkdir "build\symbols\windows"
-call flutter build windows --release --obfuscate --split-debug-info=build\symbols\windows --tree-shake-icons
+set "DART_DEFINE_ARGS="
+if exist "env.desktop.json" (
+    echo [INFO] Menggunakan kredensial Google OAuth Desktop dari env.desktop.json
+    set "DART_DEFINE_ARGS=--dart-define-from-file=env.desktop.json"
+) else (
+    echo [WARNING] env.desktop.json tidak ditemukan. Login Google Drive Desktop tidak akan memiliki client_secret.
+)
+call flutter build windows --release --obfuscate --split-debug-info=build\symbols\windows --tree-shake-icons %DART_DEFINE_ARGS%
 if errorlevel 1 (
     echo [ERROR] Gagal mengompilasi aplikasi Windows!
     exit /b 1
