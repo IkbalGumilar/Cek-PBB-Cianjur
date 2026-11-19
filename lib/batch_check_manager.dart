@@ -14,6 +14,7 @@ import 'currency_format.dart';
 import 'download_helper.dart';
 import 'nop_helper.dart';
 import 'pbb_client.dart';
+import 'progress_checkpoint_store.dart';
 import 'tax_record.dart';
 
 /// Pengelola siklus hidup tunggal (single source of truth) untuk proses
@@ -40,6 +41,7 @@ class BatchCheckManager extends ChangeNotifier {
   Directory? _sttsDirectory;
   String? _sttsBlokNumber;
   String? _scopeTitle;
+  String _scopeKey = '';
 
   int _currentIndex = 0;
   bool _isRunning = false;
@@ -49,6 +51,7 @@ class BatchCheckManager extends ChangeNotifier {
   bool _isDismissed = false;
   bool _isScreenOpen = false;
   bool _cancelledNotified = false;
+  DateTime? _pausedAt;
   String _statusMessage = 'Menyiapkan pengecekan...';
   int _sessionId = 0;
 
@@ -186,6 +189,16 @@ class BatchCheckManager extends ChangeNotifier {
     _sttsDirectory = sttsTargetDirectory;
     _sttsBlokNumber = sttsBlokNumber;
     _scopeTitle = scopeTitle;
+    _scopeKey = records.isEmpty
+        ? ''
+        : ProgressCheckpointStore.buildBatchScopeKey(
+            tahun: tahun,
+            scopeTitle: scopeTitle,
+            blokNumber: sttsBlokNumber,
+            totalCount: records.length,
+            firstNop: records.first.nop,
+            lastNop: records.last.nop,
+          );
 
     _currentIndex = 0;
     _isRunning = false;
@@ -194,12 +207,53 @@ class BatchCheckManager extends ChangeNotifier {
     _isCompleted = false;
     _isDismissed = false;
     _cancelledNotified = false;
+    _pausedAt = null;
     _statusMessage = 'Menyiapkan pengecekan...';
+
+    if (_scopeKey.isNotEmpty) {
+      final saved = await ProgressCheckpointStore.instance
+          .loadValidBatchCheckpoint(_scopeKey);
+      if (saved != null &&
+          saved.currentIndex > 0 &&
+          saved.currentIndex < _records.length) {
+        _currentIndex = saved.currentIndex;
+        for (int i = 0; i < _currentIndex; i++) {
+          if (!_records[i].isChecked) {
+            _records[i].status = 'Dilewati';
+          }
+        }
+        _statusMessage =
+            'Melanjutkan pengecekan dari nomor ${_currentIndex + 1}/${_records.length}...';
+      }
+    }
+
     notifyListeners();
 
     if (autoStart && _records.isNotEmpty) {
       unawaited(_runLoop(_sessionId));
     }
+  }
+
+  void _persistBatchCheckpoint({DateTime? savedAt}) {
+    if (_scopeKey.isEmpty || _records.isEmpty || _isCompleted) return;
+    unawaited(
+      ProgressCheckpointStore.instance.saveBatchCheckpoint(
+        BatchCheckCheckpoint(
+          scopeKey: _scopeKey,
+          currentIndex: _currentIndex,
+          totalCount: _records.length,
+          savedAtMs: (savedAt ?? DateTime.now()).toUtc().millisecondsSinceEpoch,
+        ),
+      ),
+    );
+  }
+
+  void _resetRecordsForFreshRun() {
+    for (final r in _records) {
+      r.status = 'Menunggu';
+      r.buktiBayarDownloaded = null;
+    }
+    _currentIndex = 0;
   }
 
   Future<void> _ensureSttsDirectory() async {
@@ -360,6 +414,9 @@ class BatchCheckManager extends ChangeNotifier {
 
       if (activeSession != _sessionId) return;
       _currentIndex++;
+      if (_currentIndex % 5 == 0) {
+        _persistBatchCheckpoint();
+      }
       notifyListeners();
 
       unawaited(
@@ -409,7 +466,9 @@ class BatchCheckManager extends ChangeNotifier {
       _isPaused = false;
       _isCooldown = false;
       _isCompleted = true;
+      _pausedAt = null;
       _statusMessage = 'Semua NOP selesai diperiksa.';
+      unawaited(ProgressCheckpointStore.instance.clearBatchCheckpoint());
       if (_downloadStts && _sttsDirectory != null) {
         await _updateBlockInfoTxt(isFinal: true);
       }
@@ -653,12 +712,14 @@ class BatchCheckManager extends ChangeNotifier {
     }
   }
 
-  void pause() {
+  void pause({DateTime? now}) {
     if (!_isRunning || _isCompleted) return;
     _isPaused = true;
     _isRunning = false;
     _isCooldown = false;
-    _statusMessage = 'Pengecekan dijeda.';
+    _pausedAt = now ?? DateTime.now();
+    _statusMessage = 'Pengecekan dijeda (progres tersimpan selama 24 jam).';
+    _persistBatchCheckpoint(savedAt: _pausedAt);
     notifyListeners();
 
     final currentNop = currentRecord?.nop ?? '-';
@@ -674,15 +735,40 @@ class BatchCheckManager extends ChangeNotifier {
     );
   }
 
-  void resume() {
+  @visibleForTesting
+  void markPausedForTesting(DateTime pausedAt) {
+    _isPaused = true;
+    _isRunning = false;
+    _pausedAt = pausedAt;
+    _persistBatchCheckpoint(savedAt: pausedAt);
+  }
+
+  void resume({DateTime? now, bool autoStartLoop = true}) {
     if (_isCompleted || _isRunning || _records.isEmpty) return;
-    unawaited(_runLoop(_sessionId));
+
+    final pausedMs = _pausedAt?.toUtc().millisecondsSinceEpoch ?? 0;
+    if (pausedMs > 0 &&
+        !ProgressCheckpointStore.isWithinResumeWindow(pausedMs, now: now)) {
+      _resetRecordsForFreshRun();
+      _statusMessage =
+          'Jeda melebihi 24 jam — memulai ulang pengecekan dari awal...';
+      unawaited(ProgressCheckpointStore.instance.clearBatchCheckpoint());
+    }
+
+    _pausedAt = null;
+    _isPaused = false;
+    notifyListeners();
+
+    if (autoStartLoop) {
+      unawaited(_runLoop(_sessionId));
+    }
   }
 
   void skipCurrent() {
     if (_currentIndex < _records.length) {
       _records[_currentIndex].status = 'Dilewati';
       _currentIndex++;
+      _persistBatchCheckpoint();
       notifyListeners();
       if (_isRunning && !_isPaused) {
         unawaited(_runLoop(_sessionId));
@@ -695,6 +781,7 @@ class BatchCheckManager extends ChangeNotifier {
     _isRunning = false;
     _isPaused = false;
     _isCooldown = false;
+    _pausedAt = null;
     if (_downloadStts && _sttsDirectory != null) {
       unawaited(_updateBlockInfoTxt(isFinal: true));
     }
@@ -723,6 +810,7 @@ class BatchCheckManager extends ChangeNotifier {
   void cancel() {
     if (!isActiveSession) return;
     _statusMessage = 'Pengecekan dihentikan.';
+    unawaited(ProgressCheckpointStore.instance.clearBatchCheckpoint());
     stopAndFinalize(notifyCancelled: true);
     _isDismissed = true;
     notifyListeners();
@@ -745,6 +833,7 @@ class BatchCheckManager extends ChangeNotifier {
     _sttsDirectory = null;
     _sttsBlokNumber = null;
     _scopeTitle = null;
+    _scopeKey = '';
     _currentIndex = 0;
     _isRunning = false;
     _isPaused = false;
@@ -753,6 +842,7 @@ class BatchCheckManager extends ChangeNotifier {
     _isDismissed = false;
     _isScreenOpen = false;
     _cancelledNotified = false;
+    _pausedAt = null;
     _statusMessage = 'Menyiapkan pengecekan...';
     onHideScreenRequested = null;
     onDataUpdated = null;

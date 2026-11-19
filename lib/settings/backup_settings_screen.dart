@@ -9,10 +9,10 @@ import '../blok_data_store.dart';
 import '../dkhp_package_helper.dart';
 import '../google_auth_service.dart';
 import '../google_drive_backup_policy.dart';
+import '../cloud_sync/google_account_sync_service.dart';
 import '../google_drive_picker_dialog.dart';
 import '../incoming_file_service.dart';
 import '../native_file_helper.dart';
-import '../shared_storage_link_service.dart';
 import '../unity_lerp_widgets.dart';
 import 'google_drive_settings_dialogs.dart';
 
@@ -56,7 +56,6 @@ class _BackupSettingsSectionState extends State<BackupSettingsSection> {
   String _googleAccount = '';
   String _googleDisplayName = '';
   String _googlePhotoUrl = '';
-  String _googleFolderLink = '';
   bool _overCellular = true;
   String _dhkpFingerprint = '';
   int _totalNop = 0;
@@ -94,7 +93,6 @@ class _BackupSettingsSectionState extends State<BackupSettingsSection> {
     final acc = await scheduler.getGoogleAccount();
     final name = await scheduler.getGoogleDisplayName();
     final photo = await scheduler.getGooglePhotoUrl();
-    final folderLink = await scheduler.getGoogleDriveFolderLink();
     final cell = await scheduler.getOverCellular();
     final records = await BlokDataStore.instance.loadAll();
     final fingerprint = DhkpPackageHelper.computeDhkpFingerprint(records);
@@ -110,7 +108,6 @@ class _BackupSettingsSectionState extends State<BackupSettingsSection> {
       _googleAccount = acc;
       _googleDisplayName = name;
       _googlePhotoUrl = photo;
-      _googleFolderLink = folderLink;
       _overCellular = cell;
       _dhkpFingerprint = fingerprint;
       _totalNop = records.length;
@@ -142,14 +139,14 @@ class _BackupSettingsSectionState extends State<BackupSettingsSection> {
     return '${mb.toStringAsFixed(2)} MB';
   }
 
-  Future<void> _performBackup() async {
+  Future<void> _performBackup({bool enforcePreviousDhkpMatch = true}) async {
     setState(() {
       _isBackingUp = true;
       _busyMessage = 'Menyimpan cadangan perubahan DHKP...';
     });
     try {
       final file = await BlokBackupScheduler.instance.performBackup(
-        enforcePreviousDhkpMatch: true,
+        enforcePreviousDhkpMatch: enforcePreviousDhkpMatch,
       );
       await _loadBackupSettings();
       if (!mounted) return;
@@ -164,9 +161,8 @@ class _BackupSettingsSectionState extends State<BackupSettingsSection> {
             });
           }
           try {
-            final mainFolderId = _googleFolderLink.isNotEmpty
-                ? GoogleDriveBackupPolicy.extractFolderId(_googleFolderLink)
-                : await GoogleDriveService.instance.ensureDedicatedFolder();
+            final mainFolderId = await GoogleDriveService.instance
+                .ensureDedicatedFolder();
             final backupFolderId = await GoogleDriveService.instance
                 .ensureBackupSubfolder(parentFolderId: mainFolderId);
             final uploaded = await GoogleDriveService.instance.uploadFile(
@@ -197,6 +193,47 @@ class _BackupSettingsSectionState extends State<BackupSettingsSection> {
           const SnackBar(content: Text('Gagal membuat berkas cadangan.')),
         );
       }
+    } on DhkpBackupValidationException catch (e) {
+      if (mounted) {
+        setState(() {
+          _isBackingUp = false;
+          _busyMessage = '';
+        });
+      }
+      if (!mounted) return;
+      if (enforcePreviousDhkpMatch && e.message.contains('berbeda')) {
+        final startNew = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Wilayah / Data DHKP Berbeda'),
+            content: const Text(
+              'Berkas DHKP saat ini berbeda dengan cadangan sebelumnya '
+              '(misalnya karena perpindahan wilayah kerja atau tahun baru).\n\n'
+              'Mulai riwayat cadangan baru untuk DHKP ini? Cadangan wilayah lama di Google Drive tetap aman.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: const Text('Batal'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(ctx).pop(true),
+                child: const Text('Buat Cadangan Baru'),
+              ),
+            ],
+          ),
+        );
+        if (startNew == true && mounted) {
+          await _performBackup(enforcePreviousDhkpMatch: false);
+        }
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.message),
+          backgroundColor: Colors.red[800],
+        ),
+      );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -235,11 +272,38 @@ class _BackupSettingsSectionState extends State<BackupSettingsSection> {
       _busyMessage = 'Memulihkan & mencocokkan berkas DHKP...';
     });
     try {
-      final count = await BlokDataStore.instance.importCsv(
-        path,
-        password: password,
-        requireBaseDhkp: true,
-      );
+      int count;
+      if (password == null) {
+        final masterKey = await GoogleAccountSyncService.instance
+            .getOrCreateBackupMasterKey();
+        if (masterKey != null && masterKey.isNotEmpty) {
+          try {
+            count = await BlokDataStore.instance.importCsv(
+              path,
+              password: masterKey,
+              requireBaseDhkp: true,
+            );
+          } on DkhpPasswordException {
+            // Fallback untuk cadangan lama (sebelum Master Key akun Google)
+            // atau berkas .dkhp dengan sandi manual.
+            count = await BlokDataStore.instance.importCsv(
+              path,
+              requireBaseDhkp: true,
+            );
+          }
+        } else {
+          count = await BlokDataStore.instance.importCsv(
+            path,
+            requireBaseDhkp: true,
+          );
+        }
+      } else {
+        count = await BlokDataStore.instance.importCsv(
+          path,
+          password: password,
+          requireBaseDhkp: true,
+        );
+      }
       await _loadBackupSettings();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -330,7 +394,6 @@ class _BackupSettingsSectionState extends State<BackupSettingsSection> {
           _googleAccount = '';
           _googleDisplayName = '';
           _googlePhotoUrl = '';
-          _googleFolderLink = '';
         });
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -356,62 +419,6 @@ class _BackupSettingsSectionState extends State<BackupSettingsSection> {
         ),
       );
       await _loadBackupSettings();
-    }
-  }
-
-  Future<void> _showGoogleFolderDialog() async {
-    if (_googleAccount.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Hubungkan akun Google terlebih dahulu sebelum mengatur folder bersama.',
-          ),
-        ),
-      );
-      return;
-    }
-
-    final result = await showDialog<String>(
-      context: context,
-      builder: (ctx) => GoogleFolderDialog(
-        currentAccount: _googleAccount,
-        initialLink: _googleFolderLink,
-      ),
-    );
-
-    if (result == null || result == 'cancel') return;
-
-    if (result == 'reset') {
-      await BlokBackupScheduler.instance.setGoogleDriveFolderLink('');
-      if (mounted) {
-        setState(() => _googleFolderLink = '');
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Folder bersama direset ke folder bawaan "${GoogleDriveBackupPolicy.dedicatedFolderName}".',
-            ),
-          ),
-        );
-      }
-    } else {
-      final success = await BlokBackupScheduler.instance
-          .setGoogleDriveFolderLink(result);
-      if (!mounted) return;
-      if (success) {
-        setState(() => _googleFolderLink = result);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Folder bersama Google Drive berhasil disimpan.'),
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Link folder Google Drive tidak valid.'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
     }
   }
 
@@ -616,9 +623,7 @@ class _BackupSettingsSectionState extends State<BackupSettingsSection> {
                       if (_googleAccount.isNotEmpty) ...[
                         const SizedBox(height: 2),
                         Text(
-                          _googleFolderLink.isNotEmpty
-                              ? 'Google Drive: $_googleAccount (Folder Bersama)'
-                              : 'Google Drive: $_googleAccount (Folder: ${GoogleDriveBackupPolicy.dedicatedFolderName})',
+                          'Google Drive: $_googleAccount (Folder: ${GoogleDriveBackupPolicy.dedicatedFolderName})',
                           style: Theme.of(context).textTheme.bodySmall
                               ?.copyWith(color: scheme.primary),
                         ),
@@ -746,61 +751,18 @@ class _BackupSettingsSectionState extends State<BackupSettingsSection> {
                         : 'Akun Google (Google Drive)',
                   ),
                   subtitle: Text(
-                    !Platform.isAndroid
-                        ? 'Masuk akun Google hanya didukung di Android'
+                    !GoogleAuthService.instance.isSupportedPlatform
+                        ? 'Masuk akun Google tidak didukung di platform ini'
                         : (_googleAccount.isEmpty
                               ? 'Belum terhubung • Folder "${GoogleDriveBackupPolicy.dedicatedFolderName}/backup"'
                               : '$_googleAccount • Folder backup aktif'),
                   ),
-                  trailing: Platform.isAndroid
+                  trailing: GoogleAuthService.instance.isSupportedPlatform
                       ? const Icon(Icons.chevron_right)
                       : null,
-                  onTap: Platform.isAndroid ? _showGoogleAccountDialog : null,
-                ),
-                const Divider(height: 1),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  enabled: _googleAccount.isNotEmpty,
-                  leading: Icon(
-                    Icons.folder_shared_outlined,
-                    color: _googleAccount.isNotEmpty
-                        ? null
-                        : Theme.of(context).disabledColor,
-                  ),
-                  title: const Text('Folder Bersama Google Drive'),
-                  subtitle: Text(
-                    _googleAccount.isEmpty
-                        ? 'Hubungkan akun Google terlebih dahulu untuk mengatur folder bersama'
-                        : (_googleFolderLink.isEmpty
-                              ? 'Gunakan folder bawaan ("${GoogleDriveBackupPolicy.dedicatedFolderName}")'
-                              : 'Folder bersama telah terhubung'),
-                  ),
-                  trailing: _googleFolderLink.isNotEmpty
-                      ? Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              icon: const Icon(
-                                Icons.share_outlined,
-                                size: 20,
-                                color: Colors.blue,
-                              ),
-                              tooltip: 'Bagikan Tautan Folder Bersama',
-                              onPressed: () {
-                                SharedStorageLinkService.shareStorageLink(
-                                  context: context,
-                                  folder: _googleFolderLink,
-                                  sender: _googleAccount,
-                                );
-                              },
-                            ),
-                            const Icon(Icons.chevron_right),
-                          ],
-                        )
-                      : const Icon(Icons.chevron_right),
-                  onTap: _googleAccount.isEmpty
-                      ? null
-                      : _showGoogleFolderDialog,
+                  onTap: GoogleAuthService.instance.isSupportedPlatform
+                      ? _showGoogleAccountDialog
+                      : null,
                 ),
               ],
             ),

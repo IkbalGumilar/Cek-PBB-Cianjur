@@ -318,6 +318,7 @@ class BlokDataStore {
     String? fileName,
     bool includePhotos = true,
     bool deltaOnly = true,
+    String? password,
   }) async {
     final records = await loadAll();
     final base =
@@ -331,6 +332,7 @@ class BlokDataStore {
       baseRecords: records,
       includePhotos: includePhotos,
       deltaOnly: deltaOnly,
+      password: password,
     );
     return file.path;
   }

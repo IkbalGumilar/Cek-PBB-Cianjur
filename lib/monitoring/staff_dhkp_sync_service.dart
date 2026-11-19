@@ -466,6 +466,11 @@ class StaffDhkpSyncService {
     void Function(StaffDhkpSyncProgress progress)? onProgress,
     bool Function()? shouldCancel,
     bool Function()? isPaused,
+    int initialPageBb = 1,
+    int initialPageSb = 1,
+    bool skipBelumBayar = false,
+    void Function(int nextPageBb, int nextPageSb, bool bbCompleted)?
+    onPageCheckpoint,
   }) async {
     final effectiveTglAwal = (tglBayarAwal != null && tglBayarAwal.isNotEmpty)
         ? tglBayarAwal
@@ -642,7 +647,11 @@ class StaffDhkpSyncService {
       }
 
       Future<void> runBelumBayar() async {
-        int page = 1;
+        if (skipBelumBayar) {
+          pageBb = initialPageBb > 1 ? initialPageBb - 1 : 0;
+          return;
+        }
+        int page = initialPageBb < 1 ? 1 : initialPageBb;
         bool hasMore = true;
         while (hasMore) {
           if (shouldCancel?.call() ?? false) return;
@@ -702,6 +711,7 @@ class StaffDhkpSyncService {
 
           if (tableResult.hasNextPage && page < maxPages) {
             page++;
+            onPageCheckpoint?.call(page, initialPageSb, false);
             var adaptiveDelay = pacingDelay;
             if (pacingDelay > Duration.zero &&
                 fetched.elapsed.inMilliseconds > 2000) {
@@ -712,12 +722,13 @@ class StaffDhkpSyncService {
             }
           } else {
             hasMore = false;
+            onPageCheckpoint?.call(page + 1, initialPageSb, true);
           }
         }
       }
 
       Future<void> runSudahBayar() async {
-        int page = 1;
+        int page = initialPageSb < 1 ? 1 : initialPageSb;
         bool hasMore = true;
         while (hasMore) {
           if (shouldCancel?.call() ?? false) return;
@@ -778,6 +789,7 @@ class StaffDhkpSyncService {
 
           if (tableResult.hasNextPage && page < maxPages) {
             page++;
+            onPageCheckpoint?.call(pageBb + 1, page, true);
             var adaptiveDelay = pacingDelay;
             if (pacingDelay > Duration.zero &&
                 fetched.elapsed.inMilliseconds > 2000) {

@@ -8,19 +8,16 @@ import 'package:cek_pbb_app/app_security_service.dart';
 import 'package:cek_pbb_app/base_preferences_store.dart';
 import 'package:cek_pbb_app/base_table_exporter.dart';
 import 'package:cek_pbb_app/blok_record.dart';
-import 'package:cek_pbb_app/blok_sync_service.dart';
 import 'package:cek_pbb_app/dhkp/blok_csv_codec.dart';
 import 'package:cek_pbb_app/google_auth_service.dart';
 import 'package:cek_pbb_app/map/kml_parser.dart';
 import 'package:cek_pbb_app/map/map_models.dart';
 import 'package:cek_pbb_app/monitoring/monitoring_form_fields.dart';
 import 'package:cek_pbb_app/settings/security_settings_screen.dart';
-import 'package:cek_pbb_app/shared_storage_link_service.dart';
 import 'package:cek_pbb_app/staff_portal/staff_authenticator_store.dart';
 import 'package:cek_pbb_app/staff_portal_client.dart';
 import 'package:cek_pbb_app/update_checker.dart';
 import 'package:crypto/crypto.dart';
-import 'package:encrypt/encrypt.dart' as enc;
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -91,8 +88,6 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     FlutterSecureStorage.setMockInitialValues({});
     BaseSecureStore.clearTestMemoryStore();
-    BlokChangeRecord.setSecretForTesting(null);
-    BlokChangeRecord.setPbkdf2IterationsForTesting(1000);
     AppSecurityService.setPbkdf2IterationsForTesting(100);
     AppSecurityService.instance.setLocalAuthForTesting(
       _FakeLocalAuthentication(),
@@ -180,194 +175,6 @@ void main() {
         await sec.resetFailedPinAttempts();
         expect(await sec.verifyCustomPin('123456'), isTrue);
         expect(await sec.verifyCustomPassword('SandiAman123'), isTrue);
-      },
-    );
-  });
-
-  group('A.2 BlokChangeRecord AEAD v2 Encryption & Legacy Validation', () {
-    test(
-      'Format v2 encrypts with random salt/nonce and verifies integrity via AES-256-GCM',
-      () async {
-        const secret = 'KunciTimDesaBobojong2026!';
-        const record = BlokChangeRecord(
-          id: 'change_001',
-          blok: '001',
-          nop: '320301000100100010',
-          tahunBayar: '2026',
-          petugas: 'petugas_1',
-          timestamp: 1730000000000,
-          statusBayar: 'Sudah Bayar',
-          catatan: 'Lunas kolektif',
-          namaFoto: '320301000100100010.jpg',
-          petugasFolder: 'Petugas_1',
-        );
-
-        final cipher1 = await record.toEncryptedBytes(secret: secret);
-        final cipher2 = await record.toEncryptedBytes(secret: secret);
-
-        // Header magic 'CPBB' + version 0x02
-        expect(utf8.decode(cipher1.sublist(0, 4)), 'CPBB');
-        expect(cipher1[4], 0x02);
-        // Unique salt/nonce produces distinct ciphertexts for identical plaintext
-        expect(cipher1, isNot(equals(cipher2)));
-
-        final decrypted = await BlokChangeRecord.fromEncryptedBytes(
-          cipher1,
-          secret: secret,
-        );
-        expect(decrypted, isNotNull);
-        expect(decrypted!.id, record.id);
-        expect(decrypted.nop, record.nop);
-        expect(decrypted.statusBayar, record.statusBayar);
-        expect(decrypted.catatan, record.catatan);
-        expect(decrypted.namaFoto, record.namaFoto);
-        expect(decrypted.timestamp, record.timestamp);
-      },
-    );
-
-    test(
-      'Format v2 rejects wrong secret, bit-flipped ciphertext/tag/header, and truncated bytes',
-      () async {
-        const secret = 'KunciTimDesaBobojong2026!';
-        const record = BlokChangeRecord(
-          id: 'change_002',
-          blok: '001',
-          nop: '320301000100100010',
-          tahunBayar: '2026',
-          petugas: 'petugas_1',
-          timestamp: 1730000000000,
-          statusBayar: 'Sudah Bayar',
-          catatan: 'Catatan sah',
-        );
-
-        final cipher = await record.toEncryptedBytes(secret: secret);
-
-        // Wrong secret
-        expect(
-          await BlokChangeRecord.fromEncryptedBytes(
-            cipher,
-            secret: 'SalahKunci123!',
-          ),
-          isNull,
-        );
-
-        // Tamper ciphertext byte
-        final tamperedBody = Uint8List.fromList(cipher);
-        tamperedBody[40] ^= 0xFF;
-        expect(
-          await BlokChangeRecord.fromEncryptedBytes(
-            tamperedBody,
-            secret: secret,
-          ),
-          isNull,
-        );
-
-        // Tamper GCM authentication tag byte
-        final tamperedTag = Uint8List.fromList(cipher);
-        tamperedTag[tamperedTag.length - 1] ^= 0x01;
-        expect(
-          await BlokChangeRecord.fromEncryptedBytes(
-            tamperedTag,
-            secret: secret,
-          ),
-          isNull,
-        );
-
-        // Tamper header AAD (iteration count)
-        final tamperedHeader = Uint8List.fromList(cipher);
-        tamperedHeader[9] ^= 0x01;
-        expect(
-          await BlokChangeRecord.fromEncryptedBytes(
-            tamperedHeader,
-            secret: secret,
-          ),
-          isNull,
-        );
-
-        // Truncated data
-        expect(
-          await BlokChangeRecord.fromEncryptedBytes(
-            cipher.sublist(0, 20),
-            secret: secret,
-          ),
-          isNull,
-        );
-      },
-    );
-
-    test(
-      'Legacy v1 AES-CBC payload is rejected when allowLegacy is false and validated when allowLegacy is true',
-      () async {
-        const secret = 'LegacySecret123';
-        final keyBytes = sha256.convert(utf8.encode(secret)).bytes;
-        final key = enc.Key(Uint8List.fromList(keyBytes));
-        final iv = enc.IV.fromSecureRandom(16);
-        final encrypter = enc.Encrypter(enc.AES(key, mode: enc.AESMode.cbc));
-
-        final validJson = jsonEncode({
-          'id': 'legacy_001',
-          'blok': '001',
-          'nop': '32.03.010.001.001-0001.0',
-          'tahunBayar': '2026',
-          'petugas': 'petugas_legacy',
-          'timestamp': 1730000000000,
-          'statusBayar': 'Sudah Bayar',
-          'catatan': 'Legacy note',
-          'namaFoto': '320301000100100010.jpg',
-        });
-        final encryptedValid = encrypter.encrypt(validJson, iv: iv);
-        final legacyBytes = Uint8List.fromList([
-          ...BlokChangeRecord.magic,
-          ...iv.bytes,
-          ...encryptedValid.bytes,
-        ]);
-
-        // Rejected when allowLegacy is false
-        expect(
-          await BlokChangeRecord.fromEncryptedBytes(
-            legacyBytes,
-            secret: secret,
-            allowLegacy: false,
-          ),
-          isNull,
-        );
-
-        // Accepted and marked isLegacyFormat when allowLegacy is true
-        final res = await BlokChangeRecord.decryptWithDetails(
-          legacyBytes,
-          secret: secret,
-          allowLegacy: true,
-        );
-        expect(res.isLegacyFormat, isTrue);
-        expect(res.record, isNotNull);
-        expect(res.record!.nop, '32.03.010.001.001-0001.0');
-
-        // Malicious legacy payload with path traversal in namaFoto is rejected by validateSchema
-        final maliciousJson = jsonEncode({
-          'id': 'legacy_evil',
-          'blok': '001',
-          'nop': '32.03.010.001.001-0001.0',
-          'tahunBayar': '2026',
-          'petugas': 'petugas_legacy',
-          'timestamp': 1730000000000,
-          'statusBayar': 'Sudah Bayar',
-          'catatan': 'Evil',
-          'namaFoto': '../../shared_prefs/secrets.xml',
-        });
-        final encryptedMalicious = encrypter.encrypt(maliciousJson, iv: iv);
-        final maliciousBytes = Uint8List.fromList([
-          ...BlokChangeRecord.magic,
-          ...iv.bytes,
-          ...encryptedMalicious.bytes,
-        ]);
-        expect(
-          await BlokChangeRecord.fromEncryptedBytes(
-            maliciousBytes,
-            secret: secret,
-            allowLegacy: true,
-          ),
-          isNull,
-        );
       },
     );
   });
@@ -548,6 +355,35 @@ void main() {
         await expectation;
       },
     );
+
+    test(
+      'buildDesktopTokenExchangeParams & buildDesktopRefreshTokenParams include client_secret',
+      () {
+        final exchange = GoogleAuthService.buildDesktopTokenExchangeParams(
+          clientId: 'desktop-client-id',
+          clientSecret: 'GOCSPX-secret-123',
+          authCode: 'auth-code-xyz',
+          codeVerifier: 'verifier-abc',
+          redirectUri: 'http://127.0.0.1:54321',
+        );
+        expect(exchange['client_id'], 'desktop-client-id');
+        expect(exchange['client_secret'], 'GOCSPX-secret-123');
+        expect(exchange['code'], 'auth-code-xyz');
+        expect(exchange['code_verifier'], 'verifier-abc');
+        expect(exchange['grant_type'], 'authorization_code');
+        expect(exchange['redirect_uri'], 'http://127.0.0.1:54321');
+
+        final refresh = GoogleAuthService.buildDesktopRefreshTokenParams(
+          clientId: 'desktop-client-id',
+          clientSecret: 'GOCSPX-secret-123',
+          refreshToken: 'refresh-tok-999',
+        );
+        expect(refresh['client_id'], 'desktop-client-id');
+        expect(refresh['client_secret'], 'GOCSPX-secret-123');
+        expect(refresh['refresh_token'], 'refresh-tok-999');
+        expect(refresh['grant_type'], 'refresh_token');
+      },
+    );
   });
 
   group(
@@ -663,44 +499,7 @@ void main() {
     },
   );
 
-  group('A.6 Deep Link, Redirect Validation & AppLock Exponential Backoff', () {
-    test(
-      'SharedStorageLinkService.parseString validates folder ID and URLs',
-      () {
-        const validFolderId = '1AbCdEfGhIjKlMnOpQrStUvWxYz12345';
-        expect(
-          SharedStorageLinkService.parseString(
-            'cekpbb://storage?folder=$validFolderId&name=Dusun%201',
-          )?.cleanFolderId,
-          validFolderId,
-        );
-        expect(
-          SharedStorageLinkService.parseString(
-            'https://drive.google.com/drive/folders/$validFolderId?usp=sharing',
-          )?.cleanFolderId,
-          validFolderId,
-        );
-
-        // Reject path traversal, external hosts, and short/invalid IDs
-        expect(
-          SharedStorageLinkService.parseString(
-            'cekpbb://storage?folder=../../etc/passwd',
-          ),
-          isNull,
-        );
-        expect(
-          SharedStorageLinkService.parseString(
-            'https://evil.com/drive/folders/$validFolderId',
-          ),
-          isNull,
-        );
-        expect(
-          SharedStorageLinkService.parseString('cekpbb://storage?folder=short'),
-          isNull,
-        );
-      },
-    );
-
+  group('A.6 Redirect Validation & AppLock Exponential Backoff', () {
     test(
       'StaffPortalClient.normalizeRedirectLocation blocks external domains and non-HTTPS schemes',
       () {

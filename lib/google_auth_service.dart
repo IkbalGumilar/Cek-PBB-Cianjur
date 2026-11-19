@@ -11,6 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'app_security_service.dart';
 import 'blok_backup_scheduler.dart';
+import 'cloud_sync/google_account_sync_service.dart';
 import 'google_drive_backup_policy.dart';
 
 /// Model sederhana untuk representasi akun Google yang terhubung.
@@ -41,31 +42,66 @@ class GoogleAuthService {
   static const String defaultDesktopClientId =
       '291477165913-abopbq9ng6lkivd3egpdu598m3utq3sh.apps.googleusercontent.com';
 
-  String _desktopClientId = defaultDesktopClientId;
+  static const String _envDesktopClientId = String.fromEnvironment(
+    'GOOGLE_DESKTOP_CLIENT_ID',
+  );
+  static const String _envDesktopClientSecret = String.fromEnvironment(
+    'GOOGLE_DESKTOP_CLIENT_SECRET',
+  );
+
+  String _desktopClientId = _envDesktopClientId.isNotEmpty
+      ? _envDesktopClientId
+      : defaultDesktopClientId;
+  String _desktopClientSecret = _envDesktopClientSecret;
+
+  HttpServer? _activeDesktopAuthServer;
+  bool _desktopSignInCancelled = false;
+
+  /// Menunjukkan apakah kredensial OAuth Desktop (Client ID & Client Secret)
+  /// sudah terpasang saat build/konfigurasi.
+  bool get hasDesktopOAuthCredentials =>
+      _desktopClientId.trim().isNotEmpty &&
+      _desktopClientSecret.trim().isNotEmpty;
 
   static const List<String> _scopes = [
     'email',
     'profile',
     GoogleDriveBackupPolicy.allowedScopeDriveFile,
-    GoogleDriveBackupPolicy.allowedScopeDriveReadonly,
+    GoogleDriveBackupPolicy.allowedScopeAppData,
   ];
 
   GoogleSignIn _googleSignIn = GoogleSignIn(scopes: _scopes);
 
-  /// Mengonfigurasi instance GoogleSignIn atau Client ID Desktop jika diperlukan.
+  /// Mengonfigurasi instance GoogleSignIn atau kredensial OAuth Desktop jika diperlukan.
   void configure({
     String? clientId,
     String? serverClientId,
     String? desktopClientId,
+    String? desktopClientSecret,
   }) {
-    if (desktopClientId != null && desktopClientId.isNotEmpty) {
-      _desktopClientId = desktopClientId;
+    if (desktopClientId != null && desktopClientId.trim().isNotEmpty) {
+      _desktopClientId = desktopClientId.trim();
+    }
+    if (desktopClientSecret != null && desktopClientSecret.trim().isNotEmpty) {
+      _desktopClientSecret = desktopClientSecret.trim();
     }
     _googleSignIn = GoogleSignIn(
       scopes: _scopes,
       clientId: clientId,
       serverClientId: serverClientId,
     );
+  }
+
+  /// Membatalkan sesi tunggu callback OAuth Desktop yang sedang berjalan (jika ada).
+  Future<void> cancelPendingDesktopSignIn() async {
+    final server = _activeDesktopAuthServer;
+    if (server != null) {
+      _desktopSignInCancelled = true;
+      _activeDesktopAuthServer = null;
+      try {
+        await server.close(force: true);
+      } catch (_) {}
+    }
   }
 
   /// Memeriksa apakah platform saat ini didukung untuk Google Sign In.
@@ -166,6 +202,7 @@ class GoogleAuthService {
         displayName: user.displayName,
         photoUrl: user.photoUrl,
       );
+      unawaited(GoogleAccountSyncService.instance.syncAllAfterSignIn());
 
       return user;
     } on PlatformException catch (e) {
@@ -185,19 +222,31 @@ class GoogleAuthService {
   }
 
   /// Alur otentikasi Google OAuth 2.0 untuk aplikasi Desktop via Browser (RFC 8252)
-  /// menggunakan Loopback IP dan PKCE (Proof Key for Code Exchange).
+  /// menggunakan Loopback IP (`127.0.0.1`) dan PKCE (Proof Key for Code Exchange).
   Future<GoogleAuthUser?> _signInDesktop() async {
+    if (!hasDesktopOAuthCredentials) {
+      throw Exception(
+        'Kredensial OAuth Desktop Google (GOOGLE_DESKTOP_CLIENT_ID & '
+        'GOOGLE_DESKTOP_CLIENT_SECRET) belum terpasang pada build ini. '
+        'Jalankan/build aplikasi dengan --dart-define-from-file=env.desktop.json.',
+      );
+    }
+
+    await cancelPendingDesktopSignIn();
+    _desktopSignInCancelled = false;
+
     // 1. Siapkan PKCE (code_verifier & code_challenge)
     final codeVerifier = generateRandomString(64);
     final codeChallenge = generateCodeChallenge(codeVerifier);
     final state = generateRandomString(16);
 
-    // 2. Buka local loopback server pada port dinamis (port 0)
+    // 2. Buka local loopback server pada IPv4 127.0.0.1 port dinamis (RFC 8252)
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
-    final redirectUri = 'http://localhost:${server.port}';
+    _activeDesktopAuthServer = server;
+    final redirectUri = 'http://127.0.0.1:${server.port}';
 
-    // 3. Susun URL otorisasi Google (mengikuti auth_uri resmi Google Cloud)
-    final authUri = Uri.https('accounts.google.com', '/o/oauth2/auth', {
+    // 3. Susun URL otorisasi Google OAuth 2.0 v2
+    final authUri = Uri.https('accounts.google.com', '/o/oauth2/v2/auth', {
       'client_id': _desktopClientId,
       'redirect_uri': redirectUri,
       'response_type': 'code',
@@ -226,7 +275,16 @@ class GoogleAuthService {
         expectedState: state,
         timeout: const Duration(minutes: 3),
       );
+    } catch (e) {
+      if (_desktopSignInCancelled) {
+        return null;
+      }
+      rethrow;
     } finally {
+      if (identical(_activeDesktopAuthServer, server)) {
+        _activeDesktopAuthServer = null;
+      }
+      _desktopSignInCancelled = false;
       await server.close(force: true);
     }
 
@@ -241,14 +299,14 @@ class GoogleAuthService {
         'x-www-form-urlencoded',
         charset: 'utf-8',
       );
-      final formBody = [
-        'client_id=${Uri.encodeQueryComponent(_desktopClientId)}',
-        'code=${Uri.encodeQueryComponent(authCode)}',
-        'code_verifier=${Uri.encodeQueryComponent(codeVerifier)}',
-        'grant_type=authorization_code',
-        'redirect_uri=${Uri.encodeQueryComponent(redirectUri)}',
-      ].join('&');
-      tokenRequest.write(formBody);
+      final tokenParams = buildDesktopTokenExchangeParams(
+        clientId: _desktopClientId,
+        clientSecret: _desktopClientSecret,
+        authCode: authCode,
+        codeVerifier: codeVerifier,
+        redirectUri: redirectUri,
+      );
+      tokenRequest.write(_encodeFormBody(tokenParams));
 
       final tokenResponse = await tokenRequest.close();
       final tokenResponseBody = await tokenResponse
@@ -315,6 +373,7 @@ class GoogleAuthService {
         displayName: user.displayName,
         photoUrl: user.photoUrl,
       );
+      unawaited(GoogleAccountSyncService.instance.syncAllAfterSignIn());
 
       return user;
     } finally {
@@ -504,8 +563,52 @@ class GoogleAuthService {
     await response.close();
   }
 
+  /// Menyusun parameter form-urlencoded untuk penukaran authorization code OAuth Desktop.
+  @visibleForTesting
+  static Map<String, String> buildDesktopTokenExchangeParams({
+    required String clientId,
+    required String clientSecret,
+    required String authCode,
+    required String codeVerifier,
+    required String redirectUri,
+  }) {
+    return <String, String>{
+      'client_id': clientId,
+      if (clientSecret.trim().isNotEmpty) 'client_secret': clientSecret.trim(),
+      'code': authCode,
+      'code_verifier': codeVerifier,
+      'grant_type': 'authorization_code',
+      'redirect_uri': redirectUri,
+    };
+  }
+
+  /// Menyusun parameter form-urlencoded untuk refresh access token OAuth Desktop.
+  @visibleForTesting
+  static Map<String, String> buildDesktopRefreshTokenParams({
+    required String clientId,
+    required String clientSecret,
+    required String refreshToken,
+  }) {
+    return <String, String>{
+      'client_id': clientId,
+      if (clientSecret.trim().isNotEmpty) 'client_secret': clientSecret.trim(),
+      'refresh_token': refreshToken,
+      'grant_type': 'refresh_token',
+    };
+  }
+
+  static String _encodeFormBody(Map<String, String> params) {
+    return params.entries
+        .map(
+          (e) =>
+              '${Uri.encodeQueryComponent(e.key)}=${Uri.encodeQueryComponent(e.value)}',
+        )
+        .join('&');
+  }
+
   /// Memutuskan sambungan akun Google (Sign Out).
   Future<void> signOut() async {
+    await cancelPendingDesktopSignIn();
     if (isSupportedPlatform &&
         (Platform.isAndroid || Platform.isIOS || kIsWeb)) {
       try {
@@ -514,6 +617,7 @@ class GoogleAuthService {
         debugPrint('Gagal sign out dari Google: $e');
       }
     }
+    await GoogleAccountSyncService.instance.clearLocalBackupMasterKey();
     await BlokBackupScheduler.instance.setGoogleAccountDetails(email: '');
   }
 
@@ -536,18 +640,12 @@ class GoogleAuthService {
         'x-www-form-urlencoded',
         charset: 'utf-8',
       );
-      final tokenParams = <String, String>{
-        'client_id': _desktopClientId,
-        'refresh_token': refreshToken,
-        'grant_type': 'refresh_token',
-      };
-      final body = tokenParams.entries
-          .map(
-            (e) =>
-                '${Uri.encodeQueryComponent(e.key)}=${Uri.encodeQueryComponent(e.value)}',
-          )
-          .join('&');
-      tokenReq.write(body);
+      final tokenParams = buildDesktopRefreshTokenParams(
+        clientId: _desktopClientId,
+        clientSecret: _desktopClientSecret,
+        refreshToken: refreshToken,
+      );
+      tokenReq.write(_encodeFormBody(tokenParams));
       final tokenRes = await tokenReq.close().timeout(
         const Duration(seconds: 15),
       );
@@ -593,19 +691,6 @@ class GoogleAuthService {
     }
     var account =
         _googleSignIn.currentUser ?? await _googleSignIn.signInSilently();
-    if (account == null) {
-      // Fallback ke sesi dengan scope drive.file jika pengguna sebelumnya login sebelum scope drive.readonly ditambahkan
-      try {
-        final fallbackSignIn = GoogleSignIn(
-          scopes: const [
-            'email',
-            'profile',
-            GoogleDriveBackupPolicy.allowedScopeDriveFile,
-          ],
-        );
-        account = await fallbackSignIn.signInSilently();
-      } catch (_) {}
-    }
     if (account == null && interactiveIfNeeded) {
       final savedEmail = await BlokBackupScheduler.instance.getGoogleAccount();
       if (savedEmail.isNotEmpty) {

@@ -71,13 +71,8 @@ class _GoogleDrivePickerDialogState extends State<GoogleDrivePickerDialog>
 
       // Jika ada akun terhubung atau ada mock test, muat berkas
       if (_currentAccount.isNotEmpty || GoogleDriveService.hasMockItems) {
-        final folderLink = await BlokBackupScheduler.instance
-            .getGoogleDriveFolderLink();
-        final folderId =
-            customFolderId ??
-            GoogleDriveBackupPolicy.extractFolderId(folderLink);
         final files = await GoogleDriveService.instance.listDkhpFiles(
-          folderId: folderId,
+          folderId: customFolderId,
         );
         if (mounted) {
           setState(() {

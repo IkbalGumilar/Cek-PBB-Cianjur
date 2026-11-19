@@ -2,10 +2,9 @@
 ///
 /// Prinsip Keamanan & Privasi (Least Privilege):
 /// 1. Aplikasi DILARANG KERAS meminta cakupan tulis penuh `https://www.googleapis.com/auth/drive`.
-/// 2. Aplikasi HANYA diizinkan menggunakan scope terbatas:
-///    - `https://www.googleapis.com/auth/drive.appdata` (Application Data folder terisolasi),
-///    - `https://www.googleapis.com/auth/drive.file` (Akses tulis/kelola khusus berkas/folder yang dibuat oleh aplikasi ini), dan
-///    - `https://www.googleapis.com/auth/drive.readonly` (Akses baca-saja untuk menemukan berkas paket `.dkhp`/`.dat` yang dibagikan).
+/// 2. Aplikasi HANYA diizinkan menggunakan scope non-sensitif terbatas:
+///    - `https://www.googleapis.com/auth/drive.appdata` (Application Data folder terisolasi), dan
+///    - `https://www.googleapis.com/auth/drive.file` (Akses baca/tulis khusus berkas & folder yang dibuat oleh aplikasi ini).
 /// 3. Folder khusus aplikasi di Google Drive dinamai [dedicatedFolderName] (`Cek PBB Cianjur`).
 /// 4. Aplikasi DILARANG KERAS memodifikasi atau menghapus berkas dan folder pribadi lain milik pengguna di Google Drive.
 /// 5. Kebijakan retensi Google Drive selaras dengan penyimpanan lokal: maksimal [maxCloudBackups] = 3 berkas cadangan terbaru.
@@ -18,23 +17,21 @@ class GoogleDriveBackupPolicy {
   /// ID folder khusus AppData bawaan Google Drive (hidden application data).
   static const String appDataFolderId = 'appDataFolder';
 
-  /// Scope Google Drive yang diizinkan (Least-Privilege).
+  /// Scope Google Drive yang diizinkan (Least-Privilege / Non-Sensitive).
   static const String allowedScopeAppData =
       'https://www.googleapis.com/auth/drive.appdata';
   static const String allowedScopeDriveFile =
       'https://www.googleapis.com/auth/drive.file';
-  static const String allowedScopeDriveReadonly =
-      'https://www.googleapis.com/auth/drive.readonly';
 
   static const List<String> allowedScopes = [
     allowedScopeAppData,
     allowedScopeDriveFile,
-    allowedScopeDriveReadonly,
   ];
 
-  /// Scope terlarang yang dilarang digunakan karena memberikan akses tulis penuh ke seluruh Google Drive pengguna.
+  /// Scope terlarang (Restricted) yang memberikan akses luas ke seluruh Google Drive pengguna.
   static const List<String> forbiddenScopes = [
     'https://www.googleapis.com/auth/drive',
+    'https://www.googleapis.com/auth/drive.readonly',
     'https://www.googleapis.com/auth/drive.metadata',
     'https://www.googleapis.com/auth/drive.metadata.readonly',
   ];

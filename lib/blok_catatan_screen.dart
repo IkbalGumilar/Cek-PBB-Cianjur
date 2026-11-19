@@ -14,7 +14,6 @@ import 'blok_data_store.dart';
 import 'blok_record.dart';
 import 'blok_report_exporter.dart';
 import 'blok_report_pdf.dart';
-import 'blok_sync_service.dart';
 import 'dhkp/dhkp_nop_kalkulator_dialog.dart';
 import 'dhkp/dhkp_target_pacing_dialog.dart';
 import 'calculator/pbb_calculator_models.dart';
@@ -537,12 +536,6 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
       }
       final newRecord = record.copyWith(catatan: newCatatan);
       await BlokDataStore.instance.upsert(newRecord);
-      unawaited(
-        BlokSyncService.instance.recordChange(
-          record: newRecord,
-          catatan: newCatatan,
-        ),
-      );
       await _loadRecords();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -574,12 +567,6 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
       onCekTagihan: () => _bukaTagihan(record),
       onRecordUpdated: (updated) async {
         await BlokDataStore.instance.upsert(updated);
-        unawaited(
-          BlokSyncService.instance.recordChange(
-            record: updated,
-            catatan: updated.catatan,
-          ),
-        );
         await _loadRecords();
       },
     );
@@ -602,7 +589,6 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
         alamatWp: res.alamatWp,
       );
       await BlokDataStore.instance.upsert(updatedRecord);
-      unawaited(BlokSyncService.instance.recordChange(record: updatedRecord));
       await _loadRecords();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1262,13 +1248,6 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
 
       final updatedRecord = record.copyWith(namaFoto: fileName);
       await BlokDataStore.instance.upsert(updatedRecord);
-      unawaited(
-        BlokSyncService.instance.recordChange(
-          record: updatedRecord,
-          namaFoto: fileName,
-          sourcePhotoFile: targetFile,
-        ),
-      );
       await _loadRecords();
 
       if (mounted) {
@@ -1308,9 +1287,6 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
       }
       final updated = record.copyWith(namaFoto: '');
       await BlokDataStore.instance.upsert(updated);
-      unawaited(
-        BlokSyncService.instance.recordChange(record: updated, namaFoto: ''),
-      );
       await _loadRecords();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

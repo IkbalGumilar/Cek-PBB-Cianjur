@@ -1,11 +1,18 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'blok_data_store.dart';
 import 'cianjur_wilayah_data.dart';
+import 'cloud_sync/google_account_sync_service.dart';
+import 'cloud_sync/google_drive_service.dart';
+import 'dkhp_package_helper.dart';
 import 'file_importer.dart';
+import 'google_auth_service.dart';
 import 'main_shell.dart';
 import 'nop_helper.dart';
 import 'services/location_service.dart';
@@ -56,7 +63,16 @@ class _StartupSetupScreenState extends State<StartupSetupScreen>
 
   File? _pickedDhkpFile;
   bool _saving = false;
+  bool _googleSigningIn = false;
+  String? _googleStatusText;
   String? _statusMessage;
+
+  GoogleAuthUser? _signedInGoogleUser;
+  GoogleDriveItem? _cloudBackupCandidate;
+  File? _downloadedCloudBackupFile;
+  String? _cloudBackupFingerprint;
+  String? _cloudBackupWilayahLabel;
+  String? _cloudBackupMasterKey;
 
   @override
   void initState() {
@@ -136,6 +152,9 @@ class _StartupSetupScreenState extends State<StartupSetupScreen>
 
   @override
   void dispose() {
+    if (_googleSigningIn) {
+      unawaited(GoogleAuthService.instance.cancelPendingDesktopSignIn());
+    }
     _pageController.dispose();
     _pulseController.dispose();
     _desaNameController.dispose();
@@ -264,7 +283,366 @@ class _StartupSetupScreenState extends State<StartupSetupScreen>
     }
   }
 
+  Future<void> _handleGoogleSignInRestore() async {
+    if (_googleSigningIn) return;
+    setState(() {
+      _googleSigningIn = true;
+      _googleStatusText = 'Menghubungkan akun Google...';
+    });
+
+    try {
+      final user = await GoogleAuthService.instance.signIn();
+      if (!mounted) return;
+      if (user == null) {
+        setState(() {
+          _googleSigningIn = false;
+          _googleStatusText = null;
+        });
+        return;
+      }
+
+      setState(() {
+        _signedInGoogleUser = user;
+        _googleStatusText = 'Menyinkronkan tema & kunci cadangan...';
+      });
+      await GoogleAccountSyncService.instance.syncAllAfterSignIn();
+      final masterKey = await GoogleAccountSyncService.instance
+          .getOrCreateBackupMasterKey(allowCloudSync: false);
+
+      if (!mounted) return;
+      setState(() {
+        _cloudBackupMasterKey = masterKey;
+        _googleStatusText = 'Memeriksa cadangan DHKP di Google Drive...';
+      });
+
+      GoogleDriveItem? latestBackup;
+      File? downloadedFile;
+      String? backupFp;
+      String? backupWilayah;
+
+      try {
+        final mainFolderId = await GoogleDriveService.instance
+            .ensureDedicatedFolder();
+        if (mainFolderId != null && mainFolderId.isNotEmpty) {
+          final backupFolderId = await GoogleDriveService.instance
+              .ensureBackupSubfolder(parentFolderId: mainFolderId);
+          final backupItems = await GoogleDriveService.instance.listDkhpFiles(
+            folderId: backupFolderId ?? mainFolderId,
+          );
+          final dkhpFiles = backupItems
+              .where(
+                (i) =>
+                    !i.isFolder &&
+                    (i.name.toLowerCase().endsWith('.dkhp') ||
+                        i.name.toLowerCase().endsWith('.dat')),
+              )
+              .toList();
+          if (dkhpFiles.isNotEmpty) {
+            latestBackup = dkhpFiles.first;
+          } else if (backupFolderId != null && backupFolderId != mainFolderId) {
+            final rootItems = await GoogleDriveService.instance.listDkhpFiles(
+              folderId: mainFolderId,
+            );
+            final rootDkhp = rootItems
+                .where(
+                  (i) =>
+                      !i.isFolder &&
+                      (i.name.toLowerCase().endsWith('.dkhp') ||
+                          i.name.toLowerCase().endsWith('.dat')),
+                )
+                .toList();
+            if (rootDkhp.isNotEmpty) {
+              latestBackup = rootDkhp.first;
+            }
+          }
+
+          if (latestBackup != null) {
+            downloadedFile = await GoogleDriveService.instance.downloadFile(
+              fileId: latestBackup.id,
+              fileName: latestBackup.name,
+            );
+            if (downloadedFile.existsSync()) {
+              final manifest =
+                  await DhkpPackageHelper.readBackupManifest(
+                    downloadedFile.path,
+                    password: masterKey,
+                  ) ??
+                  (masterKey != null
+                      ? await DhkpPackageHelper.readBackupManifest(
+                          downloadedFile.path,
+                        )
+                      : null);
+              backupFp = (manifest?['dhkpFingerprint'] as String?)?.trim();
+              final desa = (manifest?['desaName'] as String?)?.trim() ?? '';
+              final kec = (manifest?['kecamatanName'] as String?)?.trim() ?? '';
+              if (desa.isNotEmpty || kec.isNotEmpty) {
+                backupWilayah = [
+                  if (desa.isNotEmpty) desa,
+                  if (kec.isNotEmpty) 'Kec. $kec',
+                ].join(' • ');
+              }
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('Startup Drive backup check error: $e');
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _googleSigningIn = false;
+        _googleStatusText = null;
+        _cloudBackupCandidate = latestBackup;
+        _downloadedCloudBackupFile = downloadedFile;
+        _cloudBackupFingerprint = backupFp;
+        _cloudBackupWilayahLabel = backupWilayah;
+      });
+
+      LocationService.instance.requestAllAppPermissions().ignore();
+
+      if (latestBackup != null) {
+        // Jangan langsung restore: arahkan ke Langkah 3 agar pengguna dapat
+        // memilih unggah DHKP baru atau lewati untuk memuat cadangan seutuhnya.
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Akun Google (${user.email}) terhubung & cadangan ditemukan. '
+              'Unggah DHKP baru atau lewati untuk memulihkan cadangan.',
+            ),
+          ),
+        );
+        _goToStep(2);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Akun Google (${user.email}) terhubung. Tema & pengaturan disinkronkan.',
+            ),
+          ),
+        );
+        _goToStep(1);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _googleSigningIn = false;
+        _googleStatusText = null;
+      });
+      final cleanErr = e.toString().replaceFirst('Exception: ', '');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Gagal masuk akun Google: $cleanErr'),
+          backgroundColor: Colors.red[800],
+        ),
+      );
+    }
+  }
+
+  /// Konfirmasi 2 tahap ketika pengguna mengunggah DHKP baru yang berbeda wilayah/data
+  /// dari cadangan Google Drive sebelumnya:
+  /// - Setuju -> mengembalikan `true` (lanjut pakai DHKP baru).
+  /// - Tidak Setuju -> konfirmasi ulang apakah ingin membatalkan proses unggah.
+  ///   - Ya, Batalkan -> mengembalikan `false` (proses unggah dibatalkan).
+  ///   - Kembali -> kembali ke dialog konfirmasi pertama.
+  Future<bool> _confirmNewDhkpOverride(String newFileName) async {
+    while (mounted) {
+      if (!mounted) return false;
+      final agreeNew = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: Colors.orange),
+              SizedBox(width: 8),
+              Expanded(child: Text('Perubahan Data DHKP')),
+            ],
+          ),
+          content: Text(
+            'Berkas DHKP baru ("$newFileName") memiliki data/wilayah yang berbeda '
+            'dari cadangan sebelumnya di akun Google Anda'
+            '${_cloudBackupWilayahLabel != null ? ' ($_cloudBackupWilayahLabel)' : ''}.\n\n'
+            'Apakah Anda setuju menggunakan data DHKP baru ini?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Tidak Setuju'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('Setuju, Gunakan Data Baru'),
+            ),
+          ],
+        ),
+      );
+
+      if (agreeNew == true) return true;
+      if (!mounted) return false;
+
+      final confirmCancel = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Batalkan Proses Unggah?'),
+          content: const Text(
+            'Anda akan membatalkan proses unggah DHKP baru ini. '
+            'Jika memilih Ya, proses unggah akan dibatalkan.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Kembali'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: Colors.red),
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('Ya, Batalkan'),
+            ),
+          ],
+        ),
+      );
+
+      if (confirmCancel == true) {
+        return false;
+      }
+    }
+    return false;
+  }
+
+  /// Memulihkan data cadangan Google Drive seutuhnya saat pengguna memilih
+  /// melewati unggah DHKP baru di Langkah 3.
+  Future<void> _restoreCloudBackupAndProceed() async {
+    final backup = _cloudBackupCandidate;
+    if (backup == null) {
+      await _saveAndProceed();
+      return;
+    }
+
+    setState(() {
+      _saving = true;
+      _statusMessage = 'Memulihkan cadangan "${backup.name}" seutuhnya...';
+    });
+
+    try {
+      File? file = _downloadedCloudBackupFile;
+      if (file == null || !file.existsSync()) {
+        file = await GoogleDriveService.instance.downloadFile(
+          fileId: backup.id,
+          fileName: backup.name,
+        );
+      }
+
+      if (!file.existsSync()) {
+        throw Exception('Berkas cadangan Google Drive tidak dapat diunduh.');
+      }
+
+      final masterKey = _cloudBackupMasterKey;
+      int restoredCount = 0;
+      if (masterKey != null && masterKey.isNotEmpty) {
+        try {
+          restoredCount = await BlokDataStore.instance.importCsv(
+            file.path,
+            password: masterKey,
+            requireBaseDhkp: false,
+          );
+        } on DkhpPasswordException {
+          restoredCount = await BlokDataStore.instance.importCsv(
+            file.path,
+            requireBaseDhkp: false,
+          );
+        }
+      } else {
+        restoredCount = await BlokDataStore.instance.importCsv(
+          file.path,
+          requireBaseDhkp: false,
+        );
+      }
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_prefKecCodeKey, activeKecamatanCode);
+      await prefs.setString(_prefKelCodeKey, activeKelurahanCode);
+      await prefs.setString(_prefDesaNameKey, activeDesaName);
+      await prefs.setString(_prefKecNameKey, activeKecamatanName);
+      await prefs.setBool(_prefSetupKey, true);
+
+      if (!mounted) return;
+      final greeting = _signedInGoogleUser?.displayName.isNotEmpty == true
+          ? 'Selamat datang kembali, ${_signedInGoogleUser!.displayName}! '
+          : '';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '$greeting$restoredCount data DHKP & kondisi cadangan berhasil dipulihkan.',
+          ),
+          backgroundColor: Colors.green[800],
+        ),
+      );
+      Navigator.pushReplacement(
+        context,
+        PageRouteBuilder<void>(
+          transitionDuration: const Duration(milliseconds: 500),
+          pageBuilder: (_, _, _) => MainShell(
+            themeController: widget.themeController ?? ThemeController(),
+          ),
+          transitionsBuilder: (_, animation, _, child) =>
+              FadeTransition(opacity: animation, child: child),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _saving = false;
+        _statusMessage = null;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Gagal memulihkan cadangan Google Drive: $e'),
+          backgroundColor: Colors.red[800],
+        ),
+      );
+    }
+  }
+
   Future<void> _saveAndProceed() async {
+    // Jika ada cadangan Google Drive dan pengguna memilih unggah DHKP baru,
+    // periksa apakah berkas DHKP baru berbeda dengan cadangan sebelumnya.
+    if (_cloudBackupCandidate != null && _pickedDhkpFile != null) {
+      final newPath = _pickedDhkpFile!.path;
+      final newFileName = _pickedDhkpFile!.uri.pathSegments.last;
+      bool isDifferentFromCloud = true;
+      try {
+        final newManifest = await DhkpPackageHelper.readBackupManifest(newPath);
+        final newFp = (newManifest?['dhkpFingerprint'] as String?)?.trim();
+        if (newFp != null &&
+            newFp.isNotEmpty &&
+            _cloudBackupFingerprint != null &&
+            _cloudBackupFingerprint!.isNotEmpty &&
+            newFp == _cloudBackupFingerprint) {
+          isDifferentFromCloud = false;
+        }
+      } catch (_) {}
+
+      if (isDifferentFromCloud && mounted) {
+        final proceedNew = await _confirmNewDhkpOverride(newFileName);
+        if (!proceedNew) {
+          if (!mounted) return;
+          setState(() {
+            _pickedDhkpFile = null;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Proses unggah DHKP baru dibatalkan.'),
+            ),
+          );
+          return;
+        }
+      }
+    } else if (_cloudBackupCandidate != null && _pickedDhkpFile == null) {
+      await _restoreCloudBackupAndProceed();
+      return;
+    }
+
     setState(() {
       _saving = true;
       _statusMessage = 'Menyiapkan wilayah kerja & basis data...';
@@ -273,11 +651,15 @@ class _StartupSetupScreenState extends State<StartupSetupScreen>
     try {
       final prefs = await SharedPreferences.getInstance();
 
-      final kecCode = _selectedKecCode ?? '010';
+      final kecCode = _selectedKecCode ?? activeKecamatanCode;
       final kec = findKecamatanByCode(kecCode);
       final kecName = kec?.name ?? 'Kec. $kecCode';
-      final desaName = _desaNameController.text.trim().toUpperCase();
-      final kelCode = _kelCodeController.text.trim().padLeft(3, '0');
+      final desaName = _desaNameController.text.trim().isNotEmpty
+          ? _desaNameController.text.trim().toUpperCase()
+          : activeDesaName;
+      final kelCode = _kelCodeController.text.trim().isNotEmpty
+          ? _kelCodeController.text.trim().padLeft(3, '0')
+          : activeKelurahanCode;
 
       setActiveWilayah(
         kecCode: kecCode,
@@ -301,6 +683,11 @@ class _StartupSetupScreenState extends State<StartupSetupScreen>
         });
         try {
           await FileImporter.importFrom(_pickedDhkpFile!.path);
+          // Perbarui preferensi wilayah sesuai manifest DHKP baru (bila berubah)
+          await prefs.setString(_prefKecCodeKey, activeKecamatanCode);
+          await prefs.setString(_prefKelCodeKey, activeKelurahanCode);
+          await prefs.setString(_prefDesaNameKey, activeDesaName);
+          await prefs.setString(_prefKecNameKey, activeKecamatanName);
         } catch (e) {
           debugPrint('FileImporter error on startup: $e');
         }
@@ -676,19 +1063,77 @@ class _StartupSetupScreenState extends State<StartupSetupScreen>
                 ),
               ),
 
-              const SizedBox(height: 32),
+              const SizedBox(height: 28),
 
-              // Tombol Mulai Wizard
-              FilledButton.icon(
+              // Tombol Masuk Akun Google (Otomatis sinkron tema & pulihkan cadangan jika ada)
+              if (GoogleAuthService.instance.isSupportedPlatform) ...[
+                FilledButton.icon(
+                  key: const ValueKey('btn_google_signin_wizard'),
+                  onPressed: _googleSigningIn
+                      ? null
+                      : _handleGoogleSignInRestore,
+                  icon: _googleSigningIn
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const FaIcon(FontAwesomeIcons.google, size: 17),
+                  label: Text(
+                    _googleSigningIn
+                        ? (_googleStatusText ?? 'Menghubungkan akun Google...')
+                        : 'Masuk dengan Akun Google',
+                  ),
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size(double.infinity, 52),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Otomatis memulihkan tema, kunci cadangan, dan data DHKP dari Google Drive jika tersedia.',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 14),
+              ],
+
+              // Tombol Lewati / Mulai Wizard Manual
+              OutlinedButton.icon(
                 key: const ValueKey('btn_mulai_wizard'),
-                onPressed: () {
-                  LocationService.instance.requestAllAppPermissions().ignore();
-                  _goToStep(1);
-                },
-                icon: const Icon(Icons.arrow_forward_rounded),
-                label: const Text('Mulai Konfigurasi Wilayah Kerja'),
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size(double.infinity, 52),
+                onPressed: _googleSigningIn
+                    ? () {
+                        unawaited(
+                          GoogleAuthService.instance
+                              .cancelPendingDesktopSignIn(),
+                        );
+                        setState(() {
+                          _googleSigningIn = false;
+                          _googleStatusText = null;
+                        });
+                      }
+                    : () {
+                        LocationService.instance
+                            .requestAllAppPermissions()
+                            .ignore();
+                        _goToStep(1);
+                      },
+                icon: Icon(
+                  _googleSigningIn
+                      ? Icons.close_rounded
+                      : Icons.arrow_forward_rounded,
+                ),
+                label: Text(
+                  _googleSigningIn
+                      ? 'Batalkan Login Google'
+                      : 'Lewati & Konfigurasi Manual',
+                ),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 50),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14),
                   ),
@@ -1209,10 +1654,58 @@ class _StartupSetupScreenState extends State<StartupSetupScreen>
               _buildSectionHeader(
                 context,
                 icon: Icons.table_chart_rounded,
-                title: '2. Data Master DHKP (Ketetapan SPPT)',
-                subtitle:
-                    'Muat berkas DHKP resmi (.xlsx, .csv, atau .dat). Bagian ini opsional — dapat dilewati dan diimpor nanti.',
+                title: _cloudBackupCandidate != null
+                    ? '2. Pilih DHKP Baru atau Cadangan Google'
+                    : '2. Data Master DHKP (Ketetapan SPPT)',
+                subtitle: _cloudBackupCandidate != null
+                    ? 'Cadangan ditemukan di Google Drive. Unggah DHKP baru jika wilayah berbeda, atau lewati untuk memuat cadangan seutuhnya.'
+                    : 'Muat berkas DHKP resmi (.xlsx, .csv, atau .dat). Bagian ini opsional — dapat dilewati dan diimpor nanti.',
               ),
+              if (_cloudBackupCandidate != null) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.green.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: Colors.green.withValues(alpha: 0.35),
+                    ),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(
+                        Icons.cloud_done_outlined,
+                        color: Colors.green,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Cadangan Google Drive Tersedia',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                                color: Colors.green.shade800,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              '${_cloudBackupCandidate!.name}'
+                              '${_cloudBackupWilayahLabel != null ? ' ($_cloudBackupWilayahLabel)' : ''}',
+                              style: const TextStyle(fontSize: 11),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               const SizedBox(height: 16),
 
               Card(
@@ -1408,8 +1901,19 @@ class _StartupSetupScreenState extends State<StartupSetupScreen>
                       child: FilledButton.icon(
                         key: const ValueKey('btn_simpan_selesai'),
                         onPressed: _saving ? null : _saveAndProceed,
-                        icon: const Icon(Icons.rocket_launch_rounded),
-                        label: const Text('Simpan & Mulai Gunakan Aplikasi'),
+                        icon: Icon(
+                          _cloudBackupCandidate != null &&
+                                  _pickedDhkpFile == null
+                              ? Icons.cloud_download_rounded
+                              : Icons.rocket_launch_rounded,
+                        ),
+                        label: Text(
+                          _cloudBackupCandidate != null
+                              ? (_pickedDhkpFile != null
+                                    ? 'Gunakan DHKP Baru'
+                                    : 'Gunakan Data Cadangan')
+                              : 'Simpan & Mulai Gunakan Aplikasi',
+                        ),
                         style: FilledButton.styleFrom(
                           minimumSize: const Size(0, 52),
                           shape: RoundedRectangleBorder(
@@ -1423,9 +1927,21 @@ class _StartupSetupScreenState extends State<StartupSetupScreen>
                 const SizedBox(height: 12),
                 OutlinedButton.icon(
                   key: const ValueKey('btn_lewati_dhkp'),
-                  onPressed: _saving ? null : _saveAndProceed,
-                  icon: const Icon(Icons.skip_next_rounded),
-                  label: const Text('Lewati Langkah Ini & Selesaikan'),
+                  onPressed: _saving
+                      ? null
+                      : (_cloudBackupCandidate != null
+                            ? _restoreCloudBackupAndProceed
+                            : _saveAndProceed),
+                  icon: Icon(
+                    _cloudBackupCandidate != null
+                        ? Icons.cloud_download_outlined
+                        : Icons.skip_next_rounded,
+                  ),
+                  label: Text(
+                    _cloudBackupCandidate != null
+                        ? 'Lewati Unggah & Muat Data Cadangan'
+                        : 'Lewati Langkah Ini & Selesaikan',
+                  ),
                   style: OutlinedButton.styleFrom(
                     minimumSize: const Size(double.infinity, 46),
                     shape: RoundedRectangleBorder(

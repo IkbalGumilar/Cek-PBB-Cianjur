@@ -73,6 +73,19 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
 
   // Default: Data = Jumlah Persentase, Diagram = Batang, Desa = Semua Dusun
   DhkpGrafikTab _activeTab = DhkpGrafikTab.persentase;
+
+  /// Warna aksen monokromatik utama yang mengikuti warna tema pilihan pengguna.
+  MaterialColor get _themeAccent =>
+      buildThemeMaterialColor(Theme.of(context).colorScheme.primary);
+
+  MaterialColor get _themeSecondaryAccent =>
+      buildThemeMaterialColor(Theme.of(context).colorScheme.secondary);
+
+  MaterialColor get _themeTertiaryAccent =>
+      buildThemeMaterialColor(Theme.of(context).colorScheme.tertiary);
+
+  List<Color> get _themeSlicePalette =>
+      buildThemeSlicePalette(Theme.of(context).colorScheme);
   ChartStyle _selectedStyle = ChartStyle.batang;
   GrafikSortMode _sortMode = GrafikSortMode.wilayah;
   bool _seDesaMode = false;
@@ -1613,7 +1626,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
                     totalCount: totalNop,
                     achievedPct: lunasNominalPct,
                     objPct: lunasNopPct,
-                    accentColor: _activeTab.accentColor,
+                    accentColor: _themeAccent,
                     previousYearRecords: prevYearRecords,
                     previousYearLabel: prevYearLabel,
                   );
@@ -1632,6 +1645,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
                     previousYearRecords: prevYearRecords,
                     previousYearLabel: prevYearLabel,
                     groups: overviewGroups,
+                    colorScheme: colorScheme,
                   );
 
                   return buildDhkpKpiWithGaugeOverview(
@@ -1815,7 +1829,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
         decoration: BoxDecoration(
           gradient: isSelected
               ? LinearGradient(
-                  colors: [tab.accentColor.shade600, tab.accentColor.shade800],
+                  colors: [_themeAccent.shade600, _themeAccent.shade800],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 )
@@ -1825,7 +1839,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
           boxShadow: isSelected
               ? [
                   BoxShadow(
-                    color: tab.accentColor.withValues(alpha: 0.35),
+                    color: _themeAccent.withValues(alpha: 0.35),
                     blurRadius: 6,
                     offset: const Offset(0, 2),
                   ),
@@ -1841,7 +1855,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
               size: 16,
               color: isSelected
                   ? Colors.white
-                  : (isDark ? Colors.grey.shade300 : tab.accentColor.shade700),
+                  : (isDark ? Colors.grey.shade300 : _themeAccent.shade700),
             ),
             const SizedBox(width: 6),
             Flexible(
@@ -2091,7 +2105,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
     bool isDark,
     ColorScheme colorScheme,
   ) {
-    final accent = _activeTab.accentColor;
+    final accent = _themeAccent;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
@@ -2285,7 +2299,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
     bool isDark,
     ColorScheme colorScheme,
   ) {
-    final accent = _activeTab.accentColor;
+    final accent = _themeAccent;
 
     return Wrap(
       spacing: 8,
@@ -2578,7 +2592,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
         .firstOrNull;
     if (match == null) return const SizedBox.shrink();
 
-    final accent = _activeTab.accentColor;
+    final accent = _themeAccent;
     final isDusunItem = match.label.startsWith('Dusun ');
     final dusunNum = isDusunItem
         ? int.tryParse(match.label.replaceFirst('Dusun ', ''))
@@ -2798,20 +2812,20 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
               _buildMiniDetailStat(
                 'Sudah Bayar',
                 '${formatRupiah(match.lunasNominal)} (${match.lunasNop} objek)',
-                Colors.teal,
+                _themeAccent,
                 isDark,
               ),
               if (_activeTab != DhkpGrafikTab.trenBulanan) ...[
                 _buildMiniDetailStat(
                   'Belum Bayar',
                   '${formatRupiah(match.belumBayarNominal)} (${match.belumBayarNop} objek)',
-                  Colors.orange,
+                  _themeTertiaryAccent,
                   isDark,
                 ),
                 _buildMiniDetailStat(
                   'Total Ketetapan',
                   '${formatRupiah(match.totalNominal)} (${match.totalNop} objek)',
-                  Colors.indigo,
+                  _themeSecondaryAccent,
                   isDark,
                 ),
               ],
@@ -3117,7 +3131,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
             title: 'Diagram Batang: Pendapatan Masuk (Rp)',
             subtitle: 'Ketuk batang untuk melihat rincian wilayah',
             badgeText: '${groups.length} Wilayah',
-            accentColor: Colors.teal,
+            accentColor: _themeAccent,
             isDark: isDark,
             groups: groups,
             child: renderDhkpColumnBars(
@@ -3131,8 +3145,8 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
               animatedTopLabelBuilder: (g, t) =>
                   'Rp ${formatShortRupiah(unityLerp(0.0, g.lunasNominal.toDouble(), t).round())}',
               subLabelExtractor: (g) => '${g.lunasPct.toStringAsFixed(0)}%',
-              color1: Colors.teal.shade400,
-              color2: Colors.teal.shade800,
+              color1: _themeAccent.shade400,
+              color2: _themeAccent.shade800,
               isDark: isDark,
               selectedItemLabel: _selectedItemLabel,
               animationValue: _animation.value,
@@ -3150,7 +3164,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
             title: 'Diagram Mendatar: Peringkat Pendapatan (Rp)',
             subtitle: 'Perbandingan uang masuk antar wilayah',
             badgeText: _sortMode.label,
-            accentColor: Colors.teal,
+            accentColor: _themeAccent,
             isDark: isDark,
             groups: groups,
             child: renderDhkpHorizontalBars(
@@ -3163,8 +3177,8 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
               animatedLabelRightBuilder: (g, t) =>
                   'Rp ${formatShortRupiah(unityLerp(0.0, g.lunasNominal.toDouble(), t).round())}',
               subRight: (g) => '${g.lunasPct.toStringAsFixed(1)}% dari target',
-              color1: Colors.teal.shade400,
-              color2: Colors.teal.shade700,
+              color1: _themeAccent.shade400,
+              color2: _themeAccent.shade700,
               isDark: isDark,
               selectedItemLabel: _selectedItemLabel,
               animationValue: _animation.value,
@@ -3182,7 +3196,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
             title: 'Diagram Lingkaran: Porsi Pendapatan Masuk',
             subtitle: 'Perbandingan sumbangan penerimaan tiap wilayah',
             badgeText: 'Total Rp ${formatShortRupiah(totalPendapatanMasuk)}',
-            accentColor: Colors.teal,
+            accentColor: _themeAccent,
             isDark: isDark,
             groups: groups,
             child: renderDhkpPieChart(
@@ -3190,12 +3204,13 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
                 groups,
                 (g) => g.lunasNominal.toDouble(),
                 totalPendapatanMasuk.toDouble(),
+                palette: _themeSlicePalette,
               ),
               centerLabel: 'Rp ${formatShortRupiah(totalPendapatanMasuk)}',
               animatedCenterLabelBuilder: (t) =>
                   'Rp ${formatShortRupiah(unityLerp(0.0, totalPendapatanMasuk.toDouble(), t).round())}',
               centerSub: 'TERKUMPUL',
-              centerColor: Colors.teal,
+              centerColor: _themeAccent,
               isDark: isDark,
               selectedItemLabel: _selectedItemLabel,
               animationValue: _animation.value,
@@ -3211,7 +3226,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
           title: 'Tabel Rincian Pendapatan per Wilayah',
           subtitle: 'Daftar angka target dan uang yang sudah masuk',
           badgeText: '${groups.length} Baris',
-          accentColor: Colors.teal,
+          accentColor: _themeAccent,
           isDark: isDark,
           groups: groups,
           child: buildDhkpDetailTableContent(
@@ -3225,7 +3240,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
             col4Val: (g) => '${g.lunasPct.toStringAsFixed(1)}%',
             isDark: isDark,
             selectedItemLabel: _selectedItemLabel,
-            accentColor: _activeTab.accentColor,
+            accentColor: _themeAccent,
             onSelectLabel: _onSelectLabel,
           ),
         ),
@@ -3267,7 +3282,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
             title: 'Diagram Batang: Capaian Persentase (%)',
             subtitle: 'Skala capaian 0% sampai 100% per wilayah',
             badgeText: 'Rata-rata ${overallPct.toStringAsFixed(1)}%',
-            accentColor: Colors.green,
+            accentColor: _themeAccent,
             isDark: isDark,
             groups: groups,
             child: renderDhkpColumnBars(
@@ -3278,8 +3293,8 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
               animatedTopLabelBuilder: (g, t) =>
                   '${unityLerp(0.0, g.lunasPct, t).toStringAsFixed(1)}%',
               subLabelExtractor: (g) => '${g.lunasNop}/${g.totalNop}',
-              color1: Colors.green.shade400,
-              color2: Colors.green.shade700,
+              color1: _themeAccent.shade400,
+              color2: _themeAccent.shade700,
               isDark: isDark,
               selectedItemLabel: _selectedItemLabel,
               animationValue: _animation.value,
@@ -3297,7 +3312,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
             title: 'Diagram Mendatar: Capaian Persentase Wilayah',
             subtitle: 'Tingkat pencapaian pembayaran terhadap target 100%',
             badgeText: _sortMode.label,
-            accentColor: Colors.green,
+            accentColor: _themeAccent,
             isDark: isDark,
             groups: groups,
             child: renderDhkpHorizontalBars(
@@ -3308,8 +3323,8 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
               animatedLabelRightBuilder: (g, t) =>
                   '${unityLerp(0.0, g.lunasPct, t).toStringAsFixed(1)}%',
               subRight: (g) => '${g.lunasNop}/${g.totalNop} objek',
-              color1: Colors.green.shade400,
-              color2: Colors.green.shade700,
+              color1: _themeAccent.shade400,
+              color2: _themeAccent.shade700,
               isDark: isDark,
               selectedItemLabel: _selectedItemLabel,
               animationValue: _animation.value,
@@ -3328,14 +3343,14 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
             title: 'Diagram Lingkaran: Sudah Tercapai vs Sisa Target',
             subtitle: 'Perbandingan persentase lunas dan sisa yang belum masuk',
             badgeText: '${overallPct.toStringAsFixed(1)}% Lunas',
-            accentColor: Colors.green,
+            accentColor: _themeAccent,
             isDark: isDark,
             groups: groups,
             child: renderDhkpDonutTwoSlice(
               achievedPct: overallPct,
               achievedLabel: 'Sudah Lunas',
               remainingLabel: 'Sisa Target',
-              achievedColor: Colors.green.shade600,
+              achievedColor: _themeAccent.shade600,
               remainingColor: Colors.grey.shade400,
               centerLabel: '${overallPct.toStringAsFixed(1)}%',
               animatedCenterLabelBuilder: (animatedPct) =>
@@ -3356,7 +3371,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
           title: 'Tabel Rincian Persentase per Wilayah',
           subtitle: 'Perbandingan jumlah objek lunas dan persentase capaian',
           badgeText: '${groups.length} Baris',
-          accentColor: Colors.green,
+          accentColor: _themeAccent,
           isDark: isDark,
           groups: groups,
           child: buildDhkpDetailTableContent(
@@ -3370,7 +3385,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
             col4Val: (g) => '${g.lunasPct.toStringAsFixed(1)}%',
             isDark: isDark,
             selectedItemLabel: _selectedItemLabel,
-            accentColor: _activeTab.accentColor,
+            accentColor: _themeAccent,
             onSelectLabel: _onSelectLabel,
           ),
         ),
@@ -3413,7 +3428,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
             title: 'Diagram Batang: Tagihan Belum Bayar (Rp)',
             subtitle: 'Jumlah tagihan yang masih perlu ditagih per wilayah',
             badgeText: '${groups.length} Wilayah',
-            accentColor: Colors.orange,
+            accentColor: _themeAccent,
             isDark: isDark,
             groups: groups,
             child: renderDhkpColumnBars(
@@ -3427,8 +3442,8 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
               animatedTopLabelBuilder: (g, t) =>
                   'Rp ${formatShortRupiah(unityLerp(0.0, g.belumBayarNominal.toDouble(), t).round())}',
               subLabelExtractor: (g) => '${g.belumBayarNop} objek',
-              color1: Colors.orange.shade400,
-              color2: Colors.deepOrange.shade700,
+              color1: _themeAccent.shade400,
+              color2: _themeAccent.shade700,
               isDark: isDark,
               selectedItemLabel: _selectedItemLabel,
               animationValue: _animation.value,
@@ -3446,7 +3461,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
             title: 'Diagram Mendatar: Urutan Belum Bayar per Wilayah',
             subtitle: 'Wilayah dengan sisa tagihan belum lunas terbesar',
             badgeText: _sortMode.label,
-            accentColor: Colors.orange,
+            accentColor: _themeAccent,
             isDark: isDark,
             groups: groups,
             child: renderDhkpHorizontalBars(
@@ -3459,8 +3474,8 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
               animatedLabelRightBuilder: (g, t) =>
                   'Rp ${formatShortRupiah(unityLerp(0.0, g.belumBayarNominal.toDouble(), t).round())}',
               subRight: (g) => '${g.belumBayarNop} objek belum lunas',
-              color1: Colors.orange.shade400,
-              color2: Colors.deepOrange.shade600,
+              color1: _themeAccent.shade400,
+              color2: _themeAccent.shade600,
               isDark: isDark,
               selectedItemLabel: _selectedItemLabel,
               animationValue: _animation.value,
@@ -3478,7 +3493,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
             title: 'Diagram Lingkaran: Sebaran Belum Bayar',
             subtitle: 'Perbandingan sisa tagihan antar wilayah',
             badgeText: 'Total Rp ${formatShortRupiah(totalBelumBayarNominal)}',
-            accentColor: Colors.orange,
+            accentColor: _themeAccent,
             isDark: isDark,
             groups: groups,
             child: renderDhkpPieChart(
@@ -3486,12 +3501,13 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
                 groups,
                 (g) => g.belumBayarNominal.toDouble(),
                 totalBelumBayarNominal.toDouble(),
+                palette: _themeSlicePalette,
               ),
               centerLabel: 'Rp ${formatShortRupiah(totalBelumBayarNominal)}',
               animatedCenterLabelBuilder: (t) =>
                   'Rp ${formatShortRupiah(unityLerp(0.0, totalBelumBayarNominal.toDouble(), t).round())}',
               centerSub: 'BELUM BAYAR',
-              centerColor: Colors.orange,
+              centerColor: _themeAccent,
               isDark: isDark,
               selectedItemLabel: _selectedItemLabel,
               animationValue: _animation.value,
@@ -3507,7 +3523,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
           title: 'Tabel Rincian Belum Bayar per Wilayah',
           subtitle: 'Daftar jumlah objek dan nilai rupiah yang belum lunas',
           badgeText: '${groups.length} Baris',
-          accentColor: Colors.orange,
+          accentColor: _themeAccent,
           isDark: isDark,
           groups: groups,
           child: buildDhkpDetailTableContent(
@@ -3523,7 +3539,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
                 : '0%',
             isDark: isDark,
             selectedItemLabel: _selectedItemLabel,
-            accentColor: _activeTab.accentColor,
+            accentColor: _themeAccent,
             onSelectLabel: _onSelectLabel,
           ),
         ),
@@ -3566,7 +3582,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
             title: 'Diagram Batang: Jumlah Objek Sudah Bayar',
             subtitle: 'Banyaknya objek pajak yang sudah lunas per wilayah',
             badgeText: 'Total $totalSudahBayarCount Objek',
-            accentColor: Colors.blue,
+            accentColor: _themeAccent,
             isDark: isDark,
             groups: groups,
             child: renderDhkpColumnBars(
@@ -3580,8 +3596,8 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
                   '${unityLerp(0.0, g.lunasNop.toDouble(), t).round()} objek',
               subLabelExtractor: (g) =>
                   'Rp ${formatShortRupiah(g.lunasNominal)}',
-              color1: Colors.blue.shade400,
-              color2: Colors.blue.shade800,
+              color1: _themeAccent.shade400,
+              color2: _themeAccent.shade800,
               isDark: isDark,
               selectedItemLabel: _selectedItemLabel,
               animationValue: _animation.value,
@@ -3600,7 +3616,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
             subtitle:
                 'Urutan wilayah berdasarkan jumlah warga yang sudah bayar',
             badgeText: _sortMode.label,
-            accentColor: Colors.blue,
+            accentColor: _themeAccent,
             isDark: isDark,
             groups: groups,
             child: renderDhkpHorizontalBars(
@@ -3613,8 +3629,8 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
               animatedLabelRightBuilder: (g, t) =>
                   '${unityLerp(0.0, g.lunasNop.toDouble(), t).round()} objek',
               subRight: (g) => 'Rp ${formatShortRupiah(g.lunasNominal)}',
-              color1: Colors.blue.shade400,
-              color2: Colors.blue.shade700,
+              color1: _themeAccent.shade400,
+              color2: _themeAccent.shade700,
               isDark: isDark,
               selectedItemLabel: _selectedItemLabel,
               animationValue: _animation.value,
@@ -3632,7 +3648,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
             title: 'Diagram Lingkaran: Sebaran Objek Lunas',
             subtitle: 'Perbandingan jumlah wajib pajak yang telah membayar',
             badgeText: '$totalSudahBayarCount Objek',
-            accentColor: Colors.blue,
+            accentColor: _themeAccent,
             isDark: isDark,
             groups: groups,
             child: renderDhkpPieChart(
@@ -3640,12 +3656,13 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
                 groups,
                 (g) => g.lunasNop.toDouble(),
                 totalSudahBayarCount.toDouble(),
+                palette: _themeSlicePalette,
               ),
               centerLabel: '$totalSudahBayarCount',
               animatedCenterLabelBuilder: (t) =>
                   '${unityLerp(0.0, totalSudahBayarCount.toDouble(), t).round()}',
               centerSub: 'OBJEK LUNAS',
-              centerColor: Colors.blue,
+              centerColor: _themeAccent,
               isDark: isDark,
               selectedItemLabel: _selectedItemLabel,
               animationValue: _animation.value,
@@ -3661,7 +3678,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
           title: 'Tabel Rincian Sudah Bayar per Wilayah',
           subtitle: 'Rekapitulasi jumlah objek lunas dan uang terkumpul',
           badgeText: '${groups.length} Baris',
-          accentColor: Colors.blue,
+          accentColor: _themeAccent,
           isDark: isDark,
           groups: groups,
           child: buildDhkpDetailTableContent(
@@ -3675,7 +3692,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
             col4Val: (g) => 'Rp ${formatShortRupiah(g.lunasNominal)}',
             isDark: isDark,
             selectedItemLabel: _selectedItemLabel,
-            accentColor: _activeTab.accentColor,
+            accentColor: _themeAccent,
             onSelectLabel: _onSelectLabel,
           ),
         ),
@@ -3814,7 +3831,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
             title: cardTitle,
             subtitle: cardSubtitle,
             badgeText: cardBadge,
-            accentColor: Colors.purple,
+            accentColor: _themeAccent,
             isDark: isDark,
             groups: monthGroups,
             child: Column(
@@ -3841,7 +3858,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
                         _buildScopeChip(
                           label: 'Top $_maxCustomDesas Desa',
                           isSelected: _customCompareDesas.isEmpty,
-                          accent: Colors.purple,
+                          accent: _themeAccent,
                           isDark: isDark,
                           onTap: () {
                             setState(() => _customCompareDesas.clear());
@@ -3852,7 +3869,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
                               ? 'Pilih Desa (Maks. $_maxCustomDesas)'
                               : 'Desa Pilihan (${_customCompareDesas.length}/$_maxCustomDesas)',
                           isSelected: _customCompareDesas.isNotEmpty,
-                          accent: Colors.purple,
+                          accent: _themeAccent,
                           isDark: isDark,
                           leadingIcon: Icons.checklist_rounded,
                           onTap: () => _openSelectDesaDialog(
@@ -3894,7 +3911,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
             title: 'Diagram Mendatar: Rincian Bulanan (Jan - Des)',
             subtitle: 'Daftar penerimaan kas dari awal hingga akhir tahun',
             badgeText: '12 Bulan',
-            accentColor: Colors.purple,
+            accentColor: _themeAccent,
             isDark: isDark,
             groups: monthGroups,
             child: renderDhkpHorizontalBars(
@@ -3906,8 +3923,8 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
                   'Rp ${formatShortRupiah(unityLerp(0.0, g.lunasNominal.toDouble(), t).round())}',
               subRight: (g) =>
                   '${g.lunasNop} objek (${g.lunasPct.toStringAsFixed(1)}%)',
-              color1: Colors.purple.shade400,
-              color2: Colors.indigo.shade600,
+              color1: _themeAccent.shade400,
+              color2: _themeAccent.shade700,
               isDark: isDark,
               selectedItemLabel: _selectedItemLabel,
               animationValue: _animation.value,
@@ -3926,7 +3943,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
             title: 'Diagram Lingkaran: Porsi Penerimaan per Bulan',
             subtitle: 'Kontribusi tiap bulan terhadap total penerimaan tahunan',
             badgeText: 'Rp ${formatShortRupiah(totalDatedNominal)}',
-            accentColor: Colors.purple,
+            accentColor: _themeAccent,
             isDark: isDark,
             groups: monthGroups,
             child: renderDhkpPieChart(
@@ -3934,12 +3951,13 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
                 monthGroups.where((g) => g.lunasNominal > 0).toList(),
                 (g) => g.lunasNominal.toDouble(),
                 totalDatedNominal.toDouble(),
+                palette: _themeSlicePalette,
               ),
               centerLabel: 'Rp ${formatShortRupiah(totalDatedNominal)}',
               animatedCenterLabelBuilder: (t) =>
                   'Rp ${formatShortRupiah(unityLerp(0.0, totalDatedNominal.toDouble(), t).round())}',
               centerSub: 'TOTAL BULANAN',
-              centerColor: Colors.purple,
+              centerColor: _themeAccent,
               isDark: isDark,
               selectedItemLabel: _selectedItemLabel,
               animationValue: _animation.value,
@@ -3955,7 +3973,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
           title: 'Tabel Rincian Penerimaan Bulanan (Jan - Des)',
           subtitle: 'Rekapitulasi jumlah pembayaran dan nilai rupiah per bulan',
           badgeText: '12 Bulan',
-          accentColor: Colors.purple,
+          accentColor: _themeAccent,
           isDark: isDark,
           groups: monthGroups,
           child: buildDhkpDetailTableContent(
@@ -3969,7 +3987,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
             col4Val: (g) => '${g.lunasPct.toStringAsFixed(1)}%',
             isDark: isDark,
             selectedItemLabel: _selectedItemLabel,
-            accentColor: _activeTab.accentColor,
+            accentColor: _themeAccent,
             onSelectLabel: _onSelectLabel,
           ),
         ),
@@ -3986,7 +4004,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
     final years = scope.availableYears;
     final candidateYears = years.where((y) => y != _selectedTahun).toList();
     final suggestedYear = _suggestDefaultCompareYear(years);
-    const accent = Colors.purple;
+    final accent = _themeAccent;
 
     if (candidateYears.isEmpty || suggestedYear == null) {
       return Semantics(
@@ -4039,7 +4057,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
     final palette = DhkpGrafikAnalytics.trendSeriesPalette(isDark: isDark);
     final compareColor = palette.length > 1
         ? palette[1]
-        : (isDark ? Colors.tealAccent.shade200 : Colors.teal.shade700);
+        : (isDark ? _themeAccent.shade200 : _themeAccent.shade700);
 
     List<PopupMenuEntry<String>> buildMenuItems({required bool includeClear}) {
       return [

@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Cek Pbb App</string>
+	<string>Cek PBB Cianjur</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -24,8 +24,22 @@
 	<string>????</string>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Kamera digunakan untuk memindai NOP/QR pada lembar SPPT dan mengambil foto dokumentasi objek pajak.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Face ID digunakan untuk membuka kunci keamanan aplikasi Cek PBB Cianjur.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Lokasi digunakan untuk mendeteksi wilayah kerja otomatis dan menandai titik objek pajak pada peta.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Akses galeri digunakan untuk menyimpan gambar dokumentasi dan bukti pembayaran PBB.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Akses galeri digunakan untuk memilih foto dokumentasi objek pajak atau memindai NOP dari gambar.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -48,6 +62,8 @@
 		</dict>
 	</dict>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
+	<true/>
+	<key>UIFileSharingEnabled</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>

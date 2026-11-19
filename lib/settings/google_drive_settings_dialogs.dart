@@ -7,7 +7,6 @@ import '../google_auth_service.dart';
 import '../google_drive_backup_policy.dart';
 import '../google_drive_picker_dialog.dart';
 import '../legal_document_screen.dart';
-import '../shared_storage_link_service.dart';
 
 class GoogleAccountDialog extends StatefulWidget {
   final String initialEmail;
@@ -28,6 +27,14 @@ class GoogleAccountDialog extends StatefulWidget {
 class _GoogleAccountDialogState extends State<GoogleAccountDialog> {
   bool _loading = false;
   String? _errorMessage;
+
+  @override
+  void dispose() {
+    if (_loading) {
+      unawaited(GoogleAuthService.instance.cancelPendingDesktopSignIn());
+    }
+    super.dispose();
+  }
 
   Future<void> _handleGoogleSignIn() async {
     setState(() {
@@ -353,140 +360,6 @@ class _GoogleAccountDialogState extends State<GoogleAccountDialog> {
         TextButton(
           onPressed: () => Navigator.of(context).pop('cancel'),
           child: Text(hasInitial ? 'Tutup' : 'Batal'),
-        ),
-      ],
-    );
-  }
-}
-
-class GoogleFolderDialog extends StatefulWidget {
-  final String currentAccount;
-  final String initialLink;
-
-  const GoogleFolderDialog({
-    super.key,
-    required this.currentAccount,
-    required this.initialLink,
-  });
-
-  @override
-  State<GoogleFolderDialog> createState() => _GoogleFolderDialogState();
-}
-
-class _GoogleFolderDialogState extends State<GoogleFolderDialog> {
-  late final TextEditingController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = TextEditingController(text: widget.initialLink);
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final hasInitial = widget.initialLink.isNotEmpty;
-    return AlertDialog(
-      title: const Row(
-        children: [
-          Icon(Icons.folder_shared_outlined, color: Colors.blue),
-          SizedBox(width: 8),
-          Text('Folder Bersama'),
-        ],
-      ),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.blue.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
-              ),
-              child: const Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(Icons.info_outline, size: 20, color: Colors.blue),
-                  SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Syarat Hak Akses Folder',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12,
-                            color: Colors.blue,
-                          ),
-                        ),
-                        SizedBox(height: 4),
-                        Text(
-                          GoogleDriveBackupPolicy.editorRequirementNotice,
-                          style: TextStyle(fontSize: 11),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Akun Google: ${widget.currentAccount}\n\n'
-              'Tempel link folder Google Drive bersama tempat menyimpan cadangan:',
-              style: const TextStyle(fontSize: 13),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _controller,
-              keyboardType: TextInputType.url,
-              decoration: const InputDecoration(
-                labelText: 'Link Folder Google Drive',
-                hintText: 'https://drive.google.com/drive/folders/...',
-                prefixIcon: Icon(Icons.link),
-                border: OutlineInputBorder(),
-              ),
-            ),
-          ],
-        ),
-      ),
-      actions: [
-        if (hasInitial) ...[
-          IconButton(
-            tooltip: 'Bagikan Tautan ke Kolektor Lain',
-            icon: const Icon(Icons.share_outlined, color: Colors.blue),
-            onPressed: () {
-              final link = _controller.text.trim();
-              if (link.isNotEmpty) {
-                SharedStorageLinkService.shareStorageLink(
-                  context: context,
-                  folder: link,
-                  sender: widget.currentAccount,
-                );
-              }
-            },
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop('reset'),
-            child: const Text('Gunakan Bawaan'),
-          ),
-        ],
-        TextButton(
-          onPressed: () => Navigator.of(context).pop('cancel'),
-          child: const Text('Batal'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.of(context).pop(_controller.text.trim()),
-          child: const Text('Simpan'),
         ),
       ],
     );
