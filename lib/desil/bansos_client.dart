@@ -47,13 +47,180 @@ class BansosResult {
 
   factory BansosResult.fromHtml(String html) {
     final document = html_parser.parse(html);
+    String cleanText(String? raw) =>
+        (raw ?? '').replaceAll(RegExp(r'\s+'), ' ').trim();
+    String dashIfEmpty(String? raw) {
+      final t = cleanText(raw);
+      return (t.isEmpty || t == '-') ? '—' : t;
+    }
+
+    // 1. Cek pesan alert eksplisit pada format baru (.cb-alert / .alert)
+    final alertText = cleanText(
+      document.querySelector('.cb-alert, .alert-danger, .alert')?.text,
+    ).toLowerCase();
+    if (alertText.isNotEmpty) {
+      if (alertText.contains('captcha') || alertText.contains('huruf kode')) {
+        throw const BansosException(
+          'Captcha salah atau sudah kedaluwarsa.',
+          kind: BansosErrorKind.captcha,
+        );
+      }
+      if (alertText.contains('tidak ditemukan') ||
+          alertText.contains('data tidak ada') ||
+          alertText.contains('tidak terdaftar') ||
+          alertText.contains('belum terdaftar')) {
+        throw const BansosException(
+          'Data penerima manfaat tidak ditemukan.',
+          kind: BansosErrorKind.notFound,
+        );
+      }
+    }
+
+    // 2. Cek kartu kosong pada halaman /hasil-nik format baru (.cb-empty)
+    final emptyCard = document.querySelector('.cb-empty');
+    if (emptyCard != null) {
+      throw const BansosException(
+        'Data penerima manfaat tidak ditemukan.',
+        kind: BansosErrorKind.notFound,
+      );
+    }
+
+    // 3. Parsing format baru cb-v4 (/hasil-nik dengan .cb-profile & .cb-programs)
+    final profileNameEl = document.querySelector(
+      '.cb-profile .cb-name, .cb-v4 .cb-name',
+    );
+    if (profileNameEl != null) {
+      final nama = dashIfEmpty(profileNameEl.text);
+      String desil = dashIfEmpty(
+        document
+            .querySelector('.cb-desil, .cb-stat-desil .cb-stat-value')
+            ?.text,
+      );
+      String periodeDtsen = cleanText(
+        document.querySelector('.cb-hero .cb-chip, .badge')?.text,
+      );
+      String keteranganPbi = '—';
+      String statusKpd = '—';
+
+      for (final stat in document.querySelectorAll('.cb-profile-stats .cb-stat')) {
+        if (stat.classes.contains('cb-stat-desil')) {
+          if (desil == '—') {
+            desil = dashIfEmpty(
+              stat.querySelector('.cb-desil, .cb-stat-value')?.text,
+            );
+          }
+          continue;
+        }
+        final kicker = cleanText(
+          stat.querySelector('.cb-kicker')?.text,
+        ).toLowerCase();
+        final val = dashIfEmpty(
+          stat.querySelector('.cb-stat-value, .cb-desil')?.text,
+        );
+        if (kicker.contains('kpd') || kicker.contains('disabilitas')) {
+          statusKpd = val;
+        } else if (kicker.contains('pbi') || kicker.contains('keterangan')) {
+          keteranganPbi = val;
+        } else if (kicker.contains('periode') || kicker.contains('dtsen')) {
+          if (periodeDtsen.isEmpty && val != '—') {
+            periodeDtsen = val;
+          }
+        }
+      }
+
+      String sembakoStatus = '—';
+      String sembakoPeriode = '—';
+      String pkhStatus = '—';
+      String pkhPeriode = '—';
+      String pbiJkStatus = '—';
+      String pbiJkPeriode = '—';
+
+      for (final prog in document.querySelectorAll('.cb-program')) {
+        final title = cleanText(
+          prog.querySelector('.cb-program-head h3, h3, .cb-kicker')?.text,
+        ).toLowerCase();
+
+        String status = '—';
+        String periode = '—';
+        String ekstra = '—';
+
+        final dlDivs = prog.querySelectorAll('.cb-dl > div');
+        if (dlDivs.isNotEmpty) {
+          for (final item in dlDivs) {
+            final dt = cleanText(item.querySelector('dt')?.text).toLowerCase();
+            final dd = dashIfEmpty(item.querySelector('dd')?.text);
+            if (dt.contains('status')) {
+              status = dd;
+            } else if (dt.contains('periode')) {
+              periode = dd;
+            } else if (dt.contains('keterangan') || dt.contains('info')) {
+              ekstra = dd;
+            }
+          }
+        } else {
+          final dts = prog.querySelectorAll('dt');
+          final dds = prog.querySelectorAll('dd');
+          final count = dts.length < dds.length ? dts.length : dds.length;
+          for (int i = 0; i < count; i++) {
+            final dt = cleanText(dts[i].text).toLowerCase();
+            final dd = dashIfEmpty(dds[i].text);
+            if (dt.contains('status')) {
+              status = dd;
+            } else if (dt.contains('periode')) {
+              periode = dd;
+            } else if (dt.contains('keterangan')) {
+              ekstra = dd;
+            }
+          }
+        }
+
+        if (title.contains('sembako') || title.contains('bpnt')) {
+          sembakoStatus = status;
+          sembakoPeriode = periode;
+        } else if (title.contains('pkh')) {
+          pkhStatus = status;
+          pkhPeriode = periode;
+        } else if (title.contains('pbi')) {
+          pbiJkStatus = status;
+          pbiJkPeriode = periode;
+          if (ekstra != '—' && keteranganPbi == '—') {
+            keteranganPbi = ekstra;
+          }
+        } else if (title.contains('kpd') || title.contains('disabilitas')) {
+          if (status != '—') statusKpd = status;
+        }
+      }
+
+      return BansosResult(
+        periodeDtsen: periodeDtsen,
+        nama: nama,
+        desil: desil,
+        sembakoStatus: sembakoStatus,
+        sembakoPeriode: sembakoPeriode,
+        pkhStatus: pkhStatus,
+        pkhPeriode: pkhPeriode,
+        pbiJkStatus: pbiJkStatus,
+        pbiJkPeriode: pbiJkPeriode,
+        keteranganPbi: keteranganPbi,
+        statusKpd: statusKpd,
+      );
+    }
+
+    // 4. Fallback format tabel lama (table tbody tr)
     final row = document.querySelector('table tbody tr');
     if (row == null) {
-      final message = (document.body?.text ?? '')
-          .replaceAll(RegExp(r'\s+'), ' ')
-          .trim()
-          .toLowerCase();
-      if (message.contains('captcha') || message.contains('huruf kode')) {
+      final hasSearchForm =
+          document.querySelector('form[action*="cekbansos_nik"]') != null;
+      final message = cleanText(document.body?.text).toLowerCase();
+      if (!hasSearchForm &&
+          (message.contains('captcha') || message.contains('huruf kode'))) {
+        throw const BansosException(
+          'Captcha salah atau sudah kedaluwarsa.',
+          kind: BansosErrorKind.captcha,
+        );
+      }
+      if (message.contains('kode captcha salah') ||
+          message.contains('captcha tidak sesuai')) {
         throw const BansosException(
           'Captcha salah atau sudah kedaluwarsa.',
           kind: BansosErrorKind.captcha,
@@ -74,8 +241,7 @@ class BansosResult {
     }
 
     final cells = row.querySelectorAll('td').map((cell) {
-      final value = cell.text.replaceAll(RegExp(r'\s+'), ' ').trim();
-      return value.isEmpty ? '—' : value;
+      return dashIfEmpty(cell.text);
     }).toList();
     if (cells.length < 10) {
       throw const BansosException(
@@ -85,7 +251,7 @@ class BansosResult {
 
     final badge = document.querySelector('.badge');
     return BansosResult(
-      periodeDtsen: badge?.text.replaceAll(RegExp(r'\s+'), ' ').trim() ?? '',
+      periodeDtsen: cleanText(badge?.text),
       nama: cells[0],
       desil: cells[1],
       sembakoStatus: cells[2],
@@ -102,7 +268,10 @@ class BansosResult {
 
 class BansosClient extends BaseHttpClient {
   static const _baseUrl = 'https://cekbansos.kemensos.go.id';
+  static const _formUrl =
+      '$_baseUrl/?page_title=FORM%20PENCARIAN%20PM%20%28PENERIMA%20MANFAAT%29';
   String? _csrfToken;
+  String? _captchaUrl;
 
   Dio get _dio => dio;
 
@@ -122,10 +291,19 @@ class BansosClient extends BaseHttpClient {
   Future<Uint8List> fetchCaptchaImage() async {
     try {
       await _loadHome();
+      final targetUrl = (_captchaUrl != null && _captchaUrl!.isNotEmpty)
+          ? _captchaUrl!
+          : '$_baseUrl/captcha/flat';
+      final useQueryTimestamp = !targetUrl.contains('?');
       final response = await _dio.get<List<int>>(
-        '$_baseUrl/captcha/flat',
-        queryParameters: {'_': DateTime.now().microsecondsSinceEpoch},
-        options: Options(responseType: ResponseType.bytes),
+        targetUrl,
+        queryParameters: useQueryTimestamp
+            ? {'_': DateTime.now().microsecondsSinceEpoch}
+            : null,
+        options: Options(
+          responseType: ResponseType.bytes,
+          headers: const {'Referer': _formUrl},
+        ),
       );
       final bytes = response.data;
       if (bytes == null || bytes.isEmpty) {
@@ -153,15 +331,14 @@ class BansosClient extends BaseHttpClient {
         options: Options(
           contentType: Headers.formUrlEncodedContentType,
           responseType: ResponseType.plain,
-          // Kemensos memakai pola POST-Redirect-GET. Dio tidak selalu
-          // mengikuti 302 dari POST seperti browser, sehingga redirect perlu
-          // diambil kembali sebagai GET sambil mempertahankan cookie sesi.
+          // Kemensos memakai pola POST-Redirect-GET (302 ke /hasil-nik atau /).
           followRedirects: false,
           validateStatus: (status) => status != null && status < 400,
-          headers: const {'Origin': _baseUrl, 'Referer': '$_baseUrl/'},
+          headers: const {'Origin': _baseUrl, 'Referer': _formUrl},
         ),
       );
       final responseHtml = await _redirectedResponseHtml(response);
+      _updateTokensFromHtml(responseHtml);
       return BansosResult.fromHtml(responseHtml);
     } on DioException catch (error) {
       _logNetworkError('cek NIK', error);
@@ -174,19 +351,44 @@ class BansosClient extends BaseHttpClient {
 
   Future<void> _loadHome() async {
     final response = await _dio.get<String>(
-      _baseUrl,
+      _formUrl,
       options: Options(responseType: ResponseType.plain),
     );
-    final document = html_parser.parse(response.data ?? '');
-    final token = document
-        .querySelector('input[name="_token"]')
-        ?.attributes['value'];
-    if (token == null || token.isEmpty) {
+    final html = response.data ?? '';
+    _updateTokensFromHtml(html);
+    if (_csrfToken == null || _csrfToken!.isEmpty) {
       throw const BansosException(
         'Sesi layanan tidak dapat dibuat. Coba beberapa saat lagi.',
       );
     }
-    _csrfToken = token;
+  }
+
+  void _updateTokensFromHtml(String html) {
+    if (html.isEmpty) return;
+    final document = html_parser.parse(html);
+    final token =
+        document
+            .querySelector('input[name="_token"]')
+            ?.attributes['value']
+            ?.trim() ??
+        document
+            .querySelector('meta[name="csrf-token"]')
+            ?.attributes['content']
+            ?.trim();
+    if (token != null && token.isNotEmpty) {
+      _csrfToken = token;
+    }
+
+    final rawCapSrc = document
+        .querySelector('img#captchaCode2, img.cb-captcha-img')
+        ?.attributes['src']
+        ?.trim();
+    if (rawCapSrc != null && rawCapSrc.isNotEmpty) {
+      final resolved = Uri.parse(_baseUrl).resolve(rawCapSrc);
+      if (resolved.host == Uri.parse(_baseUrl).host) {
+        _captchaUrl = resolved.toString();
+      }
+    }
   }
 
   Future<String> _redirectedResponseHtml(Response<String> response) async {
@@ -212,7 +414,10 @@ class BansosClient extends BaseHttpClient {
 
     final resultResponse = await _dio.get<String>(
       resultUri.toString(),
-      options: Options(responseType: ResponseType.plain),
+      options: Options(
+        responseType: ResponseType.plain,
+        headers: const {'Referer': _formUrl},
+      ),
     );
     return resultResponse.data ?? '';
   }
