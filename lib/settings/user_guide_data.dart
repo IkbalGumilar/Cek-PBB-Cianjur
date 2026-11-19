@@ -425,41 +425,41 @@ class UserGuideRepository {
       chapterBadge: 'Bab 2.1',
       title: 'Buku Catatan DHKP Digital',
       subtitle:
-          'Kelola tabel DHKP, grafik capaian blok, ekspor Excel & sinkronisasi',
+          'Kelola tabel DHKP, grafik Kedusunan/Desa, Target & Pacing, cek massal latar belakang',
       summary:
-          'Buku kerja digital bagi perangkat desa dan kolektor untuk memuat berkas DHKP, menandai status pelunasan warga di lapangan, melampirkan foto bukti bayar, melihat grafik capaian per blok, hingga mengekspor laporan Excel/PDF.',
+          'Buku kerja digital perangkat desa & kolektor untuk memuat berkas .dkhp/.dat berbasis tahun, menandai pelunasan & celengan warga, melampirkan foto STTS, memantau Target & Pacing, melihat grafik (Se-Kedusunan & Semua Blok untuk Kedusunan), menjalankan Cek Massal di latar belakang, hingga ekspor PDF/Excel.',
       icon: Icons.table_chart_rounded,
       imageAsset: 'assets/guide/06_dhkp_catatan.webp',
       pins: [
         GuidePin(
           number: 1,
-          title: 'Ikon Grafik Ringkasan',
+          title: 'Ikon Grafik Ringkasan (Gauge & Tren)',
           description:
-              'Berpindah antara tampilan tabel daftar wajib pajak dan tampilan grafik visualisasi capaian penerimaan per blok.',
+              'Berpindah ke tampilan visual grafik: Gauge realisasi, 3 kartu KPI sparkline, dan kurva tren bulanan/perbandingan tahun. Pada wilayah Kedusunan, tab cakupan tampil ringkas hanya 2 pilihan: "Se-Kedusunan" dan "Semua Blok" (dan otomatis hilang bila memilih filter 1 blok).',
           dotPos: Offset(512, 265),
           targetPos: Offset(512, 195),
         ),
         GuidePin(
           number: 2,
-          title: 'Ikon Unggah Data DHKP',
+          title: 'Ikon Target & Pacing / Unggah DHKP',
           description:
-              'Memuat berkas daftar pajak DHKP (.xlsx, .xls, .csv, atau paket .dkhp) dari memori ponsel ke dalam aplikasi.',
+              'Pantau target & laju penagihan harian, atau unggah berkas .dkhp/.dat lewat menu tiga titik. Pemasangan tahun baru (mis. 2027 saat lokal 2026) langsung memperbarui tanpa menghapus data tahun lama; tahun yang sama akan meminta konfirmasi timpa terlebih dahulu.',
           dotPos: Offset(632, 265),
           targetPos: Offset(632, 195),
         ),
         GuidePin(
           number: 3,
-          title: 'Ikon Unduh / Ekspor Laporan',
+          title: 'Menu Ekspor, Cetak PDF (Batal Cetak) & Cek Massal',
           description:
-              'Mengekspor hasil pencatatan lapangan kembali menjadi berkas Excel atau laporan PDF siap cetak.',
+              'Cetak PDF lengkap dengan tombol Batal Cetak, ekspor Excel/CSV, atau jalankan Cek Massal di latar belakang (bisa disembunyikan menjadi gelembung mengambang; opsi Seluruh Blok aktif khusus untuk Kedusunan).',
           dotPos: Offset(748, 265),
           targetPos: Offset(748, 195),
         ),
         GuidePin(
           number: 4,
-          title: 'Ikon Sinkronisasi Cadangan',
+          title: 'Filter Wilayah, Tanpa Rp 0 & Kalkulator/Celengan',
           description:
-              'Menyinkronkan perubahan catatan DHKP dengan penyimpanan lokal atau folder Google Drive.',
+              'Saring data per Dusun, Blok, Tahun Pajak, Kategori, dan tombol "Tanpa Rp 0". Setiap baris juga memiliki Kalkulator & Celengan PBB, foto STTS, serta catatan petugas.',
           dotPos: Offset(865, 265),
           targetPos: Offset(865, 195),
         ),
@@ -467,7 +467,7 @@ class UserGuideRepository {
           number: 5,
           title: 'Ikon Panduan (?)',
           description:
-              'Menampilkan tur panduan interaktif untuk mengenal fungsi tombol-tombol pada halaman Data DHKP.',
+              'Menampilkan tur panduan interaktif terbaru untuk mengenal fungsi tombol-tombol pada halaman Tabel maupun Grafik DHKP.',
           dotPos: Offset(980, 265),
           targetPos: Offset(980, 195),
         ),
@@ -574,7 +574,7 @@ class UserGuideRepository {
       title: 'Menu Utama Petugas Desa',
       subtitle: 'Pusat navigasi Pantauan Wilayah & Pembayaran Kolektif',
       summary:
-          'Halaman utama Portal Staf setelah berhasil login, menyediakan akses ke 7 laporan pantauan wilayah desa dan manajemen grup pembayaran kolektif.',
+          'Halaman utama Portal Staf setelah berhasil login, menyediakan akses ke 7 laporan pantauan wilayah desa, Generate/Sinkronisasi DHKP, dan manajemen grup pembayaran kolektif.',
       icon: Icons.dashboard_customize_rounded,
       imageAsset: 'assets/guide/09_hub_petugas.webp',
       pins: [
@@ -582,7 +582,7 @@ class UserGuideRepository {
           number: 1,
           title: 'Kartu Pantauan Wilayah Desa',
           description:
-              'Membuka 7 laporan penerimaan desa: Sudah Bayar, Belum Bayar, Realisasi, Piutang, Sudah/Belum Bayar Kolektif, dan Rangking Realisasi.',
+              'Membuka 7 laporan penerimaan desa (Sudah Bayar, Belum Bayar, Realisasi, Piutang, Kolektif, Rangking) beserta tombol Generate Paket DHKP & Sinkronisasi DHKP latar belakang.',
           dotPos: Offset(42, 417),
           targetPos: Offset(100, 417),
         ),
@@ -602,17 +602,17 @@ class UserGuideRepository {
       chapterBadge: 'Bab 3.4',
       title: 'Pantauan Wilayah Desa (7 Laporan)',
       subtitle:
-          'Filter transaksi Sudah Bayar, Belum Bayar, Realisasi & Piutang',
+          'Generate Paket DHKP, Sinkronisasi latar belakang & 7 laporan real-time',
       summary:
-          'Memantau data pembayaran pajak warga di wilayah desa/kelurahan secara real-time lengkap dengan filter tanggal, tahun pajak, buku, bank, dan pencarian NOP/nama.',
+          'Memantau data pembayaran pajak warga di wilayah desa/kelurahan secara real-time, membuat paket .dkhp master/split Dusun tanpa menghapus data lokal saat generate, serta menyinkronkan status bayar ke DHKP di latar belakang.',
       icon: Icons.analytics_outlined,
       imageAsset: 'assets/guide/10_pantauan_wilayah.webp',
       pins: [
         GuidePin(
           number: 1,
-          title: 'Baris 7 Tab Laporan',
+          title: 'Baris 7 Tab Laporan & Aksi DHKP di Atas',
           description:
-              'Geser tab di bagian atas untuk memilih laporan: Sudah Bayar, Belum Bayar, Realisasi, Piutang, Sudah Bayar Kolektif, Belum Bayar Kolektif, atau Rangking Realisasi.',
+              'Di bilah atas tersedia tombol Generate Paket DHKP (membuat file .dkhp aman tanpa langsung menimpa data lokal) dan tombol Sinkronisasi DHKP (berjalan di latar belakang dengan gelembung mengambang). Geser tab di bawahnya untuk memilih 7 jenis laporan.',
           dotPos: Offset(55, 296),
           targetPos: Offset(130, 296),
         ),
@@ -843,17 +843,17 @@ class UserGuideRepository {
       chapterBadge: 'Bab 4.1',
       title: 'Menu Pengaturan Aplikasi',
       subtitle:
-          'Pusat pengaturan tema, keamanan, cadangan data & informasi aplikasi',
+          'Wilayah kerja, tema/AMOLED, keamanan, cadangan DKH2 & informasi aplikasi',
       summary:
-          'Mengatur tampilan aplikasi, penguncian keamanan, pencadangan data DHKP, panduan penggunaan, serta informasi aplikasi dan pengembang.',
+          'Mengatur Kecamatan/Desa penugasan, mode tema & AMOLED, kunci keamanan, pencadangan terenkripsi DKH2 (lokal & Google Drive), panduan penggunaan, serta informasi aplikasi.',
       icon: Icons.settings_outlined,
       imageAsset: 'assets/guide/15_pengaturan_utama.webp',
       pins: [
         GuidePin(
           number: 1,
-          title: 'Menu Tema & Tampilan',
+          title: 'Wilayah Kerja & Tema Tampilan',
           description:
-              'Mengubah mode tampilan (Ikuti Sistem / Terang / Gelap) serta mengatur warna aplikasi.',
+              'Pilih Kecamatan/Desa penugasan (32 Kecamatan & 360 Desa Cianjur) serta ubah mode tampilan (Ikuti Sistem / Terang / Gelap / AMOLED) dan warna aplikasi.',
           dotPos: Offset(42, 385),
           targetPos: Offset(95, 385),
         ),
@@ -867,9 +867,9 @@ class UserGuideRepository {
         ),
         GuidePin(
           number: 3,
-          title: 'Menu Pencadangan Data',
+          title: 'Menu Pencadangan Data (DKH2)',
           description:
-              'Menyimpan cadangan catatan DHKP ke penyimpanan ponsel maupun Google Drive.',
+              'Menyimpan cadangan catatan DHKP terenkripsi AES-256-GCM ke penyimpanan ponsel maupun Google Drive.',
           dotPos: Offset(42, 960),
           targetPos: Offset(95, 960),
         ),
@@ -905,17 +905,17 @@ class UserGuideRepository {
       chapterBadge: 'Bab 4.2',
       title: 'Tema & Tampilan Aplikasi',
       subtitle:
-          'Atur mode Terang/Gelap, warna wallpaper, dan kustomisasi warna RGB',
+          'Atur mode Terang/Gelap/AMOLED, warna wallpaper, dan kustomisasi RGB',
       summary:
-          'Sesuaikan kenyamanan mata saat bertugas di lapangan maupun malam hari dengan mode tema dan pilihan warna aksen aplikasi.',
+          'Sesuaikan kenyamanan mata saat bertugas di lapangan maupun malam hari dengan mode tema Terang, Gelap, Hitam Pekat (AMOLED), dan pilihan warna aksen aplikasi.',
       icon: Icons.palette_outlined,
       imageAsset: 'assets/guide/16_pengaturan_tema.webp',
       pins: [
         GuidePin(
           number: 1,
-          title: 'Pilihan Mode Tema (Tampilan Layar)',
+          title: 'Pilihan Mode Tema (Terang / Gelap / AMOLED)',
           description:
-              'Pilih antara Ikuti Sistem, Mode Terang (jelas di bawah sinar matahari), atau Mode Gelap (nyaman di malam hari).',
+              'Pilih antara Ikuti Sistem, Mode Terang (jelas di bawah sinar matahari), Mode Gelap, atau Hitam Pekat AMOLED (hemat baterai layar OLED).',
           dotPos: Offset(42, 545),
           targetPos: Offset(95, 545),
         ),
@@ -971,9 +971,9 @@ class UserGuideRepository {
       category: GuideCategory.pengaturan,
       chapterBadge: 'Bab 4.4',
       title: 'Pencadangan & Pemulihan Data',
-      subtitle: 'Simpan cadangan DHKP otomatis ke memori HP atau Google Drive',
+      subtitle: 'Simpan cadangan DHKP terenkripsi DKH2 ke HP atau Google Drive',
       summary:
-          'Menjaga agar seluruh catatan pembayaran dan dokumentasi DHKP tetap aman meskipun Anda berganti perangkat ponsel.',
+          'Menjaga agar seluruh catatan pembayaran dan dokumentasi DHKP tetap aman terenkripsi AES-256-GCM meskipun Anda berganti perangkat ponsel.',
       icon: Icons.cloud_sync_outlined,
       imageAsset: 'assets/guide/18_pengaturan_pencadangan.webp',
       pins: [
@@ -981,7 +981,7 @@ class UserGuideRepository {
           number: 1,
           title: 'Tombol Cadangkan Sekarang',
           description:
-              'Membuat salinan cadangan data perubahan DHKP secara langsung saat itu juga.',
+              'Membuat salinan cadangan data perubahan DHKP terenkripsi DKH2 secara langsung saat itu juga.',
           dotPos: Offset(55, 860),
           targetPos: Offset(125, 860),
         ),
@@ -989,7 +989,7 @@ class UserGuideRepository {
           number: 2,
           title: 'Tombol Pulihkan / Muat Berkas DHKP',
           description:
-              'Memulihkan catatan DHKP dari berkas cadangan yang pernah disimpan di HP atau Google Drive.',
+              'Memulihkan atau memasang berkas DHKP dari HP atau Google Drive. Tahun yang masih kosong langsung diisi; tahun sama akan meminta konfirmasi timpa.',
           dotPos: Offset(55, 1010),
           targetPos: Offset(125, 1010),
         ),
@@ -1100,6 +1100,30 @@ class UserGuideRepository {
   ];
 
   static const List<GuideFaqItem> faqs = [
+    GuideFaqItem(
+      question:
+          'Apakah Cek Massal dan Sinkronisasi bisa berjalan sambil saya membuka menu lain?',
+      answer:
+          'Bisa! Ketuk tombol "Sembunyikan" pada layar Cek Massal atau lembaran Sinkronisasi. Proses tetap berjalan di latar belakang dengan gelembung mengambang, dan saat selesai cukup ketuk notifikasi dari layar mana pun untuk langsung membuka rincian hasilnya di halaman DHKP.',
+      icon: Icons.layers_rounded,
+      category: GuideCategory.dhkp,
+    ),
+    GuideFaqItem(
+      question:
+          'Bagaimana aturan menimpa vs memperbarui saat memasang berkas .dkhp atau setelah Generate DHKP?',
+      answer:
+          'Proses Generate DHKP tidak menghapus data lokal Anda — ia hanya membuat file .dkhp baru. Saat memasang file .dkhp: jika data tahun tersebut masih kosong (atau beda tahun, mis. lokal 2026 lalu pasang 2027), data langsung diisi/diperbarui tanpa menghapus 2026. Jika tahun yang sama (mis. 2026 -> 2026) sudah terisi, aplikasi akan meminta konfirmasi timpa terlebih dahulu.',
+      icon: Icons.inventory_2_outlined,
+      category: GuideCategory.staf,
+    ),
+    GuideFaqItem(
+      question:
+          'Mengapa opsi "Seluruh Blok" di Cek Massal hanya muncul untuk wilayah Kedusunan?',
+      answer:
+          'Untuk menjaga kestabilan akses server, pengecekan Seluruh Blok sekaligus diaktifkan khusus untuk lingkup Kedusunan (Dusun). Pada tingkat Desa ke atas, pengecekan tetap dipilih per blok atau gunakan fitur Sinkronisasi di Portal Staf.',
+      icon: Icons.fact_check_outlined,
+      category: GuideCategory.dhkp,
+    ),
     GuideFaqItem(
       question:
           'Mengapa saat mengecek tagihan muncul pesan "Kode Verifikasi Salah"?',

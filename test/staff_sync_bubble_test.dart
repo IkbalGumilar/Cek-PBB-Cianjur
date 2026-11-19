@@ -1,11 +1,18 @@
 import 'dart:async';
+import 'dart:io';
 
+import 'package:cek_pbb_app/app_storage.dart';
+import 'package:cek_pbb_app/batch_check_manager.dart';
 import 'package:cek_pbb_app/batch_notification_service.dart';
+import 'package:cek_pbb_app/blok_catatan_screen.dart';
+import 'package:cek_pbb_app/blok_data_store.dart';
 import 'package:cek_pbb_app/monitoring/monitoring_wilayah_screen.dart';
 import 'package:cek_pbb_app/monitoring/staff_dhkp_sync_manager.dart';
 import 'package:cek_pbb_app/monitoring/staff_dhkp_sync_service.dart';
 import 'package:cek_pbb_app/monitoring/staff_sync_bubble_overlay.dart';
+import 'package:cek_pbb_app/result_screen.dart';
 import 'package:cek_pbb_app/staff_portal_client.dart';
+import 'package:cek_pbb_app/tax_record.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -70,18 +77,38 @@ class _FakeStaffPortalClient extends StaffPortalClient {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  late Directory tempDir;
 
   setUp(() {
-    SharedPreferences.setMockInitialValues({});
+    SharedPreferences.setMockInitialValues({
+      'feature_tour_seen_dhkp_table_view': true,
+      'feature_tour_seen_monitoring_wilayah_screen': true,
+    });
+    tempDir = Directory.systemTemp.createTempSync('staff_sync_bubble_test_');
+    AppStorage.setMockDirectories(dataDir: tempDir, mediaDir: tempDir);
+    BlokDataStore.instance.resetForTesting();
     MonitoringWilayahScreen.isCurrentlyOpen = false;
+    BlokCatatanScreen.isCurrentlyOpen = false;
+    ResultScreen.isCurrentlyOpen = false;
     StaffDhkpSyncManager.instance.reset();
+    BatchCheckManager.instance.reset();
     StaffDhkpSyncService.lastOutcome = null;
+    BatchNotificationService.instance.resetTapDeduplication();
   });
 
   tearDown(() {
     MonitoringWilayahScreen.isCurrentlyOpen = false;
+    BlokCatatanScreen.isCurrentlyOpen = false;
+    ResultScreen.isCurrentlyOpen = false;
     StaffDhkpSyncManager.instance.reset();
+    BatchCheckManager.instance.reset();
     StaffDhkpSyncService.lastOutcome = null;
+    BatchNotificationService.instance.resetTapDeduplication();
+    BlokDataStore.instance.resetForTesting();
+    AppStorage.resetForTesting();
+    if (tempDir.existsSync()) {
+      tempDir.deleteSync(recursive: true);
+    }
   });
 
   group('StaffDhkpSyncManager', () {
@@ -134,7 +161,7 @@ void main() {
         expect(find.text('Home Screen'), findsOneWidget);
         expect(find.byType(StaffSyncBubbleOverlay), findsOneWidget);
         expect(find.byIcon(Icons.sync_rounded), findsNothing);
-        expect(find.byIcon(Icons.check_circle_outline_rounded), findsNothing);
+        expect(find.byIcon(Icons.fact_check_rounded), findsNothing);
       },
     );
 
@@ -160,7 +187,6 @@ void main() {
         final completer = Completer<MonitoringTableResult>();
         fakeClient.fetchCompleter = completer;
 
-        // Start sync using fake client
         mgr.startSync(
           context: rootNavigatorKey.currentContext!,
           client: fakeClient,
@@ -175,7 +201,6 @@ void main() {
         await tester.pump(const Duration(milliseconds: 300));
         expect(mgr.isSheetOpen, isTrue);
 
-        // Hide sheet -> floating bubble should now appear!
         mgr.hideSheet();
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 300));
@@ -184,7 +209,6 @@ void main() {
         expect(mgr.shouldShowBubble, isTrue);
         expect(find.byType(StaffSyncBubbleOverlay), findsOneWidget);
 
-        // Tapping bubble re-opens modal sheet
         await tester.tap(find.byIcon(Icons.sync_rounded));
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 300));
@@ -198,7 +222,7 @@ void main() {
     );
 
     testWidgets(
-      'tapping completed bubble directly opens report dialog and staff portal',
+      'tapping completed bubble directly navigates to DHKP (BlokCatatanScreen) and opens sync report once',
       (tester) async {
         final mgr = StaffDhkpSyncManager.instance;
 
@@ -231,13 +255,11 @@ void main() {
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 300));
 
-        // Hide sheet
         mgr.hideSheet();
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 300));
         expect(mgr.shouldShowBubble, isTrue);
 
-        // Complete sync
         completer.complete(const MonitoringTableResult(headers: [], rows: []));
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 300));
@@ -246,15 +268,11 @@ void main() {
         expect(mgr.shouldShowBubble, isTrue);
         expect(find.byIcon(Icons.check_rounded), findsOneWidget);
 
-        // Tapping completed bubble should navigate to MonitoringWilayahScreen and open report dialog
         await tester.tap(find.byIcon(Icons.check_rounded));
-        await tester.pump();
-        await tester.pump(const Duration(milliseconds: 300));
+        await tester.pumpAndSettle();
 
-        expect(find.byType(MonitoringWilayahScreen), findsOneWidget);
-        expect(MonitoringWilayahScreen.isCurrentlyOpen, isTrue);
-
-        await tester.pump();
+        expect(find.byType(BlokCatatanScreen), findsOneWidget);
+        expect(BlokCatatanScreen.isCurrentlyOpen, isTrue);
         expect(find.text('Laporan Hasil Sinkronisasi'), findsOneWidget);
       },
     );
@@ -293,13 +311,11 @@ void main() {
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 300));
 
-        // Hide sheet
         mgr.hideSheet();
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 300));
         expect(mgr.shouldShowBubble, isTrue);
 
-        // Complete sync
         completer.complete(const MonitoringTableResult(headers: [], rows: []));
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 300));
@@ -307,11 +323,9 @@ void main() {
         expect(mgr.isCompleted, isTrue);
         expect(find.byIcon(Icons.check_rounded), findsOneWidget);
 
-        // Advance clock by 5 seconds to trigger auto-dismiss timer
         await tester.pump(const Duration(seconds: 5));
         await tester.pump();
 
-        // Bubble must be completely dismissed and progress cleared!
         expect(mgr.shouldShowBubble, isFalse);
         expect(mgr.progress, isNull);
         expect(find.byIcon(Icons.check_rounded), findsNothing);
@@ -357,7 +371,6 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
       expect(mgr.shouldShowBubble, isTrue);
 
-      // Perform drag gesture on the bubble
       await tester.drag(
         find.byType(StaffSyncBubbleOverlay),
         const Offset(-50, -20),
@@ -374,7 +387,7 @@ void main() {
 
   group('BatchNotificationService Notification Tap Routing Tests', () {
     testWidgets(
-      'staff_sync_completed payload navigates to MonitoringWilayahScreen and opens report',
+      'staff_sync_completed payload navigates to DHKP (BlokCatatanScreen) and opens report ONCE even on rapid double-tap',
       (tester) async {
         await tester.pumpWidget(
           MaterialApp(
@@ -391,28 +404,31 @@ void main() {
           newSpptCount: 2,
         );
 
-        BatchNotificationService.instance.onNotificationTapped(
-          const NotificationResponse(
-            notificationResponseType:
-                NotificationResponseType.selectedNotification,
-            payload: 'staff_sync_completed',
-          ),
+        const tapResp = NotificationResponse(
+          notificationResponseType:
+              NotificationResponseType.selectedNotification,
+          payload: 'staff_sync_completed',
         );
+        // Simulasikan ketukan ganda beruntun dari notifikasi sistem
+        BatchNotificationService.instance.onNotificationTapped(tapResp);
+        BatchNotificationService.instance.onNotificationTapped(tapResp);
 
-        await tester.pump();
-        await tester.pump(const Duration(milliseconds: 300));
+        await tester.pumpAndSettle();
 
-        expect(find.byType(MonitoringWilayahScreen), findsOneWidget);
-        expect(MonitoringWilayahScreen.isCurrentlyOpen, isTrue);
-
-        // Verify report dialog was shown
-        await tester.pump();
+        expect(find.byType(BlokCatatanScreen), findsOneWidget);
+        expect(BlokCatatanScreen.isCurrentlyOpen, isTrue);
         expect(find.text('Laporan Hasil Sinkronisasi'), findsOneWidget);
+
+        // Sekali tutup harus langsung kembali bersih tanpa ada dialog ganda!
+        await tester.tap(find.byTooltip('Tutup'));
+        await tester.pumpAndSettle();
+        expect(find.text('Laporan Hasil Sinkronisasi'), findsNothing);
+        expect(find.byType(BlokCatatanScreen), findsOneWidget);
       },
     );
 
     testWidgets(
-      'staff_sync_in_progress payload navigates to MonitoringWilayahScreen without report',
+      'staff_sync_in_progress payload opens running sync sheet without report',
       (tester) async {
         await tester.pumpWidget(
           MaterialApp(
@@ -432,15 +448,13 @@ void main() {
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 300));
 
-        expect(find.byType(MonitoringWilayahScreen), findsOneWidget);
-        expect(MonitoringWilayahScreen.isCurrentlyOpen, isTrue);
-        // No report dialog should be shown
+        expect(StaffDhkpSyncManager.instance.isSheetOpen, isTrue);
         expect(find.text('Laporan Hasil Sinkronisasi'), findsNothing);
       },
     );
 
     testWidgets(
-      'staff_sync_cancelled payload navigates to MonitoringWilayahScreen',
+      'staff_sync_cancelled payload navigates to DHKP (BlokCatatanScreen)',
       (tester) async {
         await tester.pumpWidget(
           MaterialApp(
@@ -457,11 +471,54 @@ void main() {
           ),
         );
 
-        await tester.pump();
-        await tester.pump(const Duration(milliseconds: 300));
+        await tester.pumpAndSettle();
 
-        expect(find.byType(MonitoringWilayahScreen), findsOneWidget);
-        expect(MonitoringWilayahScreen.isCurrentlyOpen, isTrue);
+        expect(find.byType(BlokCatatanScreen), findsOneWidget);
+        expect(BlokCatatanScreen.isCurrentlyOpen, isTrue);
+      },
+    );
+
+    testWidgets(
+      'show_batch_result payload navigates to DHKP and opens ResultScreen strictly ONCE even on double tap',
+      (tester) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            navigatorKey: rootNavigatorKey,
+            home: const Scaffold(body: Text('Other Screen')),
+          ),
+        );
+
+        final records = [
+          TaxRecord(
+            nop: '320520000400100010',
+            namaWajibPajak: 'WAJIB PAJAK TEST',
+            status: 'Sudah Bayar',
+            tanggalBayar: '2026-05-01',
+            jumlahPbb: 'Rp 50.000',
+          ),
+        ];
+        BatchNotificationService.instance.setActiveRecords(records);
+
+        const tapResp = NotificationResponse(
+          notificationResponseType:
+              NotificationResponseType.selectedNotification,
+          payload: 'show_batch_result',
+        );
+        BatchNotificationService.instance.onNotificationTapped(tapResp);
+        BatchNotificationService.instance.onNotificationTapped(tapResp);
+
+        await tester.pumpAndSettle();
+
+        expect(find.byType(ResultScreen), findsOneWidget);
+        expect(ResultScreen.isCurrentlyOpen, isTrue);
+
+        // Tutup ResultScreen 1x -> harus langsung mendarat di BlokCatatanScreen (bukan ResultScreen ke-2!)
+        rootNavigatorKey.currentState!.pop();
+        await tester.pumpAndSettle();
+
+        expect(find.byType(ResultScreen), findsNothing);
+        expect(ResultScreen.isCurrentlyOpen, isFalse);
+        expect(find.byType(BlokCatatanScreen), findsOneWidget);
       },
     );
   });

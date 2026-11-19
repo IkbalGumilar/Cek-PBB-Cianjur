@@ -699,13 +699,32 @@ Future<EditRincianResult?> showEditRincianDialog(
   }
 }
 
+const String semuaBlokCekMassalValue = '__ALL_BLOKS__';
+
 Future<List<BlokRecord>?> showPilihBlokCekMassalDialog(
   BuildContext context, {
   required List<String> availableBloks,
   required Map<String, List<BlokRecord>> recordsByBlok,
   required int? selectedWilayah,
+  bool? allowAllBlocks,
   ValueNotifier<bool>? downloadSttsOption,
+  ValueNotifier<String?>? selectedScopeTitleOut,
 }) {
+  final isKedusunanScope =
+      allowAllBlocks ??
+      (DusunData.instance.isDusunLocked || selectedWilayah != null);
+  final effectiveDusunNumber = DusunData.instance.isDusunLocked
+      ? DusunData.instance.lockedDusunNumber
+      : selectedWilayah;
+  final dusunLabel = effectiveDusunNumber != null
+      ? 'Dusun $effectiveDusunNumber'
+      : 'Kedusunan';
+
+  final allScopeRecords = <BlokRecord>[
+    for (final b in availableBloks) ...?recordsByBlok[b],
+  ];
+  final canCheckAllBlocks = isKedusunanScope && availableBloks.length > 1;
+
   return showDialog<List<BlokRecord>>(
     context: context,
     builder: (ctx) {
@@ -714,9 +733,12 @@ Future<List<BlokRecord>?> showPilihBlokCekMassalDialog(
 
       return StatefulBuilder(
         builder: (context, setDialogState) {
-          final blokRecords = currentBlok != null
-              ? (recordsByBlok[currentBlok] ?? [])
-              : <BlokRecord>[];
+          final isAllBlocksSelected = currentBlok == semuaBlokCekMassalValue;
+          final blokRecords = currentBlok == null
+              ? <BlokRecord>[]
+              : (isAllBlocksSelected
+                    ? allScopeRecords
+                    : (recordsByBlok[currentBlok] ?? <BlokRecord>[]));
           final totalCount = blokRecords.length;
           final paidCount = blokRecords.where((r) => r.isPaid).length;
           final unpaidList = blokRecords.where((r) => !r.isPaid).toList();
@@ -740,9 +762,24 @@ Future<List<BlokRecord>?> showPilihBlokCekMassalDialog(
               unpaidList.isNotEmpty && remainingCount == 0;
           final isPartialChecked = checkedTodayCount > 0 && remainingCount > 0;
 
-          final currentBlokInt = currentBlok != null
+          final currentBlokInt =
+              (currentBlok != null && !isAllBlocksSelected)
               ? (int.tryParse(currentBlok!) ?? currentBlok)
               : null;
+
+          final allUnpaidCount = allScopeRecords.where((r) => !r.isPaid).length;
+          final allDoneToday =
+              allUnpaidCount > 0 &&
+              allScopeRecords
+                      .where(
+                        (r) =>
+                            !r.isPaid &&
+                            BlokBatchCheckTracker.instance.isCheckedToday(
+                              r.nop,
+                            ),
+                      )
+                      .length ==
+                  allUnpaidCount;
 
           return AlertDialog(
             title: const Row(
@@ -786,10 +823,10 @@ Future<List<BlokRecord>?> showPilihBlokCekMassalDialog(
                           Expanded(
                             child: Text(
                               DusunData.instance.isDusunLocked
-                                  ? 'Wilayah Terkunci: Dusun ${DusunData.instance.lockedDusunNumber} (${availableBloks.length} Blok)'
+                                  ? 'Wilayah Terkunci: $dusunLabel (${availableBloks.length} Blok)'
                                   : (selectedWilayah != null
-                                        ? 'Wilayah: Dusun $selectedWilayah (${availableBloks.length} Blok)'
-                                        : 'Wilayah: 1 Desa / Semua Wilayah (${availableBloks.length} Blok 1-41)'),
+                                        ? 'Wilayah: $dusunLabel (${availableBloks.length} Blok)'
+                                        : 'Wilayah: Tingkat Desa / Semua Wilayah (${availableBloks.length} Blok)'),
                               style: Theme.of(context).textTheme.bodySmall
                                   ?.copyWith(fontWeight: FontWeight.w600),
                             ),
@@ -825,55 +862,96 @@ Future<List<BlokRecord>?> showPilihBlokCekMassalDialog(
                           size: 20,
                         ),
                       ),
-                      items: availableBloks.map((b) {
-                        final bRecs = recordsByBlok[b] ?? [];
-                        final bUnpaid = bRecs.where((r) => !r.isPaid).length;
-                        final bDoneToday =
-                            bUnpaid > 0 &&
-                            bRecs
-                                    .where(
-                                      (r) =>
-                                          !r.isPaid &&
-                                          BlokBatchCheckTracker.instance
-                                              .isCheckedToday(r.nop),
-                                    )
-                                    .length ==
-                                bUnpaid;
-
-                        final bInt = int.tryParse(b) ?? b;
-                        return DropdownMenuItem<String>(
-                          value: b,
-                          child: Row(
-                            children: [
-                              Text(
-                                'Blok $bInt',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
+                      items: [
+                        if (canCheckAllBlocks)
+                          DropdownMenuItem<String>(
+                            value: semuaBlokCekMassalValue,
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.layers_rounded,
+                                  size: 16,
+                                  color: scheme.primary,
                                 ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  bDoneToday
-                                      ? '• Sudah dicek'
-                                      : (bUnpaid == 0
-                                            ? '• Semua lunas'
-                                            : '• $bUnpaid belum bayar'),
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: bDoneToday
-                                        ? Colors.grey
-                                        : (bUnpaid == 0
-                                              ? Colors.green
-                                              : Colors.orange),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'Seluruh Blok (${availableBloks.length} Blok)',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
                                   ),
-                                  overflow: TextOverflow.ellipsis,
                                 ),
-                              ),
-                            ],
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    allDoneToday
+                                        ? '• Sudah dicek'
+                                        : (allUnpaidCount == 0
+                                              ? '• Semua lunas'
+                                              : '• $allUnpaidCount belum bayar'),
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: allDoneToday
+                                          ? Colors.grey
+                                          : (allUnpaidCount == 0
+                                                ? Colors.green
+                                                : Colors.orange),
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                        );
-                      }).toList(),
+                        ...availableBloks.map((b) {
+                          final bRecs = recordsByBlok[b] ?? [];
+                          final bUnpaid = bRecs.where((r) => !r.isPaid).length;
+                          final bDoneToday =
+                              bUnpaid > 0 &&
+                              bRecs
+                                      .where(
+                                        (r) =>
+                                            !r.isPaid &&
+                                            BlokBatchCheckTracker.instance
+                                                .isCheckedToday(r.nop),
+                                      )
+                                      .length ==
+                                  bUnpaid;
+
+                          final bInt = int.tryParse(b) ?? b;
+                          return DropdownMenuItem<String>(
+                            value: b,
+                            child: Row(
+                              children: [
+                                Text(
+                                  'Blok $bInt',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    bDoneToday
+                                        ? '• Sudah dicek'
+                                        : (bUnpaid == 0
+                                              ? '• Semua lunas'
+                                              : '• $bUnpaid belum bayar'),
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: bDoneToday
+                                          ? Colors.grey
+                                          : (bUnpaid == 0
+                                                ? Colors.green
+                                                : Colors.orange),
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }),
+                      ],
                       onChanged: (val) {
                         if (val != null) {
                           setDialogState(() {
@@ -882,6 +960,44 @@ Future<List<BlokRecord>?> showPilihBlokCekMassalDialog(
                         }
                       },
                     ),
+                    if (!isKedusunanScope) ...[
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: scheme.surfaceContainerHighest.withValues(
+                            alpha: 0.45,
+                          ),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: scheme.outlineVariant.withValues(alpha: 0.5),
+                          ),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(
+                              Icons.info_outline_rounded,
+                              size: 16,
+                              color: scheme.onSurfaceVariant,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Opsi cek Seluruh Blok hanya aktif untuk wilayah Kedusunan (dinonaktifkan untuk tingkat Desa ke atas).',
+                                style: TextStyle(
+                                  fontSize: 11.5,
+                                  color: scheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 14),
                     if (currentBlok == null) ...[
                       Container(
@@ -917,7 +1033,9 @@ Future<List<BlokRecord>?> showPilihBlokCekMassalDialog(
                                   ),
                                   const SizedBox(height: 3),
                                   Text(
-                                    'Silakan pilih salah satu nomor blok pada menu di atas terlebih dahulu untuk melihat data dan memeriksa status bayar.',
+                                    canCheckAllBlocks
+                                        ? 'Silakan pilih "Seluruh Blok" atau salah satu nomor blok pada menu di atas terlebih dahulu.'
+                                        : 'Silakan pilih salah satu nomor blok pada menu di atas terlebih dahulu untuk melihat data dan memeriksa status bayar.',
                                     style: TextStyle(
                                       fontSize: 12,
                                       color: Colors.amber.shade900,
@@ -945,7 +1063,9 @@ Future<List<BlokRecord>?> showPilihBlokCekMassalDialog(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
                               Text(
-                                'Data Objek Pajak Blok $currentBlokInt',
+                                isAllBlocksSelected
+                                    ? 'Seluruh Blok ($dusunLabel • ${availableBloks.length} Blok)'
+                                    : 'Data Objek Pajak Blok $currentBlokInt',
                                 style: Theme.of(context).textTheme.titleSmall
                                     ?.copyWith(fontWeight: FontWeight.bold),
                               ),
@@ -1001,8 +1121,8 @@ Future<List<BlokRecord>?> showPilihBlokCekMassalDialog(
                                       Expanded(
                                         child: Text(
                                           isDownloadStts
-                                              ? 'Semua Lunas: Seluruh NOP pada blok ini sudah berstatus Sudah Bayar. Pengecekan akan berjalan untuk mengunduh seluruh berkas STTS ($totalCount NOP).'
-                                              : 'Semua Lunas: Seluruh NOP pada blok ini sudah berstatus Sudah Bayar. Tidak ada tunggakan yang perlu dicek.',
+                                              ? 'Semua Lunas: Seluruh NOP pada cakupan ini sudah berstatus Sudah Bayar. Pengecekan akan berjalan untuk mengunduh seluruh berkas STTS ($totalCount NOP).'
+                                              : 'Semua Lunas: Seluruh NOP pada cakupan ini sudah berstatus Sudah Bayar. Tidak ada tunggakan yang perlu dicek.',
                                           style: TextStyle(
                                             fontSize: 12,
                                             color: isDownloadStts
@@ -1066,7 +1186,9 @@ Future<List<BlokRecord>?> showPilihBlokCekMassalDialog(
                                       const SizedBox(width: 8),
                                       Expanded(
                                         child: Text(
-                                          'Blok ini sudah dicek, coba lagi besok',
+                                          isAllBlocksSelected
+                                              ? 'Seluruh blok pada $dusunLabel sudah dicek hari ini, coba lagi besok'
+                                              : 'Blok ini sudah dicek, coba lagi besok',
                                           style: TextStyle(
                                             fontSize: 12,
                                             fontWeight: FontWeight.w600,
@@ -1194,7 +1316,12 @@ Future<List<BlokRecord>?> showPilihBlokCekMassalDialog(
                                 isAllPaid ||
                                 remainingCount == 0)))
                     ? null
-                    : () => Navigator.pop(ctx, targetRecords),
+                    : () {
+                        selectedScopeTitleOut?.value = isAllBlocksSelected
+                            ? 'Seluruh Blok ($dusunLabel • ${availableBloks.length} Blok)'
+                            : 'Blok $currentBlokInt';
+                        Navigator.pop(ctx, targetRecords);
+                      },
               ),
             ],
           );
@@ -1932,3 +2059,93 @@ Future<void> showWhatsAppPhotoPreviewDialog(
     ),
   );
 }
+
+/// Memeriksa rencana pemasangan paket `.dkhp`/`.dat` dan HANYA meminta
+/// konfirmasi pengguna apabila data untuk tahun pajak yang sama SUDAH terisi
+/// (sehingga akan ditimpa).
+///
+/// - Jika database masih kosong ATAU tahun di berkas `.dkhp` belum ada di
+///   database (mis. data lokal 2026 dan berkas baru 2027), langsung mengembalikan
+///   `true` TANPA menampilkan dialog konfirmasi.
+/// - Jika tahun yang sama sudah terisi (mis. lokal 2026 dan berkas 2026),
+///   menampilkan dialog konfirmasi bahwa data tahun tersebut akan ditimpa.
+Future<bool> confirmDhkpInstallPlanIfNeeded(
+  BuildContext context,
+  DhkpInstallPlan plan, {
+  String? fileName,
+}) async {
+  if (!plan.willOverwriteSameYear) {
+    return true;
+  }
+
+  final yearsLabel = plan.sortedOverlappingYears.join(', ');
+  final otherYears = plan.existingYears
+      .difference(plan.overlappingYears)
+      .toList()
+    ..sort();
+  final safeNote = otherYears.isNotEmpty
+      ? '\n• Data tahun lain (${otherYears.join(", ")}) tetap aman dan tidak dihapus.'
+      : '';
+  final fileHeader = (fileName != null && fileName.trim().isNotEmpty)
+      ? 'Berkas: $fileName\n\n'
+      : '';
+
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      icon: const Icon(
+        Icons.warning_amber_rounded,
+        color: Colors.orange,
+        size: 40,
+      ),
+      title: Text('Konfirmasi Timpa Data Tahun $yearsLabel'),
+      content: Text(
+        '${fileHeader}Data DHKP untuk Tahun $yearsLabel sudah terisi di aplikasi '
+        '(${plan.existingOverlappingCount} objek pajak).\n\n'
+        'Memasang berkas ini (${plan.incomingRecordCount} objek pajak) akan '
+        'MENIMPA data Tahun $yearsLabel yang ada saat ini.$safeNote\n'
+        '• Catatan/foto petugas pada NOP yang sama tetap dipertahankan dan '
+        'cadangan (backup) otomatis dibuat sebelum menimpa.\n\n'
+        'Lanjutkan menimpa data Tahun $yearsLabel?',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, false),
+          child: const Text('Batal'),
+        ),
+        FilledButton(
+          style: FilledButton.styleFrom(
+            backgroundColor: Colors.orange.shade800,
+          ),
+          onPressed: () => Navigator.pop(ctx, true),
+          child: Text('Ya, Timpa Tahun $yearsLabel'),
+        ),
+      ],
+    ),
+  );
+  return confirmed == true;
+}
+
+/// Pesan status standar setelah pemasangan paket `.dkhp`/`.dat` selesai.
+String buildDhkpInstallSuccessMessage({
+  required DhkpInstallPlan plan,
+  required int recordCount,
+  required bool isDat,
+  String? sourceLabel,
+}) {
+  final suffix = (sourceLabel != null && sourceLabel.isNotEmpty)
+      ? ' ($sourceLabel)'
+      : '';
+  if (isDat) {
+    return 'Laporan .dat berhasil dipasang$suffix: $recordCount data & foto diperbarui.';
+  }
+  final yearsLabel = plan.sortedIncomingYears.join(', ');
+  if (plan.willOverwriteSameYear) {
+    return 'Data DHKP Tahun $yearsLabel berhasil ditimpa$suffix: $recordCount data dimuat.';
+  }
+  if (plan.isYearUpdateOnly) {
+    return 'Data DHKP berhasil diperbarui ke Tahun $yearsLabel$suffix: $recordCount data ditambahkan (data tahun lama tetap tersimpan).';
+  }
+  return 'Paket DHKP${yearsLabel.isNotEmpty ? " Tahun $yearsLabel" : ""} berhasil dipasang$suffix: $recordCount data & dokumentasi dimuat.';
+}
+

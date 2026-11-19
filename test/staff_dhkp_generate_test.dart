@@ -1,5 +1,10 @@
+import 'dart:io';
+
+import 'package:cek_pbb_app/app_storage.dart';
+import 'package:cek_pbb_app/base_preferences_store.dart';
 import 'package:cek_pbb_app/blok_data_store.dart';
 import 'package:cek_pbb_app/blok_record.dart';
+import 'package:cek_pbb_app/dkhp_package_helper.dart';
 import 'package:cek_pbb_app/dusun_data.dart';
 import 'package:cek_pbb_app/monitoring/staff_dhkp_generate_dialog.dart';
 import 'package:cek_pbb_app/monitoring/staff_dhkp_generate_service.dart';
@@ -76,21 +81,35 @@ class FakeGenerateStaffPortalClient extends StaffPortalClient {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  late Directory tempDir;
 
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
+    BaseSecureStore.clearTestMemoryStore();
+    tempDir = await Directory.systemTemp.createTemp('staff_generate_test_');
+    AppStorage.setMockDirectories(dataDir: tempDir, mediaDir: tempDir);
+    BlokDataStore.instance.resetForTesting();
     await DusunData.instance.init();
+  });
+
+  tearDown(() async {
+    AppStorage.resetForTesting();
+    BlokDataStore.instance.resetForTesting();
+    BaseSecureStore.clearTestMemoryStore();
+    if (await tempDir.exists()) {
+      await tempDir.delete(recursive: true);
+    }
   });
 
   group('StaffDhkpGenerateService.generateAndApply', () {
     test(
-      'overwrites local database, applies 2Juta Pemda threshold, updates dusuns, and sets catatan tanggal jam',
+      'does NOT delete local DB during generate; installing generated .dkhp updates new year while preserving older year',
       () async {
-        // 1. Seed existing data that will be overwritten
+        // 1. Seed existing 2025 data
         await BlokDataStore.instance.upsertAll([
           const BlokRecord(
             nop: '320520000400100010',
-            namaWajibPajak: 'DATA LAMA DITIMPA',
+            namaWajibPajak: 'DATA TAHUN 2025 AMAN',
             tahunBayar: '2025',
             tanggalBayar: '',
             jumlahPbb: '50000',
@@ -98,12 +117,7 @@ void main() {
           ),
         ]);
 
-        // 2. Mock portal data:
-        // Belum Bayar:
-        // - Blok 001 (50rb, 2026)
-        // - Blok 001 (2.5jt -> Target Pemda, 2026)
-        // Sudah Bayar:
-        // - Blok 002 (100rb, 2026-03-01 14:20:00)
+        // 2. Mock portal data for 2026
         final client = FakeGenerateStaffPortalClient(
           belumBayarPages: {
             1: const MonitoringTableResult(
@@ -177,6 +191,7 @@ void main() {
               kantorDesaLng: 107.1650,
               targetPemdaThreshold: 2000000,
               pacingDelay: Duration.zero,
+              splitOutputDirectory: tempDir,
             );
 
         expect(outcome.success, isTrue);
@@ -184,14 +199,30 @@ void main() {
         expect(outcome.belumBayarCount, 1);
         expect(outcome.sudahBayarCount, 1);
         expect(outcome.targetPemdaCount, 1);
+        expect(outcome.generatedMasterFile, isNotNull);
+        expect(outcome.generatedMasterFile!.existsSync(), isTrue);
 
-        // Verify database in store
+        // Selama generate (sebelum file .dkhp dipasang), database lokal TIDAK berubah!
+        final beforeInstall = await BlokDataStore.instance.loadAll();
+        expect(beforeInstall.length, 1);
+        expect(beforeInstall.single.namaWajibPajak, 'DATA TAHUN 2025 AMAN');
+
+        // Rencana pemasangan: 2025 di lokal vs 2026 di .dkhp -> pembaruan tahun (tanpa konfirmasi timpa)
+        final plan = await DhkpPackageHelper.inspectInstallPlan(
+          outcome.generatedMasterFile!.path,
+        );
+        expect(plan.isYearUpdateOnly, isTrue);
+        expect(plan.willOverwriteSameYear, isFalse);
+
+        // Pasang file .dkhp hasil generate
+        await DhkpPackageHelper.unpackDkhp(outcome.generatedMasterFile!.path);
+
         final loaded = await BlokDataStore.instance.loadAll();
-        expect(loaded.length, 3);
-        // Data lama harus terhapus/ditimpa
+        // Data 2025 tetap terjaga + 3 data baru tahun 2026 = 4 record!
+        expect(loaded.length, 4);
         expect(
-          loaded.any((r) => r.namaWajibPajak == 'DATA LAMA DITIMPA'),
-          isFalse,
+          loaded.any((r) => r.namaWajibPajak == 'DATA TAHUN 2025 AMAN'),
+          isTrue,
         );
 
         final targetPemda = loaded.firstWhere(
@@ -211,7 +242,7 @@ void main() {
           'Sudah bayar pada tanggal 1 bulan Maret 2026 jam 14:20:00',
         );
 
-        // Verify DusunData updated
+        // Verify DusunData updated after installing generated .dkhp
         expect(DusunData.instance.kantorDesaLat, closeTo(-6.7820, 0.0001));
         expect(DusunData.instance.kantorDesaLng, closeTo(107.1650, 0.0001));
         final allDusuns = DusunData.instance.allDusuns;
@@ -276,11 +307,14 @@ void main() {
               dusuns: dusun1Only,
               filterByDusunBlocks: true,
               pacingDelay: Duration.zero,
+              splitOutputDirectory: tempDir,
             );
 
         expect(outcome.success, isTrue);
-        // Hanya 2 record dari blok 001 dan 002 yang diambil, blok 015 disaring keluar
         expect(outcome.totalRecords, 2);
+        expect(outcome.generatedMasterFile, isNotNull);
+
+        await DhkpPackageHelper.unpackDkhp(outcome.generatedMasterFile!.path);
         final loaded = await BlokDataStore.instance.loadAll();
         expect(loaded.length, 2);
         expect(loaded.any((r) => r.nop == '320520000401500040'), isFalse);
@@ -331,10 +365,14 @@ void main() {
               ],
               filterByDusunBlocks: false,
               pacingDelay: Duration.zero,
+              splitOutputDirectory: tempDir,
             );
 
         expect(outcome.success, isTrue);
         expect(outcome.totalRecords, 2);
+        expect(outcome.generatedMasterFile, isNotNull);
+
+        await DhkpPackageHelper.unpackDkhp(outcome.generatedMasterFile!.path);
         final loaded = await BlokDataStore.instance.loadAll();
         expect(loaded.any((r) => r.tahunBayar == '2018'), isTrue);
         expect(loaded.any((r) => r.tahunBayar == '2026'), isTrue);
@@ -344,7 +382,7 @@ void main() {
 
   group('StaffDhkpGenerateDialog UI', () {
     testWidgets(
-      'renders dialog with multi-year inputs, Kecamatan, Desa, Dusun, and filter option',
+      'renders dialog with multi-year inputs, Kecamatan, Desa, Dusun, and safe non-destructive mode',
       (tester) async {
         await tester.pumpWidget(
           MaterialApp(
@@ -365,7 +403,7 @@ void main() {
         await tester.tap(find.text('Open'));
         await tester.pumpAndSettle();
 
-        expect(find.text('Generate DHKP Baru (Timpa)'), findsOneWidget);
+        expect(find.text('Generate Paket DHKP Baru'), findsOneWidget);
         expect(find.text('Tahun Awal'), findsOneWidget);
         expect(find.text('Tahun Akhir'), findsOneWidget);
         expect(find.text('Kecamatan'), findsOneWidget);
@@ -379,7 +417,7 @@ void main() {
           findsOneWidget,
         );
         expect(find.text('Tambah Dusun'), findsOneWidget);
-        expect(find.text('Mulai Generate & Timpa DHKP'), findsOneWidget);
+        expect(find.text('Mulai Generate Paket DHKP'), findsOneWidget);
       },
     );
   });

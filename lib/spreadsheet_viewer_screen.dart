@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'app_security_service.dart';
 import 'blok_catatan_screen.dart';
 import 'blok_data_store.dart';
+import 'dhkp/blok_catatan_dialogs.dart';
 import 'dkhp_package_helper.dart';
 import 'incoming_file_service.dart';
 import 'spreadsheet/spreadsheet_parser.dart';
@@ -237,34 +238,42 @@ class _SpreadsheetViewerScreenState extends State<SpreadsheetViewerScreen> {
 
   /// Memproses impor berkas DHKP ke dalam database aplikasi.
   Future<void> _importDkhp() async {
-    final theme = Theme.of(context);
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        icon: Icon(
-          Icons.inventory_2_rounded,
-          color: theme.colorScheme.primary,
-          size: 38,
-        ),
-        title: const Text('Impor ke Buku Catatan'),
-        content: Text(
-          'Pasang data dari "${widget.fileName}" ke Buku Catatan Blok sekarang?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Batal'),
+    DhkpInstallPlan plan;
+    try {
+      plan = await DhkpPackageHelper.inspectInstallPlan(
+        widget.file.path,
+        password: _providedPassword,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          icon: const Icon(
+            Icons.error_outline_rounded,
+            color: Colors.red,
+            size: 36,
           ),
-          FilledButton.icon(
-            onPressed: () => Navigator.pop(ctx, true),
-            icon: const Icon(Icons.download_rounded, size: 18),
-            label: const Text('Pasang Sekarang'),
-          ),
-        ],
-      ),
-    );
+          title: const Text('Gagal Memeriksa DHKP'),
+          content: Text('$e'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Tutup'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
 
-    if (confirmed != true || !mounted) return;
+    if (!mounted) return;
+    final confirmed = await confirmDhkpInstallPlanIfNeeded(
+      context,
+      plan,
+      fileName: widget.fileName,
+    );
+    if (!confirmed || !mounted) return;
 
     // Tampilkan indikator proses
     showDialog<void>(
@@ -303,14 +312,20 @@ class _SpreadsheetViewerScreenState extends State<SpreadsheetViewerScreen> {
         password: _providedPassword,
       );
       await BlokDataStore.instance.loadAll();
+      BlokCatatanScreen.refreshIfOpen();
 
       if (!mounted) return;
       Navigator.of(context, rootNavigator: true).pop(); // Tutup loading dialog
 
+      final isDat = widget.file.path.toLowerCase().endsWith('.dat');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Sukses! ${records.length} data DHKP berhasil diimpor ke Buku Catatan.',
+            buildDhkpInstallSuccessMessage(
+              plan: plan,
+              recordCount: records.length,
+              isDat: isDat,
+            ),
           ),
           backgroundColor: Colors.teal.shade800,
           duration: const Duration(seconds: 5),
@@ -323,6 +338,9 @@ class _SpreadsheetViewerScreenState extends State<SpreadsheetViewerScreen> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
+                        settings: const RouteSettings(
+                          name: BlokCatatanScreen.routeName,
+                        ),
                         builder: (_) => const BlokCatatanScreen(),
                       ),
                     );

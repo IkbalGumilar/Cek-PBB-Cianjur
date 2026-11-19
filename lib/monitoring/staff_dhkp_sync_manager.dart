@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:material_ui/material_ui.dart';
 
 import '../batch_notification_service.dart';
+import '../blok_catatan_screen.dart';
 import '../staff_portal_client.dart';
 import 'staff_dhkp_sync_dialog.dart';
 import 'staff_dhkp_sync_service.dart';
@@ -65,6 +66,7 @@ class StaffDhkpSyncManager extends ChangeNotifier {
 
   void _initActionStream() {
     _actionSub = BatchNotificationService.actionStream.listen((action) {
+      if (!_isSyncing) return;
       switch (action) {
         case 'pause':
           if (!_isPaused && !_isCompleted) {
@@ -162,6 +164,7 @@ class StaffDhkpSyncManager extends ChangeNotifier {
       _isSyncing = false;
       _isCompleted = true;
       notifyListeners();
+      BlokCatatanScreen.refreshIfOpen();
     }
   }
 
@@ -217,6 +220,7 @@ class StaffDhkpSyncManager extends ChangeNotifier {
   /// Reset status untuk keperluan pengujian
   @visibleForTesting
   void reset() {
+    resetStaffDhkpSyncReportDialogForTesting();
     _isSyncing = false;
     _isSheetOpen = false;
     _isPaused = false;

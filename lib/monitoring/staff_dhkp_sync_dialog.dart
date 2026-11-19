@@ -887,15 +887,12 @@ class _StaffDhkpSyncRunningSheet extends StatelessWidget {
                           child: FilledButton.icon(
                             onPressed: () {
                               final out = mgr.outcome;
-                              final parentContext =
-                                  rootNavigatorKey.currentContext ?? context;
                               mgr.hideSheet(context);
-                              mgr.dismiss();
                               if (out != null) {
-                                showStaffDhkpSyncReportDialog(
-                                  parentContext,
-                                  out,
-                                );
+                                BatchNotificationService.instance
+                                    .openDhkpWithSyncReport(out);
+                              } else {
+                                mgr.dismiss();
                               }
                             },
                             style: FilledButton.styleFrom(
@@ -978,15 +975,33 @@ class _StaffDhkpSyncRunningSheet extends StatelessWidget {
   }
 }
 
-/// Menampilkan popup laporan rinci audit sinkronisasi Portal Staf
+bool _isStaffSyncReportDialogOpen = false;
+
+/// Status apakah dialog laporan hasil sinkronisasi sedang terbuka.
+bool get isStaffDhkpSyncReportDialogOpen => _isStaffSyncReportDialogOpen;
+
+/// Reset status dialog laporan sinkronisasi untuk pengujian.
+void resetStaffDhkpSyncReportDialogForTesting() {
+  _isStaffSyncReportDialogOpen = false;
+}
+
+/// Menampilkan popup laporan rinci audit sinkronisasi Portal Staf.
+/// Dilindungi guard agar tidak pernah muncul ganda meskipun notifikasi diketuk
+/// berulang kali atau dipicu bersamaan dari beberapa sumber.
 Future<void> showStaffDhkpSyncReportDialog(
   BuildContext context,
   StaffDhkpSyncOutcome outcome,
 ) async {
-  await showDialog<void>(
-    context: context,
-    builder: (ctx) => _StaffDhkpSyncReportDialog(outcome: outcome),
-  );
+  if (_isStaffSyncReportDialogOpen) return;
+  _isStaffSyncReportDialogOpen = true;
+  try {
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => _StaffDhkpSyncReportDialog(outcome: outcome),
+    );
+  } finally {
+    _isStaffSyncReportDialogOpen = false;
+  }
 }
 
 class _StaffDhkpSyncReportDialog extends StatefulWidget {
@@ -1006,6 +1021,7 @@ class _StaffDhkpSyncReportDialogState
 
   @override
   void dispose() {
+    _isStaffSyncReportDialogOpen = false;
     _searchCtrl.dispose();
     super.dispose();
   }

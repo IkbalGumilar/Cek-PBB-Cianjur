@@ -3,13 +3,34 @@ import 'package:material_ui/material_ui.dart';
 import 'result_exporter.dart';
 import 'tax_record.dart';
 
-class ResultScreen extends StatelessWidget {
+class ResultScreen extends StatefulWidget {
+  static const String routeName = 'BatchResultScreen';
+  static bool isCurrentlyOpen = false;
+
   final List<TaxRecord> records;
 
   const ResultScreen({super.key, required this.records});
 
   @override
+  State<ResultScreen> createState() => _ResultScreenState();
+}
+
+class _ResultScreenState extends State<ResultScreen> {
+  @override
+  void initState() {
+    super.initState();
+    ResultScreen.isCurrentlyOpen = true;
+  }
+
+  @override
+  void dispose() {
+    ResultScreen.isCurrentlyOpen = false;
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final records = widget.records;
     final total = records.length;
     final sudahBayar = records.where((r) => r.isPaid).length;
     final belumBayar = records

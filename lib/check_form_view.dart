@@ -454,10 +454,9 @@ class _CheckFormViewState extends State<CheckFormView> {
       steps.add(
         FeatureTourStep(
           targetKey: _blokWilayahInputKey,
-          title: 'Kolom Blok & Nomor Wilayah',
+          title: 'Wilayah Aktif, Kolom Blok & Nomor Wilayah',
           description:
-              'Ketik nomor Blok dan Nomor Urut Wilayah dari lembaran SPPT warga di kedua kotak ini. '
-              'Anda cukup mengetik angkanya saja tanpa perlu menambahkan angka nol di depan.',
+              'Ketuk penanda Kecamatan/Desa di atas kolom jika ingin mengganti wilayah kerja, lalu ketik nomor Blok dan Nomor Urut Wilayah dari SPPT tanpa angka nol di depan.',
           actionHint:
               'Contoh: untuk Blok 017 Nomor 0154, cukup ketik 17 pada kolom Blok dan 154 pada kolom Nomor Wilayah.',
           icon: Icons.pin_outlined,
@@ -482,11 +481,12 @@ class _CheckFormViewState extends State<CheckFormView> {
       steps.add(
         FeatureTourStep(
           targetKey: _importButtonKey,
-          title: 'Tombol Periksa Banyak Data Sekaligus',
+          title: 'Periksa Banyak Data Sekaligus (Latar Belakang)',
           description:
-              'Tekan tombol ini jika Anda ingin memeriksa status lunas puluhan atau ratusan warga sekaligus dari berkas daftar pajak (Excel, CSV, dokumen PDF, atau foto daftar).',
+              'Tekan tombol ini untuk memeriksa status lunas puluhan hingga ratusan NOP sekaligus dari Excel, CSV, TXT, atau foto daftar. '
+              'Proses dapat disembunyikan di latar belakang dan otomatis memperbarui DHKP saat selesai.',
           actionHint:
-              'Sangat berguna saat memeriksa daftar tagihan satu blok atau satu dusun secara otomatis.',
+              'Dari halaman DHKP, petugas Kedusunan juga bisa langsung memeriksa Seluruh Blok dusunnya sekaligus.',
           icon: Icons.upload_file_rounded,
         ),
       );

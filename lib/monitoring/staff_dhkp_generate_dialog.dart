@@ -5,8 +5,10 @@ import 'package:file_picker/file_picker.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../app_storage.dart';
+import '../blok_catatan_screen.dart';
 import '../blok_data_store.dart';
 import '../cianjur_wilayah_data.dart';
+import '../dhkp/blok_catatan_dialogs.dart';
 import '../dkhp_package_helper.dart';
 import '../dusun_data.dart';
 import '../incoming_file_service.dart';
@@ -14,7 +16,8 @@ import '../nop_helper.dart';
 import '../staff_portal_client.dart';
 import 'staff_dhkp_generate_service.dart';
 
-/// Membuka dialog Generate DHKP Baru dari Portal Staf (Mode Timpa)
+/// Membuka dialog Generate Paket DHKP Baru dari Portal Staf (tanpa menghapus
+/// database lokal sebelum berkas `.dkhp` dipasang).
 Future<void> showStaffDhkpGenerateDialog(
   BuildContext context, {
   required StaffPortalClient client,
@@ -498,9 +501,21 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
     return list;
   }
 
-  Future<void> _copySplitFilesToDirectory(SplitDkhpExportResult split) async {
+  static Future<void> _copyGeneratedFilesToDirectory(
+    BuildContext hostContext, {
+    SplitDkhpExportResult? split,
+    File? masterFile,
+  }) async {
+    final files = <File>[
+      if (split != null)
+        for (final entry in split.allEntries) entry.file
+      else
+        ?masterFile,
+    ];
+    if (files.isEmpty) return;
+
     final selectedDir = await FilePicker.getDirectoryPath(
-      dialogTitle: 'Pilih Folder Tujuan Simpan Paket .dkhp per Dusun',
+      dialogTitle: 'Pilih Folder Tujuan Simpan Paket .dkhp',
     );
     if (selectedDir == null || selectedDir.trim().isEmpty) return;
 
@@ -510,17 +525,17 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
     }
 
     var copiedCount = 0;
-    for (final entry in split.allEntries) {
-      final fileName = entry.file.uri.pathSegments.last;
+    for (final file in files) {
+      final fileName = file.uri.pathSegments.last;
       final targetPath = '${destDir.path}${Platform.pathSeparator}$fileName';
-      if (entry.file.path != targetPath) {
-        await entry.file.copy(targetPath);
+      if (file.path != targetPath) {
+        await file.copy(targetPath);
       }
       copiedCount++;
     }
 
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
+    if (!hostContext.mounted) return;
+    ScaffoldMessenger.of(hostContext).showSnackBar(
       SnackBar(
         content: Text(
           '✅ $copiedCount berkas .dkhp terenkripsi berhasil disalin ke: ${destDir.path}',
@@ -743,7 +758,8 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
         ),
         actions: [
           OutlinedButton.icon(
-            onPressed: () => _copySplitFilesToDirectory(split),
+            onPressed: () =>
+                _copyGeneratedFilesToDirectory(context, split: split),
             icon: const Icon(Icons.folder_copy_outlined, size: 18),
             label: const Text('Salin ke Folder Lain...'),
           ),
@@ -754,6 +770,108 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
         ],
       ),
     );
+  }
+
+  static Future<bool> _installGeneratedDkhpFile(
+    BuildContext hostContext, {
+    required File file,
+    String? password,
+  }) async {
+    if (!hostContext.mounted) return false;
+    final fileName = file.uri.pathSegments.last;
+
+    DhkpInstallPlan plan;
+    try {
+      plan = await DhkpPackageHelper.inspectInstallPlan(
+        file.path,
+        password: password,
+      );
+    } catch (e) {
+      if (hostContext.mounted) {
+        ScaffoldMessenger.of(hostContext).showSnackBar(
+          SnackBar(
+            content: Text('Gagal memeriksa berkas DHKP: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return false;
+    }
+
+    if (!hostContext.mounted) return false;
+    final confirmed = await confirmDhkpInstallPlanIfNeeded(
+      hostContext,
+      plan,
+      fileName: fileName,
+    );
+    if (!confirmed || !hostContext.mounted) return false;
+
+    showDialog<void>(
+      context: hostContext,
+      barrierDismissible: false,
+      builder: (_) => const PopScope(
+        canPop: false,
+        child: Center(
+          child: Card(
+            elevation: 8,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.all(Radius.circular(16)),
+            ),
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: 28, vertical: 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text(
+                    'Memasang berkas DHKP ke aplikasi...',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    try {
+      final records = await DhkpPackageHelper.unpackDkhp(
+        file.path,
+        password: password,
+      );
+      await BlokDataStore.instance.loadAll();
+      BlokCatatanScreen.refreshIfOpen();
+
+      if (hostContext.mounted) {
+        Navigator.of(hostContext, rootNavigator: true).pop();
+        ScaffoldMessenger.of(hostContext).showSnackBar(
+          SnackBar(
+            content: Text(
+              buildDhkpInstallSuccessMessage(
+                plan: plan,
+                recordCount: records.length,
+                isDat: false,
+              ),
+            ),
+            backgroundColor: Colors.teal.shade800,
+          ),
+        );
+      }
+      return true;
+    } catch (e) {
+      if (hostContext.mounted) {
+        Navigator.of(hostContext, rootNavigator: true).pop();
+        ScaffoldMessenger.of(hostContext).showSnackBar(
+          SnackBar(
+            content: Text('Gagal memasang berkas DHKP: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return false;
+    }
   }
 
   Future<void> _startGenerate() async {
@@ -778,11 +896,9 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
         : 'Semua blok se-desa (tanpa filter blok dusun)';
     final splitKet = _exportSplitByDusun
         ? 'Otomatis dipecah ke ${dusuns.length} file .dkhp Kedusunan${_includeMasterInSplit ? " + 1 Master Desa" : ""} (Terenkripsi DKH2 AES-256-GCM)'
-        : 'Hanya terapkan ke database lokal';
+        : '1 berkas Master Desa (.dkhp Terenkripsi DKH2 AES-256-GCM)';
     final previewPwd = _encryptionPasswordController.text.trim();
-    final kunciKet = !_exportSplitByDusun
-        ? ''
-        : previewPwd.isNotEmpty
+    final kunciKet = previewPwd.isNotEmpty
         ? '\n🔑 Kunci Enkripsi: Kata Sandi Kustom (${previewPwd.length} karakter)'
         : '\n🔑 Kunci Enkripsi: Kunci Pemulihan / Sandi Backup aktif (otomatis)';
 
@@ -791,19 +907,20 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
       builder: (c) => AlertDialog(
         title: const Row(
           children: [
-            Icon(Icons.warning_amber_rounded, color: Colors.orange),
+            Icon(Icons.inventory_2_outlined, color: Colors.teal),
             SizedBox(width: 8),
-            Text('Konfirmasi Timpa DHKP'),
+            Expanded(child: Text('Konfirmasi Generate Paket DHKP')),
           ],
         ),
         content: Text(
-          'Anda akan mengunduh seluruh data SPPT Tahun $labelTahun dari Portal Staf untuk:\n'
+          'Anda akan mengunduh data SPPT Tahun $labelTahun dari Portal Staf untuk:\n'
           '• Kecamatan: ${resolvedWilayah.kecName} (${resolvedWilayah.vtaxKecCode})\n'
           '• Desa/Kel.: ${resolvedWilayah.desaName} (${resolvedWilayah.vtaxKelCode})\n\n'
           '📌 Cakupan: $cakupanKet\n'
-          '🔐 Paket Split: $splitKet$kunciKet\n\n'
-          '⚠️ Basis data DHKP di aplikasi saat ini akan DITIMPA dengan data baru. Salinan cadangan (backup) otomatis disimpan sebelum proses.\n\n'
-          'Lanjutkan proses?',
+          '🔐 Paket Keluaran: $splitKet$kunciKet\n\n'
+          '🛡️ Data DHKP di aplikasi saat ini TIDAK akan dihapus atau ditimpa selama proses generate. '
+          'Pemasangan/penimpaan hanya dilakukan setelah generate selesai dan Anda memilih memasang berkas .dkhp.\n\n'
+          'Lanjutkan proses generate?',
         ),
         actions: [
           TextButton(
@@ -812,10 +929,10 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
           ),
           FilledButton(
             style: FilledButton.styleFrom(
-              backgroundColor: Colors.orange.shade800,
+              backgroundColor: Colors.teal.shade700,
             ),
             onPressed: () => Navigator.pop(c, true),
-            child: const Text('Ya, Mulai Timpa DHKP'),
+            child: const Text('Ya, Mulai Generate'),
           ),
         ],
       ),
@@ -826,6 +943,7 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
     final kantorLat = double.tryParse(_kantorLatController.text.trim());
     final kantorLng = double.tryParse(_kantorLngController.text.trim());
     final customPwd = _encryptionPasswordController.text.trim();
+    final effectivePwd = customPwd.isNotEmpty ? customPwd : null;
 
     setState(() {
       _isProcessing = true;
@@ -848,7 +966,8 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
       targetPemdaThreshold: 2000000,
       exportSplitByDusun: _exportSplitByDusun,
       includeMasterInSplit: _includeMasterInSplit,
-      encryptionPassword: customPwd.isNotEmpty ? customPwd : null,
+      encryptionPassword: effectivePwd,
+      applyToLocalDb: false,
       onProgress: (p) {
         if (mounted) {
           setState(() {
@@ -866,16 +985,19 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
 
     if (outcome.success) {
       final split = outcome.splitExportResult;
+      final masterFile = outcome.generatedMasterFile;
+      final hostContext = Navigator.of(context, rootNavigator: true).context;
       Navigator.of(context).pop();
-      await showDialog(
-        context: context,
+      if (!hostContext.mounted) return;
+      await showDialog<void>(
+        context: hostContext,
         builder: (c) => AlertDialog(
           icon: const Icon(
             Icons.check_circle_rounded,
             color: Colors.green,
             size: 48,
           ),
-          title: const Text('DHKP Berhasil Digenerate!'),
+          title: const Text('Paket DHKP Berhasil Digenerate!'),
           content: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 500),
             child: SingleChildScrollView(
@@ -922,10 +1044,29 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
                         '• [Dusun #${d.dusunNumber} - ${d.label}] ${d.file.uri.pathSegments.last} (${d.recordCount} NOP)',
                         style: const TextStyle(fontSize: 12),
                       ),
+                  ] else if (masterFile != null) ...[
+                    const Divider(),
+                    const Text(
+                      '🔐 Berkas Master .dkhp Terenkripsi:',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '• ${masterFile.uri.pathSegments.last}',
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                    Text(
+                      'Lokasi: ${masterFile.parent.path}',
+                      style: const TextStyle(fontSize: 11, color: Colors.grey),
+                    ),
                   ],
                   const SizedBox(height: 12),
                   const Text(
-                    'Data baru telah aktif langsung di aplikasi. Anda dapat langsung membuka Buku Catatan Blok atau membagikan file .dkhp per Dusun ke masing-masing Kepala Dusun.',
+                    'Data lokal aplikasi belum berubah. Ketuk "Pasang File DHKP" di bawah untuk memasangnya sekarang '
+                    '(jika tahun pajak masih kosong langsung terisi/diperbarui; jika tahun sama sudah terisi akan meminta konfirmasi timpa).',
                     style: TextStyle(fontSize: 12, color: Colors.grey),
                   ),
                 ],
@@ -933,16 +1074,36 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
             ),
           ),
           actions: [
-            if (split != null)
+            if (split != null || masterFile != null)
               OutlinedButton.icon(
-                onPressed: () => _copySplitFilesToDirectory(split),
+                onPressed: () => _copyGeneratedFilesToDirectory(
+                  hostContext,
+                  split: split,
+                  masterFile: masterFile,
+                ),
                 icon: const Icon(Icons.folder_copy_outlined, size: 18),
-                label: const Text('Simpan File Split ke Folder Lain...'),
+                label: const Text('Simpan ke Folder Lain...'),
               ),
-            FilledButton(
+            TextButton(
               onPressed: () => Navigator.pop(c),
-              child: const Text('Tutup & Selesai'),
+              child: const Text('Tutup Saja'),
             ),
+            if (masterFile != null)
+              FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  backgroundColor: Colors.teal.shade700,
+                ),
+                onPressed: () async {
+                  Navigator.pop(c);
+                  await _installGeneratedDkhpFile(
+                    hostContext,
+                    file: masterFile,
+                    password: effectivePwd,
+                  );
+                },
+                icon: const Icon(Icons.download_done_rounded, size: 18),
+                label: const Text('Pasang File DHKP'),
+              ),
           ],
         ),
       );
@@ -1068,14 +1229,14 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text(
-                          'Generate DHKP Baru (Timpa)',
+                          'Generate Paket DHKP Baru',
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
                         Text(
-                          'Unduh seluruh SPPT dari Portal Staf & susun master DHKP baru.',
+                          'Unduh SPPT dari Portal Staf & buat berkas .dkhp tanpa menghapus data lokal.',
                           style: TextStyle(
                             fontSize: 12,
                             color: isDark
@@ -1693,31 +1854,32 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
                       ),
                       const SizedBox(height: 10),
 
-                      // WARNING TIMPA
+                      // INFO MODE AMAN (TIDAK MENIMPA SAAT GENERATE)
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: Colors.red.withValues(alpha: 0.08),
+                          color: Colors.teal.withValues(alpha: 0.08),
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(
-                            color: Colors.red.withValues(alpha: 0.3),
+                            color: Colors.teal.withValues(alpha: 0.3),
                           ),
                         ),
-                        child: const Row(
+                        child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Icon(
-                              Icons.warning_amber_rounded,
-                              color: Colors.red,
+                              Icons.shield_outlined,
+                              color: Colors.teal.shade700,
                               size: 20,
                             ),
-                            SizedBox(width: 8),
+                            const SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                'Mode Timpa: Database DHKP aktif akan digantikan dengan data baru hasil unduh dari Portal Staf. Salinan cadangan (backup) otomatis dibuat.',
+                                'Mode Aman: Data DHKP lokal tidak dihapus/ditimpa saat proses generate. '
+                                'Pemasangan dilakukan setelah berkas .dkhp selesai dibuat (tahun baru memperbarui tanpa menimpa tahun lama; tahun sama meminta konfirmasi timpa).',
                                 style: TextStyle(
                                   fontSize: 12,
-                                  color: Colors.red,
+                                  color: Colors.teal.shade800,
                                 ),
                               ),
                             ),
@@ -1754,7 +1916,7 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
                     ),
                     onPressed: _startGenerate,
                     icon: const Icon(Icons.flash_on_rounded),
-                    label: const Text('Mulai Generate & Timpa DHKP'),
+                    label: const Text('Mulai Generate Paket DHKP'),
                   ),
                 ],
               ),

@@ -230,7 +230,10 @@ class _MainShellState extends State<MainShell> {
     FeatureTourController.dismissActiveTour();
     final request = await Navigator.push<BlokNavigationRequest>(
       context,
-      MaterialPageRoute(builder: (_) => const BlokCatatanScreen()),
+      MaterialPageRoute(
+        settings: const RouteSettings(name: BlokCatatanScreen.routeName),
+        builder: (_) => const BlokCatatanScreen(),
+      ),
     );
     if (!mounted) return;
     if (request == null) {

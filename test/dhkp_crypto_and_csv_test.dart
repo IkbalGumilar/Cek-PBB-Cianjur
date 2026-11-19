@@ -934,7 +934,8 @@ void main() {
           includeMasterInSplit: true,
         );
 
-        // Pastikan halaman 2 berhasil di-retry dan total 3 SPPT tersimpan utuh:
+        // Pastikan halaman 2 berhasil di-retry dan total 3 SPPT tersusun di paket .dkhp
+        // tanpa menghapus/mengubah DB lokal sebelum file dipasang:
         // 1 Belum Bayar reguler + 1 Target Pemda (>= 2 Juta) + 1 Sudah Bayar = 3 SPPT
         expect(genResult.success, isTrue);
         expect(fakeClient.belumBayarPage2Attempts, equals(2));
@@ -942,6 +943,14 @@ void main() {
         expect(genResult.belumBayarCount, equals(1));
         expect(genResult.sudahBayarCount, equals(1));
         expect(genResult.targetPemdaCount, equals(1));
+        expect(genResult.generatedMasterFile, isNotNull);
+        expect(await BlokDataStore.instance.loadAll(), isEmpty);
+
+        // Pasang berkas master .dkhp hasil generate ke database lokal
+        await DhkpPackageHelper.unpackDkhp(
+          genResult.generatedMasterFile!.path,
+          password: 'SandiAutoSplit2025!',
+        );
         expect(await BlokDataStore.instance.loadAll(), hasLength(3));
 
         // Pastikan tglBayarAkhir untuk tahun pajak lampau (2025) diperluas hingga hari ini (lintas tahun)
@@ -1230,7 +1239,7 @@ void main() {
 
         expect(find.textContaining('saat ini 4/8'), findsOneWidget);
 
-        await tester.tap(find.text('Mulai Generate & Timpa DHKP'));
+        await tester.tap(find.text('Mulai Generate Paket DHKP'));
         await tester.pumpAndSettle();
 
         expect(
