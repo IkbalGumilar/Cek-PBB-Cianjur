@@ -146,7 +146,7 @@ Antarmuka beradaptasi secara responsif (`AppBreakpoints`: Mobile `< 600dp`, Tabl
 | Pembaca PDF Camelot & Penampil Spreadsheet | ✅ | ✅ | ✅ | ✅ | Desktop mendukung Cetak Driver OS langsung (`Ctrl+P`) |
 | Login Akun Google, Pencadangan Drive & `appDataFolder` Sync | ✅ | ✅ | ✅ | ✅ | OAuth Desktop via loopback `127.0.0.1` (`env.desktop.json`) |
 | Tombol Kontak Darurat `112` Cianjur & Kontak Desa | ✅ | ✅ | — | — | Khusus perangkat seluler (panggil/WA 1-ketuk + sync Google) |
-| Pemindaian Kamera OCR (NOP / KTP / Plat) & AppWidget Home | ✅ | ✅* | — | — | Google ML Kit di HP (*AppWidget & Foreground Service khusus Android) |
+| Pemindaian Kamera OCR (NOP / KTP / Plat) & AppWidget Home | ✅ | ✅ | — | — | Google ML Kit di HP (*AppWidget & Foreground Service khusus Android) |
 | Pembaruan Mandiri (*Self-Updater* GitHub Releases) | ✅ | — | ✅ | ✅ | Verifikasi SHA-256 & magic header (iOS melalui App Store) |
 
 ---
