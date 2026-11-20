@@ -10,6 +10,7 @@ import '../calculator/pbb_calculator_models.dart';
 import '../currency_format.dart';
 import '../dkhp_package_helper.dart';
 import '../dusun_data.dart';
+import '../user_friendly_error.dart';
 import 'blok_catatan_models.dart';
 import 'dhkp_nop_kalkulator_dialog.dart';
 
@@ -1419,7 +1420,7 @@ Future<String?> showUploadDataSourceDialog(BuildContext context) {
   return showDialog<String>(
     context: context,
     builder: (ctx) => SimpleDialog(
-      title: const Text('Upload Data DHKP / Laporan (.dat)'),
+      title: const Text('Unggah Data DHKP / Laporan (.dat)'),
       children: [
         SimpleDialogOption(
           onPressed: () => Navigator.pop(ctx, 'file'),
@@ -1871,186 +1872,190 @@ Future<void> showWhatsAppPhotoPreviewDialog(
                                         color: Colors.white70,
                                       ),
                                       const SizedBox(height: 8),
-                                      Text(
-                                        'Gagal menampilkan gambar: $err',
-                                        style: const TextStyle(
-                                          color: Colors.white70,
-                                          fontSize: 12,
+                                        Text(
+                                          'Gagal menampilkan gambar: ${friendlyErrorMessage(err)}',
+                                          style: const TextStyle(
+                                            color: Colors.white70,
+                                            fontSize: 12,
+                                          ),
+                                          textAlign: TextAlign.center,
                                         ),
-                                        textAlign: TextAlign.center,
-                                      ),
-                                    ],
+                                      ],
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
-                          )
-                        : Center(
-                            child: Padding(
-                              padding: const EdgeInsets.all(24),
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    Icons.photo_camera_outlined,
-                                    size: 64,
-                                    color: Colors.white.withValues(alpha: 0.5),
-                                  ),
-                                  const SizedBox(height: 12),
-                                  const Text(
-                                    'Belum Ada Gambar Dokumentasi',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w600,
+                            )
+                          : Center(
+                              child: Padding(
+                                padding: const EdgeInsets.all(24),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.photo_camera_outlined,
+                                      size: 64,
+                                      color: Colors.white.withValues(alpha: 0.5),
                                     ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    'Klik "Upload Foto" di bawah untuk mengambil atau memilih foto.',
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(
-                                      color: Colors.white.withValues(
-                                        alpha: 0.7,
+                                    const SizedBox(height: 12),
+                                    const Text(
+                                      'Belum Ada Gambar Dokumentasi',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w600,
                                       ),
-                                      fontSize: 12,
                                     ),
-                                  ),
-                                ],
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      isMobilePlatform
+                                          ? 'Klik "Unggah Foto" di bawah untuk mengambil atau memilih foto.'
+                                          : 'Klik "Unggah Foto" di bawah untuk memilih foto dari perangkat.',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        color: Colors.white.withValues(
+                                          alpha: 0.7,
+                                        ),
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
-                          ),
+                    ),
                   ),
-                ),
 
-                // Tombol Aksi di Bawah
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 10,
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      if (hasImage && !isProcessing) ...[
-                        TextButton.icon(
-                          style: TextButton.styleFrom(
-                            foregroundColor: Colors.red,
-                          ),
-                          icon: const Icon(Icons.delete_outline, size: 18),
-                          label: const Text('Hapus'),
-                          onPressed: () async {
-                            final confirm = await showDialog<bool>(
-                              context: dialogCtx,
-                              builder: (c) => AlertDialog(
-                                title: const Text('Hapus Foto?'),
-                                content: const Text(
-                                  'Foto untuk objek ini akan dihapus dari penyimpanan.',
-                                ),
-                                actions: [
-                                  TextButton(
-                                    onPressed: () => Navigator.pop(c, false),
-                                    child: const Text('Batal'),
+                  // Tombol Aksi di Bawah
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        if (hasImage && !isProcessing) ...[
+                          TextButton.icon(
+                            style: TextButton.styleFrom(
+                              foregroundColor: Colors.red,
+                            ),
+                            icon: const Icon(Icons.delete_outline, size: 18),
+                            label: const Text('Hapus'),
+                            onPressed: () async {
+                              final confirm = await showDialog<bool>(
+                                context: dialogCtx,
+                                builder: (c) => AlertDialog(
+                                  title: const Text('Hapus Foto?'),
+                                  content: const Text(
+                                    'Foto untuk objek ini akan dihapus dari penyimpanan.',
                                   ),
-                                  FilledButton(
-                                    style: FilledButton.styleFrom(
-                                      backgroundColor: Colors.red,
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(c, false),
+                                      child: const Text('Batal'),
                                     ),
-                                    onPressed: () => Navigator.pop(c, true),
-                                    child: const Text('Hapus'),
-                                  ),
-                                ],
-                              ),
-                            );
-                            if (confirm == true && dialogCtx.mounted) {
-                              setDialogState(() {
-                                isProcessing = true;
-                                statusMessage = null;
-                              });
-                              try {
-                                if (photoFile != null) {
-                                  await FileImage(photoFile!).evict();
-                                }
-                                await onDeletePhoto();
-                                final refreshed =
-                                    await DhkpPackageHelper.findPhotoForNop(
-                                      record.nop,
-                                      customFileName: '',
-                                    );
-                                if (!dialogCtx.mounted) return;
-                                setDialogState(() {
-                                  photoFile = refreshed;
-                                  isProcessing = false;
-                                  isSuccess = true;
-                                  statusMessage = 'Foto berhasil dihapus.';
-                                });
-                              } catch (e) {
-                                if (!dialogCtx.mounted) return;
-                                setDialogState(() {
-                                  isProcessing = false;
-                                  isSuccess = false;
-                                  statusMessage = 'Gagal menghapus foto: $e';
-                                });
-                              }
-                            }
-                          },
-                        ),
-                        const Spacer(),
-                      ],
-                      FilledButton.icon(
-                        icon: isProcessing
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
+                                    FilledButton(
+                                      style: FilledButton.styleFrom(
+                                        backgroundColor: Colors.red,
+                                      ),
+                                      onPressed: () => Navigator.pop(c, true),
+                                      child: const Text('Hapus'),
+                                    ),
+                                  ],
                                 ),
-                              )
-                            : const Icon(Icons.add_a_photo, size: 18),
-                        label: Text(
-                          isProcessing
-                              ? 'Menyimpan...'
-                              : (hasImage ? 'Ganti Foto' : 'Upload Foto'),
-                        ),
-                        onPressed: isProcessing
-                            ? null
-                            : () async {
+                              );
+                              if (confirm == true && dialogCtx.mounted) {
                                 setDialogState(() {
                                   isProcessing = true;
                                   statusMessage = null;
                                 });
                                 try {
-                                  final newFile = await onPickAndSavePhoto();
-                                  if (newFile != null) {
-                                    await FileImage(newFile).evict();
-                                    if (!dialogCtx.mounted) return;
-                                    setDialogState(() {
-                                      photoFile = newFile;
-                                      isProcessing = false;
-                                      isSuccess = true;
-                                      statusMessage =
-                                          'Foto berhasil disimpan & didokumentasikan!';
-                                    });
-                                  } else {
-                                    if (!dialogCtx.mounted) return;
-                                    setDialogState(() {
-                                      isProcessing = false;
-                                    });
+                                  if (photoFile != null) {
+                                    await FileImage(photoFile!).evict();
                                   }
+                                  await onDeletePhoto();
+                                  final refreshed =
+                                      await DhkpPackageHelper.findPhotoForNop(
+                                        record.nop,
+                                        customFileName: '',
+                                      );
+                                  if (!dialogCtx.mounted) return;
+                                  setDialogState(() {
+                                    photoFile = refreshed;
+                                    isProcessing = false;
+                                    isSuccess = true;
+                                    statusMessage = 'Foto berhasil dihapus.';
+                                  });
                                 } catch (e) {
                                   if (!dialogCtx.mounted) return;
                                   setDialogState(() {
                                     isProcessing = false;
                                     isSuccess = false;
-                                    statusMessage = 'Gagal menyimpan foto: $e';
+                                    statusMessage =
+                                        'Gagal menghapus foto: ${friendlyErrorMessage(e)}';
                                   });
                                 }
-                              },
-                      ),
-                    ],
+                              }
+                            },
+                          ),
+                          const Spacer(),
+                        ],
+                        FilledButton.icon(
+                          icon: isProcessing
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Icon(Icons.add_a_photo, size: 18),
+                          label: Text(
+                            isProcessing
+                                ? 'Menyimpan...'
+                                : (hasImage ? 'Ganti Foto' : 'Unggah Foto'),
+                          ),
+                          onPressed: isProcessing
+                              ? null
+                              : () async {
+                                  setDialogState(() {
+                                    isProcessing = true;
+                                    statusMessage = null;
+                                  });
+                                  try {
+                                    final newFile = await onPickAndSavePhoto();
+                                    if (newFile != null) {
+                                      await FileImage(newFile).evict();
+                                      if (!dialogCtx.mounted) return;
+                                      setDialogState(() {
+                                        photoFile = newFile;
+                                        isProcessing = false;
+                                        isSuccess = true;
+                                        statusMessage =
+                                            'Foto berhasil disimpan & didokumentasikan!';
+                                      });
+                                    } else {
+                                      if (!dialogCtx.mounted) return;
+                                      setDialogState(() {
+                                        isProcessing = false;
+                                      });
+                                    }
+                                  } catch (e) {
+                                    if (!dialogCtx.mounted) return;
+                                    setDialogState(() {
+                                      isProcessing = false;
+                                      isSuccess = false;
+                                      statusMessage =
+                                          'Gagal menyimpan foto: ${friendlyErrorMessage(e)}';
+                                    });
+                                  }
+                                },
+                        ),
+                      ],
+                    ),
                   ),
-                ),
               ],
             ),
           ),

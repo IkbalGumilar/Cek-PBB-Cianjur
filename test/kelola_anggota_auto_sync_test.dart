@@ -114,19 +114,19 @@ void main() {
         hpKolektor: '08123456789',
         anggota: '3',
         kodeBayar: '32052026001',
-        status: 'Final - Siap Dibayar',
+        status: 'Sudah Dibayar',
         kecamatan: 'MANDE',
         kelurahan: 'BOBOJONG',
         kelurahanCode: '3205200004',
         keterangan: '',
         tanggalKadaluarsa: '2026-12-31',
-        statusCode: '1',
+        statusCode: '2',
         canDelete: false,
         canEdit: false,
         canPrintSurat: true,
       );
 
-      // 1. Buka KelolaAnggotaScreen pertama kali
+      // 1. Buka KelolaAnggotaScreen pertama kali pada grup berstatus Sudah Dibayar (statusCode == '2')
       await tester.pumpWidget(
         MaterialApp(
           home: KelolaAnggotaScreen(client: client, group: group),
@@ -189,6 +189,75 @@ void main() {
       );
       expect(rec1Second.isPaid, isFalse);
       expect(rec1Second.statusBayar, 'Belum Bayar');
+    },
+  );
+
+  testWidgets(
+    'Membuka KelolaAnggotaScreen pada grup Draft atau Siap Dibayar TIDAK mengubah DHKP menjadi Sudah Bayar',
+    (tester) async {
+      await BlokDataStore.instance.upsertAll(const [
+        BlokRecord(
+          nop: '320520000400100340',
+          namaWajibPajak: 'ENOH',
+          tahunBayar: '2026',
+          tanggalBayar: '',
+          jumlahPbb: 'Rp 41.409',
+          statusBayar: 'Belum Bayar',
+          alamatObjek: 'KP. BOBOJONG',
+          rtObjek: '001',
+        ),
+      ]);
+
+      final client = _FakeKolektifPortalClient(
+        groupResults: {
+          'grp-draft-1': const KolektifMemberListResult(
+            members: [
+              KolektifMember(
+                nop: '320520000400100340',
+                tahunPajak: '2026',
+                jatuhTempo: '2026-09-30',
+                namaWp: 'ENOH',
+                kecamatan: 'MANDE',
+                kelurahan: 'BOBOJONG',
+                pokok: '41,409',
+                denda: '0',
+                total: '41,409',
+              ),
+            ],
+          ),
+        },
+      );
+
+      const draftGroup = KolektifGroup(
+        id: 'grp-draft-1',
+        namaGroup: 'DRAFT GRUP',
+        namaKolektor: 'KADUS I',
+        hpKolektor: '08123456789',
+        anggota: '1',
+        kodeBayar: '',
+        status: 'Draft',
+        kecamatan: 'MANDE',
+        kelurahan: 'BOBOJONG',
+        kelurahanCode: '3205200004',
+        keterangan: '',
+        tanggalKadaluarsa: '2026-12-31',
+        statusCode: '0',
+        canDelete: true,
+        canEdit: true,
+        canPrintSurat: false,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: KelolaAnggotaScreen(client: client, group: draftGroup),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final records = await BlokDataStore.instance.loadAll();
+      expect(records.length, 1);
+      expect(records.first.isPaid, isFalse);
+      expect(records.first.statusBayar, 'Belum Bayar');
     },
   );
 }

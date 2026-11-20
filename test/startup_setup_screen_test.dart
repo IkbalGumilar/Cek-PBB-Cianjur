@@ -68,7 +68,7 @@ void main() {
         await tester.tap(find.byKey(const ValueKey('btn_lanjut_ke_dhkp')));
         await tester.pumpAndSettle();
 
-        // Step 3: Data Master DHKP
+        // Step 3: Data Master DHKP (tanpa berkas dipilih, tombol utama langsung menyelesaikan tanpa duplikasi)
         expect(
           find.text('2. Data Master DHKP (Ketetapan SPPT)'),
           findsOneWidget,
@@ -77,12 +77,12 @@ void main() {
           find.byKey(const ValueKey('btn_simpan_selesai')),
           findsOneWidget,
         );
-        expect(find.byKey(const ValueKey('btn_lewati_dhkp')), findsOneWidget);
-        expect(find.text('Lewati Langkah Ini & Selesaikan'), findsOneWidget);
+        expect(find.text('Simpan & Mulai Aplikasi'), findsOneWidget);
+        expect(find.byKey(const ValueKey('btn_lewati_dhkp')), findsNothing);
         expect(find.textContaining('Gunakan Data Default'), findsNothing);
 
-        // Tap Lewati Langkah Ini & Selesaikan
-        await tester.tap(find.byKey(const ValueKey('btn_lewati_dhkp')));
+        // Tap Simpan & Mulai Aplikasi (tanpa mengimpor DHKP)
+        await tester.tap(find.byKey(const ValueKey('btn_simpan_selesai')));
         await tester.pumpAndSettle();
 
         final prefs = await SharedPreferences.getInstance();

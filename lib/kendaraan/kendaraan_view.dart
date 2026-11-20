@@ -1,5 +1,4 @@
 import 'dart:developer' as developer;
-import 'dart:io';
 
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
@@ -9,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../currency_format.dart';
 import '../feature_tour/feature_tour.dart';
 import '../ui/app_design_system.dart';
+import '../user_friendly_error.dart';
 import 'kendaraan_client.dart';
 import 'plat_scanner.dart';
 
@@ -138,15 +138,16 @@ class KendaraanViewState extends State<KendaraanView>
             'Kursor akan otomatis berpindah ke kotak berikutnya saat bagian depan selesai diisi.',
         icon: Icons.directions_car_outlined,
       ),
-      FeatureTourStep(
-        targetKey: _scanPlateButtonKey,
-        title: 'Tombol Foto / Pindai Plat Nomor',
-        description:
-            'Jika menggunakan ponsel, tekan tombol ini untuk memotret langsung plat nomor kendaraan atau memilih foto dari galeri agar nomor plat otomatis terisi.',
-        actionHint:
-            'Pastikan foto plat diambil dari jarak cukup dekat, lurus, dan tidak silau.',
-        icon: Icons.document_scanner_outlined,
-      ),
+      if (isMobilePlatform)
+        FeatureTourStep(
+          targetKey: _scanPlateButtonKey,
+          title: 'Tombol Foto / Pindai Plat Nomor',
+          description:
+              'Tekan tombol ini untuk memotret langsung plat nomor kendaraan atau memilih foto dari galeri agar nomor plat otomatis terisi.',
+          actionHint:
+              'Pastikan foto plat diambil dari jarak cukup dekat, lurus, dan tidak silau.',
+          icon: Icons.document_scanner_outlined,
+        ),
       FeatureTourStep(
         targetKey: _colorChipsKey,
         title: 'Pilihan Warna Plat Kendaraan',
@@ -175,7 +176,7 @@ class KendaraanViewState extends State<KendaraanView>
             'Tekan tombol ini jika Anda ingin membuka halaman informasi pembayaran pajak kendaraan resmi Pemerintah Provinsi Jawa Barat di peramban.',
         icon: Icons.open_in_new_rounded,
       ),
-      if (widget.emergencyFabKey?.currentContext != null)
+      if (isMobilePlatform && widget.emergencyFabKey?.currentContext != null)
         FeatureTourStep(
           targetKey: widget.emergencyFabKey!,
           title: 'Tombol Kontak Darurat 112 Cianjur',
@@ -265,13 +266,7 @@ class KendaraanViewState extends State<KendaraanView>
   }
 
   Future<void> _scanAndFillPlate() async {
-    if (!Platform.isAndroid && !Platform.isIOS) {
-      setState(
-        () => _errorText =
-            'Scan foto plat tersedia di HP. Pada komputer, ketik nomor plat secara manual.',
-      );
-      return;
-    }
+    if (!isMobilePlatform) return;
 
     final source = await showDialog<ImageSource>(
       context: context,
@@ -611,34 +606,35 @@ class KendaraanViewState extends State<KendaraanView>
                         runSpacing: 8,
                         crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
-                          OutlinedButton.icon(
-                            key: _scanPlateButtonKey,
-                            onPressed: _scanningPlate
-                                ? null
-                                : _scanAndFillPlate,
-                            icon: _scanningPlate
-                                ? const SizedBox(
-                                    width: 16,
-                                    height: 16,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
+                          if (isMobilePlatform)
+                            OutlinedButton.icon(
+                              key: _scanPlateButtonKey,
+                              onPressed: _scanningPlate
+                                  ? null
+                                  : _scanAndFillPlate,
+                              icon: _scanningPlate
+                                  ? const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Icon(
+                                      Icons.document_scanner_outlined,
+                                      size: 18,
                                     ),
-                                  )
-                                : const Icon(
-                                    Icons.document_scanner_outlined,
-                                    size: 18,
-                                  ),
-                            label: Text(
-                              _scanningPlate
-                                  ? 'Membaca plat...'
-                                  : 'Foto / Scan Plat',
-                            ),
-                            style: OutlinedButton.styleFrom(
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
+                              label: Text(
+                                _scanningPlate
+                                    ? 'Membaca plat...'
+                                    : 'Foto / Scan Plat',
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
                               ),
                             ),
-                          ),
                           for (final item in const [
                             ('F', 'Cianjur/Bogor/Sukabumi'),
                             ('D', 'Bandung'),

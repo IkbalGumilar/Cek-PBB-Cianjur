@@ -104,7 +104,7 @@ void main() {
       final accounts = TotpHelper.parseImportInput(raw);
       expect(accounts.length, equals(1));
       expect(accounts.first.secret, equals(raw));
-      expect(accounts.first.name, equals('Portal Staf'));
+      expect(accounts.first.name, equals('Portal Petugas'));
       expect(accounts.first.issuer, equals('BAPENDA'));
     });
 

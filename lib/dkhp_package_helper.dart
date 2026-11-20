@@ -281,7 +281,7 @@ class DhkpPackageHelper {
       rawBytes,
       password: password,
       errorMsgOnNull:
-          'Gagal mendekripsi berkas: format atau kunci enkripsi tidak cocok.',
+          'Kata sandi salah atau berkas tidak dapat dibuka di perangkat ini.',
     );
 
     final archive = ZipDecoder().decodeBytes(zipBytes);
@@ -445,7 +445,7 @@ class DhkpPackageHelper {
       rawBytes,
       password: password,
       errorMsgOnNull:
-          'Gagal mendekripsi berkas .dkhp: Kunci atau format enkripsi tidak cocok.',
+          'Kata sandi salah atau berkas tidak dapat dibuka di perangkat ini.',
     );
 
     final archive = ZipDecoder().decodeBytes(zipBytes);
@@ -543,7 +543,7 @@ class DhkpPackageHelper {
       rawBytes,
       password: password,
       errorMsgOnNull:
-          'Gagal mendekripsi berkas .dkhp: Kunci atau format enkripsi tidak cocok.',
+          'Kata sandi salah atau berkas tidak dapat dibuka di perangkat ini.',
     );
 
     final archive = ZipDecoder().decodeBytes(zipBytes);

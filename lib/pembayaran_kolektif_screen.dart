@@ -9,6 +9,7 @@ import 'staff_portal/kolektif_group_dialogs.dart';
 import 'staff_portal_client.dart';
 import 'theme_controller.dart';
 import 'ui/app_design_system.dart';
+import 'user_friendly_error.dart';
 
 /// Menu "Pembayaran Kolektif" — daftar & filter grup kolektif (meniru tabel
 /// dan filter halaman asli `m179`/`reloadDataGroup`), ditambah dua aksi yang
@@ -86,14 +87,14 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
     ('', 'Semua'),
     ('0', 'Draft'),
     ('1', 'Siap Dibayar'),
-    ('2', 'Sudah Di Bayar'),
+    ('2', 'Sudah Dibayar'),
     ('99', 'Kedaluwarsa'),
   ];
 
   static String _labelStatus(String code) => switch (code) {
     '0' => 'Draft',
     '1' => 'Siap Dibayar',
-    '2' => 'Sudah Di Bayar',
+    '2' => 'Sudah Dibayar',
     '99' => 'Kedaluwarsa',
     _ => code.isEmpty ? '-' : code,
   };
@@ -126,34 +127,32 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
     return [
       FeatureTourStep(
         targetKey: _tambahGroupButtonKey,
-        title: 'Tombol Buat Rombongan Baru (Tambah Grup)',
+        title: 'Buat Grup Rombongan Baru',
         description:
-            'Ketuk tombol ini untuk membuat grup rombongan bayar baru. Anda cukup mengisi nama grup, keterangan, nama petugas kolektor, dan nomor HP.',
+            'Buat grup baru dengan mengisi nama grup, keterangan, nama kolektor, dan nomor HP.',
         icon: Icons.group_add_outlined,
-        actionHint:
-            'Grup baru akan berstatus Draft sehingga masih bisa ditambah/dikurangi anggotanya',
+        actionHint: 'Grup baru berstatus Draft sehingga anggotanya masih bisa diubah',
       ),
       FeatureTourStep(
         targetKey: _filterAreaKey,
         title: 'Penyaring Daftar Grup',
         description:
-            'Saring daftar rombongan bayar berdasarkan Bulan, Status (Draft, Siap Dibayar, Sudah Dibayar), Tahun, atau rentang tanggal pembuatan.',
+            'Saring grup berdasarkan bulan, status, tahun, atau rentang tanggal pembuatan.',
         icon: Icons.filter_alt_outlined,
       ),
       FeatureTourStep(
         targetKey: _tampilkanButtonKey,
-        title: 'Tombol Tampilkan & Muat Ulang',
+        title: 'Tampilkan Daftar',
         description:
-            'Ketuk tombol ini untuk memperbarui daftar grup rombongan bayar sesuai penyaring yang Anda pilih di atas.',
+            'Perbarui daftar grup sesuai penyaring yang Anda pilih di atas.',
         icon: Icons.refresh_rounded,
       ),
       FeatureTourStep(
         targetKey: _resultAreaKey,
-        title: 'Daftar Grup & Menu Aksi Rombongan',
+        title: 'Daftar Grup & Menu Aksi',
         description:
-            'Ketuk salah satu baris grup di tabel ini untuk membuka menu aksi: Kelola Anggota (tambah/hapus NOP warga), Ubah Info Grup, Cetak Surat Pengantar, atau Hapus Grup.',
+            'Ketuk salah satu grup untuk mengelola anggota, mengubah info, mencetak surat pengantar, atau menghapus grup.',
         icon: Icons.touch_app_outlined,
-        actionHint: 'Ketuk baris grup mana saja untuk mengelola anggotanya',
       ),
     ];
   }
@@ -175,7 +174,10 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
       if (!mounted) return;
       setState(
         () => _formOptions = KolektifFormOptions(
-          errorMessage: 'Gagal membaca wilayah: $e',
+          errorMessage: friendlyErrorMessage(
+            e,
+            fallback: 'Gagal memuat data wilayah. Silakan coba lagi.',
+          ),
         ),
       );
     }
@@ -200,7 +202,10 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
       if (!mounted) return;
       setState(
         () => _result = KolektifListResult(
-          errorMessage: 'Gagal memuat daftar grup: $e',
+          errorMessage: friendlyErrorMessage(
+            e,
+            fallback: 'Gagal memuat daftar grup. Silakan coba lagi.',
+          ),
         ),
       );
     } finally {
@@ -238,7 +243,7 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
       peringatan:
           'Grup akan dibuat di sistem resmi Bapenda dan tercatat permanen di sana.',
       rincian: {
-        'Nama Group': isian.namaGroup,
+        'Nama Grup': isian.namaGroup,
         'Keterangan': isian.keterangan,
         'Kolektor': isian.namaKolektor,
         'No HP Kolektor': isian.noHpKolektor,
@@ -272,7 +277,8 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
         success: false,
         message:
             'Koneksi terputus saat menunggu jawaban sistem, jadi hasilnya belum pasti. '
-            'Periksa dulu daftar grup di bawah sebelum mencoba lagi.\n\n$e',
+            'Periksa dulu daftar grup di bawah sebelum mencoba lagi.\n\n'
+            '${friendlyErrorMessage(e)}',
       );
     } finally {
       if (mounted) setState(() => _aksiBerjalan = false);
@@ -421,7 +427,7 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
       peringatan:
           'Data grup di sistem Bapenda akan diganti dengan isian di bawah.',
       rincian: {
-        'Nama Group': isian.namaGroup,
+        'Nama Grup': isian.namaGroup,
         'Keterangan': isian.keterangan,
         'Kolektor': isian.namaKolektor,
         'No HP Kolektor': isian.noHpKolektor,
@@ -448,7 +454,8 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
         success: false,
         message:
             'Koneksi terputus saat menunggu jawaban sistem, jadi hasilnya belum pasti. '
-            'Periksa dulu daftar grup di bawah sebelum mencoba lagi.\n\n$e',
+            'Periksa dulu daftar grup di bawah sebelum mencoba lagi.\n\n'
+            '${friendlyErrorMessage(e)}',
       );
     } finally {
       if (mounted) setState(() => _aksiBerjalan = false);
@@ -483,7 +490,10 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
       if (!mounted) return;
       _tampilkanPesan(
         'Surat pengantar tidak bisa dibuka',
-        'Gagal mengambil dokumen surat pengantar:\n\n$e',
+        friendlyErrorMessage(
+          e,
+          fallback: 'Gagal mengambil dokumen surat pengantar. Silakan coba lagi.',
+        ),
       );
     } finally {
       if (mounted) setState(() => _aksiBerjalan = false);
@@ -512,7 +522,7 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
           'Penghapusan tidak bisa dibatalkan. Nama grup, alasan penghapusan, dan nama akun Anda '
           'akan tercatat di riwayat penghapusan sistem Bapenda.',
       rincian: {
-        'Nama Group': group.namaGroup,
+        'Nama Grup': group.namaGroup,
         'Kolektor': group.namaKolektor,
         'Anggota': group.anggota,
         'Status': _labelStatus(group.statusCode),
@@ -535,7 +545,8 @@ class _PembayaranKolektifScreenState extends State<PembayaranKolektifScreen> {
         success: false,
         message:
             'Koneksi terputus saat menunggu jawaban sistem, jadi hasilnya belum pasti. '
-            'Periksa dulu daftar grup di bawah sebelum mencoba lagi.\n\n$e',
+            'Periksa dulu daftar grup di bawah sebelum mencoba lagi.\n\n'
+            '${friendlyErrorMessage(e)}',
       );
     } finally {
       if (mounted) setState(() => _aksiBerjalan = false);

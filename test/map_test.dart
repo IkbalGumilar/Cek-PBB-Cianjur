@@ -234,21 +234,21 @@ void main() {
         );
         expect(find.textContaining('Batas Desa'), findsOneWidget);
         expect(
-          find.textContaining('Layer Putih Wilayah Sekitar'),
+          find.textContaining('Sembunyikan Wilayah Sekitar'),
           findsOneWidget,
         );
         expect(
-          find.textContaining('Bangunan & Rumah Warga (OSM)'),
+          find.textContaining('Bangunan & Rumah Warga'),
           findsOneWidget,
         );
 
-        // Tap Bangunan OSM option - sheet must NOT close automatically
-        await tester.tap(find.textContaining('Bangunan & Rumah Warga (OSM)'));
+        // Tap Bangunan option - sheet must NOT close automatically
+        await tester.tap(find.textContaining('Bangunan & Rumah Warga'));
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 100));
 
         // Verify sheet is still open ("biarkan user yg tutup")
-        expect(find.text('Tutup Panel Layer'), findsOneWidget);
+        expect(find.text('Tutup Panel Peta'), findsOneWidget);
 
         // Tap RBI BIG option
         await tester.tap(find.textContaining('Peta Rupabumi Indonesia (BIG)'));
@@ -256,12 +256,12 @@ void main() {
         await tester.pump(const Duration(milliseconds: 100));
 
         // User manually closes sheet
-        await tester.tap(find.text('Tutup Panel Layer'));
+        await tester.tap(find.text('Tutup Panel Peta'));
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 250));
 
         // Verify sheet is closed
-        expect(find.text('Tutup Panel Layer'), findsNothing);
+        expect(find.text('Tutup Panel Peta'), findsNothing);
       },
     );
 
@@ -285,10 +285,10 @@ void main() {
         expect(find.textContaining('Dusun 1'), findsNothing);
         expect(find.textContaining('Dusun 2'), findsNothing);
 
-        // Subtitle indicates no DHKP loaded
+        // Subtitle indicates active map provider and no coordinates loaded
         expect(
           find.textContaining(
-            'Peta Dasar Satelit (Belum ada berkas DHKP dimuat)',
+            'Satelit + Jalan (Belum ada koordinat objek)',
           ),
           findsOneWidget,
         );
@@ -311,12 +311,12 @@ void main() {
         expect(find.byIcon(Icons.add_rounded), findsOneWidget);
         expect(find.byIcon(Icons.remove_rounded), findsOneWidget);
 
-        // Bottom bar shows empty prompt with Unggah KML button
+        // Bottom bar shows empty prompt with Unggah Peta button
         expect(
           find.textContaining('Peta Belum Memuat Koordinat'),
           findsOneWidget,
         );
-        expect(find.text('Unggah KML'), findsOneWidget);
+        expect(find.text('Unggah Peta'), findsOneWidget);
       },
     );
   });

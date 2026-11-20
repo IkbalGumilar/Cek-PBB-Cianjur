@@ -14,44 +14,56 @@ import '../download_helper.dart';
 import '../dusun_data.dart';
 import '../nop_helper.dart';
 import '../services/location_service.dart';
+import '../user_friendly_error.dart';
 import 'kml_parser.dart';
 import 'map_models.dart';
 import 'map_nop_picker_dialog.dart';
 import 'map_pin_store.dart';
 
-/// Pilihan provider layer peta langsung (Pilihan Layer Peta).
+/// Pilihan provider lapisan peta langsung.
 enum LiveMapProvider {
   googleHybrid(
     'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
-    'Google Satelit (Hybrid: Foto + Jalan)',
+    'Google Satelit (Foto + Jalan)',
+    'Satelit + Jalan',
     Icons.satellite_alt_rounded,
   ),
   googleSatellite(
     'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
-    'Google Satelit (Foto Udara Murni)',
+    'Google Satelit (Foto Udara)',
+    'Satelit',
     Icons.photo_camera_back_rounded,
   ),
   googleRoadmap(
     'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
-    'Google Peta Jalan (Roadmap)',
+    'Google Peta Jalan',
+    'Peta Jalan',
     Icons.map_rounded,
   ),
   openStreetMap(
     'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-    'OpenStreetMap (Vektor Bebas)',
+    'Peta Komunitas (OpenStreetMap)',
+    'Peta Komunitas',
     Icons.public_rounded,
   ),
   rbiBig(
     'https://geoservices.big.go.id/rbi/rest/services/BASEMAP/Rupabumi_Indonesia/MapServer/tile/{z}/{y}/{x}',
     'Peta Rupabumi Indonesia (BIG)',
+    'Peta BIG',
     Icons.account_balance_rounded,
   );
 
   final String urlTemplate;
   final String label;
+  final String shortLabel;
   final IconData icon;
 
-  const LiveMapProvider(this.urlTemplate, this.label, this.icon);
+  const LiveMapProvider(
+    this.urlTemplate,
+    this.label,
+    this.shortLabel,
+    this.icon,
+  );
 }
 
 /// Model informasi desa tetangga di Kecamatan Mande & Karangtengah untuk layer putih (masking).
@@ -76,6 +88,13 @@ class DhkpMapScreen extends StatefulWidget {
   final String? initialBlok;
   final List<MapTaxDot>? initialDots;
   final List<MapDusunZone>? initialZones;
+
+  /// Override khusus pengujian untuk mensimulasikan tombol GPS lapangan (seluler).
+  @visibleForTesting
+  static bool? debugShowGpsButtonOverride;
+
+  static bool get _showGpsFieldButton =>
+      debugShowGpsButtonOverride ?? isMobilePlatform;
 
   const DhkpMapScreen({
     super.key,
@@ -261,7 +280,13 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
     });
   }
 
+  bool get _isBobojongWilayah =>
+      activeNopPrefix == defaultNopPrefix ||
+      (activeKecamatanCode == '200' && activeKelurahanCode == '004');
+
   Future<void> _loadSpatialAssets() async {
+    if (!_isBobojongWilayah) return;
+
     // 1. Muat batas resmi Desa Bobojong (BIG)
     List<LatLng> boundaryPts = [];
     MapBounds? bounds;
@@ -627,7 +652,7 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(
-                  'Berhasil memuat KML: ${parseResult.dots.length} titik digabungkan (total ${_allDots.length} titik aktif).',
+                  'Berhasil memuat berkas peta: ${parseResult.dots.length} titik digabungkan (total ${_allDots.length} titik aktif).',
                 ),
                 backgroundColor: Colors.green.shade700,
               ),
@@ -638,7 +663,7 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
                 content: Text(
-                  'Berkas KML tidak memuat koordinat objek pajak yang valid.',
+                  'Berkas peta (.kml) tidak memuat koordinat objek pajak yang valid.',
                 ),
                 backgroundColor: Colors.orange,
               ),
@@ -648,9 +673,16 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Gagal memuat KML: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              friendlyErrorMessage(
+                e,
+                fallback: 'Gagal memuat berkas peta (.kml).',
+              ),
+            ),
+          ),
+        );
       }
     }
   }
@@ -691,7 +723,7 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
         content: Text(
           result.isFallbackIp
               ? 'Posisi perkiraan (${result.sourceDescription}). Gunakan Pin Manual di peta agar presisi.'
-              : 'Lokasi GPS terkunci (${result.sourceDescription}). Tekan "Tandai NOP di GPS" untuk menyematkan pin.',
+              : 'Lokasi GPS terkunci (${result.sourceDescription}). Tekan "Tandai NOP" untuk menyematkan pin.',
         ),
         backgroundColor: result.isFallbackIp
             ? Colors.orange.shade800
@@ -917,7 +949,9 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
     if (_allDots.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Belum ada titik objek pajak untuk diekspor ke KML.'),
+          content: Text(
+            'Belum ada titik objek pajak untuk disimpan ke berkas peta (.kml).',
+          ),
           backgroundColor: Colors.orange,
         ),
       );
@@ -925,7 +959,7 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
     }
 
     try {
-      final desaLabel = activeDesaName.isNotEmpty ? activeDesaName : 'BOBOJONG';
+      final desaLabel = activeDesaName.isNotEmpty ? activeDesaName : 'Wilayah';
       final kmlContent = KmlParser.exportToKml(
         villageName: desaLabel,
         dots: _allDots,
@@ -945,14 +979,14 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
       final savedPath = await DownloadHelper.saveBytes(
         bytes,
         fileName,
-        dialogTitle: 'Ekspor Koordinat Peta (.kml)',
+        dialogTitle: 'Simpan Koordinat Peta (.kml)',
       );
       if (!mounted) return;
       if (savedPath != null) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'KML berhasil diekspor (${_allDots.length} titik): $savedPath',
+              'Berkas peta ${friendlyFileName(savedPath)} berhasil disimpan (${_allDots.length} titik).',
             ),
             backgroundColor: Colors.green.shade700,
           ),
@@ -960,9 +994,16 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Gagal mengekspor KML: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              friendlyErrorMessage(
+                e,
+                fallback: 'Gagal menyimpan berkas peta (.kml).',
+              ),
+            ),
+          ),
+        );
       }
     }
   }
@@ -1280,7 +1321,7 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                                 Row(
                                   children: [
                                     Text(
-                                      'Pengaturan Layer Peta',
+                                      'Pengaturan Lapisan Peta',
                                       style: TextStyle(
                                         fontSize: 16,
                                         fontWeight: FontWeight.bold,
@@ -1316,7 +1357,7 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                                   ],
                                 ),
                                 Text(
-                                  'Pilih layer sesuai kebutuhan, ketuk tutup jika selesai',
+                                  'Pilih tampilan peta sesuai kebutuhan, lalu tutup jika selesai',
                                   style: TextStyle(
                                     fontSize: 11,
                                     color: txtSecondary,
@@ -1405,302 +1446,310 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                               ),
                             );
                           }),
-                          const Padding(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 6,
-                            ),
-                            child: Divider(height: 1),
-                          ),
-                          // SECTION: GARIS BATAS & FITUR WILAYAH
-                          Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 18,
-                              vertical: 6,
-                            ),
-                            child: Text(
-                              'GARIS BATAS & FITUR WILAYAH',
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w900,
-                                color: txtSecondary,
-                                letterSpacing: 0.5,
-                              ),
-                            ),
-                          ),
-                          // 1. Batas Desa Bobojong (BIG)
-                          InkWell(
-                            onTap: () {
-                              setState(
-                                () => _showDesaBoundary = !_showDesaBoundary,
-                              );
-                              setSheetState(() {});
-                            },
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
+                          if (_isBobojongWilayah) ...[
+                            const Padding(
+                              padding: EdgeInsets.symmetric(
                                 horizontal: 16,
-                                vertical: 8,
+                                vertical: 6,
                               ),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    _showDesaBoundary
-                                        ? Icons.check_box_rounded
-                                        : Icons.check_box_outline_blank_rounded,
-                                    size: 20,
-                                    color: _showDesaBoundary
-                                        ? const Color(0xFFE74C3C)
-                                        : Colors.grey,
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          'Batas Desa Bobojong (BIG)',
-                                          style: TextStyle(
-                                            fontSize: 13.5,
-                                            fontWeight: FontWeight.w600,
-                                            color: txtPrimary,
-                                          ),
-                                        ),
-                                        Text(
-                                          'Garis merah putus-putus batas resmi BIG',
-                                          style: TextStyle(
-                                            fontSize: 11,
-                                            color: txtSecondary,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
+                              child: Divider(height: 1),
                             ),
-                          ),
-                          // 2. Layer Putih Wilayah Sekitar
-                          InkWell(
-                            onTap: () {
-                              setState(
-                                () => _showNeighborMask = !_showNeighborMask,
-                              );
-                              setSheetState(() {});
-                            },
-                            child: Padding(
+                            // SECTION: GARIS BATAS & FITUR WILAYAH (KHUSUS DESA BOBOJONG)
+                            Padding(
                               padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 8,
+                                horizontal: 18,
+                                vertical: 6,
                               ),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    _showNeighborMask
-                                        ? Icons.check_box_rounded
-                                        : Icons.check_box_outline_blank_rounded,
-                                    size: 20,
-                                    color: _showNeighborMask
-                                        ? const Color(0xFF3498DB)
-                                        : Colors.grey,
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          'Layer Putih Wilayah Sekitar (Mande & Karangtengah)',
-                                          style: TextStyle(
-                                            fontSize: 13.5,
-                                            fontWeight: FontWeight.w600,
-                                            color: txtPrimary,
-                                          ),
-                                        ),
-                                        Text(
-                                          'Masking desa tetangga agar Bobojong kontras',
-                                          style: TextStyle(
-                                            fontSize: 11,
-                                            color: txtSecondary,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
+                              child: Text(
+                                'GARIS BATAS & FITUR WILAYAH',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w900,
+                                  color: txtSecondary,
+                                  letterSpacing: 0.5,
+                                ),
                               ),
                             ),
-                          ),
-                          // 3. Bangunan & Rumah Warga (OSM)
-                          InkWell(
-                            onTap: () {
-                              setState(
-                                () => _showOsmBuildings = !_showOsmBuildings,
-                              );
-                              if (_showOsmBuildings &&
-                                  _osmBuildingPolygons.isEmpty) {
-                                _loadOsmBuildings();
-                              }
-                              setSheetState(() {});
-                            },
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 8,
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    _showOsmBuildings
-                                        ? Icons.check_box_rounded
-                                        : Icons.check_box_outline_blank_rounded,
-                                    size: 20,
-                                    color: _showOsmBuildings
-                                        ? const Color(0xFFE67E22)
-                                        : Colors.grey,
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          'Bangunan & Rumah Warga (OSM)',
-                                          style: TextStyle(
-                                            fontSize: 13.5,
-                                            fontWeight: FontWeight.w600,
-                                            color: txtPrimary,
-                                          ),
-                                        ),
-                                        Text(
-                                          _osmBuildingPolygons.isNotEmpty
-                                              ? '${_osmBuildingPolygons.length} poligon atap rumah Desa Bobojong'
-                                              : '5.313 poligon atap rumah Desa Bobojong',
-                                          style: TextStyle(
-                                            fontSize: 11,
-                                            color: txtSecondary,
-                                          ),
-                                        ),
-                                      ],
+                            // 1. Batas Desa Bobojong (BIG)
+                            InkWell(
+                              onTap: () {
+                                setState(
+                                  () => _showDesaBoundary = !_showDesaBoundary,
+                                );
+                                setSheetState(() {});
+                              },
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 8,
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      _showDesaBoundary
+                                          ? Icons.check_box_rounded
+                                          : Icons
+                                                .check_box_outline_blank_rounded,
+                                      size: 20,
+                                      color: _showDesaBoundary
+                                          ? const Color(0xFFE74C3C)
+                                          : Colors.grey,
                                     ),
-                                  ),
-                                ],
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            'Batas Desa Bobojong (BIG)',
+                                            style: TextStyle(
+                                              fontSize: 13.5,
+                                              fontWeight: FontWeight.w600,
+                                              color: txtPrimary,
+                                            ),
+                                          ),
+                                          Text(
+                                            'Garis merah putus-putus batas resmi desa',
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              color: txtSecondary,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
-                          ),
-                          // 4. Jalan & Gang Desa (OSM)
-                          InkWell(
-                            onTap: () {
-                              setState(() => _showOsmRoads = !_showOsmRoads);
-                              if (_showOsmRoads && _osmRoadPolylines.isEmpty) {
-                                _loadOsmRoads();
-                              }
-                              setSheetState(() {});
-                            },
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 8,
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    _showOsmRoads
-                                        ? Icons.check_box_rounded
-                                        : Icons.check_box_outline_blank_rounded,
-                                    size: 20,
-                                    color: _showOsmRoads
-                                        ? const Color(0xFFF39C12)
-                                        : Colors.grey,
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          'Jalan & Gang Desa (OSM)',
-                                          style: TextStyle(
-                                            fontSize: 13.5,
-                                            fontWeight: FontWeight.w600,
-                                            color: txtPrimary,
-                                          ),
-                                        ),
-                                        Text(
-                                          _osmRoadPolylines.isNotEmpty
-                                              ? '${_osmRoadPolylines.length} ruas jalan & gang lingkungan'
-                                              : '161 ruas jalan & gang lingkungan',
-                                          style: TextStyle(
-                                            fontSize: 11,
-                                            color: txtSecondary,
-                                          ),
-                                        ),
-                                      ],
+                            // 2. Sembunyikan Wilayah Sekitar
+                            InkWell(
+                              onTap: () {
+                                setState(
+                                  () => _showNeighborMask = !_showNeighborMask,
+                                );
+                                setSheetState(() {});
+                              },
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 8,
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      _showNeighborMask
+                                          ? Icons.check_box_rounded
+                                          : Icons
+                                                .check_box_outline_blank_rounded,
+                                      size: 20,
+                                      color: _showNeighborMask
+                                          ? const Color(0xFF3498DB)
+                                          : Colors.grey,
                                     ),
-                                  ),
-                                ],
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            'Sembunyikan Wilayah Sekitar',
+                                            style: TextStyle(
+                                              fontSize: 13.5,
+                                              fontWeight: FontWeight.w600,
+                                              color: txtPrimary,
+                                            ),
+                                          ),
+                                          Text(
+                                            'Redupkan desa tetangga agar wilayah desa lebih jelas',
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              color: txtSecondary,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
-                          ),
-                          // 5. Sungai & Perairan (OSM)
-                          InkWell(
-                            onTap: () {
-                              setState(
-                                () => _showOsmWaterways = !_showOsmWaterways,
-                              );
-                              if (_showOsmWaterways &&
-                                  _osmWaterPolylines.isEmpty) {
-                                _loadOsmWaterways();
-                              }
-                              setSheetState(() {});
-                            },
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 8,
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    _showOsmWaterways
-                                        ? Icons.check_box_rounded
-                                        : Icons.check_box_outline_blank_rounded,
-                                    size: 20,
-                                    color: _showOsmWaterways
-                                        ? const Color(0xFF2980B9)
-                                        : Colors.grey,
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          'Sungai & Perairan (OSM)',
-                                          style: TextStyle(
-                                            fontSize: 13.5,
-                                            fontWeight: FontWeight.w600,
-                                            color: txtPrimary,
-                                          ),
-                                        ),
-                                        Text(
-                                          'Sungai Cibalagung, Citarum & Waduk Cirata',
-                                          style: TextStyle(
-                                            fontSize: 11,
-                                            color: txtSecondary,
-                                          ),
-                                        ),
-                                      ],
+                            // 3. Bangunan & Rumah Warga
+                            InkWell(
+                              onTap: () {
+                                setState(
+                                  () => _showOsmBuildings = !_showOsmBuildings,
+                                );
+                                if (_showOsmBuildings &&
+                                    _osmBuildingPolygons.isEmpty) {
+                                  _loadOsmBuildings();
+                                }
+                                setSheetState(() {});
+                              },
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 8,
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      _showOsmBuildings
+                                          ? Icons.check_box_rounded
+                                          : Icons
+                                                .check_box_outline_blank_rounded,
+                                      size: 20,
+                                      color: _showOsmBuildings
+                                          ? const Color(0xFFE67E22)
+                                          : Colors.grey,
                                     ),
-                                  ),
-                                ],
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            'Bangunan & Rumah Warga',
+                                            style: TextStyle(
+                                              fontSize: 13.5,
+                                              fontWeight: FontWeight.w600,
+                                              color: txtPrimary,
+                                            ),
+                                          ),
+                                          Text(
+                                            _osmBuildingPolygons.isNotEmpty
+                                                ? '${_osmBuildingPolygons.length} bidang bangunan Desa Bobojong'
+                                                : '5.313 bidang bangunan Desa Bobojong',
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              color: txtSecondary,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
-                          ),
+                            // 4. Jalan & Gang Desa
+                            InkWell(
+                              onTap: () {
+                                setState(() => _showOsmRoads = !_showOsmRoads);
+                                if (_showOsmRoads &&
+                                    _osmRoadPolylines.isEmpty) {
+                                  _loadOsmRoads();
+                                }
+                                setSheetState(() {});
+                              },
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 8,
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      _showOsmRoads
+                                          ? Icons.check_box_rounded
+                                          : Icons
+                                                .check_box_outline_blank_rounded,
+                                      size: 20,
+                                      color: _showOsmRoads
+                                          ? const Color(0xFFF39C12)
+                                          : Colors.grey,
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            'Jalan & Gang Desa',
+                                            style: TextStyle(
+                                              fontSize: 13.5,
+                                              fontWeight: FontWeight.w600,
+                                              color: txtPrimary,
+                                            ),
+                                          ),
+                                          Text(
+                                            _osmRoadPolylines.isNotEmpty
+                                                ? '${_osmRoadPolylines.length} ruas jalan & gang lingkungan'
+                                                : '161 ruas jalan & gang lingkungan',
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              color: txtSecondary,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            // 5. Sungai & Perairan
+                            InkWell(
+                              onTap: () {
+                                setState(
+                                  () => _showOsmWaterways = !_showOsmWaterways,
+                                );
+                                if (_showOsmWaterways &&
+                                    _osmWaterPolylines.isEmpty) {
+                                  _loadOsmWaterways();
+                                }
+                                setSheetState(() {});
+                              },
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 8,
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      _showOsmWaterways
+                                          ? Icons.check_box_rounded
+                                          : Icons
+                                                .check_box_outline_blank_rounded,
+                                      size: 20,
+                                      color: _showOsmWaterways
+                                          ? const Color(0xFF2980B9)
+                                          : Colors.grey,
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            'Sungai & Perairan',
+                                            style: TextStyle(
+                                              fontSize: 13.5,
+                                              fontWeight: FontWeight.w600,
+                                              color: txtPrimary,
+                                            ),
+                                          ),
+                                          Text(
+                                            'Sungai Cibalagung, Citarum & Waduk Cirata',
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              color: txtSecondary,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -1713,7 +1762,7 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                         child: ElevatedButton.icon(
                           icon: const Icon(Icons.check_rounded, size: 18),
                           label: const Text(
-                            'Tutup Panel Layer',
+                            'Tutup Panel Peta',
                             style: TextStyle(fontWeight: FontWeight.bold),
                           ),
                           style: ElevatedButton.styleFrom(
@@ -1841,8 +1890,8 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                   ),
                   Text(
                     (_allDots.isEmpty && _zones.isEmpty)
-                        ? 'Peta Dasar Satelit (Belum ada berkas DHKP dimuat)'
-                        : 'Desa $desaName, Kec. $kecName - ${_currentZone?.name ?? (_selectedDusun != null ? "Dusun $_selectedDusun" : "Semua Wilayah")} (Satelit Google)',
+                        ? '${_activeProvider.shortLabel} (Belum ada koordinat objek)'
+                        : 'Desa $desaName, Kec. $kecName - ${_currentZone?.name ?? (_selectedDusun != null ? "Dusun $_selectedDusun" : "Semua Wilayah")} (${_activeProvider.shortLabel})',
                     style: TextStyle(
                       fontSize: 11,
                       color: isDark ? Colors.white70 : Colors.black54,
@@ -1855,7 +1904,7 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
           IconButton(
             key: const ValueKey('btn_switch_layer_map'),
             icon: const Icon(Icons.layers_rounded),
-            tooltip: 'Pengaturan Layer & Batas Wilayah',
+            tooltip: 'Pengaturan Lapisan Peta',
             onPressed: _showLayerControlSheet,
           ),
           IconButton(
@@ -1871,7 +1920,7 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
           PopupMenuButton<String>(
             key: const ValueKey('btn_kml_menu'),
             icon: const Icon(Icons.import_export_rounded),
-            tooltip: 'Menu Impor / Ekspor KML',
+            tooltip: 'Impor / Simpan Berkas Peta (.kml)',
             onSelected: (value) {
               switch (value) {
                 case 'upload_kml':
@@ -1892,7 +1941,7 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                   children: [
                     Icon(Icons.file_upload_outlined, size: 18),
                     SizedBox(width: 10),
-                    Text('Unggah Berkas KML'),
+                    Text('Unggah Berkas Peta (.kml)'),
                   ],
                 ),
               ),
@@ -1902,7 +1951,7 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                   children: [
                     Icon(Icons.file_download_outlined, size: 18),
                     SizedBox(width: 10),
-                    Text('Ekspor Pin ke KML (.kml)'),
+                    Text('Simpan Pin ke Berkas Peta (.kml)'),
                   ],
                 ),
               ),
@@ -2469,7 +2518,7 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                               ),
                               const SizedBox(height: 1),
                               const Text(
-                                'Belum ada koordinat objek pajak atau batas spasial yang dimuat. Silakan unggah berkas KML untuk menampilkan sebaran.',
+                                'Belum ada koordinat objek pajak atau batas wilayah yang dimuat. Unggah berkas peta (.kml) atau pasang pin langsung di peta.',
                                 style: TextStyle(
                                   fontSize: 10.5,
                                   color: Colors.grey,
@@ -2486,7 +2535,7 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                             size: 16,
                           ),
                           label: const Text(
-                            'Unggah KML',
+                            'Unggah Peta',
                             style: TextStyle(fontSize: 11),
                           ),
                         ),
@@ -2834,30 +2883,32 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                 : 70,
             child: Column(
               children: [
-                FloatingActionButton.small(
-                  key: const ValueKey('btn_gps_field_location'),
-                  heroTag: 'btn_gps_field_location',
-                  backgroundColor: _currentGpsLocation != null
-                      ? Colors.blue.shade700
-                      : (isDark
-                            ? const Color(0xEE1A2234)
-                            : Colors.white.withValues(alpha: 0.94)),
-                  tooltip: 'Gunakan Koordinat GPS Sekarang',
-                  onPressed: _isFetchingGps ? null : _activateGpsLocation,
-                  child: _isFetchingGps
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : Icon(
-                          Icons.my_location_rounded,
-                          color: _currentGpsLocation != null
-                              ? Colors.white
-                              : Colors.blue.shade600,
-                        ),
-                ),
-                const SizedBox(height: 8),
+                if (DhkpMapScreen._showGpsFieldButton) ...[
+                  FloatingActionButton.small(
+                    key: const ValueKey('btn_gps_field_location'),
+                    heroTag: 'btn_gps_field_location',
+                    backgroundColor: _currentGpsLocation != null
+                        ? Colors.blue.shade700
+                        : (isDark
+                              ? const Color(0xEE1A2234)
+                              : Colors.white.withValues(alpha: 0.94)),
+                    tooltip: 'Gunakan Koordinat GPS Sekarang',
+                    onPressed: _isFetchingGps ? null : _activateGpsLocation,
+                    child: _isFetchingGps
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Icon(
+                            Icons.my_location_rounded,
+                            color: _currentGpsLocation != null
+                                ? Colors.white
+                                : Colors.blue.shade600,
+                          ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
                 FloatingActionButton.small(
                   key: const ValueKey('btn_toggle_pin_mode'),
                   heroTag: 'btn_toggle_pin_mode',
@@ -3279,7 +3330,7 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                           ),
                           Text(
                             isOwnerSame
-                                ? 'Alamat Objek: ${dot.alamatObjek.isNotEmpty ? dot.alamatObjek : 'Desa Bobojong'}'
+                                ? 'Alamat Objek: ${dot.alamatObjek.isNotEmpty ? dot.alamatObjek : 'Desa $activeDesaName'}'
                                 : 'Alamat Pemilik: ${dot.alamatWp.isNotEmpty ? dot.alamatWp : 'Luar Wilayah Objek'}',
                             style: const TextStyle(fontSize: 10),
                             maxLines: 1,

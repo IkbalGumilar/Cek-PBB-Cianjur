@@ -816,7 +816,7 @@ class PbbClient extends BaseHttpClient {
       if (json is Map && json['rc'] != '0000') {
         if (json['rc'] == '0014') {
           throw QrisGenerationError(
-            'NOP ini untuk tahun $tahun sudah pernah generate VA. Silakan gunakan pembayaran VA.',
+            'NOP ini untuk tahun $tahun sudah pernah membuat Virtual Account. Silakan gunakan pembayaran VA.',
           );
         }
         throw QrisGenerationError(
@@ -877,7 +877,7 @@ class PbbClient extends BaseHttpClient {
       final rc = json is Map ? json['rc'] : null;
       if (rc == '0014') {
         throw VaGenerationError(
-          'NOP ini untuk tahun $tahun sudah pernah generate QRIS. Silakan gunakan pembayaran QRIS.',
+          'NOP ini untuk tahun $tahun sudah pernah membuat kode QRIS. Silakan gunakan pembayaran QRIS.',
         );
       }
       final rcm = json is Map ? json['rcm'] as String? : null;

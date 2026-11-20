@@ -12,6 +12,7 @@ import '../dkhp_package_helper.dart';
 import '../dusun_data.dart';
 import '../nop_helper.dart';
 import '../staff_portal_client.dart';
+import '../user_friendly_error.dart';
 import 'staff_dhkp_sync_service.dart' show ParsedStaffRow, StaffDhkpSyncService;
 
 /// Progres proses pembuatan (Generate) data DHKP
@@ -192,7 +193,8 @@ class StaffDhkpGenerateService {
         tableResult = MonitoringTableResult(
           headers: const [],
           rows: const [],
-          errorMessage: 'Kesalahan jaringan pada halaman $page: $e',
+          errorMessage:
+              'Gangguan koneksi pada halaman $page: ${friendlyErrorMessage(e)}',
         );
       }
       sw.stop();
@@ -839,7 +841,10 @@ class StaffDhkpGenerateService {
         kecamatanName: resolvedWilayah.kecName,
         kecamatanCode: resolvedWilayah.kecCode3,
         kelurahanCode: resolvedWilayah.kelCode3,
-        errorMessage: 'Terjadi kesalahan saat generate DHKP: $e',
+        errorMessage: friendlyErrorMessage(
+          e,
+          fallback: 'Gagal membuat paket DHKP. Silakan coba lagi.',
+        ),
       );
     }
   }

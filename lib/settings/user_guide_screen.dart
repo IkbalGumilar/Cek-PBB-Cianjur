@@ -25,7 +25,7 @@ class _UserGuideScreenState extends State<UserGuideScreen> {
     'Kolektif',
     'Google Drive',
     'Saweria',
-    'MFA',
+    'Keamanan',
   ];
 
   @override
@@ -116,16 +116,7 @@ class _UserGuideScreenState extends State<UserGuideScreen> {
     );
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Buku Panduan & Bantuan'),
-        actions: [
-          IconButton(
-            tooltip: 'Aktifkan Ulang Tur Layar',
-            icon: const Icon(Icons.replay_rounded),
-            onPressed: _resetInteractiveTours,
-          ),
-        ],
-      ),
+      appBar: AppBar(title: const Text('Buku Panduan & Bantuan')),
       body: SafeArea(
         child: CustomScrollView(
           slivers: [
@@ -428,7 +419,7 @@ class _UserGuideScreenState extends State<UserGuideScreen> {
               onPressed: _resetInteractiveTours,
               icon: const Icon(Icons.replay_circle_filled_rounded, size: 18),
               label: const Text(
-                'Tampilkan Ulang Popup Tur di Semua Halaman',
+                'Aktifkan Ulang Tur Layar',
                 style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
               ),
               style: OutlinedButton.styleFrom(

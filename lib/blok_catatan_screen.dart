@@ -42,6 +42,7 @@ import 'result_screen.dart';
 import 'tax_record.dart';
 import 'ui/app_design_system.dart';
 import 'unity_lerp_widgets.dart';
+import 'user_friendly_error.dart';
 
 export 'dhkp/blok_catatan_models.dart';
 
@@ -170,68 +171,69 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
   }
 
   List<FeatureTourStep> _buildTableTourSteps() {
+    final moreMenuExportLine = Platform.isAndroid
+        ? '• Peta Objek Pajak, Cetak PDF, Bagikan/Unduh Excel & CSV, Kolase STTS, dan Kalkulator AJB.'
+        : '• Peta Objek Pajak, Cetak PDF, Unduh Excel & CSV, Kolase STTS, dan Kalkulator AJB.';
+    final photoColumnLine = isMobilePlatform
+        ? '• Kolom Gambar: Memotret atau mengunggah foto STTS.'
+        : '• Kolom Gambar: Mengunggah foto STTS dari perangkat.';
+
     return [
       FeatureTourStep(
         targetKey: _toggleGrafikButtonKey,
         title: 'Beralih ke Visual Grafik DHKP',
         description:
-            'Tekan ikon diagram ini untuk membuka tampilan grafik DHKP: Gauge realisasi, 3 kartu tren KPI, grafik batang per Kedusunan/Blok, serta perbandingan lintas tahun.',
+            'Buka tampilan grafik DHKP berisi Indikator Capaian, ringkasan grafik tren, perbandingan Dusun/Blok, dan lintas tahun.',
         actionHint:
-            'Tekan kembali ikon ini saat di layar grafik untuk kembali ke tabel catatan DHKP.',
+            'Tekan ikon ini kembali untuk beralih ke tabel Data DHKP.',
         icon: Icons.bar_chart_rounded,
       ),
       FeatureTourStep(
         targetKey: _targetPacingTourKey,
-        title: 'Target & Pacing Realisasi',
+        title: 'Target & Laju Penagihan',
         description:
-            'Pantau target capaian harian/bulanan, proyeksi waktu tercapai, dan laju penagihan sesuai tanggal jatuh tempo wilayah Anda.',
+            'Pantau target capaian harian/mingguan dan laju penagihan sesuai tanggal jatuh tempo wilayah Anda.',
         icon: Icons.speed_rounded,
       ),
       FeatureTourStep(
         targetKey: _moreMenuButtonKey,
-        title: 'Menu Aksi DHKP, Cek Massal & Kalkulator',
+        title: 'Menu Aksi DHKP & Kalkulator',
         description:
-            'Tekan ikon tiga titik ini untuk mengakses fitur lengkap:\n'
-            '• Unggah Berkas DHKP (.dkhp) / Laporan (.dat): Tahun baru otomatis ditambahkan tanpa menghapus tahun lama; tahun sama meminta konfirmasi timpa.\n'
-            '• Cek Status Bayar Massal: Berjalan di latar belakang (bisa disembunyikan) dengan opsi Seluruh Blok khusus Kedusunan.\n'
-            '• Peta Objek Pajak, Cetak PDF (dengan Batal Cetak), Bagikan/Unduh Excel & CSV, Kolase STTS, serta Kalkulator AJB.',
+            '• Unggah DHKP (.dkhp) atau Laporan (.dat) dari perangkat/Google Drive.\n'
+            '• Cek Status Bayar Massal di latar belakang.\n'
+            '$moreMenuExportLine',
         icon: Icons.more_vert_rounded,
       ),
       FeatureTourStep(
         targetKey: _filterBlokTahunKey,
-        title: 'Filter Wilayah Dusun, Blok, & Tahun Pajak',
+        title: 'Filter Dusun, Blok & Tahun Pajak',
         description:
-            'Pilih Kedusunan (khusus operator), nomor Blok atau "Semua Blok", serta Tahun Pajak. Pilihan ini juga ikut diterapkan saat beralih ke mode Grafik.',
+            'Pilih Dusun, nomor Blok atau "Semua Blok", serta Tahun Pajak. Filter ini juga berlaku di mode Grafik.',
         icon: Icons.filter_alt_outlined,
       ),
       FeatureTourStep(
         targetKey: _searchFilterSortKey,
-        title: 'Cari Cepat, Filter Kategori, Tanpa Rp 0, & Urutkan',
+        title: 'Cari, Filter Kategori & Urutkan',
         description:
-            '• Kotak Cari: Cari nama WP, NOP, atau alamat objek.\n'
-            '• Filter Kategori: Saring Sudah Bayar, Belum Bayar, Target Pemda, atau objek berfoto/catatan.\n'
-            '• Opsi "Tanpa Rp 0" & Urutkan: Sembunyikan ketetapan nihil (Rp 0) dan urutkan baris sesuai kebutuhan penagihan.',
+            'Cari nama WP, NOP, atau alamat objek; saring kategori bayar, Target Pemda, sembunyikan Rp 0, dan atur urutan data.',
         icon: Icons.manage_search_rounded,
       ),
       FeatureTourStep(
         targetKey: _tableAreaKey,
-        title: 'Tabel Wajib Pajak, Celengan & Aksi Baris',
+        title: 'Tabel Wajib Pajak & Aksi Baris',
         description:
-            'Pada setiap baris wajib pajak Anda dapat:\n'
-            '• Kolom Gambar: Memotret/mengunggah foto STTS.\n'
-            '• Kolom Aksi: Cek rincian objek, cetak bukti lunas PDF, hitung tagihan/cicilan celengan warga, atau cek status langsung.\n'
-            '• Kolom Catatan: Mencatat keterangan lapangan & progres tabungan warga.',
-        actionHint:
-            'Geser tabel ke kiri/kanan atau atas/bawah untuk melihat seluruh kolom.',
+            '$photoColumnLine\n'
+            '• Kolom Aksi: Lihat rincian, cetak bukti lunas, hitung denda/cicilan, atau cek status.\n'
+            '• Kolom Catatan: Simpan keterangan lapangan & tabungan warga.',
+        actionHint: 'Geser tabel ke kiri/kanan untuk melihat seluruh kolom.',
         icon: Icons.table_rows_outlined,
       ),
       FeatureTourStep(
         targetKey: _summaryFooterKey,
-        title: 'Kartu Ringkasan Capaian & Target Pemda',
+        title: 'Ringkasan Capaian & Target Pemda',
         description:
-            'Menampilkan rekap otomatis untuk daftar aktif: jumlah & rupiah Sudah Bayar, Belum Bayar, persentase realisasi, dan pemisahan Target Pemda (>= Rp 2 Juta).',
-        actionHint:
-            'Ketuk bagian atas kartu ringkasan untuk melipat atau membukanya.',
+            'Rekap otomatis jumlah & rupiah Sudah Bayar, Belum Bayar, capaian realisasi, serta Target Pemda (>= Rp 2 Juta).',
+        actionHint: 'Ketuk bagian atas kartu untuk melipat atau membukanya.',
         icon: Icons.summarize_outlined,
       ),
     ];
@@ -372,7 +374,7 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
     if (setBusy && mounted) {
       setState(() {
         _busy = true;
-        _busyMessage = busyMessage ?? 'Memuat data catatan blok...';
+        _busyMessage = busyMessage ?? 'Memuat Data DHKP...';
         _busyIcon = busyIcon ?? Icons.sync_rounded;
       });
     }
@@ -881,7 +883,7 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Laporan .dat tersimpan di $location (${targetRecords.length} objek PBB)',
+            'Laporan .dat tersimpan: ${friendlyFileName(location)} (${targetRecords.length} objek PBB)',
           ),
           backgroundColor: Colors.teal,
         ),
@@ -890,7 +892,9 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Gagal membuat berkas laporan: $e'),
+          content: Text(
+            'Gagal membuat berkas laporan: ${friendlyErrorMessage(e)}',
+          ),
           backgroundColor: Colors.red,
         ),
       );
@@ -937,7 +941,9 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              isMismatch ? 'Data tidak sesuai' : 'Gagal membaca berkas: $e',
+              isMismatch
+                  ? 'Data tidak sesuai'
+                  : 'Gagal membaca berkas: ${friendlyErrorMessage(e)}',
             ),
             backgroundColor: Colors.red,
           ),
@@ -966,7 +972,7 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
             content: Text(
               isMismatch
                   ? 'Data tidak sesuai'
-                  : 'Gagal membaca berkas Google Drive: $e',
+                  : 'Gagal membaca berkas Google Drive: ${friendlyErrorMessage(e)}',
             ),
             backgroundColor: Colors.red,
           ),
@@ -1114,7 +1120,9 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            isMismatch ? 'Data tidak sesuai' : 'Gagal memuat berkas: $e',
+            isMismatch
+                ? 'Data tidak sesuai'
+                : 'Gagal memuat berkas: ${friendlyErrorMessage(e)}',
           ),
           backgroundColor: Colors.red,
         ),
@@ -1145,42 +1153,47 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
 
   /// Memilih foto dari Kamera, Galeri, atau File Picker lalu menyimpannya secara lokal
   Future<File?> _pilihDanSimpanFoto(BlokRecord record) async {
-    final method = await showModalBottomSheet<String>(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Padding(
-              padding: EdgeInsets.all(16),
-              child: Text(
-                'Pilih Sumber Foto',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-            ),
-            ListTile(
-              leading: const Icon(Icons.camera_alt, color: Colors.blue),
-              title: const Text('Ambil dari Kamera'),
-              onTap: () => Navigator.pop(ctx, 'camera'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.photo_library, color: Colors.teal),
-              title: const Text('Pilih dari Galeri'),
-              onTap: () => Navigator.pop(ctx, 'gallery'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.folder_open, color: Colors.amber),
-              title: const Text('Pilih dari Penyimpanan Perangkat'),
-              onTap: () => Navigator.pop(ctx, 'file'),
-            ),
-            const SizedBox(height: 8),
-          ],
+    final String? method;
+    if (!isMobilePlatform) {
+      method = 'file';
+    } else {
+      method = await showModalBottomSheet<String>(
+        context: context,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
         ),
-      ),
-    );
+        builder: (ctx) => SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: Text(
+                  'Pilih Sumber Foto',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+              ),
+              ListTile(
+                leading: const Icon(Icons.camera_alt, color: Colors.blue),
+                title: const Text('Ambil dari Kamera'),
+                onTap: () => Navigator.pop(ctx, 'camera'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_library, color: Colors.teal),
+                title: const Text('Pilih dari Galeri'),
+                onTap: () => Navigator.pop(ctx, 'gallery'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.folder_open, color: Colors.amber),
+                title: const Text('Pilih dari Penyimpanan Perangkat'),
+                onTap: () => Navigator.pop(ctx, 'file'),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      );
+    }
 
     if (method == null) return null;
 
@@ -1218,9 +1231,11 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Gagal memilih gambar: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal memilih gambar: ${friendlyErrorMessage(e)}'),
+          ),
+        );
       }
       return null;
     }
@@ -1323,7 +1338,7 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
         child: Tooltip(
           message: hasPhoto
               ? 'Klik untuk perbesar / ganti foto'
-              : 'Klik untuk upload foto',
+              : 'Klik untuk unggah foto',
           child: CircleAvatar(
             radius: 18,
             backgroundColor: hasPhoto
@@ -1413,14 +1428,18 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
       );
       final location = await DownloadHelper.saveBytes(bytes, fileName);
       if (!mounted || location == null) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Laporan tersimpan di $location')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Laporan tersimpan: ${friendlyFileName(location)}'),
+        ),
+      );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Gagal membuat laporan: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Gagal membuat laporan: ${friendlyErrorMessage(e)}'),
+        ),
+      );
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -1484,9 +1503,13 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Gagal membagikan laporan: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Gagal membagikan laporan: ${friendlyErrorMessage(e)}',
+          ),
+        ),
+      );
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -1590,9 +1613,13 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Gagal menyiapkan cetakan: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Gagal menyiapkan cetakan: ${friendlyErrorMessage(e)}',
+          ),
+        ),
+      );
     } finally {
       _isPrinting = false;
     }
@@ -1741,7 +1768,7 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
                       : Icons.bar_chart_rounded,
                 ),
                 tooltip: _tampilkanGrafik
-                    ? 'Beralih ke Buku Catatan (Tabel)'
+                    ? 'Beralih ke Tabel Data DHKP'
                     : 'Beralih ke Visual Grafik',
               ),
               KeyedSubtree(
@@ -1750,7 +1777,7 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
                   key: const ValueKey('dhkp_target_pacing_btn'),
                   visualDensity: VisualDensity.compact,
                   icon: const Icon(Icons.speed_rounded),
-                  tooltip: 'Target & Pacing Realisasi',
+                  tooltip: 'Target & Laju Penagihan',
                   onPressed: _bukaTargetPacingDialog,
                 ),
               ),
@@ -1843,15 +1870,16 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
                         dense: true,
                       ),
                     ),
-                    const PopupMenuItem(
-                      value: 'bagikan',
-                      child: ListTile(
-                        leading: Icon(Icons.share_outlined),
-                        title: Text('Bagikan Laporan'),
-                        contentPadding: EdgeInsets.zero,
-                        dense: true,
+                    if (Platform.isAndroid)
+                      const PopupMenuItem(
+                        value: 'bagikan',
+                        child: ListTile(
+                          leading: Icon(Icons.share_outlined),
+                          title: Text('Bagikan Laporan'),
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
+                        ),
                       ),
-                    ),
                     const PopupMenuItem(
                       value: 'unduh',
                       child: ListTile(

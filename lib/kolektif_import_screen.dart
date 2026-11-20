@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import 'kolektif_nop_berkas.dart';
 import 'staff_portal_client.dart';
+import 'user_friendly_error.dart';
 
 /// Layar "Unggah Berkas NOP" untuk satu grup kolektif.
 ///
@@ -133,15 +134,10 @@ class _KolektifImportScreenState extends State<KolektifImportScreen> {
         title: Text('Kirim ${_siapKirim.length} NOP?'),
         content: SingleChildScrollView(
           child: Text(
-            '${_siapKirim.length} NOP dari "${widget.namaBerkas}" akan dicari di server lalu '
-            'dimasukkan ke grup "${widget.group.namaGroup}" untuk tahun pajak ${widget.tahunPajak}, '
-            '${widget.namaBuku}.\n\n'
-            'Yang belum bayar akan masuk. Yang sudah bayar dan yang tidak ditemukan tidak akan masuk — '
-            'daftarnya dilaporkan setelah selesai.\n\n'
-            'Dikirim satu per satu, perkiraan $_perkiraanWaktu. Bisa dihentikan di tengah jalan; '
-            'yang sudah masuk tetap bisa dihapus lagi selama grup masih Draft.'
-            '${adaSingkatan ? '\n\nCatatan: sebagian NOP berasal dari singkatan, jadi awalan wilayahnya '
-                      'dilengkapi dari kelurahan grup ini. Pastikan daftarnya sudah benar.' : ''}',
+            'Tambahkan ${_siapKirim.length} NOP ke grup "${widget.group.namaGroup}" '
+            '(Tahun ${widget.tahunPajak}, ${widget.namaBuku}).\n\n'
+            'Hanya NOP yang belum dibayar yang akan masuk. Perkiraan waktu $_perkiraanWaktu dan dapat dihentikan kapan saja.'
+            '${adaSingkatan ? '\n\nCatatan: sebagian NOP singkatan dilengkapi awalan kelurahan grup ini.' : ''}',
           ),
         ),
         actions: [
@@ -185,8 +181,9 @@ class _KolektifImportScreenState extends State<KolektifImportScreen> {
     } on Exception catch (e) {
       hasil = HasilImporNop(
         errorFatal:
-            'Pengiriman berhenti karena kesalahan tak terduga, jadi hasilnya belum pasti. '
-            'Periksa dulu daftar anggota sebelum mengulang.\n\n$e',
+            'Pengiriman berhenti karena gangguan koneksi, jadi hasilnya belum lengkap. '
+            'Periksa daftar anggota sebelum mengulang.\n\n'
+            '${friendlyErrorMessage(e)}',
       );
     }
 
@@ -196,7 +193,7 @@ class _KolektifImportScreenState extends State<KolektifImportScreen> {
       _mengirim = false;
       _hasil = hasil;
     });
-    await _tampilkanNotifBerurutan(hasil);
+    await _tampilkanRingkasanHasil(hasil);
   }
 
   void _tampilkanProgres() {
@@ -249,95 +246,120 @@ class _KolektifImportScreenState extends State<KolektifImportScreen> {
     );
   }
 
-  /// Tampilkan hasilnya SATU PER SATU, bukan digabung jadi satu pesan panjang.
-  /// Tiap golongan punya tindak lanjut yang berbeda — yang sudah bayar memang
-  /// tidak perlu diapa-apakan, sedangkan yang tidak ditemukan biasanya berarti
-  /// NOP-nya salah tulis dan perlu dibetulkan — jadi menggabungnya justru
-  /// membuat yang perlu ditindaklanjuti tenggelam.
-  Future<void> _tampilkanNotifBerurutan(HasilImporNop hasil) async {
-    final tahap = <({String judul, String keterangan, List<String> nop, Color? warna})>[
-      (
-        judul: 'Ditambahkan',
-        keterangan:
-            'NOP berikut ketemu, tagihannya belum bayar, dan sudah masuk jadi anggota grup '
-            '"${widget.group.namaGroup}".',
-        nop: [for (final i in hasil.ditambahkan) i.nop],
-        warna: Colors.green.shade700,
-      ),
-      (
-        judul: 'Sudah Bayar — Tidak Dimasukkan',
-        keterangan:
-            'NOP berikut ketemu, tapi tagihan tahun ${widget.tahunPajak} sudah lunas, '
-            'jadi tidak dimasukkan ke grup.',
-        nop: [for (final i in hasil.sudahBayar) i.nop],
-        warna: null,
-      ),
-      (
-        judul: 'Tidak Ditemukan — Tidak Dimasukkan',
-        keterangan:
-            'NOP berikut tidak ada di data server untuk tahun ${widget.tahunPajak}, '
-            'jadi tidak dimasukkan. Biasanya karena salah tulis atau salah kelurahan.',
-        nop: [for (final i in hasil.tidakDitemukan) i.nop],
-        warna: null,
-      ),
-      if (hasil.perluDiperiksa.isNotEmpty)
-        (
-          judul: 'Perlu Diperiksa',
-          keterangan:
-              'Server menjawab hal lain untuk NOP berikut. Jawabannya ditampilkan apa adanya '
-              'supaya tidak salah tafsir — periksa daftar anggota untuk memastikan.',
-          nop: [
-            for (final i in hasil.perluDiperiksa)
-              '${i.nop} — ${i.pesan ?? 'tanpa keterangan'}',
-          ],
-          warna: Theme.of(context).colorScheme.error,
-        ),
-    ];
+  /// Menampilkan ringkasan hasil pengiriman dalam satu dialog terpadu yang
+  /// hanya memuat kategori yang ada isinya, sehingga pengguna tidak perlu
+  /// menutup beberapa dialog kosong secara beruntun.
+  Future<void> _tampilkanRingkasanHasil(HasilImporNop hasil) async {
+    final bagian =
+        <({String judul, String keterangan, List<String> nop, Color? warna})>[
+          if (hasil.ditambahkan.isNotEmpty)
+            (
+              judul: 'Ditambahkan',
+              keterangan:
+                  'Masuk ke grup "${widget.group.namaGroup}" (belum dibayar).',
+              nop: [for (final i in hasil.ditambahkan) i.nop],
+              warna: Colors.green.shade700,
+            ),
+          if (hasil.sudahBayar.isNotEmpty)
+            (
+              judul: 'Sudah Dibayar (Dilewati)',
+              keterangan:
+                  'Tagihan tahun ${widget.tahunPajak} sudah lunas sehingga tidak dimasukkan.',
+              nop: [for (final i in hasil.sudahBayar) i.nop],
+              warna: null,
+            ),
+          if (hasil.tidakDitemukan.isNotEmpty)
+            (
+              judul: 'Tidak Ditemukan',
+              keterangan:
+                  'Tidak terdaftar pada tahun ${widget.tahunPajak} (periksa penulisan atau kelurahan).',
+              nop: [for (final i in hasil.tidakDitemukan) i.nop],
+              warna: Colors.orange.shade800,
+            ),
+          if (hasil.perluDiperiksa.isNotEmpty)
+            (
+              judul: 'Perlu Diperiksa',
+              keterangan: 'Keterangan dari server:',
+              nop: [
+                for (final i in hasil.perluDiperiksa)
+                  '${i.nop} — ${i.pesan ?? 'tanpa keterangan'}',
+              ],
+              warna: Theme.of(context).colorScheme.error,
+            ),
+        ];
 
-    for (var i = 0; i < tahap.length; i++) {
-      if (!mounted) return;
-      final t = tahap[i];
-      final terakhir = i == tahap.length - 1;
-      await showDialog<void>(
-        context: context,
-        barrierDismissible: false,
-        builder: (ctx) => AlertDialog(
-          title: Text(
-            '${i + 1}/${tahap.length} · ${t.judul} (${t.nop.length})',
-            style: t.warna == null ? null : TextStyle(color: t.warna),
-          ),
-          content: SizedBox(
-            width: double.maxFinite,
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(t.keterangan),
-                  const SizedBox(height: 12),
-                  if (t.nop.isEmpty)
-                    const Text(
-                      'Tidak ada.',
-                      style: TextStyle(color: Colors.grey),
-                    )
-                  else
-                    SelectableText(
-                      t.nop.join('\n'),
-                      style: const TextStyle(fontFamily: 'monospace'),
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Ringkasan Pengiriman NOP'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (hasil.errorFatal != null) ...[
+                  Text(
+                    hasil.errorFatal!,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                      fontWeight: FontWeight.w600,
                     ),
+                  ),
+                  const SizedBox(height: 12),
                 ],
-              ),
+                if (bagian.isEmpty)
+                  const Text('Tidak ada NOP yang berhasil diproses.')
+                else
+                  for (final b in bagian) ...[
+                    Text(
+                      '${b.judul} (${b.nop.length})',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: b.warna,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      b.keterangan,
+                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
+                    const SizedBox(height: 6),
+                    SelectableText(
+                      b.nop.join('\n'),
+                      style: const TextStyle(
+                        fontFamily: 'monospace',
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+              ],
             ),
           ),
-          actions: [
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: Text(terakhir ? 'Selesai' : 'Lanjut'),
-            ),
-          ],
         ),
-      );
-    }
+        actions: [
+          TextButton(
+            onPressed: () async {
+              await Clipboard.setData(ClipboardData(text: _ringkasan(hasil)));
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Ringkasan disalin ke papan klip.'),
+                ),
+              );
+            },
+            child: const Text('Salin'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Selesai'),
+          ),
+        ],
+      ),
+    );
   }
 
   String _ringkasan(HasilImporNop hasil) {
@@ -365,7 +387,7 @@ class _KolektifImportScreenState extends State<KolektifImportScreen> {
     }
 
     bagian('Ditambahkan', hasil.ditambahkan);
-    bagian('Sudah bayar', hasil.sudahBayar);
+    bagian('Sudah dibayar', hasil.sudahBayar);
     bagian('Tidak ditemukan', hasil.tidakDitemukan);
     if (hasil.perluDiperiksa.isNotEmpty) {
       bagian('Perlu diperiksa', hasil.perluDiperiksa, pakaiPesan: true);
@@ -387,7 +409,7 @@ class _KolektifImportScreenState extends State<KolektifImportScreen> {
             ),
             const SizedBox(height: 8),
             _barisAngka('Ditambahkan', hasil.ditambahkan.length),
-            _barisAngka('Sudah bayar', hasil.sudahBayar.length),
+            _barisAngka('Sudah dibayar', hasil.sudahBayar.length),
             _barisAngka('Tidak ditemukan', hasil.tidakDitemukan.length),
             if (hasil.perluDiperiksa.isNotEmpty)
               _barisAngka('Perlu diperiksa', hasil.perluDiperiksa.length),
@@ -408,9 +430,9 @@ class _KolektifImportScreenState extends State<KolektifImportScreen> {
             Row(
               children: [
                 TextButton.icon(
-                  onPressed: () => _tampilkanNotifBerurutan(hasil),
-                  icon: const Icon(Icons.replay),
-                  label: const Text('Lihat Lagi'),
+                  onPressed: () => _tampilkanRingkasanHasil(hasil),
+                  icon: const Icon(Icons.list_alt_rounded),
+                  label: const Text('Lihat Rincian'),
                 ),
                 const SizedBox(width: 8),
                 TextButton.icon(
@@ -420,7 +442,9 @@ class _KolektifImportScreenState extends State<KolektifImportScreen> {
                     );
                     if (!mounted) return;
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Ringkasan disalin.')),
+                      const SnackBar(
+                        content: Text('Ringkasan disalin ke papan klip.'),
+                      ),
                     );
                   },
                   icon: const Icon(Icons.copy_all_outlined),

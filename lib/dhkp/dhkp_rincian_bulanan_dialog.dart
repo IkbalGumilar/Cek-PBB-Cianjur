@@ -12,6 +12,7 @@ import '../download_helper.dart';
 import '../native_file_helper.dart';
 import '../nop_helper.dart';
 import '../tagihan_result.dart' show formatRupiah;
+import '../user_friendly_error.dart';
 import 'dhkp_grafik_analytics.dart';
 
 String _cleanPdfText(String text) {
@@ -451,7 +452,7 @@ class _DhkpRincianBulananSheetState extends State<DhkpRincianBulananSheet> {
       messenger.showSnackBar(
         SnackBar(
           content: Text(
-            'Laporan bulan $_monthName berhasil disimpan di: $savedPath',
+            'Laporan bulan $_monthName berhasil disimpan: ${friendlyFileName(savedPath)}',
           ),
           action: SnackBarAction(
             label: 'Buka',
@@ -461,7 +462,9 @@ class _DhkpRincianBulananSheetState extends State<DhkpRincianBulananSheet> {
       );
     } catch (e) {
       messenger.showSnackBar(
-        SnackBar(content: Text('Gagal mengunduh laporan: $e')),
+        SnackBar(
+          content: Text('Gagal mengunduh laporan: ${friendlyErrorMessage(e)}'),
+        ),
       );
     } finally {
       if (mounted) setState(() => _isProcessing = false);
@@ -493,12 +496,20 @@ class _DhkpRincianBulananSheetState extends State<DhkpRincianBulananSheet> {
         if (savedPath == null) return;
         await NativeFileHelper.showInFileManager(savedPath);
         messenger.showSnackBar(
-          SnackBar(content: Text('Dokumen PDF disimpan di: $savedPath')),
+          SnackBar(
+            content: Text(
+              'Dokumen PDF disimpan: ${friendlyFileName(savedPath)}',
+            ),
+          ),
         );
       }
     } catch (e) {
       messenger.showSnackBar(
-        SnackBar(content: Text('Gagal membagikan laporan: $e')),
+        SnackBar(
+          content: Text(
+            'Gagal membagikan laporan: ${friendlyErrorMessage(e)}',
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => _isProcessing = false);
@@ -521,7 +532,11 @@ class _DhkpRincianBulananSheetState extends State<DhkpRincianBulananSheet> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal menyiapkan cetak PDF: $e')),
+          SnackBar(
+            content: Text(
+              'Gagal menyiapkan cetak PDF: ${friendlyErrorMessage(e)}',
+            ),
+          ),
         );
       }
     } finally {
@@ -629,7 +644,7 @@ class _DhkpRincianBulananSheetState extends State<DhkpRincianBulananSheet> {
 
                   const SizedBox(height: 10),
 
-                  // Baris Tombol Aksi: Unduh, Bagikan, Cetak
+                  // Baris Tombol Aksi: Unduh, Bagikan (Android), Cetak
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Row(
@@ -650,23 +665,28 @@ class _DhkpRincianBulananSheetState extends State<DhkpRincianBulananSheet> {
                             ),
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            icon: const Icon(Icons.share_rounded, size: 17),
-                            label: const Text(
-                              'Bagikan',
-                              style: TextStyle(fontSize: 12),
-                            ),
-                            onPressed: (_monthRecords.isEmpty || _isProcessing)
-                                ? null
-                                : _handleShare,
-                            style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 8),
-                              visualDensity: VisualDensity.compact,
+                        if (Platform.isAndroid) ...[
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              icon: const Icon(Icons.share_rounded, size: 17),
+                              label: const Text(
+                                'Bagikan',
+                                style: TextStyle(fontSize: 12),
+                              ),
+                              onPressed:
+                                  (_monthRecords.isEmpty || _isProcessing)
+                                  ? null
+                                  : _handleShare,
+                              style: OutlinedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 8,
+                                ),
+                                visualDensity: VisualDensity.compact,
+                              ),
                             ),
                           ),
-                        ),
+                        ],
                         const SizedBox(width: 8),
                         Expanded(
                           child: FilledButton.icon(

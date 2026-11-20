@@ -33,6 +33,7 @@ import 'feature_tour/feature_tour.dart';
 import 'tagihan_result.dart' show formatRupiah;
 import 'ui/app_design_system.dart';
 import 'unity_lerp_widgets.dart' show UnityAnimationCurve, unityLerp;
+import 'user_friendly_error.dart';
 
 export 'dhkp/dhkp_grafik_analytics.dart';
 
@@ -212,59 +213,49 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
   }
 
   List<FeatureTourStep> _buildTourSteps() {
+    final exportButtons = Platform.isAndroid
+        ? 'Unduh PNG atau PDF, Bagikan, dan Cetak'
+        : 'Unduh PNG atau PDF dan Cetak';
     return [
       FeatureTourStep(
         targetKey: _topTabsKey,
-        title: '5 Pilihan Kategori Laporan Grafik',
+        title: '5 Kategori Laporan Grafik',
         description:
-            'Pilih sudut pandang grafik yang ingin Anda pantau:\n'
-            '• Jumlah Persentase: Perbandingan persen lunas antar dusun atau blok.\n'
-            '• Jumlah Pendapatan: Total nominal pajak masuk dibandingkan target.\n'
-            '• Sudah Bayar & Belum Bayar: Rincian jumlah SPPT lunas dan tunggakan.\n'
-            '• Tren Pembayaran: Kurva realisasi bulanan serta perbandingan antar tahun.',
-        actionHint:
-            'Ketuk salah satu kategori di atas untuk langsung mengganti grafik.',
+            'Pilih sudut pandang grafik: Persentase lunas, Pendapatan, Sudah/Belum Bayar, atau Tren Pembayaran bulanan.',
+        actionHint: 'Ketuk salah satu kategori di atas untuk mengganti grafik.',
         icon: Icons.analytics_outlined,
       ),
       FeatureTourStep(
         targetKey: _scopeBarKey,
-        title: 'Pilihan Cakupan Wilayah Cepat',
+        title: 'Cakupan Wilayah Cepat',
         description:
-            'Menyesuaikan tingkat wilayah yang sedang aktif:\n'
-            '• Wilayah Kedusunan: Hanya menampilkan 2 tab ringkas — "Se-Kedusunan" dan "Semua Blok".\n'
-            '• Wilayah Desa: Menampilkan Se-Desa, Semua Dusun, serta tab tiap Dusun.\n'
-            '• Filter 1 Blok: Bilah cakupan otomatis disembunyikan agar tampilan grafik blok lebih lega.',
-        actionHint:
-            'Anda juga dapat mengetuk batang dusun/blok langsung di grafik untuk melihat detailnya.',
+            'Ganti cakupan sesuai wilayah aktif (Se-Desa, Dusun, atau Semua Blok). Bilah otomatis disembunyikan saat memilih 1 Blok.',
+        actionHint: 'Ketuk batang dusun/blok pada grafik untuk melihat detail.',
         icon: Icons.place_outlined,
       ),
       FeatureTourStep(
         targetKey: _statCardsKey,
-        title: 'Gauge Realisasi & 3 Kartu Tren KPI',
+        title: 'Indikator Capaian & 3 Kartu Tren',
         description:
-            'Menampilkan indikator setengah lingkaran (Gauge) capaian pelunasan beserta 3 kartu metrik utama (sparkline tren, perbandingan tahun sebelumnya, jumlah SPPT, dan nilai rupiah).',
+            'Menampilkan Indikator Capaian pelunasan beserta 3 kartu ringkasan berisi grafik tren, perbandingan tahun lalu, jumlah SPPT, dan nilai rupiah.',
         icon: Icons.assessment_outlined,
       ),
       FeatureTourStep(
         targetKey: _controlToolbarKey,
-        title: 'Bentuk Diagram, Pas Layar, Urutan & Lipat Kartu',
+        title: 'Bentuk Diagram, Urutan & Lipat Kartu',
         description:
-            '• Bentuk Diagram: Pilih Batang Tegak, Batang Mendatar, Diagram Lingkaran, atau Semua.\n'
-            '• Pas Layar / Geser: Rapatkan seluruh batang agar muat di satu layar atau ubah ke mode geser horizontal.\n'
-            '• Urutkan & Lipat/Buka Semua: Atur urutan wilayah dan rapikan kartu grafik.',
-        actionHint:
-            'Seluruh pilihan tampilan ini tersimpan otomatis saat Anda kembali membuka grafik.',
+            'Atur bentuk diagram (Batang Tegak, Mendatar, Lingkaran), mode Pas Layar/Geser, urutan wilayah, serta lipat/buka kartu.',
+        actionHint: 'Pilihan tampilan tersimpan otomatis.',
         icon: Icons.tune_rounded,
       ),
       FeatureTourStep(
         targetKey: _chartContentKey,
-        title: 'Grafik Interaktif, Bandingkan Tahun & Ekspor PDF/PNG',
+        title: 'Grafik Interaktif & Ekspor PNG/PDF',
         description:
             '• Ketuk batang atau titik bulan untuk melihat rincian wajib pajak.\n'
-            '• Pada tab Tren Pembayaran, gunakan tombol "Bandingkan" di pojok kanan bawah untuk membandingkan 2 tahun sekaligus.\n'
-            '• Di pojok kanan atas setiap kartu tersedia tombol Unduh PNG/PDF/Excel, Bagikan, dan Cetak (dilengkapi Batal Cetak).',
-        actionHint:
-            'Geser layar ke bawah untuk melihat tabel perbandingan lengkap di bawah grafik.',
+            '• Pada tab Tren Pembayaran, tekan "Bandingkan" untuk membandingkan 2 tahun sekaligus.\n'
+            '• Di pojok kanan atas kartu tersedia tombol $exportButtons.',
+        actionHint: 'Geser ke bawah untuk melihat tabel perbandingan lengkap.',
         icon: Icons.bar_chart_rounded,
       ),
     ];
@@ -671,7 +662,11 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
         final savedPath = await DownloadHelper.saveBytes(bytes, fileName);
         if (savedPath == null) return;
         messenger.showSnackBar(
-          SnackBar(content: Text('Gambar grafik disimpan di: $savedPath')),
+          SnackBar(
+            content: Text(
+              'Gambar grafik disimpan: ${friendlyFileName(savedPath)}',
+            ),
+          ),
         );
       } else {
         final pdfBytes = await _generateSectionPdf(
@@ -684,12 +679,18 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
         final savedPath = await DownloadHelper.saveBytes(pdfBytes, fileName);
         if (savedPath == null) return;
         messenger.showSnackBar(
-          SnackBar(content: Text('Dokumen PDF grafik disimpan di: $savedPath')),
+          SnackBar(
+            content: Text(
+              'Dokumen PDF grafik disimpan: ${friendlyFileName(savedPath)}',
+            ),
+          ),
         );
       }
     } catch (e) {
       messenger.showSnackBar(
-        SnackBar(content: Text('Gagal mengunduh grafik: $e')),
+        SnackBar(
+          content: Text('Gagal mengunduh grafik: ${friendlyErrorMessage(e)}'),
+        ),
       );
     }
   }
@@ -729,7 +730,9 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
           await NativeFileHelper.showInFileManager(savedPath);
           messenger.showSnackBar(
             SnackBar(
-              content: Text('Gambar grafik disimpan dan dibuka di: $savedPath'),
+              content: Text(
+                'Gambar grafik disimpan: ${friendlyFileName(savedPath)}',
+              ),
             ),
           );
         }
@@ -758,7 +761,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
           messenger.showSnackBar(
             SnackBar(
               content: Text(
-                'Dokumen PDF grafik disimpan dan dibuka di: $savedPath',
+                'Dokumen PDF grafik disimpan: ${friendlyFileName(savedPath)}',
               ),
             ),
           );
@@ -766,7 +769,9 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
       }
     } catch (e) {
       messenger.showSnackBar(
-        SnackBar(content: Text('Gagal membagikan grafik: $e')),
+        SnackBar(
+          content: Text('Gagal membagikan grafik: ${friendlyErrorMessage(e)}'),
+        ),
       );
     }
   }
@@ -1279,7 +1284,14 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
       );
     } catch (e) {
       messenger.showSnackBar(
-        SnackBar(content: Text('Gagal menyiapkan cetak laporan bulanan: $e')),
+        SnackBar(
+          content: Text(
+            friendlyErrorMessage(
+              e,
+              fallback: 'Gagal menyiapkan cetak laporan bulanan.',
+            ),
+          ),
+        ),
       );
     }
   }
@@ -1509,7 +1521,14 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
       );
     } catch (e) {
       messenger.showSnackBar(
-        SnackBar(content: Text('Gagal menyiapkan cetak grafik: $e')),
+        SnackBar(
+          content: Text(
+            friendlyErrorMessage(
+              e,
+              fallback: 'Gagal menyiapkan cetak grafik.',
+            ),
+          ),
+        ),
       );
     }
   }
@@ -3006,28 +3025,29 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
                       groups: groups,
                     ),
                   ),
-                  IconButton(
-                    visualDensity: VisualDensity.compact,
-                    constraints: const BoxConstraints(
-                      minWidth: 32,
-                      minHeight: 32,
+                  if (Platform.isAndroid)
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      constraints: const BoxConstraints(
+                        minWidth: 32,
+                        minHeight: 32,
+                      ),
+                      padding: const EdgeInsets.all(4),
+                      tooltip: 'Bagikan Grafik (Gambar / PDF)',
+                      icon: Icon(
+                        Icons.share_outlined,
+                        size: 17,
+                        color: isDark
+                            ? Colors.grey.shade300
+                            : accentColor.shade700,
+                      ),
+                      onPressed: () => _handleShareSection(
+                        sectionKey: sectionKey,
+                        title: title,
+                        subtitle: subtitle,
+                        groups: groups,
+                      ),
                     ),
-                    padding: const EdgeInsets.all(4),
-                    tooltip: 'Bagikan Grafik (Gambar / PDF)',
-                    icon: Icon(
-                      Icons.share_outlined,
-                      size: 17,
-                      color: isDark
-                          ? Colors.grey.shade300
-                          : accentColor.shade700,
-                    ),
-                    onPressed: () => _handleShareSection(
-                      sectionKey: sectionKey,
-                      title: title,
-                      subtitle: subtitle,
-                      groups: groups,
-                    ),
-                  ),
                   IconButton(
                     visualDensity: VisualDensity.compact,
                     constraints: const BoxConstraints(

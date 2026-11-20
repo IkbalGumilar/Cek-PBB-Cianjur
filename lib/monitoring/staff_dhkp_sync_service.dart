@@ -12,6 +12,7 @@ import '../dhkp_widget_sync_service.dart';
 import '../dusun_data.dart';
 import '../nop_helper.dart';
 import '../staff_portal_client.dart';
+import '../user_friendly_error.dart';
 
 
 /// Pilihan mode sinkronisasi DHKP dari Portal Staf
@@ -419,7 +420,10 @@ class StaffDhkpSyncService {
         tableResult = MonitoringTableResult(
           headers: const [],
           rows: const [],
-          errorMessage: 'Kesalahan jaringan pada halaman $page: $e',
+          errorMessage: friendlyErrorMessage(
+            e,
+            fallback: 'Koneksi terganggu saat memuat halaman $page.',
+          ),
         );
       }
       sw.stop();
@@ -517,7 +521,7 @@ class StaffDhkpSyncService {
     // 1. Notifikasi awal (Android Foreground Service & 1 notif awal di Desktop)
     await BatchNotificationService.instance.showStarted(
       title: 'Sinkronisasi DHKP Dimulai ($blokSummaryLabel)',
-      content: 'Menghubungkan ke Portal Staf Bapenda ($totalBloks blok)...',
+      content: 'Menghubungkan ke Portal Petugas Bapenda ($totalBloks blok)...',
       total: totalBloks,
     );
 
@@ -843,7 +847,7 @@ class StaffDhkpSyncService {
           blokLabel: blokSummaryLabel,
           tahun: tahun,
           errorMessage:
-              'Sesi login ke Portal Staf telah kedaluwarsa. Silakan masuk kembali melalui Menu Petugas sebelum melanjutkan sinkronisasi.',
+              'Sesi login ke Portal Petugas telah kedaluwarsa. Silakan masuk kembali melalui Menu Petugas sebelum melanjutkan sinkronisasi.',
         );
       }
 
@@ -1109,7 +1113,7 @@ class StaffDhkpSyncService {
             luasBangunan: parsed.luasBangunan,
             njopBangunan: parsed.njopBangunan,
             isTargetPemda: parsedPbbVal >= 2000000,
-            catatan: 'SPPT Baru terdeteksi dari Portal Staf',
+            catatan: 'SPPT Baru terdeteksi dari Portal Petugas',
           );
           keyToExisting[key] = newRecord;
           recordsToUpsertMap[key] = newRecord;
@@ -1165,7 +1169,10 @@ class StaffDhkpSyncService {
         newNops: newNops,
         updatedRecords: updatedRecords,
         newRecords: newRecords,
-        errorMessage: 'Gagal menyinkronkan data: $e',
+        errorMessage: friendlyErrorMessage(
+          e,
+          fallback: 'Gagal menyinkronkan data DHKP. Silakan coba lagi.',
+        ),
       );
       lastOutcome = errOutcome;
       return errOutcome;

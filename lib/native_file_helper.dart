@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 /// Simpan/bagikan berkas lewat Kotlin native (bukan media_store_plus): plugin
@@ -13,7 +14,9 @@ class NativeFileHelper {
   /// Dapatkan path absolut folder media publik Android (`/storage/emulated/0/Android/media/id.cianjur.pbb`).
   static Future<String> getMediaDirectoryPath() async {
     if (!Platform.isAndroid) {
-      throw UnsupportedError('Media directory path hanya tersedia di Android.');
+      throw UnsupportedError(
+        'Folder penyimpanan media hanya tersedia di Android.',
+      );
     }
     try {
       final path = await _channel.invokeMethod<String>('getMediaDirectoryPath');
@@ -47,9 +50,8 @@ class NativeFileHelper {
       }
       return location;
     } on PlatformException catch (e) {
-      throw Exception(
-        'Gagal menyimpan berkas ke media: ${e.message ?? e.code}',
-      );
+      debugPrint('NativeFileHelper saveToMedia error: ${e.code} ${e.message}');
+      throw Exception('Gagal menyimpan berkas ke penyimpanan media perangkat.');
     }
   }
 
@@ -77,7 +79,10 @@ class NativeFileHelper {
       }
       return location;
     } on PlatformException catch (e) {
-      throw Exception('Gagal menyimpan berkas: ${e.message ?? e.code}');
+      debugPrint(
+        'NativeFileHelper saveToDocuments error: ${e.code} ${e.message}',
+      );
+      throw Exception('Gagal menyimpan berkas ke folder Dokumen.');
     }
   }
 
@@ -111,7 +116,8 @@ class NativeFileHelper {
         'mimeType': mimeType,
       });
     } on PlatformException catch (e) {
-      throw Exception('Gagal membagikan berkas: ${e.message ?? e.code}');
+      debugPrint('NativeFileHelper shareBytes error: ${e.code} ${e.message}');
+      throw Exception('Gagal membuka menu berbagi perangkat.');
     }
   }
 

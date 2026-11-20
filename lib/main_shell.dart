@@ -1,7 +1,5 @@
 import 'dart:async';
-import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 
@@ -25,6 +23,7 @@ import 'staff_portal_client.dart';
 import 'theme_controller.dart';
 import 'update_checker.dart';
 import 'update_screen.dart';
+import 'user_friendly_error.dart';
 
 enum _ActiveView { check, import, desil, kendaraan }
 
@@ -214,6 +213,7 @@ class _MainShellState extends State<MainShell> {
             : StaffLoginScreen(
                 client: client,
                 themeController: widget.themeController,
+                skipInitialSessionCheck: true,
               ),
       ),
     );
@@ -271,7 +271,7 @@ class _MainShellState extends State<MainShell> {
     if (_view == _ActiveView.desil) {
       final handled = _desilKey.currentState?.handleBack() ?? false;
       if (handled) return;
-      _exitApp();
+      _backToCheck();
       return;
     }
     if (_view == _ActiveView.kendaraan) {
@@ -284,7 +284,7 @@ class _MainShellState extends State<MainShell> {
         );
         return;
       }
-      _exitApp();
+      _backToCheck();
       return;
     }
     if (_view == _ActiveView.check) {
@@ -366,7 +366,9 @@ class _MainShellState extends State<MainShell> {
                         headerMenuKey: _headerMenuKey,
                         headerSettingsKey: _headerSettingsKey,
                         dhkpFabKey: _dhkpFabKey,
-                        emergencyFabKey: _emergencyFabKey,
+                        emergencyFabKey: isMobilePlatform
+                            ? _emergencyFabKey
+                            : null,
                         isActive: _view == _ActiveView.check,
                         onRegisterShowTour: (fn) => _showCheckTour = fn,
                       ),
@@ -378,13 +380,17 @@ class _MainShellState extends State<MainShell> {
                       ),
                       DesilView(
                         key: _desilKey,
-                        emergencyFabKey: _emergencyFabKey,
+                        emergencyFabKey: isMobilePlatform
+                            ? _emergencyFabKey
+                            : null,
                         isActive: _view == _ActiveView.desil,
                       ),
                       KendaraanView(
                         key: _kendaraanKey,
                         scrollController: _kendaraanScrollController,
-                        emergencyFabKey: _emergencyFabKey,
+                        emergencyFabKey: isMobilePlatform
+                            ? _emergencyFabKey
+                            : null,
                         isActive: _view == _ActiveView.kendaraan,
                       ),
                     ],
@@ -392,9 +398,7 @@ class _MainShellState extends State<MainShell> {
                 ),
               ],
             ),
-            if (!kIsWeb &&
-                (Platform.isAndroid || Platform.isIOS || kDebugMode) &&
-                _view != _ActiveView.import)
+            if (isMobilePlatform && _view != _ActiveView.import)
               Positioned(
                 left: 16,
                 bottom: 16,
@@ -433,7 +437,7 @@ class _BukuCatatanButton extends StatelessWidget {
           isLabelVisible: count > 0,
           child: FloatingActionButton.extended(
             onPressed: onPressed,
-            tooltip: 'Buku Catatan DHKP',
+            tooltip: 'Data DHKP',
             icon: const Icon(Icons.table_chart_outlined),
             label: const Text('DHKP'),
           ),

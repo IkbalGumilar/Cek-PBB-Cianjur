@@ -1,8 +1,12 @@
+import 'dart:io';
+
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 
 import '../app_security_service.dart';
 import '../backup_password_store.dart';
+import '../blok_backup_scheduler.dart';
+import '../user_friendly_error.dart';
 
 /// Halaman terpisah untuk pengaturan Keamanan Aplikasi.
 class SecuritySettingsScreen extends StatelessWidget {
@@ -27,7 +31,9 @@ class SecuritySettingsSection extends StatefulWidget {
   const SecuritySettingsSection({super.key});
 
   static String methodLabel(AppLockType method) => switch (method) {
-    AppLockType.device => 'Sidik Jari / Kunci HP',
+    AppLockType.device => Platform.isWindows
+        ? 'Windows Hello / Kunci Perangkat'
+        : 'Sidik Jari / Kunci Perangkat',
     AppLockType.pin => 'PIN 6 Angka',
     AppLockType.password => 'Kata Sandi',
   };
@@ -39,12 +45,13 @@ class SecuritySettingsSection extends StatefulWidget {
 
 class _SecuritySettingsSectionState extends State<SecuritySettingsSection> {
   bool _enabled = false;
-  AppLockType _method = AppLockType.device;
+  AppLockType _method = Platform.isLinux ? AppLockType.pin : AppLockType.device;
   int _timeoutSeconds = 0;
   bool _biometricSupported = false;
   bool _hasPin = false;
   bool _hasPassword = false;
   bool _hasBackupPassword = false;
+  String _googleAccount = '';
 
   @override
   void initState() {
@@ -61,16 +68,20 @@ class _SecuritySettingsSectionState extends State<SecuritySettingsSection> {
     final hasPin = await service.hasCustomPin();
     final hasPassword = await service.hasCustomPassword();
     final hasBackupPass = await BackupPasswordStore.instance.hasPassword();
+    final googleAcc = await BlokBackupScheduler.instance.getGoogleAccount();
 
     if (!mounted) return;
     setState(() {
       _enabled = enabled;
-      _method = method;
+      _method = (Platform.isLinux && method == AppLockType.device)
+          ? AppLockType.pin
+          : method;
       _timeoutSeconds = timeout;
       _biometricSupported = bioSupported;
       _hasPin = hasPin;
       _hasPassword = hasPassword;
       _hasBackupPassword = hasBackupPass;
+      _googleAccount = googleAcc;
     });
   }
 
@@ -98,7 +109,7 @@ class _SecuritySettingsSectionState extends State<SecuritySettingsSection> {
     }
 
     if (_method == AppLockType.device) {
-      if (!_biometricSupported) {
+      if (Platform.isLinux || !_biometricSupported) {
         if (!mounted) return;
         final configured = await _showPinSetupDialog();
         if (configured) {
@@ -110,14 +121,16 @@ class _SecuritySettingsSectionState extends State<SecuritySettingsSection> {
         return;
       }
       final ok = await service.authenticateWithDevice(
-        reason: 'Konfirmasi kunci layar HP untuk mengaktifkan Kunci Aplikasi',
+        reason: Platform.isWindows
+            ? 'Konfirmasi Windows Hello atau kunci perangkat untuk mengaktifkan Kunci Aplikasi'
+            : 'Konfirmasi kunci perangkat untuk mengaktifkan Kunci Aplikasi',
       );
       if (!mounted) return;
       if (!ok) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
-              'Gagal verifikasi kunci layar HP. Gunakan PIN 6 Angka sebagai gantinya.',
+              'Gagal verifikasi kunci perangkat. Gunakan PIN 6 Angka sebagai gantinya.',
             ),
           ),
         );
@@ -131,6 +144,7 @@ class _SecuritySettingsSectionState extends State<SecuritySettingsSection> {
         final configured = await _showPinSetupDialog();
         if (!configured) return;
       }
+      await service.setLockType(AppLockType.pin);
       await service.setLockEnabled(true);
       service.unlock();
       await _loadSecuritySettings();
@@ -139,6 +153,7 @@ class _SecuritySettingsSectionState extends State<SecuritySettingsSection> {
         final configured = await _showPasswordSetupDialog();
         if (!configured) return;
       }
+      await service.setLockType(AppLockType.password);
       await service.setLockEnabled(true);
       service.unlock();
       await _loadSecuritySettings();
@@ -226,7 +241,8 @@ class _SecuritySettingsSectionState extends State<SecuritySettingsSection> {
                           if (!ctx.mounted) return;
                           setDialogState(() {
                             isSubmitting = false;
-                            errorText = 'Gagal memverifikasi: $e';
+                            errorText =
+                                'Gagal memverifikasi: ${friendlyErrorMessage(e)}';
                           });
                         }
                       },
@@ -259,16 +275,19 @@ class _SecuritySettingsSectionState extends State<SecuritySettingsSection> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              RadioListTile<AppLockType>(
-                title: const Text('Sidik Jari / Kunci HP'),
-                subtitle: Text(
-                  _biometricSupported
-                      ? 'Gunakan sidik jari, wajah, atau pola bawaan HP'
-                      : 'Tidak tersedia di perangkat ini',
+              if (!Platform.isLinux)
+                RadioListTile<AppLockType>(
+                  title: Text(methodLabel(AppLockType.device)),
+                  subtitle: Text(
+                    _biometricSupported
+                        ? (Platform.isWindows
+                              ? 'Gunakan Windows Hello atau kunci layar perangkat'
+                              : 'Gunakan sidik jari, wajah, atau kunci bawaan perangkat')
+                        : 'Tidak tersedia di perangkat ini',
+                  ),
+                  value: AppLockType.device,
+                  enabled: _biometricSupported,
                 ),
-                value: AppLockType.device,
-                enabled: _biometricSupported,
-              ),
               const RadioListTile<AppLockType>(
                 title: Text('PIN 6 Angka'),
                 subtitle: Text('Buka cepat dengan 6 angka pilihan Anda'),
@@ -296,7 +315,9 @@ class _SecuritySettingsSectionState extends State<SecuritySettingsSection> {
       if (!ok) return;
     } else if (chosen == AppLockType.device) {
       final ok = await service.authenticateWithDevice(
-        reason: 'Verifikasi sidik jari atau kunci layar HP',
+        reason: Platform.isWindows
+            ? 'Verifikasi Windows Hello atau kunci perangkat'
+            : 'Verifikasi sidik jari atau kunci perangkat',
       );
       if (!ok) return;
     }
@@ -393,7 +414,8 @@ class _SecuritySettingsSectionState extends State<SecuritySettingsSection> {
                           if (!ctx.mounted) return;
                           setDialogState(() {
                             isSubmitting = false;
-                            errorText = 'Gagal menyimpan PIN: $e';
+                            errorText =
+                                'Gagal menyimpan PIN: ${friendlyErrorMessage(e)}';
                           });
                         }
                       },
@@ -506,7 +528,8 @@ class _SecuritySettingsSectionState extends State<SecuritySettingsSection> {
                           if (!ctx.mounted) return;
                           setDialogState(() {
                             isSubmitting = false;
-                            errorText = 'Gagal menyimpan kata sandi: $e';
+                            errorText =
+                                'Gagal menyimpan kata sandi: ${friendlyErrorMessage(e)}';
                           });
                         }
                       },
@@ -569,6 +592,8 @@ class _SecuritySettingsSectionState extends State<SecuritySettingsSection> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final hasGoogleAccount = _googleAccount.isNotEmpty;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -600,7 +625,7 @@ class _SecuritySettingsSectionState extends State<SecuritySettingsSection> {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'Lindungi data pajak warga di HP Anda agar tidak dibuka orang lain.',
+                  'Lindungi data pajak warga di perangkat Anda agar tidak dibuka orang lain.',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
                 const SizedBox(height: 8),
@@ -640,7 +665,13 @@ class _SecuritySettingsSectionState extends State<SecuritySettingsSection> {
                 children: [
                   ListTile(
                     contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.fingerprint),
+                    leading: Icon(
+                      Platform.isLinux
+                          ? Icons.pin_outlined
+                          : (Platform.isWindows
+                                ? Icons.verified_user_outlined
+                                : Icons.fingerprint),
+                    ),
                     title: const Text('Cara Buka Kunci'),
                     subtitle: Text(methodLabel(_method)),
                     trailing: const Icon(Icons.chevron_right),
@@ -701,11 +732,14 @@ class _SecuritySettingsSectionState extends State<SecuritySettingsSection> {
               children: [
                 Row(
                   children: [
-                    Icon(Icons.enhanced_encryption_outlined, color: scheme.primary),
+                    Icon(
+                      Icons.enhanced_encryption_outlined,
+                      color: scheme.primary,
+                    ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        'Enkripsi & Pemulihan Backup (.dkhp)',
+                        'Keamanan & Pemulihan Cadangan (.dkhp)',
                         style: Theme.of(context).textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.bold,
                         ),
@@ -715,7 +749,9 @@ class _SecuritySettingsSectionState extends State<SecuritySettingsSection> {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'Setiap berkas cadangan (.dkhp) dienkripsi (DKH2 AES-256-GCM) menggunakan satu kunci aktif saat cadangan dibuat: Kata Sandi Backup kustom Anda (jika diatur), atau Kunci Pemulihan (Recovery Key) perangkat ini (jika kata sandi kustom tidak diatur).',
+                  hasGoogleAccount
+                      ? 'Setiap berkas cadangan (.dkhp) dilindungi enkripsi secara otomatis. Karena Akun Google ($_googleAccount) sedang terhubung, cadangan dari menu Pencadangan Data diamankan dengan kunci cadangan Akun Google agar dapat langsung dipulihkan saat Anda berganti perangkat. Kata Sandi Cadangan kustom atau Kunci Pemulihan di bawah digunakan untuk ekspor paket lokal dan cadangan tanpa Akun Google.'
+                      : 'Setiap berkas cadangan (.dkhp) dilindungi enkripsi secara otomatis menggunakan Kata Sandi Cadangan kustom Anda (jika diatur) atau Kunci Pemulihan perangkat ini. Anda juga dapat menghubungkan Akun Google di menu Pencadangan Data agar kunci cadangan tersinkron otomatis antarperangkat.',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
                 const SizedBox(height: 8),
@@ -724,13 +760,15 @@ class _SecuritySettingsSectionState extends State<SecuritySettingsSection> {
                   leading: const Icon(Icons.vpn_key_outlined),
                   title: Text(
                     _hasBackupPassword
-                        ? 'Ubah Kata Sandi Backup (.dkhp)'
-                        : 'Atur Kata Sandi Backup (.dkhp)',
+                        ? 'Ubah Kata Sandi Cadangan (.dkhp)'
+                        : 'Atur Kata Sandi Cadangan (.dkhp)',
                   ),
                   subtitle: Text(
                     _hasBackupPassword
-                        ? 'Aktif • Backup baru hanya dapat dibuka dengan kata sandi kustom ini (bukan Recovery Key)'
-                        : 'Tidak diatur • Backup baru dienkripsi dengan Kunci Pemulihan perangkat ini',
+                        ? 'Aktif • Ekspor lokal & cadangan non-Google hanya dapat dibuka dengan kata sandi ini'
+                        : (hasGoogleAccount
+                              ? 'Tidak diatur • Cadangan Google memakai kunci Akun Google; ekspor lokal memakai Kunci Pemulihan'
+                              : 'Tidak diatur • Cadangan baru diamankan dengan Kunci Pemulihan perangkat ini'),
                   ),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: _showBackupPasswordSetupDialog,
@@ -739,11 +777,11 @@ class _SecuritySettingsSectionState extends State<SecuritySettingsSection> {
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: const Icon(Icons.key_rounded),
-                  title: const Text('Lihat Kunci Pemulihan (Recovery Key)'),
+                  title: const Text('Lihat Kunci Pemulihan'),
                   subtitle: Text(
                     _hasBackupPassword
-                        ? 'Hanya untuk membuka backup yang dibuat saat kata sandi kustom tidak aktif'
-                        : 'Wajib disimpan untuk membuka backup perangkat ini di HP/komputer lain',
+                        ? 'Hanya untuk membuka cadangan lama yang dibuat tanpa kata sandi kustom'
+                        : 'Simpan di tempat aman untuk membuka cadangan perangkat ini di perangkat lain',
                   ),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: _showRecoveryKeyDialog,
@@ -764,7 +802,9 @@ class _SecuritySettingsSectionState extends State<SecuritySettingsSection> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Gagal mengakses Kunci Pemulihan di Secure Storage: $e'),
+          content: Text(
+            'Gagal mengakses Kunci Pemulihan dari penyimpanan aman perangkat: ${friendlyErrorMessage(e)}',
+          ),
           backgroundColor: Colors.red,
         ),
       );
@@ -775,13 +815,13 @@ class _SecuritySettingsSectionState extends State<SecuritySettingsSection> {
       context: context,
       builder: (ctx) => AlertDialog(
         icon: const Icon(Icons.key_rounded, size: 36),
-        title: const Text('Kunci Pemulihan Backup'),
+        title: const Text('Kunci Pemulihan Cadangan'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Simpan Kunci Pemulihan ini di tempat aman. Kunci ini dipakai untuk membuka berkas backup (.dkhp) yang dibuat tanpa Kata Sandi Kustom saat dipulihkan di perangkat lain. Jika kunci ini hilang, backup tersebut tidak dapat dibuka. (Catatan: Backup yang dibuat dengan Kata Sandi Kustom hanya dapat dibuka dengan kata sandi kustom tersebut, bukan dengan kunci ini):',
+              'Simpan Kunci Pemulihan ini di tempat aman. Kunci ini dipakai untuk membuka berkas cadangan (.dkhp) lokal yang dibuat tanpa Kata Sandi Kustom saat dipulihkan di perangkat lain. Jika kunci ini hilang, berkas tersebut tidak dapat dibuka. (Catatan: Berkas yang dibuat dengan Kata Sandi Kustom hanya dapat dibuka dengan kata sandi tersebut, dan cadangan saat Akun Google terhubung terbuka otomatis dengan Akun Google yang sama.)',
               style: TextStyle(fontSize: 13),
             ),
             const SizedBox(height: 12),
@@ -829,13 +869,13 @@ class _SecuritySettingsSectionState extends State<SecuritySettingsSection> {
         context: context,
         builder: (ctx) => StatefulBuilder(
           builder: (ctx, setDialogState) => AlertDialog(
-            title: const Text('Kata Sandi Backup (.dkhp)'),
+            title: const Text('Kata Sandi Cadangan (.dkhp)'),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Masukkan kata sandi minimal 8 karakter untuk mengenkripsi berkas cadangan .dkhp Anda:',
+                  'Masukkan kata sandi minimal 8 karakter untuk mengamankan berkas cadangan .dkhp Anda:',
                   style: TextStyle(fontSize: 13),
                 ),
                 const SizedBox(height: 12),
@@ -844,7 +884,7 @@ class _SecuritySettingsSectionState extends State<SecuritySettingsSection> {
                   obscureText: obscure,
                   autofocus: true,
                   decoration: InputDecoration(
-                    labelText: 'Kata Sandi Backup (min. 8 karakter)',
+                    labelText: 'Kata Sandi Cadangan (min. 8 karakter)',
                     errorText: errorText,
                     border: const OutlineInputBorder(),
                     suffixIcon: IconButton(

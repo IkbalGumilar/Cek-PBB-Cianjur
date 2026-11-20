@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 
@@ -6,6 +8,7 @@ import '../download_helper.dart';
 import '../native_file_helper.dart';
 import '../staff_portal_client.dart';
 import '../ui/app_design_system.dart';
+import '../user_friendly_error.dart';
 import 'monitoring_result_exporter.dart';
 
 const _pageSize = 10;
@@ -80,14 +83,29 @@ class _MonitoringResultViewState extends State<MonitoringResultView> {
       );
       final location = await DownloadHelper.saveBytes(bytes, fileName);
       if (!mounted || location == null) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Tersimpan di $location')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Tersimpan: ${friendlyFileName(location)}'),
+          action: isDesktopPlatform
+              ? SnackBarAction(
+                  label: 'Buka Folder',
+                  onPressed: () => NativeFileHelper.showInFileManager(location),
+                )
+              : null,
+        ),
+      );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Gagal mengunduh: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            friendlyErrorMessage(
+              e,
+              fallback: 'Gagal mengunduh berkas. Silakan coba lagi.',
+            ),
+          ),
+        ),
+      );
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -114,9 +132,16 @@ class _MonitoringResultViewState extends State<MonitoringResultView> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Gagal membagikan: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            friendlyErrorMessage(
+              e,
+              fallback: 'Gagal membagikan berkas. Silakan coba lagi.',
+            ),
+          ),
+        ),
+      );
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -138,9 +163,16 @@ class _MonitoringResultViewState extends State<MonitoringResultView> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Gagal menyiapkan cetakan: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            friendlyErrorMessage(
+              e,
+              fallback: 'Gagal menyiapkan cetakan. Silakan coba lagi.',
+            ),
+          ),
+        ),
+      );
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -249,15 +281,16 @@ class _MonitoringResultViewState extends State<MonitoringResultView> {
                       icon: const Icon(Icons.download_outlined),
                       tooltip: 'Unduh (PDF/Excel/CSV)',
                     ),
-                    IconButton(
-                      onPressed: _busy ? null : () => _bagikan(result),
-                      icon: const Icon(Icons.share_outlined),
-                      tooltip: 'Bagikan (PDF/Excel/CSV)',
-                    ),
+                    if (Platform.isAndroid)
+                      IconButton(
+                        onPressed: _busy ? null : () => _bagikan(result),
+                        icon: const Icon(Icons.share_outlined),
+                        tooltip: 'Bagikan (PDF/Excel/CSV)',
+                      ),
                     IconButton(
                       onPressed: _busy ? null : () => _cetak(result),
                       icon: const Icon(Icons.print_outlined),
-                      tooltip: 'Cetak (Ctrl+P)',
+                      tooltip: isMobilePlatform ? 'Cetak' : 'Cetak (Ctrl+P)',
                     ),
                   ],
                 ),

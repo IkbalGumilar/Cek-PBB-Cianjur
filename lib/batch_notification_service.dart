@@ -507,7 +507,7 @@ class BatchNotificationService {
 
       await _notifications.show(
         id: _notificationId,
-        title: '✅ Sinkronisasi Portal Staf Selesai (${blokLabel ?? "DHKP"})',
+        title: '✅ Sinkronisasi Portal Petugas Selesai (${blokLabel ?? "DHKP"})',
         body: body,
         notificationDetails: details,
         payload: 'staff_sync_completed',

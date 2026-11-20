@@ -14,6 +14,7 @@ import '../dusun_data.dart';
 import '../incoming_file_service.dart';
 import '../nop_helper.dart';
 import '../staff_portal_client.dart';
+import '../user_friendly_error.dart';
 import 'staff_dhkp_generate_service.dart';
 
 /// Membuka dialog Generate Paket DHKP Baru dari Portal Staf (tanpa menghapus
@@ -339,7 +340,7 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
-              'Gagal menemukan berkas manifest.json yang valid di dalam file tersebut.',
+              'Berkas tersebut tidak memuat konfigurasi wilayah yang valid.',
             ),
             backgroundColor: Colors.red,
           ),
@@ -449,7 +450,7 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            '✅ Manifest dimuat: Desa ${resolved.desaName} (${resolved.vtaxKelCode}) • ${_dusunEntries.length} Dusun',
+            'Konfigurasi wilayah dimuat: Desa ${resolved.desaName} • ${_dusunEntries.length} Dusun',
           ),
           backgroundColor: Colors.green.shade700,
         ),
@@ -458,7 +459,12 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Terjadi kesalahan membaca berkas: $e'),
+          content: Text(
+            friendlyErrorMessage(
+              e,
+              fallback: 'Gagal membaca berkas konfigurasi wilayah.',
+            ),
+          ),
           backgroundColor: Colors.red,
         ),
       );
@@ -515,7 +521,7 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
     if (files.isEmpty) return;
 
     final selectedDir = await FilePicker.getDirectoryPath(
-      dialogTitle: 'Pilih Folder Tujuan Simpan Paket .dkhp',
+      dialogTitle: 'Pilih Folder Tujuan Simpan Paket DHKP',
     );
     if (selectedDir == null || selectedDir.trim().isEmpty) return;
 
@@ -538,7 +544,7 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
     ScaffoldMessenger.of(hostContext).showSnackBar(
       SnackBar(
         content: Text(
-          '✅ $copiedCount berkas .dkhp terenkripsi berhasil disalin ke: ${destDir.path}',
+          '$copiedCount berkas DHKP berhasil disalin ke folder ${friendlyFileName(destDir.path)}.',
         ),
         backgroundColor: Colors.green.shade700,
       ),
@@ -672,7 +678,12 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Gagal memecah paket .dkhp: $e'),
+          content: Text(
+            friendlyErrorMessage(
+              e,
+              fallback: 'Gagal memecah paket DHKP.',
+            ),
+          ),
           backgroundColor: Colors.red,
         ),
       );
@@ -702,7 +713,7 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Wilayah: Desa $desaName • Enkripsi: DKH2 (AES-256-GCM)',
+                  'Wilayah: Desa $desaName • Paket Terenkripsi',
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 13,
@@ -710,7 +721,7 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'Folder: ${split.outputDirectory.path}',
+                  'Folder: ${friendlyFileName(split.outputDirectory.path)}',
                   style: const TextStyle(fontSize: 11, color: Colors.grey),
                 ),
                 const Divider(),
@@ -790,7 +801,12 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
       if (hostContext.mounted) {
         ScaffoldMessenger.of(hostContext).showSnackBar(
           SnackBar(
-            content: Text('Gagal memeriksa berkas DHKP: $e'),
+            content: Text(
+              friendlyErrorMessage(
+                e,
+                fallback: 'Gagal memeriksa berkas DHKP.',
+              ),
+            ),
             backgroundColor: Colors.red,
           ),
         );
@@ -865,7 +881,12 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
         Navigator.of(hostContext, rootNavigator: true).pop();
         ScaffoldMessenger.of(hostContext).showSnackBar(
           SnackBar(
-            content: Text('Gagal memasang berkas DHKP: $e'),
+            content: Text(
+              friendlyErrorMessage(
+                e,
+                fallback: 'Gagal memasang berkas DHKP.',
+              ),
+            ),
             backgroundColor: Colors.red,
           ),
         );
@@ -892,15 +913,15 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
     }
 
     final cakupanKet = (_filterByDusunBlocks && allConfiguredBlocks.isNotEmpty)
-        ? 'Hanya blok terdaftar pada dusun (${allConfiguredBlocks.length} blok: ${allConfiguredBlocks.join(", ")})'
-        : 'Semua blok se-desa (tanpa filter blok dusun)';
+        ? '${allConfiguredBlocks.length} blok dusun'
+        : 'Semua blok se-desa';
     final splitKet = _exportSplitByDusun
-        ? 'Otomatis dipecah ke ${dusuns.length} file .dkhp Kedusunan${_includeMasterInSplit ? " + 1 Master Desa" : ""} (Terenkripsi DKH2 AES-256-GCM)'
-        : '1 berkas Master Desa (.dkhp Terenkripsi DKH2 AES-256-GCM)';
+        ? '${dusuns.length} berkas dusun${_includeMasterInSplit ? " + 1 Master Desa" : ""} (terenkripsi)'
+        : '1 berkas Master Desa (terenkripsi)';
     final previewPwd = _encryptionPasswordController.text.trim();
     final kunciKet = previewPwd.isNotEmpty
-        ? '\n🔑 Kunci Enkripsi: Kata Sandi Kustom (${previewPwd.length} karakter)'
-        : '\n🔑 Kunci Enkripsi: Kunci Pemulihan / Sandi Backup aktif (otomatis)';
+        ? 'Kata sandi khusus (${previewPwd.length} karakter)'
+        : 'Kunci cadangan aktif';
 
     final confirm = await showDialog<bool>(
       context: context,
@@ -913,14 +934,11 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
           ],
         ),
         content: Text(
-          'Anda akan mengunduh data SPPT Tahun $labelTahun dari Portal Staf untuk:\n'
-          '• Kecamatan: ${resolvedWilayah.kecName} (${resolvedWilayah.vtaxKecCode})\n'
-          '• Desa/Kel.: ${resolvedWilayah.desaName} (${resolvedWilayah.vtaxKelCode})\n\n'
-          '📌 Cakupan: $cakupanKet\n'
-          '🔐 Paket Keluaran: $splitKet$kunciKet\n\n'
-          '🛡️ Data DHKP di aplikasi saat ini TIDAK akan dihapus atau ditimpa selama proses generate. '
-          'Pemasangan/penimpaan hanya dilakukan setelah generate selesai dan Anda memilih memasang berkas .dkhp.\n\n'
-          'Lanjutkan proses generate?',
+          'Unduh SPPT Tahun $labelTahun untuk Desa ${resolvedWilayah.desaName}, Kec. ${resolvedWilayah.kecName}.\n\n'
+          '• Cakupan: $cakupanKet\n'
+          '• Keluaran: $splitKet\n'
+          '• Keamanan: $kunciKet\n\n'
+          'Data DHKP lokal Anda saat ini tidak akan diubah sampai Anda memilih memasang berkas hasilnya.',
         ),
         actions: [
           TextButton(
@@ -1013,7 +1031,7 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
                   Text(
                     '• Total SPPT Terbit: ${outcome.totalRecords} objek pajak',
                   ),
-                  Text('• Sudah Bayar: ${outcome.sudahBayarCount} NOP'),
+                  Text('• Sudah Dibayar: ${outcome.sudahBayarCount} NOP'),
                   Text('• Belum Bayar: ${outcome.belumBayarCount} NOP'),
                   Text(
                     '• Target Pemda (>= 2 Juta): ${outcome.targetPemdaCount} NOP',
@@ -1030,7 +1048,7 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Lokasi: ${split.outputDirectory.path}',
+                      'Folder: ${friendlyFileName(split.outputDirectory.path)}',
                       style: const TextStyle(fontSize: 11, color: Colors.grey),
                     ),
                     const SizedBox(height: 6),
@@ -1059,7 +1077,7 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
                       style: const TextStyle(fontSize: 12),
                     ),
                     Text(
-                      'Lokasi: ${masterFile.parent.path}',
+                      'Folder: ${friendlyFileName(masterFile.parent.path)}',
                       style: const TextStyle(fontSize: 11, color: Colors.grey),
                     ),
                   ],
@@ -1145,7 +1163,7 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
       final p = _progress;
       final ratio = p?.ratio ?? 0.0;
       final status =
-          p?.currentStatus ?? 'Menghubungkan ke Portal Staf Bapenda...';
+          p?.currentStatus ?? 'Menghubungkan ke Portal Petugas Bapenda...';
 
       return AlertDialog(
         title: const Row(
@@ -1236,7 +1254,7 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
                           ),
                         ),
                         Text(
-                          'Unduh SPPT dari Portal Staf & buat berkas .dkhp tanpa menghapus data lokal.',
+                          'Unduh SPPT dari Portal Petugas & buat berkas .dkhp tanpa menghapus data lokal.',
                           style: TextStyle(
                             fontSize: 12,
                             color: isDark
@@ -1444,7 +1462,7 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
                         builder: (context) {
                           final resolved = _currentResolvedWilayah();
                           return Text(
-                            'Kode V-Tax Bapenda: ${resolved.vtaxKelCode} (Kec. ${resolved.kecName} [${resolved.kecCode3}] • Desa ${resolved.desaName} [${resolved.kelCode3}])',
+                            'Kode Wilayah: ${resolved.vtaxKelCode} (Kec. ${resolved.kecName} • Desa ${resolved.desaName})',
                             style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w600,
@@ -1505,7 +1523,7 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
                         ],
                       ),
                       Text(
-                        'Tuliskan nama dusun, koordinat fokus, dan daftar bloknya (pisahkan dengan koma). Misal 3 dusun dipecah 3, atau Desa Bobojong 5 dusun dipecah 5.',
+                        'Tuliskan nama dusun, koordinat titik peta (opsional), dan daftar bloknya (pisahkan dengan koma).',
                         style: TextStyle(
                           fontSize: 12,
                           color: isDark
@@ -1578,7 +1596,7 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
                                       child: TextFormField(
                                         controller: item.latController,
                                         decoration: const InputDecoration(
-                                          labelText: 'Lat Fokus',
+                                          labelText: 'Lintang (Opsional)',
                                           border: OutlineInputBorder(),
                                           isDense: true,
                                         ),
@@ -1589,7 +1607,7 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
                                       child: TextFormField(
                                         controller: item.lngController,
                                         decoration: const InputDecoration(
-                                          labelText: 'Lng Fokus',
+                                          labelText: 'Bujur (Opsional)',
                                           border: OutlineInputBorder(),
                                           isDense: true,
                                         ),
@@ -1707,7 +1725,7 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
                                   ),
                                 ),
                                 subtitle: const Text(
-                                  'Setiap berkas .dkhp dienkripsi (DKH2 AES-256-GCM) dan berisi manifest sesuai input serta terkunci khusus untuk blok dusun masing-masing.',
+                                  'Setiap berkas .dkhp terenkripsi dan terkunci khusus untuk daftar blok dusun masing-masing.',
                                   style: TextStyle(fontSize: 11),
                                 ),
                                 value: _exportSplitByDusun,
@@ -1845,7 +1863,7 @@ class _StaffDhkpGenerateDialogState extends State<StaffDhkpGenerateDialog> {
                             const SizedBox(width: 8),
                             const Expanded(
                               child: Text(
-                                'Khusus Buku 1, 2, 3 (PBB Pedesaan s/d Rp 2.000.000): Data diambil langsung dari tabel Bapenda dengan metode santai/lambat (jeda aman) agar stabil dan tidak terputus. Target Pemda (>= Rp 2.000.000) otomatis dipisahkan.',
+                                'Khusus Buku 1, 2, 3 (PBB Pedesaan s/d Rp 2.000.000): data diunduh bertahap agar stabil dan tidak terputus. Target Pemda (>= Rp 2.000.000) dipisahkan otomatis.',
                                 style: TextStyle(fontSize: 12),
                               ),
                             ),

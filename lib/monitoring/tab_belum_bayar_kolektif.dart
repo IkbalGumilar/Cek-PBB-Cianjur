@@ -49,12 +49,12 @@ class _TabBelumBayarKolektifState extends State<TabBelumBayarKolektif> {
   Future<MonitoringTableResult?> _fetch() async {
     if (_tglCutoffBelumBayar.text.isEmpty) {
       return const MonitoringTableResult(
-        errorMessage: 'Tanggal Cutoff Belum Bayar wajib diisi.',
+        errorMessage: 'Tanggal batas belum bayar wajib diisi.',
       );
     }
     if (_tglCutoffKadaluarsa.text.isEmpty) {
       return const MonitoringTableResult(
-        errorMessage: 'Tanggal Cutoff Kadaluarsa wajib diisi.',
+        errorMessage: 'Tanggal batas kedaluwarsa wajib diisi.',
       );
     }
     return widget.client.fetchBelumBayarKolektif(
@@ -104,7 +104,7 @@ class _TabBelumBayarKolektifState extends State<TabBelumBayarKolektif> {
           value: _kelurahan,
           onChanged: (v) => setState(() => _kelurahan = v),
         ),
-        const MonitoringSectionTitle('Tanggal Cutoff'),
+        const MonitoringSectionTitle('Tanggal Batas'),
         Row(
           children: [
             Expanded(
@@ -117,7 +117,7 @@ class _TabBelumBayarKolektifState extends State<TabBelumBayarKolektif> {
             const SizedBox(width: 8),
             Expanded(
               child: MonitoringDateField(
-                label: 'Kadaluarsa',
+                label: 'Kedaluwarsa',
                 controller: _tglCutoffKadaluarsa,
                 required: true,
               ),

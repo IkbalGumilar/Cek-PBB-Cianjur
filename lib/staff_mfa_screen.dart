@@ -11,6 +11,7 @@ import 'staff_portal/totp_helper.dart';
 import 'staff_portal_client.dart';
 import 'theme_controller.dart';
 import 'ui/app_design_system.dart';
+import 'user_friendly_error.dart';
 
 /// Layar verifikasi MFA (kode Google Authenticator) — tahap kedua login
 /// portal staf, dibuka setelah [StaffLoginScreen] berhasil lolos tahap
@@ -148,20 +149,12 @@ class _StaffMfaScreenState extends State<StaffMfaScreen> {
       final result = await widget.client.verifyMfa(otp);
       if (!mounted) return;
       if (result.success) {
-        await showDialog<void>(
-          context: context,
-          builder: (ctx) => AlertDialog(
-            title: const Text('Login Berhasil'),
-            content: const Text('Anda berhasil masuk ke Portal Staf.'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('OK'),
-              ),
-            ],
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Berhasil masuk ke Portal Petugas.'),
+            duration: Duration(seconds: 2),
           ),
         );
-        if (!mounted) return;
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(
@@ -179,7 +172,14 @@ class _StaffMfaScreenState extends State<StaffMfaScreen> {
         });
       }
     } catch (e) {
-      if (mounted) setState(() => _errorText = 'Gagal verifikasi: $e');
+      if (mounted) {
+        setState(
+          () => _errorText = friendlyErrorMessage(
+            e,
+            fallback: 'Gagal memverifikasi kode. Silakan coba lagi.',
+          ),
+        );
+      }
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -220,8 +220,8 @@ class _StaffMfaScreenState extends State<StaffMfaScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
-              'Tidak ditemukan QR Code yang terbaca pada berkas gambar. '
-              'Pastikan gambar memuat QR Code Google Authenticator yang jelas dan utuh.',
+              'Tidak ditemukan kode QR yang terbaca pada berkas gambar. '
+              'Pastikan gambar memuat kode QR Google Authenticator yang jelas dan utuh.',
             ),
             backgroundColor: Colors.red,
           ),
@@ -235,7 +235,12 @@ class _StaffMfaScreenState extends State<StaffMfaScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Gagal membaca gambar QR: $e'),
+          content: Text(
+            friendlyErrorMessage(
+              e,
+              fallback: 'Gagal membaca gambar kode QR.',
+            ),
+          ),
           backgroundColor: Colors.red,
         ),
       );
@@ -248,8 +253,8 @@ class _StaffMfaScreenState extends State<StaffMfaScreen> {
       builder: (ctx) => AlertDialog(
         title: const Text('Hapus Kunci Authenticator?'),
         content: const Text(
-          'Kunci 2FA akan dihapus dari penyimpanan aman perangkat ini. '
-          'Anda harus memasukkan kode secara manual dari aplikasi HP di kemudian hari.',
+          'Kunci verifikasi 2 langkah akan dihapus dari perangkat ini. '
+          'Anda harus memasukkan kode secara manual dari aplikasi Authenticator di kemudian hari.',
         ),
         actions: [
           TextButton(
@@ -280,7 +285,7 @@ class _StaffMfaScreenState extends State<StaffMfaScreen> {
       Clipboard.setData(ClipboardData(text: _currentTotpCode!));
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Kode $_currentTotpCode disalin ke clipboard.'),
+          content: Text('Kode $_currentTotpCode disalin ke papan klip.'),
           duration: const Duration(seconds: 2),
         ),
       );
@@ -300,7 +305,7 @@ class _StaffMfaScreenState extends State<StaffMfaScreen> {
     final colorScheme = theme.colorScheme;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Verifikasi MFA')),
+      appBar: AppBar(title: const Text('Verifikasi 2 Langkah')),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
@@ -448,7 +453,7 @@ class _StaffMfaScreenState extends State<StaffMfaScreen> {
                 ),
                 PopupMenuButton<String>(
                   icon: const Icon(Icons.more_vert_rounded),
-                  tooltip: 'Opsi Kunci 2FA',
+                  tooltip: 'Opsi Kunci Authenticator',
                   onSelected: (val) {
                     if (val == 'edit') {
                       _showConnectDialog();
@@ -518,7 +523,7 @@ class _StaffMfaScreenState extends State<StaffMfaScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'KODE 2FA AKTIF',
+                          'KODE KEAMANAN AKTIF',
                           style: TextStyle(
                             fontSize: 11,
                             letterSpacing: 1.2,
@@ -580,25 +585,33 @@ class _StaffMfaScreenState extends State<StaffMfaScreen> {
 
             const SizedBox(height: 12),
 
-            // Baris Tombol Aksi & Toggle Auto-Verify
-            Row(
+            // Baris Tombol Aksi & Toggle Masuk Otomatis
+            Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 4,
+              runSpacing: 4,
               children: [
-                TextButton.icon(
-                  icon: const Icon(Icons.input_rounded, size: 18),
-                  label: const Text('Isi ke Kolom'),
-                  onPressed: _fillTotpCode,
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextButton.icon(
+                      icon: const Icon(Icons.input_rounded, size: 18),
+                      label: const Text('Isi ke Kolom'),
+                      onPressed: _fillTotpCode,
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.copy_rounded, size: 18),
+                      tooltip: 'Salin Kode',
+                      onPressed: _copyTotpCode,
+                    ),
+                  ],
                 ),
-                IconButton(
-                  icon: const Icon(Icons.copy_rounded, size: 18),
-                  tooltip: 'Salin Kode',
-                  onPressed: _copyTotpCode,
-                ),
-                const Spacer(),
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      'Auto-Login',
+                      'Masuk Otomatis',
                       style: TextStyle(
                         fontSize: 12,
                         color: colorScheme.onSurfaceVariant,
@@ -623,7 +636,7 @@ class _StaffMfaScreenState extends State<StaffMfaScreen> {
     );
   }
 
-  /// Kartu promosi saat Secret Key belum tersimpan
+  /// Kartu promosi saat Kode Rahasia belum tersimpan
   Widget _buildConnectPromoCard(ColorScheme colorScheme) {
     return Card(
       elevation: 0,
@@ -662,7 +675,7 @@ class _StaffMfaScreenState extends State<StaffMfaScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Simpan Secret Key atau impor gambar QR 2FA agar kode 6 digit terisi dan terverifikasi secara otomatis setiap kali login Monitoring.',
+              'Simpan kode rahasia atau impor gambar kode QR agar kode 6 digit terisi dan terverifikasi otomatis setiap kali masuk Portal Petugas.',
               style: TextStyle(
                 fontSize: 13,
                 color: colorScheme.onSurfaceVariant,
@@ -675,7 +688,7 @@ class _StaffMfaScreenState extends State<StaffMfaScreen> {
               children: [
                 FilledButton.tonalIcon(
                   icon: const Icon(Icons.link_rounded, size: 18),
-                  label: const Text('Hubungkan Kunci (Copas)'),
+                  label: const Text('Tempel Kunci Rahasia'),
                   onPressed: () => _showConnectDialog(),
                 ),
                 OutlinedButton.icon(
@@ -692,7 +705,7 @@ class _StaffMfaScreenState extends State<StaffMfaScreen> {
   }
 }
 
-/// Dialog untuk memasukkan Secret Key Base32, tautan ekspor, atau impor gambar QR
+/// Dialog untuk memasukkan Kode Rahasia Authenticator, tautan ekspor, atau impor gambar QR
 class _ConnectAuthenticatorDialog extends StatefulWidget {
   final StaffAuthenticatorStore store;
   final String? initialKey;
@@ -793,7 +806,10 @@ class _ConnectAuthenticatorDialogState
       setState(() {
         _parsedAccounts = [];
         _selectedAccount = null;
-        _validationError = 'Kunci tidak valid: $e';
+        _validationError = friendlyErrorMessage(
+          e,
+          fallback: 'Kode rahasia tidak valid. Periksa kembali lalu coba lagi.',
+        );
         _livePreviewCode = null;
       });
     }
@@ -820,8 +836,8 @@ class _ConnectAuthenticatorDialogState
       if (qrText == null || qrText.trim().isEmpty) {
         setState(() {
           _validationError =
-              'Tidak ditemukan QR Code yang terbaca pada gambar tersebut. '
-              'Pastikan gambar jelas dan memuat QR Code Google Authenticator yang utuh.';
+              'Tidak ditemukan kode QR yang terbaca pada gambar tersebut. '
+              'Pastikan gambar jelas dan memuat kode QR Google Authenticator yang utuh.';
           _livePreviewCode = null;
           _selectedAccount = null;
           _parsedAccounts = [];
@@ -834,7 +850,10 @@ class _ConnectAuthenticatorDialogState
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _validationError = 'Gagal membaca gambar QR: $e';
+        _validationError = friendlyErrorMessage(
+          e,
+          fallback: 'Gagal membaca gambar kode QR.',
+        );
       });
     }
   }
@@ -876,7 +895,7 @@ class _ConnectAuthenticatorDialogState
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                'Tempelkan Secret Key Base32 / tautan ekspor, atau pilih berkas gambar QR Code:',
+                'Tempelkan kode rahasia / tautan ekspor Authenticator, atau pilih berkas gambar kode QR:',
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: colorScheme.onSurfaceVariant,
                 ),
@@ -887,8 +906,8 @@ class _ConnectAuthenticatorDialogState
                 controller: _keyController,
                 maxLines: 2,
                 decoration: InputDecoration(
-                  labelText: 'Secret Key / Tautan Ekspor',
-                  hintText: 'Contoh: JBSWY3DPEHPK3PXP atau otpauth://...',
+                  labelText: 'Kode Rahasia Authenticator',
+                  hintText: 'Tempel kode kunci atau tautan dari Google Authenticator',
                   border: const OutlineInputBorder(),
                   suffixIcon: IconButton(
                     icon: const Icon(Icons.clear_rounded),

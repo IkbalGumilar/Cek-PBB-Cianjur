@@ -9,6 +9,7 @@ import '../qris_result.dart';
 import '../qris_view_screen.dart';
 import '../tagihan_result.dart';
 import '../ui/app_design_system.dart';
+import '../user_friendly_error.dart';
 import '../va_result.dart';
 import '../va_view_screen.dart';
 
@@ -65,7 +66,12 @@ class StatusBayarResultCard extends StatelessWidget {
         context: context,
         builder: (_) => AlertDialog(
           title: const Text('Gagal'),
-          content: Text('Gagal memuat PDF: $e'),
+          content: Text(
+            friendlyErrorMessage(
+              e,
+              fallback: 'Gagal memuat dokumen bukti bayar. Silakan coba lagi.',
+            ),
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
@@ -203,7 +209,13 @@ class TagihanResultCard extends StatelessWidget {
     } catch (e) {
       if (!context.mounted) return;
       Navigator.pop(context);
-      _showError(context, 'Gagal generate QRIS: $e');
+      _showError(
+        context,
+        friendlyErrorMessage(
+          e,
+          fallback: 'Gagal membuat kode QRIS. Silakan coba lagi.',
+        ),
+      );
     }
   }
 
@@ -277,7 +289,13 @@ class TagihanResultCard extends StatelessWidget {
     } catch (e) {
       if (!context.mounted) return;
       Navigator.pop(context);
-      _showError(context, 'Gagal generate VA: $e');
+      _showError(
+        context,
+        friendlyErrorMessage(
+          e,
+          fallback: 'Gagal membuat Virtual Account. Silakan coba lagi.',
+        ),
+      );
     }
   }
 
@@ -301,7 +319,13 @@ class TagihanResultCard extends StatelessWidget {
     } catch (e) {
       if (!context.mounted) return;
       Navigator.pop(context);
-      _showError(context, 'Gagal memuat PDF: $e');
+      _showError(
+        context,
+        friendlyErrorMessage(
+          e,
+          fallback: 'Gagal memuat dokumen tagihan. Silakan coba lagi.',
+        ),
+      );
     }
   }
 
@@ -360,7 +384,7 @@ class TagihanResultCard extends StatelessWidget {
                     result.inactiveUntilYear!,
                   ),
                   child: Text(
-                    '[Cek status bayar tahun ${result.inactiveUntilYear}]',
+                    'Cek status bayar tahun ${result.inactiveUntilYear}',
                   ),
                 ),
             ],

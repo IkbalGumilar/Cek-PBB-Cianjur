@@ -405,7 +405,7 @@ void main() {
         );
         await tester.pump(const Duration(milliseconds: 250));
 
-        expect(find.text('Verifikasi MFA'), findsOneWidget);
+        expect(find.text('Verifikasi 2 Langkah'), findsOneWidget);
         expect(find.text('Verifikasi & Masuk'), findsOneWidget);
         expect(tester.takeException(), isNull);
 

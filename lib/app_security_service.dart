@@ -165,17 +165,25 @@ class AppSecurityService extends BasePreferencesStore {
     }
   }
 
-  /// Mendapatkan jenis kunci yang dipilih. Default: [AppLockType.device].
+  /// Mendapatkan jenis kunci yang dipilih. Default: [AppLockType.device] (atau [AppLockType.pin] pada Linux).
   Future<AppLockType> getLockType() async {
     final raw = await _readSecure(_keyLockType);
     if (raw == 'pin') return AppLockType.pin;
     if (raw == 'password') return AppLockType.password;
+    if (Platform.isLinux) {
+      if (await hasCustomPin()) return AppLockType.pin;
+      if (await hasCustomPassword()) return AppLockType.password;
+      return AppLockType.pin;
+    }
     return AppLockType.device;
   }
 
   /// Mengubah jenis kunci yang dipilih.
   Future<void> setLockType(AppLockType type) async {
-    final val = switch (type) {
+    final effectiveType = (Platform.isLinux && type == AppLockType.device)
+        ? AppLockType.pin
+        : type;
+    final val = switch (effectiveType) {
       AppLockType.device => 'device',
       AppLockType.pin => 'pin',
       AppLockType.password => 'password',
@@ -197,8 +205,9 @@ class AppSecurityService extends BasePreferencesStore {
     await setInt(_keyTimeoutSeconds, seconds);
   }
 
-  /// Memeriksa apakah perangkat memiliki sensor biometrik (Fingerprint/Face).
+  /// Memeriksa apakah perangkat memiliki sensor biometrik (Sidik Jari/Wajah).
   Future<bool> canCheckBiometrics() async {
+    if (Platform.isLinux) return false;
     try {
       return await _localAuth.canCheckBiometrics;
     } catch (_) {
@@ -206,8 +215,9 @@ class AppSecurityService extends BasePreferencesStore {
     }
   }
 
-  /// Memeriksa apakah perangkat mendukung autentikasi keamanan (biometrik atau kunci layar HP).
+  /// Memeriksa apakah perangkat mendukung autentikasi keamanan (biometrik atau kunci perangkat).
   Future<bool> isDeviceSupported() async {
+    if (Platform.isLinux) return false;
     try {
       return await _localAuth.isDeviceSupported();
     } catch (_) {
@@ -215,8 +225,9 @@ class AppSecurityService extends BasePreferencesStore {
     }
   }
 
-  /// Mendapatkan daftar tipe biometrik yang tersedia di perangkat (misal: Fingerprint, Face).
+  /// Mendapatkan daftar tipe biometrik yang tersedia di perangkat (misal: Sidik Jari, Wajah).
   Future<List<BiometricType>> getAvailableBiometrics() async {
+    if (Platform.isLinux) return <BiometricType>[];
     try {
       return await _localAuth.getAvailableBiometrics();
     } catch (_) {
@@ -241,14 +252,16 @@ class AppSecurityService extends BasePreferencesStore {
       if (hasFinger && hasFace) {
         return 'Mendukung Sidik Jari & Pengenalan Wajah';
       } else if (hasFinger) {
-        return 'Mendukung Sidik Jari (Fingerprint)';
+        return 'Mendukung Sidik Jari';
       } else if (hasFace) {
-        return 'Mendukung Pengenalan Wajah (Face Unlock)';
+        return 'Mendukung Pengenalan Wajah';
+      } else if (Platform.isWindows) {
+        return 'Mendukung Windows Hello / Kunci Perangkat';
       } else {
-        return 'Mendukung Kunci Layar HP (PIN / Pola / Sandi)';
+        return 'Mendukung Kunci Perangkat (PIN / Pola / Sandi)';
       }
     } catch (_) {
-      return 'Kunci Layar Perangkat Bawaan';
+      return 'Kunci Perangkat Bawaan';
     }
   }
 
@@ -263,17 +276,18 @@ class AppSecurityService extends BasePreferencesStore {
     _temporaryLockBypass = value;
   }
 
-  /// Meminta autentikasi menggunakan Kunci Perangkat (Sidik Jari / Wajah / Kunci Layar HP).
+  /// Meminta autentikasi menggunakan Kunci Perangkat (Sidik Jari / Wajah / Kunci Perangkat).
   Future<bool> authenticateWithDevice({
     String reason = 'Konfirmasi keamanan untuk membuka Cek PBB Cianjur',
   }) async {
+    if (Platform.isLinux) return false;
     if (_isAuthenticating) return false;
     _isAuthenticating = true;
     try {
       final authenticated = await _localAuth.authenticate(
         localizedReason: reason,
         biometricOnly:
-            false, // Izinkan fallback ke PIN/Pola HP jika biometrik belum diatur/gagal
+            false, // Izinkan fallback ke PIN/Pola perangkat jika biometrik belum diatur/gagal
         persistAcrossBackgrounding: true,
       );
       if (authenticated) {
@@ -294,11 +308,12 @@ class AppSecurityService extends BasePreferencesStore {
     }
   }
 
-  /// Meminta autentikasi biometrik/kunci HP khusus untuk mendekripsi dan membuka paket DHKP
+  /// Meminta autentikasi biometrik/kunci perangkat khusus untuk membuka paket DHKP
   /// tanpa membuka status kunci aplikasi secara global jika aplikasi sedang terkunci di background.
   Future<bool> authenticateToDecryptDhkp({
     String fileName = 'paket DHKP',
   }) async {
+    if (Platform.isLinux) return true;
     try {
       final canCheck = await _localAuth.canCheckBiometrics;
       final isSupported = await _localAuth.isDeviceSupported();
@@ -310,7 +325,7 @@ class AppSecurityService extends BasePreferencesStore {
 
       return await _localAuth.authenticate(
         localizedReason:
-            'Pindai sidik jari Anda untuk mendekripsi dan membuka $fileName',
+            'Konfirmasi identitas Anda untuk membuka $fileName',
         biometricOnly: false,
         persistAcrossBackgrounding: true,
       );
@@ -490,10 +505,24 @@ class AppSecurityService extends BasePreferencesStore {
     _lastPausedTime = null;
   }
 
+  /// Memeriksa apakah metode kunci aktif dapat dibuka pada perangkat ini.
+  Future<bool> _canUnlockWithCurrentMethod() async {
+    final type = await getLockType();
+    switch (type) {
+      case AppLockType.device:
+        if (Platform.isLinux) return false;
+        return await isDeviceSupported();
+      case AppLockType.pin:
+        return await hasCustomPin();
+      case AppLockType.password:
+        return await hasCustomPassword();
+    }
+  }
+
   /// Dipanggil saat inisialisasi awal membuka aplikasi (cold start).
   Future<void> onColdStart() async {
     final enabled = await isLockEnabled();
-    if (enabled) {
+    if (enabled && await _canUnlockWithCurrentMethod()) {
       lock();
     } else {
       unlock();
@@ -534,7 +563,7 @@ class AppSecurityService extends BasePreferencesStore {
         .difference(_lastPausedTime!)
         .inSeconds;
 
-    if (elapsedSeconds >= timeout) {
+    if (elapsedSeconds >= timeout && await _canUnlockWithCurrentMethod()) {
       lock();
     }
     _lastPausedTime = null;

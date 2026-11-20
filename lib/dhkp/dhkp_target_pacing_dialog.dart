@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 
@@ -507,22 +509,24 @@ class _TargetPacingDialogContentState
                       label: const Text('Salin Pesan WA'),
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  IconButton.filledTonal(
-                    onPressed: () {
-                      final text = PbbCalculatorHelper.formatWhatsAppTarget(
-                        namaWilayah: widget.wilayahTitle,
-                        targetResult: targetResult,
-                        pacingResult: pacingResult,
-                      );
-                      NativeFileHelper.shareText(
-                        text: text,
-                        title: 'Target Capaian PBB-P2',
-                      );
-                    },
-                    icon: const Icon(Icons.share_rounded, size: 18),
-                    tooltip: 'Bagikan',
-                  ),
+                  if (Platform.isAndroid) ...[
+                    const SizedBox(width: 8),
+                    IconButton.filledTonal(
+                      onPressed: () {
+                        final text = PbbCalculatorHelper.formatWhatsAppTarget(
+                          namaWilayah: widget.wilayahTitle,
+                          targetResult: targetResult,
+                          pacingResult: pacingResult,
+                        );
+                        NativeFileHelper.shareText(
+                          text: text,
+                          title: 'Target Capaian PBB-P2',
+                        );
+                      },
+                      icon: const Icon(Icons.share_rounded, size: 18),
+                      tooltip: 'Bagikan',
+                    ),
+                  ],
                 ],
               ),
             ),

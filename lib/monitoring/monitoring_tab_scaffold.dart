@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 
 import '../staff_portal_client.dart';
+import '../user_friendly_error.dart';
 import 'monitoring_excel_queue_view.dart';
 import 'monitoring_form_fields.dart';
 import 'monitoring_result_table.dart';
@@ -36,7 +37,7 @@ class MonitoringTabScaffold extends StatefulWidget {
   /// Callback pengambil parameter filter aktif untuk ekspor Excel.
   final Map<String, String> Function()? getExportParams;
 
-  /// Callback ekspor langsung (dipakai tab Rangking Realisasi yang tidak memiliki antrean).
+  /// Callback ekspor langsung (dipakai tab Peringkat Realisasi yang tidak memiliki antrean).
   final Future<void> Function()? onDirectExcelExport;
 
   const MonitoringTabScaffold({
@@ -86,7 +87,10 @@ class _MonitoringTabScaffoldState extends State<MonitoringTabScaffold> {
       if (!mounted) return;
       setState(
         () => _result = MonitoringTableResult(
-          errorMessage: 'Gagal memuat data: $e',
+          errorMessage: friendlyErrorMessage(
+            e,
+            fallback: 'Gagal memuat data. Silakan coba lagi.',
+          ),
         ),
       );
     } finally {
@@ -112,13 +116,14 @@ class _MonitoringTabScaffoldState extends State<MonitoringTabScaffold> {
       return;
     }
 
+    final excelTabLabel = '${widget.reportTitle} Excel';
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Ekspor ke Excel (Server V-Tax)'),
+        title: const Text('Unduh Excel (Server Bapenda)'),
         content: Text(
-          'Server V-Tax akan memproses pembuatan berkas Excel untuk "${widget.reportTitle}" di latar belakang.\n\n'
-          'Setelah antrean dibuat, Anda dapat mengunduh berkasnya dari sub-tab "Berkas Excel Server".\n\n'
+          'Server Bapenda akan memproses pembuatan berkas Excel untuk "${widget.reportTitle}" di latar belakang.\n\n'
+          'Setelah antrean dibuat, Anda dapat mengunduh berkasnya dari tab "$excelTabLabel".\n\n'
           'Apakah Anda ingin melanjutkan?',
         ),
         actions: [
@@ -146,23 +151,22 @@ class _MonitoringTabScaffoldState extends State<MonitoringTabScaffold> {
         params: params,
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(res.message),
-          action: SnackBarAction(
-            label: 'Lihat Antrean',
-            onPressed: () {
-              if (mounted) setState(() => _selectedSubTab = 1);
-            },
-          ),
-        ),
-      );
       // Otomatis pindah ke sub-tab berkas Excel agar staf langsung memantau progresnya
       setState(() => _selectedSubTab = 1);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(res.message)));
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal meminta ekspor ke server: $e')),
+        SnackBar(
+          content: Text(
+            friendlyErrorMessage(
+              e,
+              fallback: 'Gagal meminta ekspor Excel ke server. Silakan coba lagi.',
+            ),
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => _exportLoading = false);
@@ -247,7 +251,7 @@ class _MonitoringTabScaffoldState extends State<MonitoringTabScaffold> {
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                'Filter & Parameter (${widget.reportTitle})',
+                                'Filter Pencarian (${widget.reportTitle})',
                                 style: theme.textTheme.titleSmall?.copyWith(
                                   fontWeight: FontWeight.bold,
                                   color: colorScheme.primary,
@@ -276,7 +280,7 @@ class _MonitoringTabScaffoldState extends State<MonitoringTabScaffold> {
                       const SizedBox(height: 16),
                     ],
 
-                    // Baris Tombol Aksi (Tampilkan Data & Ekspor ke xls)
+                    // Baris Tombol Aksi (Tampilkan Data & Unduh Excel)
                     Row(
                       children: [
                         Expanded(
@@ -322,7 +326,7 @@ class _MonitoringTabScaffoldState extends State<MonitoringTabScaffold> {
                                       size: 18,
                                     ),
                               label: Text(
-                                _exportLoading ? 'Proses...' : 'Ekspor ke xls',
+                                _exportLoading ? 'Proses...' : 'Unduh Excel',
                               ),
                             ),
                           ),

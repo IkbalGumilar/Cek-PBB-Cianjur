@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../feature_tour/feature_tour.dart';
 import '../ui/app_design_system.dart';
+import '../user_friendly_error.dart';
 import 'bansos_client.dart';
 import 'nik_scanner.dart';
 
@@ -149,15 +150,16 @@ class DesilViewState extends State<DesilView> with WidgetsBindingObserver {
             'Begitu 16 angka selesai diketik, kursor akan otomatis berpindah ke kolom huruf kode di bawah.',
         icon: Icons.badge_outlined,
       ),
-      FeatureTourStep(
-        targetKey: _scanNikButtonKey,
-        title: 'Tombol Pindai Foto KTP atau KK',
-        description:
-            'Tidak perlu mengetik 16 angka satu per satu! Tekan tombol ini untuk memotret KTP atau Kartu Keluarga warga, dan aplikasi akan otomatis mengenali serta mengisi angka NIK-nya.',
-        actionHint:
-            'Pastikan foto diambil di tempat terang dan tulisan NIK terlihat jelas.',
-        icon: Icons.document_scanner_outlined,
-      ),
+      if (isMobilePlatform)
+        FeatureTourStep(
+          targetKey: _scanNikButtonKey,
+          title: 'Tombol Pindai Foto KTP atau KK',
+          description:
+              'Tidak perlu mengetik 16 angka satu per satu! Tekan tombol ini untuk memotret KTP atau Kartu Keluarga warga, dan aplikasi akan otomatis mengenali serta mengisi angka NIK-nya.',
+          actionHint:
+              'Pastikan foto diambil di tempat terang dan tulisan NIK terlihat jelas.',
+          icon: Icons.document_scanner_outlined,
+        ),
       FeatureTourStep(
         targetKey: _captchaAreaKey,
         title: 'Gambar Huruf Kode & Tombol Ganti Kode',
@@ -185,7 +187,7 @@ class DesilViewState extends State<DesilView> with WidgetsBindingObserver {
             'Tekan tombol Kembali jika Anda ingin memeriksa NIK warga lainnya.',
         icon: Icons.search_rounded,
       ),
-      if (widget.emergencyFabKey?.currentContext != null)
+      if (isMobilePlatform && widget.emergencyFabKey?.currentContext != null)
         FeatureTourStep(
           targetKey: widget.emergencyFabKey!,
           title: 'Tombol Kontak Darurat 112 Cianjur',
@@ -334,6 +336,7 @@ class DesilViewState extends State<DesilView> with WidgetsBindingObserver {
   }
 
   Future<void> _scanAndFillNik() async {
+    if (!isMobilePlatform) return;
     final source = await showDialog<ImageSource>(
       context: context,
       builder: (dialogContext) => SimpleDialog(
@@ -752,34 +755,36 @@ class DesilViewState extends State<DesilView> with WidgetsBindingObserver {
                             ),
                           ),
                         ),
-                        const SizedBox(width: 10),
-                        SizedBox(
-                          height: 56,
-                          width: 56,
-                          child: _scanningNik
-                              ? const Center(
-                                  child: SizedBox(
-                                    width: 24,
-                                    height: 24,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2.2,
+                        if (isMobilePlatform) ...[
+                          const SizedBox(width: 10),
+                          SizedBox(
+                            height: 56,
+                            width: 56,
+                            child: _scanningNik
+                                ? const Center(
+                                    child: SizedBox(
+                                      width: 24,
+                                      height: 24,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2.2,
+                                      ),
+                                    ),
+                                  )
+                                : IconButton.filledTonal(
+                                    key: _scanNikButtonKey,
+                                    onPressed: _scanAndFillNik,
+                                    icon: const Icon(
+                                      Icons.document_scanner_outlined,
+                                    ),
+                                    tooltip: 'Pindai NIK dari Foto KTP atau KK',
+                                    style: IconButton.styleFrom(
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(14),
+                                      ),
                                     ),
                                   ),
-                                )
-                              : IconButton.filledTonal(
-                                  key: _scanNikButtonKey,
-                                  onPressed: _scanAndFillNik,
-                                  icon: const Icon(
-                                    Icons.document_scanner_outlined,
-                                  ),
-                                  tooltip: 'Pindai NIK dari Foto KTP atau KK',
-                                  style: IconButton.styleFrom(
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(14),
-                                    ),
-                                  ),
-                                ),
-                        ),
+                          ),
+                        ],
                       ],
                     );
                   },
@@ -1213,27 +1218,15 @@ class DesilViewState extends State<DesilView> with WidgetsBindingObserver {
                   ),
                   const SizedBox(height: 12),
 
-                  // 2 Kotak Stat Profil Tambahan: Keterangan PBI & Status KPD
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _miniStatBox(
-                          context,
-                          label: 'KETERANGAN PBI',
-                          value: result.keteranganPbi,
-                          icon: Icons.health_and_safety_outlined,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: _miniStatBox(
-                          context,
-                          label: 'STATUS KPD (DISABILITAS)',
-                          value: result.statusKpd,
-                          icon: Icons.accessible_rounded,
-                        ),
-                      ),
-                    ],
+                  // Kotak Stat Profil Tambahan: Status KPD (Keterangan PBI sudah tampil di kartu PBI-JK)
+                  SizedBox(
+                    width: double.infinity,
+                    child: _miniStatBox(
+                      context,
+                      label: 'STATUS KPD (DISABILITAS)',
+                      value: result.statusKpd,
+                      icon: Icons.accessible_rounded,
+                    ),
                   ),
                 ],
               ),
@@ -1469,17 +1462,7 @@ class DesilViewState extends State<DesilView> with WidgetsBindingObserver {
               ],
             ),
             const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: _dlCell(context, label: 'STATUS', value: status),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _dlCell(context, label: 'PERIODE', value: periode),
-                ),
-              ],
-            ),
+            _dlCell(context, label: 'PERIODE', value: periode),
             if (extraLabel != null &&
                 extraValue != null &&
                 extraValue.trim().isNotEmpty &&

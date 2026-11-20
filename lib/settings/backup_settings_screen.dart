@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:material_ui/material_ui.dart';
-import 'package:flutter/services.dart';
 
 import '../blok_backup_scheduler.dart';
 import '../blok_data_store.dart';
@@ -14,6 +13,7 @@ import '../google_drive_picker_dialog.dart';
 import '../incoming_file_service.dart';
 import '../native_file_helper.dart';
 import '../unity_lerp_widgets.dart';
+import '../user_friendly_error.dart';
 import 'google_drive_settings_dialogs.dart';
 
 /// Halaman terpisah untuk pengaturan Pencadangan Data DHKP.
@@ -173,10 +173,12 @@ class _BackupSettingsSectionState extends State<BackupSettingsSection> {
               cloudInfo =
                   '\nDisinkronkan ke Google Drive ($_googleAccount/backup)';
             } else {
-              cloudInfo = '\n(Tersimpan di HP, gagal unggah ke Google Drive)';
+              cloudInfo =
+                  '\n(Tersimpan di perangkat, gagal unggah ke Google Drive)';
             }
           } catch (cloudErr) {
-            cloudInfo = '\n(Tersimpan di HP, kendala Drive: $cloudErr)';
+            cloudInfo =
+                '\n(Tersimpan di perangkat, kendala Drive: ${friendlyErrorMessage(cloudErr, fallback: 'Gagal mengunggah ke Google Drive.')})';
           }
         }
         if (!mounted) return;
@@ -238,7 +240,7 @@ class _BackupSettingsSectionState extends State<BackupSettingsSection> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Gagal membuat cadangan: $e'),
+            content: Text('Gagal membuat cadangan: ${friendlyErrorMessage(e)}'),
             backgroundColor: Colors.red[800],
           ),
         );
@@ -261,8 +263,40 @@ class _BackupSettingsSectionState extends State<BackupSettingsSection> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal memuat berkas cadangan: $e')),
+        SnackBar(
+          content: Text(
+            'Gagal memuat berkas cadangan: ${friendlyErrorMessage(e)}',
+          ),
+        ),
       );
+    }
+  }
+
+  Future<void> _confirmAndRestoreLocalBackup(File file) async {
+    if (_isBackingUp) return;
+    final fileName = friendlyFileName(file.path);
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Pulihkan Cadangan?'),
+        content: Text(
+          'Data DHKP akan dipulihkan dari berkas "$fileName". Lanjutkan?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Batal'),
+          ),
+          FilledButton.icon(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            icon: const Icon(Icons.restore_rounded, size: 18),
+            label: const Text('Pulihkan'),
+          ),
+        ],
+      ),
+    );
+    if (confirm == true && mounted) {
+      await _restoreFromFilePath(file.path);
     }
   }
 
@@ -330,7 +364,9 @@ class _BackupSettingsSectionState extends State<BackupSettingsSection> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Gagal memulihkan cadangan: $e'),
+          content: Text(
+            'Gagal memulihkan cadangan: ${friendlyErrorMessage(e)}',
+          ),
           backgroundColor: Colors.red[800],
         ),
       );
@@ -455,11 +491,33 @@ class _BackupSettingsSectionState extends State<BackupSettingsSection> {
     }
   }
 
+  Future<void> _openBackupLocation(File file) async {
+    try {
+      if (!await file.exists()) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Berkas cadangan tidak ditemukan.')),
+        );
+        return;
+      }
+      await NativeFileHelper.showInFileManager(file.path);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Gagal membuka lokasi berkas: ${friendlyErrorMessage(e)}',
+          ),
+        ),
+      );
+    }
+  }
+
   Future<void> _shareBackupFile(File file) async {
     try {
       if (!await file.exists()) return;
       final bytes = await file.readAsBytes();
-      final fileName = file.uri.pathSegments.last;
+      final fileName = friendlyFileName(file.path);
       if (Platform.isAndroid) {
         await NativeFileHelper.shareBytes(
           bytes: bytes,
@@ -467,30 +525,23 @@ class _BackupSettingsSectionState extends State<BackupSettingsSection> {
           mimeType: 'application/octet-stream',
         );
       } else {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Berkas tersimpan di: ${file.path}'),
-            action: SnackBarAction(
-              label: 'Salin Lokasi',
-              onPressed: () {
-                Clipboard.setData(ClipboardData(text: file.path));
-              },
-            ),
-          ),
-        );
+        await NativeFileHelper.showInFileManager(file.path);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Gagal membagikan berkas: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Gagal membagikan berkas: ${friendlyErrorMessage(e)}',
+            ),
+          ),
+        );
       }
     }
   }
 
   Future<void> _deleteBackupFile(File file) async {
-    final fileName = file.uri.pathSegments.last;
+    final fileName = friendlyFileName(file.path);
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -527,9 +578,13 @@ class _BackupSettingsSectionState extends State<BackupSettingsSection> {
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text('Gagal menghapus berkas: $e')));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Gagal menghapus berkas: ${friendlyErrorMessage(e)}',
+              ),
+            ),
+          );
         }
       } finally {
         if (mounted) {
@@ -707,17 +762,19 @@ class _BackupSettingsSectionState extends State<BackupSettingsSection> {
                   trailing: const Icon(Icons.chevron_right),
                   onTap: _showFrequencyDialog,
                 ),
-                const Divider(height: 1),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.wifi_outlined),
-                  title: const Text('Cadangkan Lewat'),
-                  subtitle: Text(
-                    _overCellular ? 'Wi-Fi atau Seluler' : 'Hanya Wi-Fi',
+                if (isMobilePlatform) ...[
+                  const Divider(height: 1),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.wifi_outlined),
+                    title: const Text('Cadangkan Lewat'),
+                    subtitle: Text(
+                      _overCellular ? 'Wi-Fi atau Seluler' : 'Hanya Wi-Fi',
+                    ),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: _showNetworkDialog,
                   ),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: _showNetworkDialog,
-                ),
+                ],
               ],
             ),
           ),
@@ -781,7 +838,7 @@ class _BackupSettingsSectionState extends State<BackupSettingsSection> {
           ),
           const SizedBox(height: 4),
           ..._localBackups.map((file) {
-            final fileName = file.uri.pathSegments.last;
+            final fileName = friendlyFileName(file.path);
             final size = file.existsSync() ? file.lengthSync() : 0;
             final modTime = file.existsSync() ? file.lastModifiedSync() : null;
             return Card(
@@ -819,9 +876,31 @@ class _BackupSettingsSectionState extends State<BackupSettingsSection> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     IconButton(
-                      icon: const Icon(Icons.share_outlined, size: 20),
-                      tooltip: 'Bagikan berkas cadangan',
-                      onPressed: () => _shareBackupFile(file),
+                      icon: Icon(
+                        Icons.restore_rounded,
+                        size: 20,
+                        color: scheme.primary,
+                      ),
+                      tooltip: 'Pulihkan cadangan ini',
+                      onPressed: _isBackingUp
+                          ? null
+                          : () => _confirmAndRestoreLocalBackup(file),
+                    ),
+                    IconButton(
+                      icon: Icon(
+                        isDesktopPlatform
+                            ? Icons.folder_open_outlined
+                            : Icons.share_outlined,
+                        size: 20,
+                      ),
+                      tooltip: isDesktopPlatform
+                          ? 'Buka Lokasi Berkas'
+                          : 'Bagikan berkas cadangan',
+                      onPressed: _isBackingUp
+                          ? null
+                          : () => isDesktopPlatform
+                                ? _openBackupLocation(file)
+                                : _shareBackupFile(file),
                     ),
                     IconButton(
                       icon: const Icon(
@@ -830,7 +909,9 @@ class _BackupSettingsSectionState extends State<BackupSettingsSection> {
                         color: Colors.red,
                       ),
                       tooltip: 'Hapus berkas ini',
-                      onPressed: () => _deleteBackupFile(file),
+                      onPressed: _isBackingUp
+                          ? null
+                          : () => _deleteBackupFile(file),
                     ),
                   ],
                 ),

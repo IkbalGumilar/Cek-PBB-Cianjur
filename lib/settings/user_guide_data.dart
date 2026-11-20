@@ -136,7 +136,7 @@ class UserGuideRepository {
         ),
         GuidePin(
           number: 4,
-          title: 'Tombol Pindai SPPT (Kamera OCR)',
+          title: 'Tombol Pindai SPPT Kamera (Khusus HP)',
           description:
               'Gunakan kamera ponsel untuk memotret lembar SPPT fisik. Aplikasi akan membaca dan mengisi nomor Blok serta Nomor Wilayah secara otomatis.',
           dotPos: Offset(1035, 770),
@@ -197,9 +197,9 @@ class UserGuideRepository {
         ),
         GuidePin(
           number: 2,
-          title: 'Blok, Nomor, Scan SPPT & Cek Banyak Data',
+          title: 'Blok, Nomor, Pindai SPPT (Khusus HP) & Cek Banyak Data',
           description:
-              'Masukkan Blok dan Nomor urut SPPT, pindai kertas SPPT lewat kamera, atau ketuk ikon berkas panah di kanan untuk memeriksa banyak NOP sekaligus.',
+              'Masukkan Blok dan Nomor urut SPPT, pindai kertas SPPT lewat kamera (Khusus HP), atau ketuk ikon berkas panah di kanan untuk memeriksa banyak NOP sekaligus.',
           dotPos: Offset(42, 738),
           targetPos: Offset(98, 738),
         ),
@@ -252,7 +252,7 @@ class UserGuideRepository {
           number: 1,
           title: 'Tombol Pilih File',
           description:
-              'Muat daftar NOP warga langsung dari berkas Excel (.xlsx/.xls), CSV, atau TXT di penyimpanan ponsel.',
+              'Muat daftar NOP warga langsung dari berkas Excel (.xlsx/.xls), CSV, atau TXT di penyimpanan perangkat.',
           dotPos: Offset(42, 582),
           targetPos: Offset(98, 582),
         ),
@@ -268,9 +268,9 @@ class UserGuideRepository {
         ),
         GuidePin(
           number: 3,
-          title: 'Tombol Simpan, Scan & Hapus Semua',
+          title: 'Tombol Simpan, Pindai Kamera (Khusus HP) & Hapus Semua',
           description:
-              'Simpan daftar NOP agar tidak hilang, tambahkan NOP dengan memindai SPPT berurutan lewat kamera, atau kosongkan daftar.',
+              'Simpan daftar NOP agar tidak hilang, tambahkan NOP dengan memindai SPPT berurutan lewat kamera (Khusus HP), atau kosongkan daftar.',
           dotPos: Offset(42, 1578),
           targetPos: Offset(98, 1578),
         ),
@@ -299,7 +299,7 @@ class UserGuideRepository {
       title: 'Cek Pajak Kendaraan Bermotor',
       subtitle: 'Informasi PKB & SWDKLLJ wilayah Jawa Barat',
       summary:
-          'Layanan bantu bagi warga untuk memeriksa informasi pajak kendaraan bermotor Jawa Barat menggunakan nomor polisi atau pindaian foto plat nomor.',
+          'Layanan bantu bagi warga untuk memeriksa informasi pajak kendaraan bermotor Jawa Barat menggunakan nomor polisi atau pindaian foto plat nomor (Khusus HP).',
       icon: Icons.directions_car_filled_outlined,
       imageAsset: 'assets/guide/04_cek_kendaraan.webp',
       pins: [
@@ -321,9 +321,9 @@ class UserGuideRepository {
         ),
         GuidePin(
           number: 3,
-          title: 'Tombol Foto / Scan Plat Nomor',
+          title: 'Tombol Foto / Pindai Plat Nomor (Khusus HP)',
           description:
-              'Arahkan kamera ke plat nomor kendaraan untuk mengisi kolom nomor polisi secara otomatis.',
+              'Arahkan kamera ponsel ke plat nomor kendaraan untuk mengisi kolom nomor polisi secara otomatis.',
           dotPos: Offset(695, 1060),
           targetPos: Offset(618, 1060),
         ),
@@ -377,23 +377,23 @@ class UserGuideRepository {
           number: 2,
           title: 'Kolom NIK (16 Digit)',
           description:
-              'Masukkan 16 angka Nomor Induk Kependudukan sesuai yang tertera pada KTP atau Kartu Keluarga.',
+              'Masukkan 16 angka Nomor Induk Kependudukan sesuai KTP atau Kartu Keluarga. Setelah minimal 12 digit NIK terisi, gambar kode keamanan akan dimuat otomatis agar tetap segar.',
           dotPos: Offset(42, 852),
           targetPos: Offset(98, 852),
         ),
         GuidePin(
           number: 3,
-          title: 'Tombol Scan KTP / KK',
+          title: 'Tombol Pindai KTP / KK (Khusus HP)',
           description:
-              'Pindai foto KTP atau KK menggunakan kamera agar 16 digit NIK terisi otomatis.',
+              'Pindai foto KTP atau KK menggunakan kamera ponsel agar 16 digit NIK terisi otomatis.',
           dotPos: Offset(1035, 842),
           targetPos: Offset(968, 842),
         ),
         GuidePin(
           number: 4,
-          title: 'Gambar Huruf Kode (Captcha Kemensos)',
+          title: 'Gambar Huruf Kode & Tombol Ganti Kode',
           description:
-              'Gambar kode verifikasi dari layanan Kemensos. Ketuk "Ganti Kode Gambar" bila huruf buram.',
+              'Gambar kode keamanan dari layanan Kemensos muncul otomatis setelah 12 digit NIK diisi. Jika huruf kurang jelas, ketuk tombol "Ganti Kode" untuk memuat gambar baru.',
           dotPos: Offset(75, 1228),
           targetPos: Offset(138, 1228),
         ),
@@ -401,7 +401,7 @@ class UserGuideRepository {
           number: 5,
           title: 'Kolom Huruf Kode',
           description:
-              'Ketik huruf/angka sesuai gambar captcha yang tampil di atasnya.',
+              'Ketik huruf/angka sesuai gambar kode keamanan yang tampil di atasnya.',
           dotPos: Offset(42, 1542),
           targetPos: Offset(98, 1542),
         ),
@@ -425,23 +425,23 @@ class UserGuideRepository {
       chapterBadge: 'Bab 2.1',
       title: 'Buku Catatan DHKP Digital',
       subtitle:
-          'Kelola tabel DHKP, grafik Kedusunan/Desa, Target & Pacing, cek massal latar belakang',
+          'Kelola tabel DHKP, grafik Kedusunan/Desa, Target & Laju Penagihan, cek massal latar belakang',
       summary:
-          'Buku kerja digital perangkat desa & kolektor untuk memuat berkas .dkhp/.dat berbasis tahun, menandai pelunasan & celengan warga, melampirkan foto STTS, memantau Target & Pacing, melihat grafik (Se-Kedusunan & Semua Blok untuk Kedusunan), menjalankan Cek Massal di latar belakang, hingga ekspor PDF/Excel.',
+          'Buku kerja digital perangkat desa & kolektor untuk memuat berkas .dkhp/.dat berbasis tahun, menandai pelunasan & celengan warga, melampirkan foto STTS, memantau Target & Laju Penagihan, melihat grafik (Se-Kedusunan & Semua Blok untuk Kedusunan), menjalankan Cek Massal di latar belakang, hingga ekspor PDF/Excel.',
       icon: Icons.table_chart_rounded,
       imageAsset: 'assets/guide/06_dhkp_catatan.webp',
       pins: [
         GuidePin(
           number: 1,
-          title: 'Ikon Grafik Ringkasan (Gauge & Tren)',
+          title: 'Ikon Grafik Ringkasan & Tren',
           description:
-              'Berpindah ke tampilan visual grafik: Gauge realisasi, 3 kartu KPI sparkline, dan kurva tren bulanan/perbandingan tahun. Pada wilayah Kedusunan, tab cakupan tampil ringkas hanya 2 pilihan: "Se-Kedusunan" dan "Semua Blok" (dan otomatis hilang bila memilih filter 1 blok).',
+              'Berpindah ke tampilan visual grafik: diagram capaian realisasi, 3 kartu ringkasan utama beserta grafik mini, dan kurva tren bulanan/perbandingan tahun. Pada wilayah Kedusunan, tab cakupan tampil ringkas hanya 2 pilihan: "Se-Kedusunan" dan "Semua Blok" (dan otomatis hilang bila memilih filter 1 blok).',
           dotPos: Offset(512, 265),
           targetPos: Offset(512, 195),
         ),
         GuidePin(
           number: 2,
-          title: 'Ikon Target & Pacing / Unggah DHKP',
+          title: 'Ikon Target & Laju Penagihan / Unggah DHKP',
           description:
               'Pantau target & laju penagihan harian, atau unggah berkas .dkhp/.dat lewat menu tiga titik. Pemasangan tahun baru (mis. 2027 saat lokal 2026) langsung memperbarui tanpa menghapus data tahun lama; tahun yang sama akan meminta konfirmasi timpa terlebih dahulu.',
           dotPos: Offset(632, 265),
@@ -481,10 +481,10 @@ class UserGuideRepository {
       id: 'login_portal_staf',
       category: GuideCategory.staf,
       chapterBadge: 'Bab 3.1',
-      title: 'Login Portal Staf Bapenda',
-      subtitle: 'Masuk menggunakan akun resmi staf desa / kolektor',
+      title: 'Masuk Portal Petugas Bapenda',
+      subtitle: 'Masuk menggunakan akun resmi petugas desa / kolektor',
       summary:
-          'Pintu masuk khusus bagi perangkat desa dan kolektor yang memiliki akun resmi Portal Staf untuk mengakses laporan penerimaan wilayah dan pembayaran kolektif.',
+          'Pintu masuk khusus bagi perangkat desa dan kolektor yang memiliki akun resmi Portal Petugas untuk mengakses laporan penerimaan wilayah dan pembayaran kolektif.',
       icon: Icons.login_rounded,
       imageAsset: 'assets/guide/07_login_portal_staf.webp',
       pins: [
@@ -492,7 +492,7 @@ class UserGuideRepository {
           number: 1,
           title: 'Kolom Username',
           description:
-              'Masukkan nama pengguna (username) akun staf desa/kelurahan yang terdaftar di Bapenda.',
+              'Masukkan nama pengguna (username) akun petugas desa/kelurahan yang terdaftar di Bapenda.',
           dotPos: Offset(760, 348),
           targetPos: Offset(650, 348),
         ),
@@ -500,7 +500,7 @@ class UserGuideRepository {
           number: 2,
           title: 'Kolom Password',
           description:
-              'Masukkan kata sandi akun staf Anda. Ketuk ikon mata di sebelah kanan untuk memeriksa ketikan.',
+              'Masukkan kata sandi akun petugas Anda. Ketuk ikon mata di sebelah kanan untuk memeriksa ketikan.',
           dotPos: Offset(760, 528),
           targetPos: Offset(650, 528),
         ),
@@ -524,7 +524,7 @@ class UserGuideRepository {
           number: 5,
           title: 'Tombol Login',
           description:
-              'Memvalidasi kredensial staf dan melanjutkan ke halaman verifikasi keamanan dua langkah (MFA).',
+              'Memvalidasi akun petugas dan melanjutkan ke halaman verifikasi keamanan dua langkah.',
           dotPos: Offset(760, 1288),
           targetPos: Offset(650, 1288),
         ),
@@ -534,10 +534,10 @@ class UserGuideRepository {
       id: 'verifikasi_mfa',
       category: GuideCategory.staf,
       chapterBadge: 'Bab 3.2',
-      title: 'Verifikasi Keamanan MFA',
-      subtitle: 'Masukkan 6 digit kode OTP dari Google Authenticator',
+      title: 'Verifikasi Keamanan Dua Langkah',
+      subtitle: 'Masukkan 6 digit kode keamanan dari Google Authenticator',
       summary:
-          'Pengamanan berlapis menggunakan kode OTP 6 digit dari aplikasi Google Authenticator untuk memastikan hanya petugas berwenang yang dapat mengakses data desa.',
+          'Pengamanan berlapis menggunakan kode sementara 6 digit dari aplikasi Google Authenticator untuk memastikan hanya petugas berwenang yang dapat mengakses data desa.',
       icon: Icons.phonelink_lock_rounded,
       imageAsset: 'assets/guide/08_verifikasi_mfa.webp',
       pins: [
@@ -557,14 +557,6 @@ class UserGuideRepository {
           dotPos: Offset(760, 688),
           targetPos: Offset(650, 688),
         ),
-        GuidePin(
-          number: 3,
-          title: 'Panduan Google Authenticator',
-          description:
-              'Ketuk tautan ini jika Anda memerlukan panduan cara menghubungkan dan melihat kode di Google Authenticator.',
-          dotPos: Offset(960, 878),
-          targetPos: Offset(860, 878),
-        ),
       ],
     ),
     GuideTopic(
@@ -574,7 +566,7 @@ class UserGuideRepository {
       title: 'Menu Utama Petugas Desa',
       subtitle: 'Pusat navigasi Pantauan Wilayah & Pembayaran Kolektif',
       summary:
-          'Halaman utama Portal Staf setelah berhasil login, menyediakan akses ke 7 laporan pantauan wilayah desa, Generate/Sinkronisasi DHKP, dan manajemen grup pembayaran kolektif.',
+          'Halaman utama Portal Petugas setelah berhasil masuk, menyediakan akses ke 7 laporan pantauan wilayah desa, Buat Paket / Sinkronisasi DHKP, dan manajemen grup pembayaran kolektif.',
       icon: Icons.dashboard_customize_rounded,
       imageAsset: 'assets/guide/09_hub_petugas.webp',
       pins: [
@@ -582,7 +574,7 @@ class UserGuideRepository {
           number: 1,
           title: 'Kartu Pantauan Wilayah Desa',
           description:
-              'Membuka 7 laporan penerimaan desa (Sudah Bayar, Belum Bayar, Realisasi, Piutang, Kolektif, Rangking) beserta tombol Generate Paket DHKP & Sinkronisasi DHKP latar belakang.',
+              'Membuka 7 laporan penerimaan desa (Sudah Bayar, Belum Bayar, Realisasi, Piutang, Kolektif, Peringkat) beserta tombol Buat Paket DHKP & Sinkronisasi DHKP latar belakang.',
           dotPos: Offset(42, 417),
           targetPos: Offset(100, 417),
         ),
@@ -602,9 +594,9 @@ class UserGuideRepository {
       chapterBadge: 'Bab 3.4',
       title: 'Pantauan Wilayah Desa (7 Laporan)',
       subtitle:
-          'Generate Paket DHKP, Sinkronisasi latar belakang & 7 laporan real-time',
+          'Buat Paket DHKP, Sinkronisasi latar belakang & 7 laporan langsung',
       summary:
-          'Memantau data pembayaran pajak warga di wilayah desa/kelurahan secara real-time, membuat paket .dkhp master/split Dusun tanpa menghapus data lokal saat generate, serta menyinkronkan status bayar ke DHKP di latar belakang.',
+          'Memantau data pembayaran pajak warga di wilayah desa/kelurahan secara langsung, membuat paket .dkhp utama maupun pecahan per Dusun tanpa menghapus data lokal saat pembuatan paket, serta menyinkronkan status bayar ke DHKP di latar belakang.',
       icon: Icons.analytics_outlined,
       imageAsset: 'assets/guide/10_pantauan_wilayah.webp',
       pins: [
@@ -612,7 +604,7 @@ class UserGuideRepository {
           number: 1,
           title: 'Baris 7 Tab Laporan & Aksi DHKP di Atas',
           description:
-              'Di bilah atas tersedia tombol Generate Paket DHKP (membuat file .dkhp aman tanpa langsung menimpa data lokal) dan tombol Sinkronisasi DHKP (berjalan di latar belakang dengan gelembung mengambang). Geser tab di bawahnya untuk memilih 7 jenis laporan.',
+              'Di bilah atas tersedia tombol Buat Paket DHKP (membuat berkas .dkhp aman tanpa langsung menimpa data lokal) dan tombol Sinkronisasi DHKP (berjalan di latar belakang dengan gelembung mengambang). Geser tab di bawahnya untuk memilih 7 jenis laporan.',
           dotPos: Offset(55, 296),
           targetPos: Offset(130, 296),
         ),
@@ -654,16 +646,16 @@ class UserGuideRepository {
       id: 'pantauan_ranking',
       category: GuideCategory.staf,
       chapterBadge: 'Bab 3.5',
-      title: 'Rangking Realisasi Capaian',
+      title: 'Peringkat Realisasi Capaian',
       subtitle: 'Evaluasi peringkat dan persentase realisasi PBB wilayah',
       summary:
-          'Menampilkan tabel peringkat capaian realisasi PBB berdasarkan periode tanggal pembayaran, tanggal cutoff belum bayar, serta kategori buku.',
+          'Menampilkan tabel peringkat capaian realisasi PBB berdasarkan periode tanggal pembayaran, tanggal batas tunggakan, serta kategori buku.',
       icon: Icons.leaderboard_rounded,
       imageAsset: 'assets/guide/11_pantauan_ranking.webp',
       pins: [
         GuidePin(
           number: 1,
-          title: 'Tab Rangking Realisasi',
+          title: 'Tab Peringkat Realisasi',
           description:
               'Tab laporan khusus untuk melihat peringkat persentase capaian realisasi pajak.',
           dotPos: Offset(860, 395),
@@ -671,9 +663,9 @@ class UserGuideRepository {
         ),
         GuidePin(
           number: 2,
-          title: 'Filter Tanggal Pembayaran & Cutoff',
+          title: 'Filter Tanggal Pembayaran & Batas Tunggakan',
           description:
-              'Tentukan periode tanggal pembayaran yang dihitung beserta tanggal cutoff tunggakan.',
+              'Tentukan periode tanggal pembayaran yang dihitung beserta tanggal batas tunggakan.',
           dotPos: Offset(500, 550),
           targetPos: Offset(400, 550),
         ),
@@ -718,7 +710,7 @@ class UserGuideRepository {
           number: 2,
           title: 'Filter Bulan, Status & Tanggal',
           description:
-              'Saring daftar grup rombongan berdasarkan bulan, status grup (Draft / Sudah Di Bayar), tahun, atau tanggal.',
+              'Saring daftar grup rombongan berdasarkan bulan, status grup (Draft / Sudah Dibayar), tahun, atau tanggal.',
           dotPos: Offset(330, 947),
           targetPos: Offset(240, 947),
         ),
@@ -782,18 +774,18 @@ class UserGuideRepository {
       id: 'tambah_group_kolektif',
       category: GuideCategory.staf,
       chapterBadge: 'Bab 3.8',
-      title: 'Formulir Tambah Group Baru',
+      title: 'Formulir Tambah Grup Baru',
       subtitle: 'Buat wadah grup rombongan bayar baru untuk kolektor',
       summary:
           'Formulir pembuatan grup rombongan baru yang mencatat nama grup, keterangan, nama kolektor, serta nomor HP kolektor.',
       warningNote:
-          'Pembuatan grup bersifat permanen di server. Pastikan data sudah benar sebelum menekan Lanjut, atau ketuk Kembali Ke Group untuk membatalkan.',
+          'Pembuatan grup bersifat permanen di server. Pastikan data sudah benar sebelum menekan Lanjut, atau ketuk Kembali ke Grup untuk membatalkan.',
       icon: Icons.group_add_rounded,
       imageAsset: 'assets/guide/14_tambah_group.webp',
       pins: [
         GuidePin(
           number: 1,
-          title: 'Kolom Nama Group',
+          title: 'Kolom Nama Grup',
           description:
               'Masukkan nama identifikasi grup rombongan (contoh: nama kadus/kolektor dan nomor urutan grup).',
           dotPos: Offset(145, 652),
@@ -819,15 +811,15 @@ class UserGuideRepository {
           number: 4,
           title: 'Kecamatan & Kelurahan Otomatis',
           description:
-              'Terisi secara otomatis mengikuti wilayah akun staf desa/kelurahan yang sedang login.',
+              'Terisi secara otomatis mengikuti wilayah akun petugas desa/kelurahan yang sedang masuk.',
           dotPos: Offset(145, 1432),
           targetPos: Offset(232, 1432),
         ),
         GuidePin(
           number: 5,
-          title: 'Tombol Kembali Ke Group & Lanjut',
+          title: 'Tombol Kembali ke Grup & Lanjut',
           description:
-              'Ketuk "Kembali Ke Group" untuk membatalkan, atau ketuk "Lanjut" untuk menyimpan grup dan mulai menambahkan NOP anggota.',
+              'Ketuk "Kembali ke Grup" untuk membatalkan, atau ketuk "Lanjut" untuk menyimpan grup dan mulai menambahkan NOP anggota.',
           dotPos: Offset(145, 1815),
           targetPos: Offset(245, 1815),
         ),
@@ -843,9 +835,9 @@ class UserGuideRepository {
       chapterBadge: 'Bab 4.1',
       title: 'Menu Pengaturan Aplikasi',
       subtitle:
-          'Wilayah kerja, tema/AMOLED, keamanan, cadangan DKH2 & informasi aplikasi',
+          'Wilayah kerja, tema, keamanan, cadangan terenkripsi & informasi aplikasi',
       summary:
-          'Mengatur Kecamatan/Desa penugasan, mode tema & AMOLED, kunci keamanan, pencadangan terenkripsi DKH2 (lokal & Google Drive), panduan penggunaan, serta informasi aplikasi.',
+          'Mengatur Kecamatan/Desa penugasan, mode tema & layar gelap, kunci keamanan, pencadangan terenkripsi (perangkat & Google Drive), panduan penggunaan, serta informasi aplikasi.',
       icon: Icons.settings_outlined,
       imageAsset: 'assets/guide/15_pengaturan_utama.webp',
       pins: [
@@ -853,7 +845,7 @@ class UserGuideRepository {
           number: 1,
           title: 'Wilayah Kerja & Tema Tampilan',
           description:
-              'Pilih Kecamatan/Desa penugasan (32 Kecamatan & 360 Desa Cianjur) serta ubah mode tampilan (Ikuti Sistem / Terang / Gelap / AMOLED) dan warna aplikasi.',
+              'Pilih Kecamatan/Desa penugasan (32 Kecamatan & 360 Desa Cianjur) serta ubah mode tampilan (Ikuti Sistem / Terang / Gelap / Hitam Pekat) dan warna aplikasi.',
           dotPos: Offset(42, 385),
           targetPos: Offset(95, 385),
         ),
@@ -861,15 +853,15 @@ class UserGuideRepository {
           number: 2,
           title: 'Menu Keamanan Aplikasi',
           description:
-              'Mengaktifkan kunci pengaman Sidik Jari, PIN, atau Kata Sandi saat membuka aplikasi.',
+              'Mengaktifkan kunci pengaman Perangkat (Sidik Jari / Windows Hello), PIN 6 Angka, atau Kata Sandi saat membuka aplikasi.',
           dotPos: Offset(42, 665),
           targetPos: Offset(95, 665),
         ),
         GuidePin(
           number: 3,
-          title: 'Menu Pencadangan Data (DKH2)',
+          title: 'Menu Pencadangan Data',
           description:
-              'Menyimpan cadangan catatan DHKP terenkripsi AES-256-GCM ke penyimpanan ponsel maupun Google Drive.',
+              'Menyimpan cadangan catatan DHKP secara terenkripsi ke penyimpanan perangkat maupun Google Drive.',
           dotPos: Offset(42, 960),
           targetPos: Offset(95, 960),
         ),
@@ -885,7 +877,7 @@ class UserGuideRepository {
           number: 5,
           title: 'Menu Tentang & Bagikan Aplikasi',
           description:
-              'Membagikan file APK, melihat profil pengembang, membuka tautan GitHub & Saweria, serta memeriksa pembaruan.',
+              'Membagikan aplikasi (berkas APK di HP Android atau tautan unduhan di komputer), melihat profil pengembang, membuka tautan GitHub & Saweria, serta memeriksa pembaruan.',
           dotPos: Offset(42, 1550),
           targetPos: Offset(95, 1550),
         ),
@@ -905,25 +897,25 @@ class UserGuideRepository {
       chapterBadge: 'Bab 4.2',
       title: 'Tema & Tampilan Aplikasi',
       subtitle:
-          'Atur mode Terang/Gelap/AMOLED, warna wallpaper, dan kustomisasi RGB',
+          'Atur mode Terang/Gelap/Hitam Pekat, warna otomatis sistem, dan kustomisasi warna',
       summary:
-          'Sesuaikan kenyamanan mata saat bertugas di lapangan maupun malam hari dengan mode tema Terang, Gelap, Hitam Pekat (AMOLED), dan pilihan warna aksen aplikasi.',
+          'Sesuaikan kenyamanan mata saat bertugas di lapangan maupun malam hari dengan mode tema Terang, Gelap, Hitam Pekat, dan pilihan warna aplikasi.',
       icon: Icons.palette_outlined,
       imageAsset: 'assets/guide/16_pengaturan_tema.webp',
       pins: [
         GuidePin(
           number: 1,
-          title: 'Pilihan Mode Tema (Terang / Gelap / AMOLED)',
+          title: 'Pilihan Mode Tema (Terang / Gelap / Hitam Pekat)',
           description:
-              'Pilih antara Ikuti Sistem, Mode Terang (jelas di bawah sinar matahari), Mode Gelap, atau Hitam Pekat AMOLED (hemat baterai layar OLED).',
+              'Pilih antara Ikuti Sistem, Mode Terang (jelas di bawah sinar matahari), Mode Gelap, atau Hitam Pekat (hemat baterai layar OLED).',
           dotPos: Offset(42, 545),
           targetPos: Offset(95, 545),
         ),
         GuidePin(
           number: 2,
-          title: 'Sakelar Ikuti Warna Wallpaper',
+          title: 'Sakelar Warna Otomatis (Wallpaper HP / Aksen Sistem)',
           description:
-              'Menyesuaikan warna aplikasi secara otomatis mengikuti palet warna gambar latar (wallpaper) ponsel Anda.',
+              'Menyesuaikan warna aplikasi secara otomatis mengikuti gambar latar (HP) atau warna aksen sistem perangkat (komputer).',
           dotPos: Offset(760, 865),
           targetPos: Offset(835, 915),
         ),
@@ -937,7 +929,7 @@ class UserGuideRepository {
         ),
         GuidePin(
           number: 4,
-          title: 'Slider Atur Warna Sendiri (RGB)',
+          title: 'Pengatur Warna Sendiri (Merah, Hijau, Biru)',
           description:
               'Geser pengatur Merah, Hijau, dan Biru untuk meracik warna khusus sesuai keinginan Anda.',
           dotPos: Offset(42, 1730),
@@ -950,7 +942,7 @@ class UserGuideRepository {
       category: GuideCategory.pengaturan,
       chapterBadge: 'Bab 4.3',
       title: 'Keamanan & Kunci Aplikasi',
-      subtitle: 'Lindungi data pajak warga dengan Sidik Jari, PIN, atau Sandi',
+      subtitle: 'Lindungi data pajak warga dengan Kunci Perangkat, PIN, atau Sandi',
       summary:
           'Mencegah akses tanpa izin ke catatan DHKP dan fitur aplikasi dengan mengaktifkan penguncian layar saat aplikasi dibuka.',
       icon: Icons.lock_outline_rounded,
@@ -960,7 +952,7 @@ class UserGuideRepository {
           number: 1,
           title: 'Sakelar Kunci Pengaman Aplikasi',
           description:
-              'Aktifkan sakelar ini untuk memilih metode penguncian: Kunci Perangkat (Sidik Jari / Wajah / Pola HP), PIN 6 Angka, atau Kata Sandi.',
+              'Aktifkan sakelar ini untuk memilih metode penguncian: Kunci Perangkat (Sidik Jari / Wajah di HP atau Windows Hello di Windows), PIN 6 Angka, atau Kata Sandi.',
           dotPos: Offset(760, 540),
           targetPos: Offset(835, 595),
         ),
@@ -971,9 +963,9 @@ class UserGuideRepository {
       category: GuideCategory.pengaturan,
       chapterBadge: 'Bab 4.4',
       title: 'Pencadangan & Pemulihan Data',
-      subtitle: 'Simpan cadangan DHKP terenkripsi DKH2 ke HP atau Google Drive',
+      subtitle: 'Simpan cadangan DHKP terenkripsi ke perangkat atau Google Drive',
       summary:
-          'Menjaga agar seluruh catatan pembayaran dan dokumentasi DHKP tetap aman terenkripsi AES-256-GCM meskipun Anda berganti perangkat ponsel.',
+          'Menjaga agar seluruh catatan pembayaran dan dokumentasi DHKP tetap aman terenkripsi meskipun Anda berganti perangkat.',
       icon: Icons.cloud_sync_outlined,
       imageAsset: 'assets/guide/18_pengaturan_pencadangan.webp',
       pins: [
@@ -981,7 +973,7 @@ class UserGuideRepository {
           number: 1,
           title: 'Tombol Cadangkan Sekarang',
           description:
-              'Membuat salinan cadangan data perubahan DHKP terenkripsi DKH2 secara langsung saat itu juga.',
+              'Membuat salinan cadangan data perubahan DHKP secara terenkripsi langsung saat itu juga.',
           dotPos: Offset(55, 860),
           targetPos: Offset(125, 860),
         ),
@@ -989,7 +981,7 @@ class UserGuideRepository {
           number: 2,
           title: 'Tombol Pulihkan / Muat Berkas DHKP',
           description:
-              'Memulihkan atau memasang berkas DHKP dari HP atau Google Drive. Tahun yang masih kosong langsung diisi; tahun sama akan meminta konfirmasi timpa.',
+              'Memulihkan atau memasang berkas DHKP dari perangkat atau Google Drive. Tahun yang masih kosong langsung diisi; tahun sama akan meminta konfirmasi timpa.',
           dotPos: Offset(55, 1010),
           targetPos: Offset(125, 1010),
         ),
@@ -1003,22 +995,14 @@ class UserGuideRepository {
         ),
         GuidePin(
           number: 4,
-          title: 'Sakelar Hanya Data DHKP Saja',
+          title: 'Pilihan Jaringan — Cadangkan Lewat (Khusus HP)',
           description:
-              'Jika aktif, cadangan hanya menyimpan tabel data tanpa foto dokumentasi agar ukuran berkas lebih hemat.',
-          dotPos: Offset(42, 1530),
-          targetPos: Offset(95, 1530),
-        ),
-        GuidePin(
-          number: 5,
-          title: 'Pilihan Jaringan (Cadangkan Lewat)',
-          description:
-              'Pilih apakah pencadangan otomatis berjalan hanya saat terhubung Wi-Fi atau boleh menggunakan kuota seluler.',
+              'Pilih apakah pencadangan otomatis berjalan hanya saat terhubung Wi-Fi atau boleh menggunakan kuota seluler (khusus HP).',
           dotPos: Offset(42, 1735),
           targetPos: Offset(95, 1735),
         ),
         GuidePin(
-          number: 6,
+          number: 5,
           title: 'Akun Google (Google Drive)',
           description:
               'Hubungkan akun Google Anda untuk menyimpan cadangan secara otomatis di folder "Cek PBB Cianjur" pada Google Drive.',
@@ -1033,17 +1017,17 @@ class UserGuideRepository {
       chapterBadge: 'Bab 4.5',
       title: 'Tentang & Bagikan Aplikasi',
       subtitle:
-          'Bagikan file APK, profil pengembang, GitHub, Saweria & pembaruan',
+          'Bagikan aplikasi, profil pengembang, GitHub, Saweria & pembaruan',
       summary:
-          'Memuat informasi versi aplikasi, tombol berbagi file instalasi APK ke sesama perangkat desa, profil pengembang Ikbal (@IkbalGumilar), tautan GitHub & Saweria, serta pemeriksa pembaruan.',
+          'Memuat informasi versi aplikasi, tombol berbagi berkas APK (Khusus HP Android) atau tautan unduhan (komputer), profil pengembang Ikbal (@IkbalGumilar), tautan GitHub & Saweria, serta pemeriksa pembaruan.',
       icon: Icons.info_outline_rounded,
       imageAsset: 'assets/guide/20_pengaturan_tentang.webp',
       pins: [
         GuidePin(
           number: 1,
-          title: 'Tombol Bagikan File Aplikasi',
+          title: 'Tombol Bagikan File Aplikasi (Khusus HP) / Salin Tautan',
           description:
-              'Kirim file instalasi aplikasi (.apk) langsung ke rekan kolektor atau warga lewat WhatsApp, Bluetooth, atau Quick Share tanpa kuota unduh ulang.',
+              'Di HP Android, kirim berkas instalasi (.apk) langsung ke rekan kolektor atau warga lewat WhatsApp, Bluetooth, atau Quick Share tanpa kuota unduh ulang. Di komputer, tombol ini menyalin tautan unduhan resmi.',
           dotPos: Offset(42, 911),
           targetPos: Offset(102, 911),
         ),
@@ -1110,9 +1094,9 @@ class UserGuideRepository {
     ),
     GuideFaqItem(
       question:
-          'Bagaimana aturan menimpa vs memperbarui saat memasang berkas .dkhp atau setelah Generate DHKP?',
+          'Bagaimana aturan menimpa vs memperbarui saat memasang berkas .dkhp atau setelah Buat Paket DHKP?',
       answer:
-          'Proses Generate DHKP tidak menghapus data lokal Anda — ia hanya membuat file .dkhp baru. Saat memasang file .dkhp: jika data tahun tersebut masih kosong (atau beda tahun, mis. lokal 2026 lalu pasang 2027), data langsung diisi/diperbarui tanpa menghapus 2026. Jika tahun yang sama (mis. 2026 -> 2026) sudah terisi, aplikasi akan meminta konfirmasi timpa terlebih dahulu.',
+          'Proses Buat Paket DHKP tidak menghapus data lokal Anda — ia hanya membuat berkas .dkhp baru. Saat memasang berkas .dkhp: jika data tahun tersebut masih kosong (atau beda tahun, mis. lokal 2026 lalu pasang 2027), data langsung diisi/diperbarui tanpa menghapus 2026. Jika tahun yang sama (mis. 2026 -> 2026) sudah terisi, aplikasi akan meminta konfirmasi timpa terlebih dahulu.',
       icon: Icons.inventory_2_outlined,
       category: GuideCategory.staf,
     ),
@@ -1120,7 +1104,7 @@ class UserGuideRepository {
       question:
           'Mengapa opsi "Seluruh Blok" di Cek Massal hanya muncul untuk wilayah Kedusunan?',
       answer:
-          'Untuk menjaga kestabilan akses server, pengecekan Seluruh Blok sekaligus diaktifkan khusus untuk lingkup Kedusunan (Dusun). Pada tingkat Desa ke atas, pengecekan tetap dipilih per blok atau gunakan fitur Sinkronisasi di Portal Staf.',
+          'Untuk menjaga kestabilan akses server, pengecekan Seluruh Blok sekaligus diaktifkan khusus untuk lingkup Kedusunan (Dusun). Pada tingkat Desa ke atas, pengecekan tetap dipilih per blok atau gunakan fitur Sinkronisasi di Portal Petugas.',
       icon: Icons.fact_check_outlined,
       category: GuideCategory.dhkp,
     ),
@@ -1142,17 +1126,17 @@ class UserGuideRepository {
     ),
     GuideFaqItem(
       question:
-          'Bagaimana cara membagikan aplikasi ini ke HP kolektor atau perangkat desa lain?',
+          'Bagaimana cara membagikan aplikasi ini ke perangkat kolektor atau perangkat desa lain?',
       answer:
-          'Buka menu Pengaturan > Tentang & Bagikan Aplikasi, lalu ketuk tombol hijau "Bagikan File Aplikasi". Anda bisa langsung mengirim file APK lewat WhatsApp, Bluetooth, atau Quick Share.',
+          'Buka menu Pengaturan > Tentang & Bagikan Aplikasi. Di HP Android (Khusus HP), ketuk "Bagikan File Aplikasi" untuk mengirim berkas APK lewat WhatsApp, Bluetooth, atau Quick Share. Di komputer, ketuk "Salin Link Unduhan Aplikasi".',
       icon: Icons.share_rounded,
       category: GuideCategory.pengaturan,
     ),
     GuideFaqItem(
       question:
-          'Apakah catatan pembayaran DHKP saya aman jika berganti HP baru?',
+          'Apakah catatan pembayaran DHKP saya aman jika berganti perangkat baru?',
       answer:
-          'Sangat aman. Buka menu Pengaturan > Pencadangan Data, hubungkan Akun Google (Google Drive), lalu ketuk "Cadangkan Sekarang". Di HP baru, cukup pilih "Pulihkan / Muat Berkas DHKP".',
+          'Sangat aman. Buka menu Pengaturan > Pencadangan Data, hubungkan Akun Google (Google Drive), lalu ketuk "Cadangkan Sekarang". Di perangkat baru, cukup masuk dengan Akun Google yang sama atau pilih "Pulihkan / Muat Berkas DHKP".',
       icon: Icons.cloud_done_outlined,
       category: GuideCategory.dhkp,
     ),
@@ -1160,7 +1144,7 @@ class UserGuideRepository {
       question:
           'Apa yang harus diperhatikan sebelum membuat grup baru di Pembayaran Kolektif?',
       answer:
-          'Pembuatan grup rombongan baru pada Portal Staf bersifat permanen di server. Pastikan Nama Group, Keterangan, dan Nama Kolektor sudah benar sebelum menekan tombol Lanjut.',
+          'Pembuatan grup rombongan baru pada Portal Petugas bersifat permanen di server. Pastikan Nama Grup, Keterangan, dan Nama Kolektor sudah benar sebelum menekan tombol Lanjut.',
       icon: Icons.warning_amber_rounded,
       category: GuideCategory.staf,
     ),

@@ -43,7 +43,7 @@ class StaffAuthenticatorStore extends BasePreferencesStore {
     }
     if (name.isNotEmpty) return name;
     if (issuer.isNotEmpty) return issuer;
-    return 'Google Authenticator Staf';
+    return 'Google Authenticator Petugas';
   }
 
   /// Menyimpan Secret Key Base32 dan opsional metadata akun.
@@ -54,7 +54,7 @@ class StaffAuthenticatorStore extends BasePreferencesStore {
   }) async {
     final cleaned = TotpHelper.sanitizeBase32(secretBase32);
     if (!TotpHelper.isValidBase32(cleaned)) {
-      throw const FormatException('Secret key bukan format Base32 yang valid.');
+      throw const FormatException('Format kunci keamanan tidak valid.');
     }
     await writeSecureOnly(_keySecret, cleaned);
     if (accountName != null && accountName.isNotEmpty) {

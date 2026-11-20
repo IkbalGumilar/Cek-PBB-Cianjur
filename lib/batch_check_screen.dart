@@ -416,13 +416,6 @@ class _BatchCheckScreenState extends State<BatchCheckScreen>
                 'Cek Massal (${currentIdx.clamp(0, total)}/$total)',
               ),
               actions: [
-                if (_mgr.isActiveSession)
-                  TextButton.icon(
-                    key: const ValueKey('batch_hide_appbar_btn'),
-                    onPressed: _hideToBackground,
-                    icon: const Icon(Icons.visibility_off_outlined, size: 18),
-                    label: const Text('Sembunyikan'),
-                  ),
                 if (currentIdx > 0 && !_mgr.isActiveSession)
                   TextButton.icon(
                     onPressed: () => _openResultScreen(replace: true),
@@ -808,6 +801,13 @@ class _BatchCheckScreenState extends State<BatchCheckScreen>
                                       IconButton.outlined(
                                         tooltip: 'Hentikan & Lihat Hasil',
                                         color: scheme.error,
+                                        style: IconButton.styleFrom(
+                                          side: BorderSide(
+                                            color: scheme.error.withValues(
+                                              alpha: 0.5,
+                                            ),
+                                          ),
+                                        ),
                                         onPressed: _stopAndViewResult,
                                         icon: const Icon(
                                           Icons.stop_circle_outlined,
@@ -846,7 +846,10 @@ class _BatchCheckScreenState extends State<BatchCheckScreen>
                                       ),
                                       const SizedBox(width: 8),
                                       IconButton.outlined(
-                                        tooltip: 'Sembunyikan ke Latar Belakang',
+                                        key: const ValueKey(
+                                          'batch_hide_action_btn',
+                                        ),
+                                        tooltip: 'Sembunyikan',
                                         onPressed: _hideToBackground,
                                         icon: const Icon(
                                           Icons.visibility_off_outlined,
@@ -856,10 +859,18 @@ class _BatchCheckScreenState extends State<BatchCheckScreen>
                                       const SizedBox(width: 4),
                                       IconButton.outlined(
                                         tooltip: 'Hentikan & Lihat Hasil',
+                                        color: scheme.error,
+                                        style: IconButton.styleFrom(
+                                          side: BorderSide(
+                                            color: scheme.error.withValues(
+                                              alpha: 0.5,
+                                            ),
+                                          ),
+                                        ),
                                         onPressed: _stopAndViewResult,
                                         icon: const Icon(
-                                          Icons.fact_check_outlined,
-                                          size: 18,
+                                          Icons.stop_circle_outlined,
+                                          size: 20,
                                         ),
                                       ),
                                     ] else ...[

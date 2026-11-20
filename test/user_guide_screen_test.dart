@@ -38,7 +38,7 @@ void main() {
       await tester.tap(find.text('Portal Petugas'));
       await tester.pump();
 
-      expect(find.text('Login Portal Staf Bapenda'), findsOneWidget);
+      expect(find.text('Masuk Portal Petugas Bapenda'), findsOneWidget);
       expect(find.text('Cek Tagihan PBB'), findsNothing);
     },
   );

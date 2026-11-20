@@ -9,6 +9,7 @@ import '../blok_record.dart';
 import '../dhkp/blok_catatan_models.dart';
 import '../nop_helper.dart';
 import '../staff_portal_client.dart';
+import '../user_friendly_error.dart';
 import 'staff_dhkp_sync_manager.dart';
 import 'staff_dhkp_sync_service.dart';
 
@@ -607,6 +608,13 @@ class _StaffDhkpSyncRunningSheet extends StatelessWidget {
         final progress = mgr.progress;
         final outcome = mgr.outcome;
 
+        final isCancelled =
+            isCompleted && ((outcome?.isCancelled ?? false) || mgr.isCancelled);
+        final rawError = outcome?.errorMessage?.trim();
+        final hasError =
+            isCompleted && !isCancelled && rawError != null && rawError.isNotEmpty;
+        final isSuccess = isCompleted && !isCancelled && !hasError;
+
         final progressRatio = progress?.ratio ?? 0.0;
         final currentBlok = progress?.currentBlok ?? 'Memulai...';
         final updatedPaid =
@@ -614,6 +622,41 @@ class _StaffDhkpSyncRunningSheet extends StatelessWidget {
         final newSppt = outcome?.newSpptCount ?? progress?.newSpptCount ?? 0;
         final checked =
             outcome?.totalCheckedRows ?? progress?.totalCheckedRows ?? 0;
+
+        final Color headerBgColor;
+        final IconData headerIcon;
+        final Color headerIconColor;
+        final String headerTitle;
+        if (!isCompleted) {
+          headerBgColor = Colors.teal.shade50;
+          headerIcon = Icons.sync_rounded;
+          headerIconColor = Colors.teal.shade700;
+          headerTitle = 'Menyinkronkan ke DHKP...';
+        } else if (isCancelled) {
+          headerBgColor = Colors.amber.shade50;
+          headerIcon = Icons.cancel_outlined;
+          headerIconColor = Colors.amber.shade800;
+          headerTitle = 'Sinkronisasi Dibatalkan';
+        } else if (hasError) {
+          headerBgColor = Colors.red.shade50;
+          headerIcon = Icons.error_outline_rounded;
+          headerIconColor = Colors.red.shade700;
+          headerTitle = 'Sinkronisasi Gagal';
+        } else {
+          headerBgColor = Colors.green.shade50;
+          headerIcon = Icons.check_circle_outline_rounded;
+          headerIconColor = Colors.green.shade700;
+          headerTitle = 'Sinkronisasi Selesai!';
+        }
+
+        final friendlyErr = hasError
+            ? friendlyErrorMessage(
+                rawError,
+                fallback:
+                    'Sinkronisasi belum dapat diselesaikan. Periksa koneksi Anda lalu coba lagi.',
+              )
+            : null;
+        final hasReportData = isSuccess || updatedPaid > 0 || newSppt > 0;
 
         return PopScope(
           canPop: false,
@@ -649,18 +692,12 @@ class _StaffDhkpSyncRunningSheet extends StatelessWidget {
                       Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: isCompleted
-                              ? Colors.green.shade50
-                              : Colors.teal.shade50,
+                          color: headerBgColor,
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Icon(
-                          isCompleted
-                              ? Icons.check_circle_outline_rounded
-                              : Icons.sync_rounded,
-                          color: isCompleted
-                              ? Colors.green.shade700
-                              : Colors.teal.shade700,
+                          headerIcon,
+                          color: headerIconColor,
                           size: 24,
                         ),
                       ),
@@ -670,9 +707,7 @@ class _StaffDhkpSyncRunningSheet extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              isCompleted
-                                  ? 'Sinkronisasi Selesai!'
-                                  : 'Menyinkronkan ke DHKP...',
+                              headerTitle,
                               style: const TextStyle(
                                 fontSize: 17,
                                 fontWeight: FontWeight.bold,
@@ -732,6 +767,67 @@ class _StaffDhkpSyncRunningSheet extends StatelessWidget {
                         ),
                       ],
                     ),
+                  ] else if (isCancelled) ...[
+                    // Banner Dibatalkan
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.shade50,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.amber.shade300),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.info_outline_rounded,
+                            color: Colors.amber.shade800,
+                            size: 22,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'Sinkronisasi dihentikan sebelum selesai. Data DHKP lokal yang belum diproses tidak diubah.',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.amber.shade900,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ] else if (hasError) ...[
+                    // Banner Gagal
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.red.shade50,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.red.shade200),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            Icons.error_outline_rounded,
+                            color: Colors.red.shade700,
+                            size: 22,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              friendlyErr!,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.red.shade900,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ] else ...[
                     // Banner Selesai
                     Container(
@@ -751,7 +847,7 @@ class _StaffDhkpSyncRunningSheet extends StatelessWidget {
                           const SizedBox(width: 10),
                           Expanded(
                             child: Text(
-                              'Total $updatedPaid NOP diperbarui menjadi Lunas dan $newSppt NOP baru terdeteksi. Seluruh grafik DHKP langsung otomatis ter-update.',
+                              'Total $updatedPaid NOP diperbarui menjadi Lunas dan $newSppt NOP baru terdeteksi. Seluruh grafik DHKP langsung otomatis diperbarui.',
                               style: TextStyle(
                                 fontSize: 12,
                                 color: Colors.green.shade900,
@@ -823,7 +919,7 @@ class _StaffDhkpSyncRunningSheet extends StatelessWidget {
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              'Proses ini berjalan di latar belakang. Anda dapat meminimalkan aplikasi atau menyembunyikan sheet ini.',
+                              'Proses ini berjalan di latar belakang. Anda dapat meminimalkan aplikasi atau menutup panel ini.',
                               style: TextStyle(
                                 fontSize: 11,
                                 color: isDark
@@ -882,32 +978,36 @@ class _StaffDhkpSyncRunningSheet extends StatelessWidget {
                   ] else ...[
                     Row(
                       children: [
-                        Expanded(
-                          flex: 3,
-                          child: FilledButton.icon(
-                            onPressed: () {
-                              final out = mgr.outcome;
-                              mgr.hideSheet(context);
-                              if (out != null) {
-                                BatchNotificationService.instance
-                                    .openDhkpWithSyncReport(out);
-                              } else {
-                                mgr.dismiss();
-                              }
-                            },
-                            style: FilledButton.styleFrom(
-                              backgroundColor: Colors.teal.shade700,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 12),
+                        if (hasReportData) ...[
+                          Expanded(
+                            flex: 3,
+                            child: FilledButton.icon(
+                              onPressed: () {
+                                final out = mgr.outcome;
+                                mgr.hideSheet(context);
+                                if (out != null) {
+                                  BatchNotificationService.instance
+                                      .openDhkpWithSyncReport(out);
+                                } else {
+                                  mgr.dismiss();
+                                }
+                              },
+                              style: FilledButton.styleFrom(
+                                backgroundColor: Colors.teal.shade700,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 12,
+                                ),
+                              ),
+                              icon: const Icon(
+                                Icons.assignment_outlined,
+                                size: 18,
+                              ),
+                              label: const Text('Lihat Laporan Rinci'),
                             ),
-                            icon: const Icon(
-                              Icons.assignment_outlined,
-                              size: 18,
-                            ),
-                            label: const Text('Lihat Laporan Rinci'),
                           ),
-                        ),
-                        const SizedBox(width: 8),
+                          const SizedBox(width: 8),
+                        ],
                         Expanded(
                           flex: 2,
                           child: OutlinedButton(
@@ -1040,7 +1140,7 @@ class _StaffDhkpSyncReportDialogState
   void _copySummary() {
     final o = widget.outcome;
     final text = StringBuffer()
-      ..writeln('=== Laporan Sinkronisasi Portal Staf Bapenda ===')
+      ..writeln('=== Laporan Sinkronisasi Portal Petugas Bapenda ===')
       ..writeln('Wilayah: ${o.blokLabel}')
       ..writeln('Tahun Pajak: ${o.tahun}')
       ..writeln('Total Baris Diperiksa: ${o.totalCheckedRows}')

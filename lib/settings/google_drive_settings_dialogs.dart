@@ -7,6 +7,7 @@ import '../google_auth_service.dart';
 import '../google_drive_backup_policy.dart';
 import '../google_drive_picker_dialog.dart';
 import '../legal_document_screen.dart';
+import '../user_friendly_error.dart';
 
 class GoogleAccountDialog extends StatefulWidget {
   final String initialEmail;
@@ -55,7 +56,10 @@ class _GoogleAccountDialogState extends State<GoogleAccountDialog> {
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _errorMessage = e.toString().replaceFirst('Exception: ', '');
+        _errorMessage = friendlyErrorMessage(
+          e,
+          fallback: 'Gagal menghubungkan Akun Google. Silakan coba lagi.',
+        );
       });
     }
   }

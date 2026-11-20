@@ -136,7 +136,7 @@ class StaffPortalParser {
     if (isSessionExpired(html, statusCode: statusCode, location: location)) {
       return const MonitoringTableResult(
         errorMessage:
-            'Sesi login ke Portal Staf telah kedaluwarsa. Silakan masuk kembali melalui Menu Petugas.',
+            'Sesi login ke Portal Petugas telah kedaluwarsa. Silakan masuk kembali melalui Menu Petugas.',
       );
     }
     final document = html_parser.parse(html);
@@ -302,7 +302,7 @@ class StaffPortalParser {
     if (isSessionExpired(html, statusCode: statusCode, location: location)) {
       return const MonitoringExcelQueueResult(
         errorMessage:
-            'Sesi login ke Portal Staf telah kedaluwarsa. Silakan masuk kembali melalui Menu Petugas.',
+            'Sesi login ke Portal Petugas telah kedaluwarsa. Silakan masuk kembali melalui Menu Petugas.',
       );
     }
     if (html.isEmpty) {
@@ -496,7 +496,7 @@ class StaffPortalParser {
     if (isSessionExpired(body, statusCode: statusCode, location: location)) {
       return const KolektifMemberListResult(
         errorMessage:
-            'Sesi login ke Portal Staf telah kedaluwarsa. Silakan masuk kembali melalui Menu Petugas.',
+            'Sesi login ke Portal Petugas telah kedaluwarsa. Silakan masuk kembali melalui Menu Petugas.',
       );
     }
     try {
@@ -552,7 +552,7 @@ class StaffPortalParser {
       return const KolektifActionResult(
         success: false,
         message:
-            'Sesi login ke Portal Staf telah kedaluwarsa. Silakan masuk kembali melalui Menu Petugas.',
+            'Sesi login ke Portal Petugas telah kedaluwarsa. Silakan masuk kembali melalui Menu Petugas.',
         responsDikenali: false,
       );
     }
@@ -591,7 +591,7 @@ class StaffPortalParser {
     if (isSessionExpired(body, statusCode: statusCode, location: location)) {
       return const KolektifListResult(
         errorMessage:
-            'Sesi login ke Portal Staf telah kedaluwarsa. Silakan masuk kembali melalui Menu Petugas.',
+            'Sesi login ke Portal Petugas telah kedaluwarsa. Silakan masuk kembali melalui Menu Petugas.',
       );
     }
     try {

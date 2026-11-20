@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 
 import 'result_exporter.dart';
 import 'tax_record.dart';
+import 'user_friendly_error.dart';
 
 class ResultScreen extends StatefulWidget {
   static const String routeName = 'BatchResultScreen';
@@ -76,7 +77,9 @@ class _ResultScreenState extends State<ResultScreen> {
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text('Laporan CSV tersimpan: $path'),
+                      content: Text(
+                        'Laporan CSV tersimpan: ${friendlyFileName(path)}',
+                      ),
                       behavior: SnackBarBehavior.floating,
                     ),
                   );
@@ -85,7 +88,13 @@ class _ResultScreenState extends State<ResultScreen> {
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text('Gagal mengekspor: $e'),
+                      content: Text(
+                        friendlyErrorMessage(
+                          e,
+                          fallback:
+                              'Gagal mengekspor laporan CSV. Silakan coba lagi.',
+                        ),
+                      ),
                       backgroundColor: Colors.red,
                     ),
                   );

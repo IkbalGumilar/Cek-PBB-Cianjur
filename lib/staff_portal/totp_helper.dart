@@ -72,7 +72,7 @@ class TotpHelper {
       final char = cleaned[i];
       final val = _base32Alphabet.indexOf(char);
       if (val == -1) {
-        throw FormatException('Karakter Base32 tidak valid: "$char"');
+        throw FormatException('Karakter kunci keamanan tidak valid: "$char"');
       }
       buffer = (buffer << 5) | val;
       bitsLeft += 5;
@@ -114,7 +114,7 @@ class TotpHelper {
   }) {
     final secretBytes = base32Decode(secretBase32);
     if (secretBytes.isEmpty) {
-      throw const FormatException('Secret key Base32 kosong');
+      throw const FormatException('Kunci keamanan tidak boleh kosong.');
     }
 
     final targetTime = time ?? DateTime.now().toUtc();
@@ -182,12 +182,14 @@ class TotpHelper {
     if (input.startsWith('otpauth-migration://offline')) {
       final uri = Uri.tryParse(input);
       if (uri == null) {
-        throw const FormatException('Format URI migrasi tidak valid');
+        throw const FormatException(
+          'Tautan ekspor Google Authenticator tidak valid.',
+        );
       }
       final dataParam = uri.queryParameters['data'];
       if (dataParam == null || dataParam.isEmpty) {
         throw const FormatException(
-          'Parameter "data" tidak ditemukan pada tautan migrasi',
+          'Data akun tidak ditemukan pada tautan ekspor Authenticator.',
         );
       }
       return _parseGoogleMigrationData(dataParam);
@@ -197,12 +199,14 @@ class TotpHelper {
     if (input.startsWith('otpauth://')) {
       final uri = Uri.tryParse(input);
       if (uri == null) {
-        throw const FormatException('Format URI otpauth tidak valid');
+        throw const FormatException(
+          'Tautan Google Authenticator tidak valid.',
+        );
       }
       final secret = uri.queryParameters['secret'];
       if (secret == null || !isValidBase32(secret)) {
         throw const FormatException(
-          'Parameter secret tidak ditemukan atau bukan Base32 valid',
+          'Kode rahasia tidak ditemukan atau formatnya tidak valid.',
         );
       }
       var name = Uri.decodeComponent(uri.path.replaceFirst('/', ''));
@@ -226,15 +230,14 @@ class TotpHelper {
       return [
         TotpAccount(
           secret: sanitizeBase32(input),
-          name: 'Portal Staf',
+          name: 'Portal Petugas',
           issuer: 'BAPENDA',
         ),
       ];
     }
 
     throw const FormatException(
-      'Format tidak dikenali. Masukkan Secret Key Base32 (mis. JBSWY3DPEHPK3PXP), '
-      'tautan otpauth://, atau tautan ekspor otpauth-migration://.',
+      'Format kunci tidak dikenali. Tempel kode rahasia atau tautan ekspor dari Google Authenticator.',
     );
   }
 

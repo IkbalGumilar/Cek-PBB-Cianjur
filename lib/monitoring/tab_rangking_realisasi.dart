@@ -1,12 +1,15 @@
+import 'dart:io';
+
 import 'package:material_ui/material_ui.dart';
 
 import '../download_helper.dart';
 import '../native_file_helper.dart';
 import '../staff_portal_client.dart';
+import '../user_friendly_error.dart';
 import 'monitoring_form_fields.dart';
 import 'monitoring_tab_scaffold.dart';
 
-/// Tab "Rangking Realisasi" — replika field-per-field dari tab ketujuh
+/// Tab "Peringkat Realisasi" — replika field-per-field dari tab ketujuh
 /// Monitoring Wilayah asli.
 class TabRangkingRealisasi extends StatefulWidget {
   final StaffPortalClient client;
@@ -35,28 +38,40 @@ class _TabRangkingRealisasiState extends State<TabRangkingRealisasi> {
         namakec: _namaKecamatan,
       );
       final suffixTahun = _tahun.isNotEmpty ? '_$_tahun' : '';
-      final fileName = 'rangking_realisasi_buku_$_bukuFilter$suffixTahun.xlsx';
+      final fileName = 'peringkat_realisasi_buku_$_bukuFilter$suffixTahun.xlsx';
       final location = await DownloadHelper.saveBytes(bytes, fileName);
       if (!mounted || location == null) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            'Berhasil mengunduh $fileName\nTersimpan di: $location',
-          ),
-          action: SnackBarAction(
-            label: 'Bagikan',
-            onPressed: () => NativeFileHelper.shareBytes(
-              bytes: bytes,
-              fileName: fileName,
-              mimeType: DownloadHelper.mimeTypeFor(fileName),
-            ),
-          ),
+          content: Text('Berhasil mengunduh ${friendlyFileName(location)}'),
+          action: isDesktopPlatform
+              ? SnackBarAction(
+                  label: 'Buka Folder',
+                  onPressed: () => NativeFileHelper.showInFileManager(location),
+                )
+              : (Platform.isAndroid
+                    ? SnackBarAction(
+                        label: 'Bagikan',
+                        onPressed: () => NativeFileHelper.shareBytes(
+                          bytes: bytes,
+                          fileName: fileName,
+                          mimeType: DownloadHelper.mimeTypeFor(fileName),
+                        ),
+                      )
+                    : null),
         ),
       );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal mengekspor Rangking Realisasi: $e')),
+        SnackBar(
+          content: Text(
+            friendlyErrorMessage(
+              e,
+              fallback: 'Gagal mengunduh Peringkat Realisasi. Silakan coba lagi.',
+            ),
+          ),
+        ),
       );
     }
   }
@@ -64,7 +79,7 @@ class _TabRangkingRealisasiState extends State<TabRangkingRealisasi> {
   @override
   Widget build(BuildContext context) {
     return MonitoringTabScaffold(
-      reportTitle: 'Rangking Realisasi',
+      reportTitle: 'Peringkat Realisasi',
       client: widget.client,
       onDirectExcelExport: _directExcelExport,
       onFetch: () => widget.client.fetchRangkingRealisasi(

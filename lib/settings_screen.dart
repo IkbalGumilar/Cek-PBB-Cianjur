@@ -12,6 +12,7 @@ import 'settings/user_guide_screen.dart';
 import 'settings/wilayah_settings_screen.dart';
 import 'nop_helper.dart';
 import 'theme_controller.dart';
+import 'user_friendly_error.dart';
 
 export 'settings/about_app_screen.dart';
 export 'settings/backup_settings_screen.dart';
@@ -96,29 +97,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
         targetKey: _wilayahCardKey,
         title: 'Wilayah Kerja & Profil Desa',
         description:
-            'Atur Kecamatan dan Desa/Kelurahan aktif dari katalog resmi Kabupaten Cianjur (32 Kecamatan & 360 Desa/Kelurahan) agar prefix NOP 18 digit terisi otomatis.',
+            'Atur Kecamatan dan Desa/Kelurahan aktif dari katalog resmi Kabupaten Cianjur (32 Kecamatan & 360 Desa/Kelurahan) agar kode awalan NOP terisi otomatis.',
         icon: Icons.domain_rounded,
       ),
       FeatureTourStep(
         targetKey: _themeCardKey,
-        title: 'Tema, Mode AMOLED & Warna Aplikasi',
-        description:
-            'Ubah mode tampilan (Ikuti Sistem, Terang, Gelap, atau Hitam Pekat AMOLED), aktifkan warna Material You dari wallpaper, atau racik warna aksen pilihan Anda.',
+        title: 'Tema & Warna Aplikasi',
+        description: isDesktopPlatform
+            ? 'Ubah mode tampilan (Ikuti Sistem, Terang, Gelap, atau Hitam Pekat), aktifkan warna aksen sistem perangkat, atau racik warna pilihan Anda.'
+            : 'Ubah mode tampilan (Ikuti Sistem, Terang, Gelap, atau Hitam Pekat), aktifkan warna otomatis dari wallpaper, atau racik warna pilihan Anda.',
         icon: Icons.palette_outlined,
         actionHint: 'Gunakan mode Terang saat bertugas di bawah sinar matahari',
       ),
       FeatureTourStep(
         targetKey: _securityCardKey,
         title: 'Keamanan & Kunci Pengaman Aplikasi',
-        description:
-            'Pasang pengaman Sidik Jari, PIN 6 Angka, atau Kata Sandi agar data DHKP dan catatan pajak warga di perangkat Anda tetap terlindungi.',
+        description: isDesktopPlatform
+            ? 'Pasang kunci pengaman PIN 6 Angka atau Kata Sandi agar data DHKP dan catatan pajak warga di perangkat Anda tetap terlindungi.'
+            : 'Pasang pengaman Sidik Jari, PIN 6 Angka, atau Kata Sandi agar data DHKP dan catatan pajak warga di perangkat Anda tetap terlindungi.',
         icon: Icons.lock_outline_rounded,
       ),
       FeatureTourStep(
         targetKey: _backupCardKey,
-        title: 'Pencadangan Terenkripsi (DKH2) & Google Drive',
+        title: 'Pencadangan Terenkripsi & Google Drive',
         description:
-            'Simpan salinan cadangan DHKP terenkripsi AES-256-GCM ke memori HP atau Google Drive, atur kata sandi cadangan, dan pulihkan data kapan saja saat berganti perangkat.',
+            'Simpan salinan cadangan DHKP terenkripsi ke penyimpanan perangkat atau Google Drive, atur kata sandi cadangan, dan pulihkan data kapan saja saat berganti perangkat.',
         icon: Icons.cloud_sync_outlined,
         actionHint:
             'Aktifkan cadangan otomatis agar perubahan DHKP selalu aman',
@@ -127,14 +130,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
         targetKey: _tourGuideCardKey,
         title: 'Buku Panduan & Pusat Bantuan',
         description:
-            'Buka panduan visual interaktif bertitik nomor, cari topik fitur dengan cepat, baca tanya jawab (FAQ), atau reset seluruh tur petunjuk layar.',
+            'Buka panduan visual interaktif bertitik nomor, cari topik fitur dengan cepat, baca tanya jawab, atau atur ulang seluruh tur petunjuk layar.',
         icon: Icons.menu_book_rounded,
       ),
       FeatureTourStep(
         targetKey: _aboutCardKey,
-        title: 'Tentang, Bagikan APK & Cek Pembaruan',
-        description:
-            'Bagikan file aplikasi ke sesama perangkat desa/kolektor lewat WhatsApp atau Bluetooth, periksa pembaruan versi terbaru, dan lihat informasi pengembang.',
+        title: isDesktopPlatform
+            ? 'Tentang & Pembaruan Aplikasi'
+            : 'Tentang, Bagikan Aplikasi & Cek Pembaruan',
+        description: isDesktopPlatform
+            ? 'Salin tautan unduhan resmi aplikasi untuk dibagikan ke rekan, periksa pembaruan versi terbaru, dan lihat informasi pengembang.'
+            : 'Bagikan berkas aplikasi ke sesama perangkat desa atau kolektor lewat WhatsApp atau Bluetooth, periksa pembaruan versi terbaru, dan lihat informasi pengembang.',
         icon: Icons.info_outline_rounded,
       ),
     ];
@@ -172,7 +178,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         : 'Nonaktif • Ketuk untuk mengaktifkan kunci aplikasi';
     final backupSubtitle = _googleAccount.isNotEmpty
         ? 'Google Drive ($_googleAccount) • ${BackupSettingsSection.frequencyLabel(_backupFreq)}'
-        : 'Simpan cadangan data DHKP ke HP atau Google Drive';
+        : 'Simpan cadangan data DHKP ke perangkat atau Google Drive';
 
     return Scaffold(
       appBar: AppBar(
@@ -250,8 +256,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               icon: Icons.info_outline,
               iconColor: Colors.indigo.shade600,
               title: 'Tentang & Bagikan Aplikasi',
-              subtitle:
-                  'Bagikan aplikasi ke teman, periksa pembaruan & info pembuat',
+              subtitle: isDesktopPlatform
+                  ? 'Salin tautan unduhan, periksa pembaruan & info pembuat'
+                  : 'Bagikan aplikasi ke teman, periksa pembaruan & info pembuat',
               onTap: () => _openSubScreen(const AboutAppScreen()),
             ),
             const SizedBox(height: 20),

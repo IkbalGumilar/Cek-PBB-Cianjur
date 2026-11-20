@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import '../desktop_accent_color_helper.dart';
 import '../theme_controller.dart';
 import '../unity_lerp_widgets.dart';
+import '../user_friendly_error.dart';
 
 /// Halaman terpisah untuk pengaturan Tema & Tampilan.
 class ThemeSettingsScreen extends StatelessWidget {
@@ -363,9 +364,15 @@ class _ThemeSettingsSectionState extends State<ThemeSettingsSection>
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
                     secondary: const Icon(Icons.auto_awesome_outlined),
-                    title: const Text('Ikuti Warna Wallpaper'),
-                    subtitle: const Text(
-                      'Sesuaikan warna aplikasi otomatis dengan gambar latar HP',
+                    title: Text(
+                      isDesktopPlatform
+                          ? 'Ikuti Warna Aksen Sistem'
+                          : 'Ikuti Warna Wallpaper',
+                    ),
+                    subtitle: Text(
+                      isDesktopPlatform
+                          ? 'Sesuaikan warna aplikasi otomatis dengan warna aksen sistem perangkat'
+                          : 'Sesuaikan warna aplikasi otomatis dengan gambar latar HP',
                     ),
                     value: useMaterialYou,
                     onChanged: (val) {

@@ -4,6 +4,7 @@ import 'package:material_ui/material_ui.dart';
 
 import 'apk_installer.dart';
 import 'update_info.dart';
+import 'user_friendly_error.dart';
 
 enum _Stage { idle, downloading, downloaded, needPermission }
 
@@ -93,7 +94,10 @@ class _UpdateScreenState extends State<UpdateScreen> {
       if (!mounted) return;
       setState(() {
         _stage = _Stage.idle;
-        _error = e.toString();
+        _error = friendlyErrorMessage(
+          e,
+          fallback: 'Gagal mengunduh atau memasang pembaruan. Silakan coba lagi.',
+        );
       });
     } finally {
       if (mounted && _isInstalling) {
@@ -126,7 +130,10 @@ class _UpdateScreenState extends State<UpdateScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = e.toString();
+        _error = friendlyErrorMessage(
+          e,
+          fallback: 'Gagal membuka pemasang pembaruan. Silakan coba lagi.',
+        );
       });
     } finally {
       if (mounted) {

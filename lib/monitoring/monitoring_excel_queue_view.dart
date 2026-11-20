@@ -1,10 +1,13 @@
+import 'dart:io';
+
 import 'package:material_ui/material_ui.dart';
 
 import '../download_helper.dart';
 import '../native_file_helper.dart';
 import '../staff_portal_client.dart';
+import '../user_friendly_error.dart';
 
-/// Tampilan antrean unduhan berkas Excel dari server V-Tax (`loadDataDownloadExcel...`).
+/// Tampilan antrean unduhan berkas Excel dari server Bapenda (`loadDataDownloadExcel...`).
 /// Menampilkan status berkas (Siap Diunduh atau Sedang Diproses), tautan unduhan langsung,
 /// serta fungsi pembatalan/penghapusan antrean server (`svc-monitoring-hapus.php`).
 class MonitoringExcelQueueView extends StatefulWidget {
@@ -55,7 +58,10 @@ class _MonitoringExcelQueueViewState extends State<MonitoringExcelQueueView> {
       if (mounted) {
         setState(
           () => _queueResult = MonitoringExcelQueueResult(
-            errorMessage: 'Gagal memuat antrean Excel: $e',
+            errorMessage: friendlyErrorMessage(
+              e,
+              fallback: 'Gagal memuat antrean Excel. Silakan coba lagi.',
+            ),
           ),
         );
       }
@@ -85,21 +91,35 @@ class _MonitoringExcelQueueViewState extends State<MonitoringExcelQueueView> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Tersimpan di: $location'),
-          action: SnackBarAction(
-            label: 'Bagikan',
-            onPressed: () => NativeFileHelper.shareBytes(
-              bytes: bytes,
-              fileName: fileName,
-              mimeType: DownloadHelper.mimeTypeFor(fileName),
-            ),
-          ),
+          content: Text('Tersimpan: ${friendlyFileName(location)}'),
+          action: isDesktopPlatform
+              ? SnackBarAction(
+                  label: 'Buka Folder',
+                  onPressed: () => NativeFileHelper.showInFileManager(location),
+                )
+              : (Platform.isAndroid
+                    ? SnackBarAction(
+                        label: 'Bagikan',
+                        onPressed: () => NativeFileHelper.shareBytes(
+                          bytes: bytes,
+                          fileName: fileName,
+                          mimeType: DownloadHelper.mimeTypeFor(fileName),
+                        ),
+                      )
+                    : null),
         ),
       );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal mengunduh berkas dari server: $e')),
+        SnackBar(
+          content: Text(
+            friendlyErrorMessage(
+              e,
+              fallback: 'Gagal mengunduh berkas dari server. Silakan coba lagi.',
+            ),
+          ),
+        ),
       );
     } finally {
       if (mounted) {
@@ -126,7 +146,7 @@ class _MonitoringExcelQueueViewState extends State<MonitoringExcelQueueView> {
         title: const Text('Hapus Antrean Server?'),
         content: Text(
           'Apakah Anda yakin ingin membatalkan dan menghapus hasil unduh '
-          'tanggal ${item.tanggal} dari server V-Tax?\n\n'
+          'tanggal ${item.tanggal} dari server Bapenda?\n\n'
           'Tindakan ini aman dan berguna untuk membersihkan proses ekspor yang macet.',
         ),
         actions: [
@@ -160,9 +180,16 @@ class _MonitoringExcelQueueViewState extends State<MonitoringExcelQueueView> {
       await _loadQueue();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Gagal menghapus antrean: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            friendlyErrorMessage(
+              e,
+              fallback: 'Gagal menghapus antrean. Silakan coba lagi.',
+            ),
+          ),
+        ),
+      );
     } finally {
       if (mounted) setState(() => _actionBusy = false);
     }
@@ -228,7 +255,7 @@ class _MonitoringExcelQueueViewState extends State<MonitoringExcelQueueView> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Server V-Tax memproses ekspor Excel di latar belakang. '
+                    'Server Bapenda memproses ekspor Excel di latar belakang. '
                     'Jika proses selesai, tombol Unduh akan aktif. Jika proses macet, gunakan tombol Hapus.',
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.textTheme.bodySmall?.color?.withValues(
@@ -374,7 +401,7 @@ class _MonitoringExcelQueueViewState extends State<MonitoringExcelQueueView> {
                                     ),
                                     const SizedBox(width: 6),
                                     Text(
-                                      'Processing...',
+                                      'Sedang diproses...',
                                       style: TextStyle(
                                         fontSize: 11,
                                         fontWeight: FontWeight.w600,

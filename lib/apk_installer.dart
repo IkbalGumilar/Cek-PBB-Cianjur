@@ -131,14 +131,20 @@ class ApkInstaller {
 
     final actualSize = await file.length();
     if (actualSize <= 0) {
-      await failAndDelete('Berkas pembaruan yang diunduh kosong (0 byte).');
+      debugPrint('ApkInstaller: berkas unduhan kosong (0 byte).');
+      await failAndDelete(
+        'Berkas pembaruan yang diunduh kosong atau tidak lengkap.',
+      );
     }
 
     if (expectedSize != null &&
         expectedSize > 0 &&
         actualSize != expectedSize) {
+      debugPrint(
+        'ApkInstaller: ukuran berkas ($actualSize byte) tidak sesuai ukuran rilis ($expectedSize byte).',
+      );
       await failAndDelete(
-        'Ukuran berkas unduhan ($actualSize byte) tidak sesuai dengan ukuran rilis resmi ($expectedSize byte).',
+        'Berkas pembaruan tidak lengkap atau rusak saat diunduh. Silakan coba lagi.',
       );
     }
 
@@ -151,8 +157,9 @@ class ApkInstaller {
     }
 
     if (!verifyMagicHeader(headerBytes, fileName)) {
+      debugPrint('ApkInstaller: magic header tidak cocok untuk $fileName.');
       await failAndDelete(
-        'Format berkas pembaruan ($fileName) tidak valid atau rusak (magic header tidak cocok).',
+        'Berkas pembaruan rusak atau formatnya tidak sesuai. Silakan coba unduh ulang.',
       );
     }
 
@@ -162,13 +169,19 @@ class ApkInstaller {
           .replaceFirst(RegExp(r'^sha256:', caseSensitive: false), '')
           .toLowerCase();
       if (!RegExp(r'^[a-f0-9]{64}$').hasMatch(cleanExpected)) {
-        await failAndDelete('Format checksum SHA-256 rilis tidak valid.');
+        debugPrint('ApkInstaller: format checksum SHA-256 rilis tidak valid.');
+        await failAndDelete(
+          'Informasi verifikasi keamanan pembaruan tidak valid.',
+        );
       }
       final digest = await sha256.bind(file.openRead()).first;
       final actualHash = digest.toString().toLowerCase();
       if (actualHash != cleanExpected) {
+        debugPrint(
+          'ApkInstaller: verifikasi SHA-256 gagal (expected=$cleanExpected, actual=$actualHash).',
+        );
         await failAndDelete(
-          'Verifikasi integritas SHA-256 gagal! Berkas unduhan rusak atau telah dimodifikasi.',
+          'Verifikasi keamanan berkas gagal. Berkas pembaruan mungkin rusak atau tidak asli.',
         );
       }
     } else {
@@ -189,8 +202,9 @@ class ApkInstaller {
   }) async {
     final parsedUri = Uri.tryParse(url);
     if (parsedUri == null || parsedUri.scheme != 'https') {
+      debugPrint('ApkInstaller: menolak URL unduhan non-HTTPS: $url');
       throw Exception(
-        'URL unduhan pembaruan harus menggunakan protokol HTTPS.',
+        'Tautan unduhan pembaruan tidak aman dan tidak dapat diproses.',
       );
     }
 
@@ -206,9 +220,8 @@ class ApkInstaller {
 
     if (!isPathWithinDirectory(dir, finalFile) ||
         !isPathWithinDirectory(dir, tempFile)) {
-      throw Exception(
-        'Nama berkas pembaruan tidak aman (path traversal ditolak).',
-      );
+      debugPrint('ApkInstaller: path traversal ditolak untuk "$fileName".');
+      throw Exception('Nama berkas pembaruan tidak valid.');
     }
 
     try {
@@ -258,7 +271,7 @@ class ApkInstaller {
   static Future<Directory> _desktopDownloadsFolder() async {
     final downloadsDir = await getDownloadsDirectory();
     if (downloadsDir == null) {
-      throw Exception('Folder Downloads tidak ditemukan di perangkat ini.');
+      throw Exception('Folder Unduhan tidak ditemukan di perangkat ini.');
     }
     final targetDir = Directory('${downloadsDir.path}/$appFolderName');
     await targetDir.create(recursive: true);
@@ -271,7 +284,8 @@ class ApkInstaller {
   static Future<String> install(String filePath) async {
     final file = File(filePath);
     if (!await file.exists()) {
-      throw Exception('Berkas instalasi pembaruan tidak ditemukan: $filePath');
+      debugPrint('ApkInstaller: berkas instalasi tidak ditemukan: $filePath');
+      throw Exception('Berkas pemasangan pembaruan tidak ditemukan.');
     }
 
     if (Platform.isWindows) {
@@ -288,7 +302,8 @@ class ApkInstaller {
           return 'OPENED';
         }
       } catch (e) {
-        throw Exception('Gagal membuka berkas pembaruan Windows: $e');
+        debugPrint('ApkInstaller Windows install error: $e');
+        throw Exception('Gagal membuka berkas pembaruan di Windows.');
       }
     }
     if (!Platform.isAndroid) {
@@ -302,7 +317,10 @@ class ApkInstaller {
       });
       return status ?? 'OPENED';
     } on PlatformException catch (e) {
-      throw Exception('Gagal membuka installer: ${e.message ?? e.code}');
+      debugPrint('ApkInstaller PlatformException: ${e.code} ${e.message}');
+      throw Exception(
+        'Gagal membuka pemasang aplikasi. Silakan coba lagi atau pasang secara manual.',
+      );
     }
   }
 

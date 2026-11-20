@@ -314,16 +314,33 @@ void main() {
         final markerFinder = find.byKey(ValueKey('map_dot_pin_$coordKey'));
         await pumpUntilFound(markerFinder);
 
-        // Tombol kontrol GPS, Pasang Pin Manual, dan Menu KML tampil
+        // Pada Desktop (Linux/Windows), tombol GPS lapangan disembunyikan;
+        // tombol Pasang Pin Manual dan Menu KML tetap tampil.
         expect(
           find.byKey(const ValueKey('btn_gps_field_location')),
-          findsOneWidget,
+          findsNothing,
         );
         expect(
           find.byKey(const ValueKey('btn_toggle_pin_mode')),
           findsOneWidget,
         );
         expect(find.byKey(const ValueKey('btn_kml_menu')), findsOneWidget);
+
+        // Simulasikan perangkat seluler -> tombol GPS lapangan tampil
+        DhkpMapScreen.debugShowGpsButtonOverride = true;
+        addTearDown(() => DhkpMapScreen.debugShowGpsButtonOverride = null);
+        await tester.pumpWidget(
+          const MaterialApp(
+            home: DhkpMapScreen(
+              initialRecords: [recAOld, recALatest, recB, recC],
+            ),
+          ),
+        );
+        await tester.pump();
+        expect(
+          find.byKey(const ValueKey('btn_gps_field_location')),
+          findsOneWidget,
+        );
 
         // Uji toggle mode pasang pin & tombol Batal
         await tester.tap(find.byKey(const ValueKey('btn_toggle_pin_mode')));

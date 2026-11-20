@@ -17,14 +17,9 @@ import 'nop_helper.dart';
 import 'nop_scanner.dart';
 import 'tax_record.dart';
 import 'unity_lerp_widgets.dart';
+import 'user_friendly_error.dart';
 
 const _draftFileName = 'draft_nop.txt';
-
-const _placeholderExample = '''
-Contoh isi (satu nomor pajak per baris, atau dipisah koma):
-17154
-300584
-320520000403000330''';
 
 class ImportView extends StatefulWidget {
   final CheckMode mode;
@@ -43,7 +38,9 @@ class ImportView extends StatefulWidget {
 }
 
 class ImportViewState extends State<ImportView> {
-  final _tahunController = TextEditingController(text: '2026');
+  final _tahunController = TextEditingController(
+    text: DateTime.now().year.toString(),
+  );
   final _textController = TextEditingController();
   final _nopScanner = NopScanner();
 
@@ -61,9 +58,16 @@ class ImportViewState extends State<ImportView> {
   String? _errorText;
   String? _savedNotice;
 
+  String get _placeholderExample =>
+      'Contoh isi (satu nomor pajak per baris, atau dipisah koma):\n'
+      '17154\n'
+      '300584\n'
+      '${activeNopPrefix}03000330';
+
   @override
   void initState() {
     super.initState();
+    activeWilayahRevision.addListener(_onWilayahChanged);
     widget.onRegisterShowTour?.call(showTour);
     _loadDraft();
     if (Platform.isAndroid) {
@@ -72,6 +76,10 @@ class ImportViewState extends State<ImportView> {
     if (widget.isActive) {
       _maybeStartTour();
     }
+  }
+
+  void _onWilayahChanged() {
+    if (mounted) setState(() {});
   }
 
   @override
@@ -104,53 +112,55 @@ class ImportViewState extends State<ImportView> {
   }
 
   List<FeatureTourStep> _buildTourSteps() {
+    final currentYear = DateTime.now().year;
+    final hasCameraScan = Platform.isAndroid;
     return [
       FeatureTourStep(
         targetKey: _pickFileButtonKey,
-        title: 'Tombol Pilih Berkas Daftar Pajak',
+        title: 'Pilih Berkas Daftar NOP',
         description:
-            'Tekan tombol ini untuk mengambil berkas daftar wajib pajak dari penyimpanan perangkat Anda (mendukung berkas Excel .xlsx/.xls, .csv, atau catatan teks .txt).',
-        actionHint:
-            'Aplikasi akan otomatis membaca seluruh nomor objek pajak yang ada di dalam berkas tersebut.',
+            'Ambil berkas daftar wajib pajak dari perangkat (mendukung Excel .xlsx/.xls, .csv, atau teks .txt).',
+        actionHint: 'Seluruh NOP di dalam berkas akan dibaca otomatis.',
         icon: Icons.folder_open_rounded,
       ),
       FeatureTourStep(
         targetKey: _textNotesKey,
-        title: 'Kolom Catatan Nomor Pajak Manual',
+        title: 'Catatan Nomor Pajak Manual',
         description:
-            'Selain dari berkas, Anda juga bisa mengetik atau menempelkan daftar nomor objek pajak langsung di kotak ini (satu nomor per baris atau dipisahkan koma). '
-            'Bisa ditulis lengkap 18 angka maupun cukup angka Blok + Nomor Wilayah saja.',
-        actionHint:
-            'Contoh penulisan singkat: ketik 17154 untuk Blok 017 Nomor 0154.',
+            'Ketik atau tempel daftar NOP langsung di sini (satu per baris atau dipisah koma), lengkap 18 digit maupun singkat (Blok + Nomor Wilayah).',
+        actionHint: 'Contoh singkat: ketik 17154 untuk Blok 017 Nomor 0154.',
         icon: Icons.edit_note_rounded,
       ),
       FeatureTourStep(
         targetKey: _noteActionsKey,
-        title: 'Tombol Simpan, Pindai Foto, & Hapus Catatan',
-        description:
-            '• Simpan: Menyimpan daftar nomor di kotak catatan agar tidak hilang saat aplikasi ditutup.\n'
-            '• Pindai Foto: Memotret lembaran daftar pajak dengan kamera agar nomor-nomornya otomatis masuk ke daftar.\n'
-            '• Hapus Semua: Mengosongkan kembali kotak catatan.',
+        title: hasCameraScan
+            ? 'Simpan, Scan, & Hapus Catatan'
+            : 'Simpan & Hapus Catatan',
+        description: hasCameraScan
+            ? '• Simpan: Menyimpan daftar agar tidak hilang.\n'
+                  '• Scan: Memindai foto daftar pajak dari kamera atau galeri.\n'
+                  '• Hapus Semua: Mengosongkan kotak catatan.'
+            : '• Simpan: Menyimpan daftar agar tidak hilang saat aplikasi ditutup.\n'
+                  '• Hapus Semua: Mengosongkan kotak catatan.',
         actionHint:
-            'Gunakan tombol Simpan jika Anda sedang mengumpulkan daftar nomor warga secara bertahap.',
+            'Gunakan Simpan saat mengumpulkan daftar NOP secara bertahap.',
         icon: Icons.save_outlined,
       ),
       FeatureTourStep(
         targetKey: _tahunKey,
-        title: 'Kolom Tahun Pajak Pemeriksaan',
+        title: 'Tahun Pajak Pemeriksaan',
         description:
-            'Tentukan tahun pajak yang akan diperiksa untuk seluruh daftar nomor di atas sekaligus.',
-        actionHint: 'Secara bawaan terisi tahun berjalan (misalnya 2026).',
+            'Tentukan tahun pajak yang akan diperiksa untuk seluruh daftar NOP sekaligus.',
+        actionHint: 'Secara bawaan terisi tahun berjalan ($currentYear).',
         icon: Icons.calendar_month_outlined,
       ),
       FeatureTourStep(
         targetKey: _startBatchButtonKey,
-        title: 'Mulai Pemeriksaan Massal (Latar Belakang)',
+        title: 'Mulai Pemeriksaan Massal',
         description:
-            'Tekan tombol ini untuk memeriksa seluruh daftar NOP secara berurutan dengan tampilan gulir otomatis terpusat. '
-            'Anda dapat menekan "Sembunyikan" agar pemeriksaan berjalan di latar belakang sambil memakai menu lain; ketuk notifikasi selesai untuk langsung membuka rincian hasil di DHKP.',
+            'Periksa seluruh daftar NOP secara berurutan. Tekan "Sembunyikan" agar berjalan di latar belakang sambil memakai menu lain.',
         actionHint:
-            'Pastikan sudah ada daftar nomor dari berkas atau kotak catatan sebelum menekan tombol ini.',
+            'Pastikan sudah ada daftar NOP dari berkas atau catatan sebelum memulai.',
         icon: Icons.play_circle_outline_rounded,
       ),
     ];
@@ -158,6 +168,7 @@ class ImportViewState extends State<ImportView> {
 
   @override
   void dispose() {
+    activeWilayahRevision.removeListener(_onWilayahChanged);
     _tahunController.dispose();
     _textController.dispose();
     super.dispose();
@@ -198,29 +209,19 @@ class ImportViewState extends State<ImportView> {
       if (!mounted || nops == null || nops.isEmpty) return;
       await _addScannedNops(nops);
     } catch (e) {
-      if (mounted) setState(() => _errorText = 'Gagal memulihkan scan: $e');
+      if (mounted) {
+        setState(
+          () => _errorText = friendlyErrorMessage(
+            e,
+            fallback: 'Gagal memulihkan hasil pindai sebelumnya.',
+          ),
+        );
+      }
     }
   }
 
   Future<void> _scanDocument() async {
-    if (!Platform.isAndroid) {
-      await showDialog<void>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Scan Dokumen'),
-          content: const Text(
-            'Scan dengan kamera atau galeri saat ini tersedia di Android.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Mengerti'),
-            ),
-          ],
-        ),
-      );
-      return;
-    }
+    if (!Platform.isAndroid) return;
 
     final source = await showDialog<ImageSource>(
       context: context,
@@ -263,7 +264,14 @@ class ImportViewState extends State<ImportView> {
 
       await _addScannedNops(nops);
     } catch (e) {
-      if (mounted) setState(() => _errorText = 'Gagal scan dokumen: $e');
+      if (mounted) {
+        setState(
+          () => _errorText = friendlyErrorMessage(
+            e,
+            fallback: 'Gagal memindai dokumen. Coba ambil foto lebih jelas.',
+          ),
+        );
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -371,7 +379,15 @@ class ImportViewState extends State<ImportView> {
         _records = records;
       });
     } catch (e) {
-      if (mounted) setState(() => _errorText = 'Gagal baca file: $e');
+      if (mounted) {
+        setState(
+          () => _errorText = friendlyErrorMessage(
+            e,
+            fallback:
+                'Gagal membaca berkas. Pastikan format Excel, CSV, atau TXT valid.',
+          ),
+        );
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -429,7 +445,30 @@ class ImportViewState extends State<ImportView> {
     }
 
     if (BatchCheckManager.instance.isActiveSession) {
-      BatchNotificationService.instance.openActiveBatchCheck();
+      if (!mounted) return;
+      final openActive = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Cek Massal Sedang Berjalan'),
+          content: const Text(
+            'Masih ada proses cek massal lain yang aktif di latar belakang. '
+            'Selesaikan atau hentikan proses tersebut terlebih dahulu sebelum memulai daftar baru.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Tutup'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Lihat Proses Aktif'),
+            ),
+          ],
+        ),
+      );
+      if (openActive == true && mounted) {
+        BatchNotificationService.instance.openActiveBatchCheck();
+      }
       return;
     }
 
@@ -535,7 +574,8 @@ class ImportViewState extends State<ImportView> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Tulis 18 angka NOP lengkap atau singkat (blok + nomor wilayah). Contoh: ${nopShortcutExamples.map((e) => '${e.$1} -> ${e.$2}').join(', ')}',
+                    'Tulis 18 angka NOP lengkap atau singkat (blok + nomor wilayah). '
+                    'Contoh: 17154 -> ${activeNopPrefix}01701540, 300584 -> ${activeNopPrefix}03005840',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: scheme.onSurfaceVariant,
                     ),
@@ -545,8 +585,8 @@ class ImportViewState extends State<ImportView> {
                     key: _textNotesKey,
                     controller: _textController,
                     maxLines: 7,
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
+                    decoration: InputDecoration(
+                      border: const OutlineInputBorder(),
                       alignLabelWithHint: true,
                       hintText: _placeholderExample,
                     ),
@@ -563,11 +603,12 @@ class ImportViewState extends State<ImportView> {
                         icon: const Icon(Icons.save_outlined),
                         label: const Text('Simpan'),
                       ),
-                      OutlinedButton.icon(
-                        onPressed: _loading ? null : _scanDocument,
-                        icon: const Icon(Icons.document_scanner_outlined),
-                        label: const Text('Scan'),
-                      ),
+                      if (Platform.isAndroid)
+                        OutlinedButton.icon(
+                          onPressed: _loading ? null : _scanDocument,
+                          icon: const Icon(Icons.document_scanner_outlined),
+                          label: const Text('Scan'),
+                        ),
                       OutlinedButton.icon(
                         onPressed: _clearNotes,
                         icon: const Icon(Icons.delete_outline),
