@@ -600,23 +600,38 @@ class _SpreadsheetViewerScreenState extends State<SpreadsheetViewerScreen> {
     );
   }
 
+  SpreadsheetTable? _cachedFilteredTable;
+  String? _cachedFilteredQuery;
+  List<List<String>> _cachedFilteredRows = const [];
+
+  List<List<String>> _resolveDisplayRows(SpreadsheetTable? table) {
+    if (table == null) return const [];
+    if (identical(_cachedFilteredTable, table) &&
+        _cachedFilteredQuery == _searchQuery) {
+      return _cachedFilteredRows;
+    }
+    final List<List<String>> result;
+    if (_searchQuery.trim().isEmpty) {
+      result = table.rows;
+    } else {
+      final q = _searchQuery.toLowerCase();
+      result = table.rows.where((row) {
+        return row.any((cell) => cell.toLowerCase().contains(q));
+      }).toList();
+    }
+    _cachedFilteredTable = table;
+    _cachedFilteredQuery = _searchQuery;
+    _cachedFilteredRows = result;
+    return result;
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final table = _currentTable;
 
-    // Filter baris berdasarkan pencarian
-    List<List<String>> displayRows = [];
-    if (table != null) {
-      if (_searchQuery.trim().isEmpty) {
-        displayRows = table.rows;
-      } else {
-        final q = _searchQuery.toLowerCase();
-        displayRows = table.rows.where((row) {
-          return row.any((cell) => cell.toLowerCase().contains(q));
-        }).toList();
-      }
-    }
+    // Filter baris berdasarkan pencarian (di-cache agar ganti halaman tidak memfilter ulang)
+    final displayRows = _resolveDisplayRows(table);
 
     // Hitung paginasi
     final totalRows = displayRows.length;

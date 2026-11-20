@@ -9,14 +9,14 @@ import 'blok_record.dart';
 import 'dhkp/blok_catatan_models.dart';
 import 'tagihan_result.dart' show formatRupiah;
 
+final RegExp _tabunganPdfRegex = RegExp(
+  r'\[TABUNGAN_PBB:.*?:\/TABUNGAN_PBB\]',
+  dotAll: true,
+);
+
 String _cleanPdfText(String text) {
   if (text.isEmpty) return text;
-  final withoutTabungan = text
-      .replaceAll(
-        RegExp(r'\[TABUNGAN_PBB:.*?:\/TABUNGAN_PBB\]', dotAll: true),
-        '',
-      )
-      .trim();
+  final withoutTabungan = text.replaceAll(_tabunganPdfRegex, '').trim();
   final replaced = withoutTabungan
       .replaceAll('✓', '[Lunas]')
       .replaceAll('✔', '[Lunas]')

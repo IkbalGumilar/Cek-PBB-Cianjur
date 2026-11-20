@@ -16,6 +16,8 @@ class SpreadsheetDataView extends StatelessWidget {
   final VoidCallback onRetry;
   final void Function(int rowIndex, List<String> rowValues) onRowSelected;
 
+  static final RegExp _numericCellRegex = RegExp(r'^[0-9]+$');
+
   const SpreadsheetDataView({
     super.key,
     required this.isLoading,
@@ -209,7 +211,7 @@ class SpreadsheetDataView extends StatelessWidget {
                       final value = columnIndex < rowValues.length
                           ? rowValues[columnIndex]
                           : '';
-                      final isNumeric = RegExp(r'^[0-9]+$').hasMatch(value);
+                      final isNumeric = _numericCellRegex.hasMatch(value);
                       return DataCell(
                         Text(
                           value,

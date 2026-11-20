@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
@@ -284,6 +285,22 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
       activeNopPrefix == defaultNopPrefix ||
       (activeKecamatanCode == '200' && activeKelurahanCode == '004');
 
+  static bool get _canUseIsolate {
+    try {
+      final bindingName = WidgetsBinding.instance.runtimeType.toString();
+      return !bindingName.contains('Test');
+    } catch (_) {
+      return true;
+    }
+  }
+
+  static Future<Map<String, dynamic>> _decodeGeoJsonMap(String jsonStr) async {
+    if (_canUseIsolate) {
+      return Isolate.run(() => json.decode(jsonStr) as Map<String, dynamic>);
+    }
+    return json.decode(jsonStr) as Map<String, dynamic>;
+  }
+
   Future<void> _loadSpatialAssets() async {
     if (!_isBobojongWilayah) return;
 
@@ -294,7 +311,7 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
       final jsonStr = await rootBundle.loadString(
         'assets/data/bobojong_batas_big.geojson',
       );
-      final data = json.decode(jsonStr) as Map<String, dynamic>;
+      final data = await _decodeGeoJsonMap(jsonStr);
       final features = data['features'] as List? ?? [];
       if (features.isNotEmpty) {
         final geom = features.first['geometry'] as Map<String, dynamic>? ?? {};
@@ -331,7 +348,7 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
       final jsonStr = await rootBundle.loadString(
         'assets/data/kecamatan_mande_desa_big.geojson',
       );
-      final data = json.decode(jsonStr) as Map<String, dynamic>;
+      final data = await _decodeGeoJsonMap(jsonStr);
       final features = data['features'] as List? ?? [];
       for (final f in features) {
         final props = f['properties'] as Map<String, dynamic>? ?? {};
@@ -381,7 +398,7 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
       final jsonStr = await rootBundle.loadString(
         'assets/data/bobojong_buildings_osm.geojson',
       );
-      final data = json.decode(jsonStr) as Map<String, dynamic>;
+      final data = await _decodeGeoJsonMap(jsonStr);
       final features = data['features'] as List? ?? [];
       final osmBuildings = <Polygon>[];
       for (final f in features) {
@@ -421,7 +438,7 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
       final jsonStr = await rootBundle.loadString(
         'assets/data/bobojong_roads_osm.geojson',
       );
-      final data = json.decode(jsonStr) as Map<String, dynamic>;
+      final data = await _decodeGeoJsonMap(jsonStr);
       final features = data['features'] as List? ?? [];
       final osmRoads = <Polyline>[];
       for (final f in features) {
@@ -458,7 +475,7 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
       final jsonStr = await rootBundle.loadString(
         'assets/data/bobojong_waterways_osm.geojson',
       );
-      final data = json.decode(jsonStr) as Map<String, dynamic>;
+      final data = await _decodeGeoJsonMap(jsonStr);
       final features = data['features'] as List? ?? [];
       final osmWaterways = <Polyline>[];
       for (final f in features) {
@@ -612,7 +629,11 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
       if (files.isNotEmpty && files.first.path != null) {
         final file = File(files.first.path!);
         final text = await file.readAsString();
-        final parseResult = KmlParser.parse(text, dhkpRecords: uniqueRecords);
+        final parseResult = _canUseIsolate
+            ? await Isolate.run(
+                () => KmlParser.parse(text, dhkpRecords: uniqueRecords),
+              )
+            : KmlParser.parse(text, dhkpRecords: uniqueRecords);
         if (parseResult.dots.isNotEmpty) {
           final entries = MapPinStore.entriesFromDots(
             parseResult.dots,
@@ -1981,434 +2002,451 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
         children: [
           // 1. PETA LIVE INTERAKTIF SEUTUHNYA (FLUTTER MAP FULL SCREEN)
           Positioned.fill(
-            child: FlutterMap(
-              mapController: _mapController,
-              options: MapOptions(
-                initialCenter: _getActiveWilayahCenter(),
-                initialZoom: 13.0,
-                minZoom: 11.0,
-                maxZoom: 19.0,
-                onTap: (tapPosition, point) {
-                  if (_isPinPlacementMode) {
+            child: RepaintBoundary(
+              child: FlutterMap(
+                mapController: _mapController,
+                options: MapOptions(
+                  initialCenter: _getActiveWilayahCenter(),
+                  initialZoom: 13.0,
+                  minZoom: 11.0,
+                  maxZoom: 19.0,
+                  onTap: (tapPosition, point) {
+                    if (_isPinPlacementMode) {
+                      _pinAtCoordinate(point, source: 'manual');
+                      return;
+                    }
+                    // Tutup kartu jika mengetuk sembarang area peta
+                    if (_selectedDot != null) {
+                      setState(() => _selectedDot = null);
+                    }
+                  },
+                  onLongPress: (tapPosition, point) {
                     _pinAtCoordinate(point, source: 'manual');
-                    return;
-                  }
-                  // Tutup kartu jika mengetuk sembarang area peta
-                  if (_selectedDot != null) {
-                    setState(() => _selectedDot = null);
-                  }
-                },
-                onLongPress: (tapPosition, point) {
-                  _pinAtCoordinate(point, source: 'manual');
-                },
-              ),
-              children: [
-                // 1.1 Layer Ubin Peta Langsung Google Maps / BIG (Streaming Bebas)
-                TileLayer(
-                  urlTemplate: _activeProvider.urlTemplate,
-                  userAgentPackageName: 'id.cianjur.pbb',
-                  maxZoom: 19,
+                  },
                 ),
-
-                // 1.2 Layer Putih Transparan pada Desa Sekitar di Kecamatan Mande & Karangtengah (Masking Wilayah)
-                // Desa Bobojong dibiarkan normal (tanpa layer putih) agar terlihat jelas & kontras
-                if (_showNeighborMask && _neighborDesas.isNotEmpty)
-                  PolygonLayer(
-                    polygons: _neighborDesas
-                        .map(
-                          (n) => Polygon(
-                            points: n.polygon,
-                            color: Colors.white.withValues(alpha: 0.65),
-                            borderColor: Colors.blueGrey.withValues(
-                              alpha: 0.45,
-                            ),
-                            borderStrokeWidth: 1.2,
-                          ),
-                        )
-                        .toList(),
+                children: [
+                  // 1.1 Layer Ubin Peta Langsung Google Maps / BIG (Streaming Bebas)
+                  TileLayer(
+                    urlTemplate: _activeProvider.urlTemplate,
+                    userAgentPackageName: 'id.cianjur.pbb',
+                    maxZoom: 19,
                   ),
 
-                // 1.3 Label Nama Desa-Desa Sekitar di Kecamatan Mande & Karangtengah
-                if (_showNeighborMask && _neighborDesas.isNotEmpty)
-                  MarkerLayer(
-                    markers: _neighborDesas
-                        .map(
-                          (n) => Marker(
-                            point: n.center,
-                            width: 150,
-                            height: 38,
-                            child: Center(
-                              child: Container(
+                  // 1.2 Layer Putih Transparan pada Desa Sekitar di Kecamatan Mande & Karangtengah (Masking Wilayah)
+                  // Desa Bobojong dibiarkan normal (tanpa layer putih) agar terlihat jelas & kontras
+                  if (_showNeighborMask && _neighborDesas.isNotEmpty)
+                    PolygonLayer(
+                      polygonCulling: true,
+                      polygons: _neighborDesas
+                          .map(
+                            (n) => Polygon(
+                              points: n.polygon,
+                              color: Colors.white.withValues(alpha: 0.65),
+                              borderColor: Colors.blueGrey.withValues(
+                                alpha: 0.45,
+                              ),
+                              borderStrokeWidth: 1.2,
+                            ),
+                          )
+                          .toList(),
+                    ),
+
+                  // 1.3 Label Nama Desa-Desa Sekitar di Kecamatan Mande & Karangtengah
+                  if (_showNeighborMask && _neighborDesas.isNotEmpty)
+                    MarkerLayer(
+                      markers: _neighborDesas
+                          .map(
+                            (n) => Marker(
+                              point: n.center,
+                              width: 150,
+                              height: 38,
+                              child: Center(
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withValues(alpha: 0.90),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(
+                                      color: Colors.blueGrey.withValues(
+                                        alpha: 0.35,
+                                      ),
+                                      width: 0.8,
+                                    ),
+                                    boxShadow: const [
+                                      BoxShadow(
+                                        color: Colors.black12,
+                                        blurRadius: 3,
+                                        offset: Offset(0, 1),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        'Desa ${n.name}',
+                                        style: TextStyle(
+                                          fontSize: 9.2,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.blueGrey.shade800,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      if (n.kecamatan != null &&
+                                          n.kecamatan!.isNotEmpty)
+                                        Text(
+                                          'Kec. ${n.kecamatan}',
+                                          style: TextStyle(
+                                            fontSize: 7.5,
+                                            fontWeight: FontWeight.w500,
+                                            color: Colors.blueGrey.shade600,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          )
+                          .toList(),
+                    ),
+
+                  // 1.4 Layer Bangunan & Rumah Warga Desa Bobojong (OpenStreetMap)
+                  if (_showOsmBuildings && _osmBuildingPolygons.isNotEmpty)
+                    PolygonLayer(
+                      polygonCulling: true,
+                      polygons: _osmBuildingPolygons,
+                    ),
+
+                  // 1.5 Layer Sungai & Perairan (OpenStreetMap)
+                  if (_showOsmWaterways && _osmWaterPolylines.isNotEmpty)
+                    PolylineLayer(polylines: _osmWaterPolylines),
+
+                  // 1.6 Layer Jalan & Gang Desa (OpenStreetMap)
+                  if (_showOsmRoads && _osmRoadPolylines.isNotEmpty)
+                    PolylineLayer(polylines: _osmRoadPolylines),
+
+                  // 1.7 Garis Batas Wilayah Resmi Desa Bobojong (BIG)
+                  if (_showDesaBoundary && _desaBoundaryPoints.isNotEmpty)
+                    PolylineLayer(
+                      polylines: [
+                        Polyline(
+                          points: _desaBoundaryPoints,
+                          color: const Color(
+                            0xFFE74C3C,
+                          ), // Merah Elegan Batas Resmi
+                          strokeWidth: 2.8,
+                          borderColor: Colors.white,
+                          borderStrokeWidth: 1.2,
+                          pattern: StrokePattern.dashed(
+                            segments: const [10, 5],
+                          ),
+                        ),
+                      ],
+                    ),
+
+                  // 1.3 Garis Trajektori ke Rumah Pemilik (jika terpisah)
+                  if (_selectedDot != null &&
+                      _selectedDot!.hasSeparateOwnerLocation)
+                    PolylineLayer(
+                      polylines: [
+                        Polyline(
+                          points: [
+                            _selectedDot!.coordinate.toLatLng(),
+                            _selectedDot!.ownerCoordinate!.toLatLng(),
+                          ],
+                          color: const Color(0xFFF59E0B),
+                          strokeWidth: 3.0,
+                        ),
+                      ],
+                    ),
+
+                  // 1.4 Marker Rumah Pemilik (Beacon)
+                  if (_selectedDot != null &&
+                      _selectedDot!.hasSeparateOwnerLocation)
+                    MarkerLayer(
+                      markers: [
+                        Marker(
+                          point: _selectedDot!.ownerCoordinate!.toLatLng(),
+                          width: 140,
+                          height: 50,
+                          child: Column(
+                            children: [
+                              Container(
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 6,
                                   vertical: 2,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.90),
+                                  color: const Color(0xE6000000),
                                   borderRadius: BorderRadius.circular(6),
                                   border: Border.all(
-                                    color: Colors.blueGrey.withValues(
-                                      alpha: 0.35,
-                                    ),
-                                    width: 0.8,
+                                    color: const Color(0xFFF59E0B),
+                                    width: 1,
                                   ),
-                                  boxShadow: const [
-                                    BoxShadow(
-                                      color: Colors.black12,
-                                      blurRadius: 3,
-                                      offset: Offset(0, 1),
-                                    ),
-                                  ],
-                                ),
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text(
-                                      'Desa ${n.name}',
-                                      style: TextStyle(
-                                        fontSize: 9.2,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.blueGrey.shade800,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    if (n.kecamatan != null &&
-                                        n.kecamatan!.isNotEmpty)
-                                      Text(
-                                        'Kec. ${n.kecamatan}',
-                                        style: TextStyle(
-                                          fontSize: 7.5,
-                                          fontWeight: FontWeight.w500,
-                                          color: Colors.blueGrey.shade600,
-                                        ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                        )
-                        .toList(),
-                  ),
-
-                // 1.4 Layer Bangunan & Rumah Warga Desa Bobojong (OpenStreetMap)
-                if (_showOsmBuildings && _osmBuildingPolygons.isNotEmpty)
-                  PolygonLayer(polygons: _osmBuildingPolygons),
-
-                // 1.5 Layer Sungai & Perairan (OpenStreetMap)
-                if (_showOsmWaterways && _osmWaterPolylines.isNotEmpty)
-                  PolylineLayer(polylines: _osmWaterPolylines),
-
-                // 1.6 Layer Jalan & Gang Desa (OpenStreetMap)
-                if (_showOsmRoads && _osmRoadPolylines.isNotEmpty)
-                  PolylineLayer(polylines: _osmRoadPolylines),
-
-                // 1.7 Garis Batas Wilayah Resmi Desa Bobojong (BIG)
-                if (_showDesaBoundary && _desaBoundaryPoints.isNotEmpty)
-                  PolylineLayer(
-                    polylines: [
-                      Polyline(
-                        points: _desaBoundaryPoints,
-                        color: const Color(
-                          0xFFE74C3C,
-                        ), // Merah Elegan Batas Resmi
-                        strokeWidth: 2.8,
-                        borderColor: Colors.white,
-                        borderStrokeWidth: 1.2,
-                        pattern: StrokePattern.dashed(segments: const [10, 5]),
-                      ),
-                    ],
-                  ),
-
-                // 1.3 Garis Trajektori ke Rumah Pemilik (jika terpisah)
-                if (_selectedDot != null &&
-                    _selectedDot!.hasSeparateOwnerLocation)
-                  PolylineLayer(
-                    polylines: [
-                      Polyline(
-                        points: [
-                          _selectedDot!.coordinate.toLatLng(),
-                          _selectedDot!.ownerCoordinate!.toLatLng(),
-                        ],
-                        color: const Color(0xFFF59E0B),
-                        strokeWidth: 3.0,
-                      ),
-                    ],
-                  ),
-
-                // 1.4 Marker Rumah Pemilik (Beacon)
-                if (_selectedDot != null &&
-                    _selectedDot!.hasSeparateOwnerLocation)
-                  MarkerLayer(
-                    markers: [
-                      Marker(
-                        point: _selectedDot!.ownerCoordinate!.toLatLng(),
-                        width: 140,
-                        height: 50,
-                        child: Column(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: const Color(0xE6000000),
-                                borderRadius: BorderRadius.circular(6),
-                                border: Border.all(
-                                  color: const Color(0xFFF59E0B),
-                                  width: 1,
-                                ),
-                              ),
-                              child: Text(
-                                '🏠 ${_selectedDot!.namaWajibPajak}',
-                                style: const TextStyle(
-                                  color: Color(0xFFF59E0B),
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            const Icon(
-                              Icons.location_on_rounded,
-                              color: Color(0xFFF59E0B),
-                              size: 22,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-
-                // 1.5 Landmark Presisi: Kantor Desa (hanya jika koordinat terkonfigurasi)
-                if (_effectiveKantorDesa != null)
-                  MarkerLayer(
-                    markers: [
-                      // Landmark Presisi: Kantor Desa
-                      Marker(
-                        point: _effectiveKantorDesa!,
-                        width: 170,
-                        height: 95,
-                        child: GestureDetector(
-                          onTap: _focusKantorDesa,
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 3,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xE61E293B),
-                                  borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(
-                                    color: const Color(0xFFF1C40F),
-                                    width: 1.2,
-                                  ),
-                                  boxShadow: const [
-                                    BoxShadow(
-                                      color: Colors.black45,
-                                      blurRadius: 4,
-                                      offset: Offset(0, 1),
-                                    ),
-                                  ],
                                 ),
                                 child: Text(
-                                  '🏛️ Kantor Desa $activeDesaName',
+                                  '🏠 ${_selectedDot!.namaWajibPajak}',
                                   style: const TextStyle(
-                                    color: Colors.white,
+                                    color: Color(0xFFF59E0B),
                                     fontSize: 10,
                                     fontWeight: FontWeight.bold,
                                   ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
-                              const SizedBox(height: 3),
-                              AnimatedBuilder(
-                                animation: _pulseController,
-                                builder: (context, _) {
-                                  final pulse = _pulseController.value;
-                                  return SizedBox(
-                                    width: 44,
-                                    height: 44,
-                                    child: Stack(
-                                      alignment: Alignment.center,
-                                      children: [
-                                        // Lingkaran gelombang radar (pulse wave ripple ala Google Maps GPS)
-                                        Container(
-                                          width: 22 + (pulse * 20),
-                                          height: 22 + (pulse * 20),
-                                          decoration: BoxDecoration(
-                                            shape: BoxShape.circle,
-                                            color: const Color(0xFFF1C40F)
-                                                .withValues(
-                                                  alpha: 0.35 * (1.0 - pulse),
-                                                ),
-                                            border: Border.all(
-                                              color: const Color(0xFFF1C40F)
-                                                  .withValues(
-                                                    alpha: 0.70 * (1.0 - pulse),
-                                                  ),
-                                              width: 1.5,
-                                            ),
-                                          ),
-                                        ),
-                                        // Lingkaran tengah ikon instansi pemerintahan
-                                        Container(
-                                          width: 28,
-                                          height: 28,
-                                          decoration: BoxDecoration(
-                                            shape: BoxShape.circle,
-                                            color: const Color(0xFF2C3E50),
-                                            border: Border.all(
-                                              color: const Color(0xFFF1C40F),
-                                              width: 2.0,
-                                            ),
-                                            boxShadow: const [
-                                              BoxShadow(
-                                                color: Colors.black45,
-                                                blurRadius: 4,
-                                                offset: Offset(0, 2),
-                                              ),
-                                            ],
-                                          ),
-                                          child: const Center(
-                                            child: Icon(
-                                              Icons.account_balance_rounded,
-                                              color: Color(0xFFF1C40F),
-                                              size: 15,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  );
-                                },
+                              const Icon(
+                                Icons.location_on_rounded,
+                                color: Color(0xFFF59E0B),
+                                size: 22,
                               ),
                             ],
                           ),
                         ),
-                      ),
-                    ],
-                  ),
+                      ],
+                    ),
 
-                // 1.6 Titik Objek Pajak (Pin Multi-NOP, GPS, dan Draft Pin)
-                MarkerLayer(
-                  markers: [
-                    ...filteredDots.map((dot) {
-                      final isSelected = _selectedDot?.id == dot.id;
-                      final dotColor = dot.status.color;
-                      final size = isSelected ? 34.0 : 26.0;
-                      final nopCount = dot.spptList.length;
-
-                      return Marker(
-                        point: dot.coordinate.toLatLng(),
-                        width: size,
-                        height: size,
-                        child: GestureDetector(
-                          key: ValueKey('map_dot_${dot.id}'),
-                          onTap: () {
-                            if (_isPinPlacementMode) {
-                              _pinAtCoordinate(
-                                dot.coordinate.toLatLng(),
-                                source: 'manual',
-                              );
-                              return;
-                            }
-                            _selectDot(dot);
-                          },
-                          child: Stack(
-                            clipBehavior: Clip.none,
-                            children: [
-                              AnimatedBuilder(
-                                animation: _pulseController,
-                                builder: (context, _) {
-                                  final pulse = isSelected
-                                      ? _pulseController.value
-                                      : 0.0;
-                                  return Container(
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color: dotColor,
-                                      border: Border.all(
-                                        color: isSelected
-                                            ? const Color(0xFFF1C40F)
-                                            : Colors.white,
-                                        width: isSelected ? 2.5 : 1.5,
-                                      ),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: isSelected
-                                              ? const Color(
-                                                  0xFFF1C40F,
-                                                ).withValues(
-                                                  alpha: 0.6 + pulse * 0.3,
-                                                )
-                                              : dotColor.withValues(alpha: 0.5),
-                                          blurRadius: isSelected ? 12 : 5,
-                                          spreadRadius: isSelected ? 3 : 1,
-                                        ),
-                                      ],
+                  // 1.5 Landmark Presisi: Kantor Desa (hanya jika koordinat terkonfigurasi)
+                  if (_effectiveKantorDesa != null)
+                    MarkerLayer(
+                      markers: [
+                        // Landmark Presisi: Kantor Desa
+                        Marker(
+                          point: _effectiveKantorDesa!,
+                          width: 170,
+                          height: 95,
+                          child: GestureDetector(
+                            onTap: _focusKantorDesa,
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 3,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xE61E293B),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(
+                                      color: const Color(0xFFF1C40F),
+                                      width: 1.2,
                                     ),
-                                    alignment: Alignment.center,
-                                    child: dot.status == MapDotStatus.fasum
-                                        ? const Icon(
-                                            Icons.account_balance_rounded,
-                                            size: 12,
-                                            color: Colors.white,
-                                          )
-                                        : Text(
-                                            dot.nomorUrut.length >= 2
-                                                ? dot.nomorUrut.substring(
-                                                    dot.nomorUrut.length - 2,
-                                                  )
-                                                : dot.nomorUrut,
-                                            style: const TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 9,
-                                              fontWeight: FontWeight.w900,
-                                            ),
-                                          ),
-                                  );
-                                },
-                              ),
-                              if (nopCount > 1)
-                                Positioned(
-                                  right: -6,
-                                  top: -6,
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 4,
-                                      vertical: 1,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF0F766E),
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(
-                                        color: Colors.white,
-                                        width: 1,
+                                    boxShadow: const [
+                                      BoxShadow(
+                                        color: Colors.black45,
+                                        blurRadius: 4,
+                                        offset: Offset(0, 1),
                                       ),
-                                    ),
-                                    child: Text(
-                                      '$nopCount',
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 8.5,
-                                        fontWeight: FontWeight.w900,
-                                      ),
+                                    ],
+                                  ),
+                                  child: Text(
+                                    '🏛️ Kantor Desa $activeDesaName',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
                                     ),
                                   ),
                                 ),
-                            ],
+                                const SizedBox(height: 3),
+                                RepaintBoundary(
+                                  child: AnimatedBuilder(
+                                    animation: _pulseController,
+                                    builder: (context, _) {
+                                      final pulse = _pulseController.value;
+                                      return SizedBox(
+                                        width: 44,
+                                        height: 44,
+                                        child: Stack(
+                                          alignment: Alignment.center,
+                                          children: [
+                                            // Lingkaran gelombang radar (pulse wave ripple ala Google Maps GPS)
+                                            Container(
+                                              width: 22 + (pulse * 20),
+                                              height: 22 + (pulse * 20),
+                                              decoration: BoxDecoration(
+                                                shape: BoxShape.circle,
+                                                color: const Color(0xFFF1C40F)
+                                                    .withValues(
+                                                      alpha:
+                                                          0.35 * (1.0 - pulse),
+                                                    ),
+                                                border: Border.all(
+                                                  color: const Color(0xFFF1C40F)
+                                                      .withValues(
+                                                        alpha:
+                                                            0.70 *
+                                                            (1.0 - pulse),
+                                                      ),
+                                                  width: 1.5,
+                                                ),
+                                              ),
+                                            ),
+                                            // Lingkaran tengah ikon instansi pemerintahan
+                                            Container(
+                                              width: 28,
+                                              height: 28,
+                                              decoration: BoxDecoration(
+                                                shape: BoxShape.circle,
+                                                color: const Color(0xFF2C3E50),
+                                                border: Border.all(
+                                                  color: const Color(
+                                                    0xFFF1C40F,
+                                                  ),
+                                                  width: 2.0,
+                                                ),
+                                                boxShadow: const [
+                                                  BoxShadow(
+                                                    color: Colors.black45,
+                                                    blurRadius: 4,
+                                                    offset: Offset(0, 2),
+                                                  ),
+                                                ],
+                                              ),
+                                              child: const Center(
+                                                child: Icon(
+                                                  Icons.account_balance_rounded,
+                                                  color: Color(0xFFF1C40F),
+                                                  size: 15,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
-                      );
-                    }),
+                      ],
+                    ),
+
+                  // 1.6 Titik Objek Pajak (Pin Multi-NOP, GPS, dan Draft Pin)
+                  MarkerLayer(
+                    markers: [
+                      ...filteredDots.map((dot) {
+                        final isSelected = _selectedDot?.id == dot.id;
+                        final dotColor = dot.status.color;
+                        final size = isSelected ? 34.0 : 26.0;
+                        final nopCount = dot.spptList.length;
+
+                        Widget buildDotBody(double pulse) {
+                          return Container(
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: dotColor,
+                              border: Border.all(
+                                color: isSelected
+                                    ? const Color(0xFFF1C40F)
+                                    : Colors.white,
+                                width: isSelected ? 2.5 : 1.5,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: isSelected
+                                      ? const Color(0xFFF1C40F).withValues(
+                                          alpha: 0.6 + pulse * 0.3,
+                                        )
+                                      : dotColor.withValues(alpha: 0.5),
+                                  blurRadius: isSelected ? 12 : 5,
+                                  spreadRadius: isSelected ? 3 : 1,
+                                ),
+                              ],
+                            ),
+                            alignment: Alignment.center,
+                            child: dot.status == MapDotStatus.fasum
+                                ? const Icon(
+                                    Icons.account_balance_rounded,
+                                    size: 12,
+                                    color: Colors.white,
+                                  )
+                                : Text(
+                                    dot.nomorUrut.length >= 2
+                                        ? dot.nomorUrut.substring(
+                                            dot.nomorUrut.length - 2,
+                                          )
+                                        : dot.nomorUrut,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                          );
+                        }
+
+                        return Marker(
+                          point: dot.coordinate.toLatLng(),
+                          width: size,
+                          height: size,
+                          child: GestureDetector(
+                            key: ValueKey('map_dot_${dot.id}'),
+                            onTap: () {
+                              if (_isPinPlacementMode) {
+                                _pinAtCoordinate(
+                                  dot.coordinate.toLatLng(),
+                                  source: 'manual',
+                                );
+                                return;
+                              }
+                              _selectDot(dot);
+                            },
+                            child: Stack(
+                              clipBehavior: Clip.none,
+                              children: [
+                                isSelected
+                                    ? RepaintBoundary(
+                                        child: AnimatedBuilder(
+                                          animation: _pulseController,
+                                          builder: (context, _) => buildDotBody(
+                                            _pulseController.value,
+                                          ),
+                                        ),
+                                      )
+                                    : buildDotBody(0.0),
+                                if (nopCount > 1)
+                                  Positioned(
+                                    right: -6,
+                                    top: -6,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 4,
+                                        vertical: 1,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF0F766E),
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(
+                                          color: Colors.white,
+                                          width: 1,
+                                        ),
+                                      ),
+                                      child: Text(
+                                        '$nopCount',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 8.5,
+                                          fontWeight: FontWeight.w900,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }),
                     if (_currentGpsLocation != null)
                       Marker(
                         point: LatLng(
@@ -2466,6 +2504,7 @@ class _DhkpMapScreenState extends State<DhkpMapScreen>
                   ],
                 ),
               ],
+            ),
             ),
           ),
 

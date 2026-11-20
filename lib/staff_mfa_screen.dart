@@ -346,17 +346,17 @@ class _StaffMfaScreenState extends State<StaffMfaScreen> {
                     hintText: '000000',
                     border: const OutlineInputBorder(),
                     prefixIcon: const Icon(Icons.pin),
-                    suffixIcon: _otpController.text.isNotEmpty
-                        ? IconButton(
-                            icon: const Icon(Icons.clear),
-                            onPressed: () {
-                              _otpController.clear();
-                              setState(() {});
-                            },
-                          )
-                        : null,
+                    suffixIcon: ValueListenableBuilder<TextEditingValue>(
+                      valueListenable: _otpController,
+                      builder: (context, value, _) {
+                        if (value.text.isEmpty) return const SizedBox.shrink();
+                        return IconButton(
+                          icon: const Icon(Icons.clear),
+                          onPressed: _otpController.clear,
+                        );
+                      },
+                    ),
                   ),
-                  onChanged: (_) => setState(() {}),
                   onSubmitted: (_) => _submitting ? null : _verify(),
                 ),
                 const SizedBox(height: 8),

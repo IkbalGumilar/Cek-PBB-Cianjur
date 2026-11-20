@@ -391,9 +391,7 @@ class _KelolaAnggotaScreenState extends State<KelolaAnggotaScreen> {
       if (!mounted) return;
       setState(() {
         _result = result;
-        if (result.members.isNotEmpty) {
-          _tampil = result.members.length;
-        }
+        _tampil = _pageSize;
       });
       await _sinkronkanAnggotaKeDhkpSekali(result);
     } catch (e) {

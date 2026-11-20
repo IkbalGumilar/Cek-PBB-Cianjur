@@ -367,6 +367,7 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
     bool setBusy = false,
     String? busyMessage,
     IconData? busyIcon,
+    bool refreshPhotos = false,
   }) async {
     final blok = _selectedBlok;
     if (blok == null) return;
@@ -379,9 +380,11 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
       });
     }
 
-    // Cache direktori & nama file foto di memori agar sel tabel tidak melakukan I/O disk
-    final photosDir = await DhkpPackageHelper.photosDirectory();
-    final photoNames = await DhkpPackageHelper.refreshPhotoNamesCache();
+    // Cache direktori & nama file foto di memori agar sel tabel tidak melakukan I/O disk berulang
+    final photosDir = _photosDir ?? await DhkpPackageHelper.photosDirectory();
+    final photoNames = (refreshPhotos || _cachedPhotoFileNames.isEmpty)
+        ? await DhkpPackageHelper.refreshPhotoNamesCache()
+        : _cachedPhotoFileNames;
 
     final allScope = blok == semuaBlokValue
         ? await BlokDataStore.instance.byWhitelist(
@@ -432,6 +435,20 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
       _busy = false;
     });
     _updateScreenSecurity();
+  }
+
+  /// Menyaring langsung dari [_allScopeRecords] di memori tanpa melakukan I/O disk,
+  /// tanpa query ulang multi-tahun, dan tanpa menghitung ulang metrik ringkasan.
+  void _applyMemoryFilterOnly() {
+    var records = DhkpSummaryMetrics.filterByKategori(
+      _allScopeRecords,
+      _kategoriFilter,
+    );
+    records = DhkpSummaryMetrics.filterBySearch(records, _searchQuery);
+    setState(() {
+      _records = records;
+      _currentPage = 0;
+    });
   }
 
   /// Data lingkup saat ini (mengikuti pilihan Blok & Tahun di layar atau blokOverride),
@@ -488,15 +505,8 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
 
   void _pilihKategori(DhkpKategoriFilter? kategori) {
     if (kategori == null) return;
-    setState(() {
-      _kategoriFilter = kategori;
-      _currentPage = 0;
-    });
-    _loadRecords(
-      setBusy: true,
-      busyMessage: 'Menyaring kategori: ${kategori.label}...',
-      busyIcon: Icons.filter_alt_outlined,
-    );
+    _kategoriFilter = kategori;
+    _applyMemoryFilterOnly();
   }
 
   void _toggleSembunyikanNihil() {
@@ -687,19 +697,25 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
         DusunData.instance.isDusunLocked || _selectedWilayah != null;
     final downloadSttsOption = ValueNotifier<bool>(false);
     final selectedScopeTitle = ValueNotifier<String?>(null);
-    final selectedRecords = await showPilihBlokCekMassalDialog(
-      context,
-      availableBloks: availableBloks,
-      recordsByBlok: recordsByBlok,
-      selectedWilayah: _selectedWilayah,
-      allowAllBlocks: isKedusunanScope,
-      downloadSttsOption: downloadSttsOption,
-      selectedScopeTitleOut: selectedScopeTitle,
-    );
-    final downloadStts = downloadSttsOption.value;
-    final scopeTitle = selectedScopeTitle.value;
-    downloadSttsOption.dispose();
-    selectedScopeTitle.dispose();
+    List<BlokRecord>? selectedRecords;
+    late final bool downloadStts;
+    late final String? scopeTitle;
+    try {
+      selectedRecords = await showPilihBlokCekMassalDialog(
+        context,
+        availableBloks: availableBloks,
+        recordsByBlok: recordsByBlok,
+        selectedWilayah: _selectedWilayah,
+        allowAllBlocks: isKedusunanScope,
+        downloadSttsOption: downloadSttsOption,
+        selectedScopeTitleOut: selectedScopeTitle,
+      );
+      downloadStts = downloadSttsOption.value;
+      scopeTitle = selectedScopeTitle.value;
+    } finally {
+      downloadSttsOption.dispose();
+      selectedScopeTitle.dispose();
+    }
 
     if (selectedRecords == null || selectedRecords.isEmpty || !mounted) return;
 
@@ -2113,11 +2129,8 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
                                               ),
                                               onPressed: () {
                                                 _searchController.clear();
-                                                setState(() {
-                                                  _searchQuery = '';
-                                                  _currentPage = 0;
-                                                });
-                                                _loadRecords();
+                                                _searchQuery = '';
+                                                _applyMemoryFilterOnly();
                                               },
                                             )
                                           : null,
@@ -2130,11 +2143,8 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
                                       isDense: true,
                                     ),
                                     onChanged: (val) {
-                                      setState(() {
-                                        _searchQuery = val;
-                                        _currentPage = 0;
-                                      });
-                                      _loadRecords();
+                                      _searchQuery = val;
+                                      _applyMemoryFilterOnly();
                                     },
                                   ),
                                 ),

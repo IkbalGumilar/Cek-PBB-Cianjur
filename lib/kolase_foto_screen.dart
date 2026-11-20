@@ -162,7 +162,9 @@ class _KolaseFotoScreenState extends State<KolaseFotoScreen> {
             try {
               final bytes = await photo.readAsBytes();
               if (bytes.isNotEmpty) {
-                final squareBytes = ImageCropHelper.cropToSquare(bytes);
+                final squareBytes = await ImageCropHelper.cropToSquareAsync(
+                  bytes,
+                );
                 _photoBytes.add(squareBytes);
               }
             } catch (_) {}
@@ -201,6 +203,7 @@ class _KolaseFotoScreenState extends State<KolaseFotoScreen> {
       imageBytesList: _photoBytes,
       template: _template,
       blok: _selectedBlok == 'Semua' ? null : _selectedBlok,
+      alreadyCropped: true,
     );
   }
 
@@ -733,6 +736,7 @@ class _KolaseFotoScreenState extends State<KolaseFotoScreen> {
                                   child: Image.memory(
                                     images[idx],
                                     fit: BoxFit.cover,
+                                    cacheWidth: 400,
                                   ),
                                 ),
                               ),

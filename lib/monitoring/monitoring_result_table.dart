@@ -391,44 +391,46 @@ class _MonitoringCompactRowCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         side: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.55)),
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            for (var i = 0; i < headers.length; i++)
-              if (cells[i].trim().isNotEmpty) ...[
-                if (i > 0) const Divider(height: 12),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      flex: 4,
-                      child: Text(
-                        headers[i].isEmpty ? 'Kolom ${i + 1}' : headers[i],
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: scheme.onSurfaceVariant,
-                          fontWeight: FontWeight.w600,
+      child: SelectionArea(
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (var i = 0; i < headers.length; i++)
+                if (cells[i].trim().isNotEmpty) ...[
+                  if (i > 0) const Divider(height: 12),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        flex: 4,
+                        child: Text(
+                          headers[i].isEmpty ? 'Kolom ${i + 1}' : headers[i],
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      flex: 6,
-                      child: SelectableText(
-                        cells[i],
-                        textAlign: TextAlign.right,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          fontWeight: i <= 2 || i == headers.length - 1
-                              ? FontWeight.bold
-                              : FontWeight.w500,
+                      const SizedBox(width: 8),
+                      Expanded(
+                        flex: 6,
+                        child: Text(
+                          cells[i],
+                          textAlign: TextAlign.right,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            fontWeight: i <= 2 || i == headers.length - 1
+                                ? FontWeight.bold
+                                : FontWeight.w500,
+                          ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-              ],
-          ],
+                    ],
+                  ),
+                ],
+            ],
+          ),
         ),
       ),
     );

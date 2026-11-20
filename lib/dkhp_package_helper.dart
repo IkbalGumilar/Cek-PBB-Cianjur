@@ -428,6 +428,42 @@ class DhkpPackageHelper {
     return null;
   }
 
+  static String? _cachedInspectPath;
+  static int? _cachedInspectLen;
+  static int? _cachedInspectMtimeMs;
+  static String? _cachedInspectPassword;
+  static Uint8List? _cachedInspectZipBytes;
+
+  static Future<Uint8List> _readAndDecryptZipBytesCached(
+    File file, {
+    String? password,
+  }) async {
+    final stat = await file.stat();
+    final len = stat.size;
+    final mtime = stat.modified.millisecondsSinceEpoch;
+    final normPass = password?.trim() ?? '';
+    if (_cachedInspectZipBytes != null &&
+        _cachedInspectPath == file.path &&
+        _cachedInspectLen == len &&
+        _cachedInspectMtimeMs == mtime &&
+        _cachedInspectPassword == normPass) {
+      return _cachedInspectZipBytes!;
+    }
+    final rawBytes = await file.readAsBytes();
+    final zipBytes = await _resolveArchiveZipBytes(
+      rawBytes,
+      password: password,
+      errorMsgOnNull:
+          'Kata sandi salah atau berkas tidak dapat dibuka di perangkat ini.',
+    );
+    _cachedInspectPath = file.path;
+    _cachedInspectLen = len;
+    _cachedInspectMtimeMs = mtime;
+    _cachedInspectPassword = normPass;
+    _cachedInspectZipBytes = zipBytes;
+    return zipBytes;
+  }
+
   /// Memeriksa isi berkas `.dkhp`/`.dat` tanpa memodifikasi database lokal
   /// untuk mengetahui apakah tahun pajak pada paket masih kosong atau sudah
   /// memiliki data di aplikasi (sehingga perlu konfirmasi timpa).
@@ -440,12 +476,9 @@ class DhkpPackageHelper {
       throw FileSystemException('Berkas .dkhp tidak ditemukan', filePath);
     }
 
-    final rawBytes = await file.readAsBytes();
-    final zipBytes = await _resolveArchiveZipBytes(
-      rawBytes,
+    final zipBytes = await _readAndDecryptZipBytesCached(
+      file,
       password: password,
-      errorMsgOnNull:
-          'Kata sandi salah atau berkas tidak dapat dibuka di perangkat ini.',
     );
 
     final archive = ZipDecoder().decodeBytes(zipBytes);
@@ -538,13 +571,11 @@ class DhkpPackageHelper {
       throw FileSystemException('Berkas .dkhp tidak ditemukan', filePath);
     }
 
-    final rawBytes = await file.readAsBytes();
-    final zipBytes = await _resolveArchiveZipBytes(
-      rawBytes,
+    final zipBytes = await _readAndDecryptZipBytesCached(
+      file,
       password: password,
-      errorMsgOnNull:
-          'Kata sandi salah atau berkas tidak dapat dibuka di perangkat ini.',
     );
+    _cachedInspectZipBytes = null;
 
     final archive = ZipDecoder().decodeBytes(zipBytes);
     final photosDir = await photosDirectory();
@@ -1284,7 +1315,7 @@ class DhkpPackageHelper {
     }
 
     final file = File(outputPath);
-    file.writeAsBytesSync(outputBytes);
+    await file.writeAsBytes(outputBytes, flush: true);
     return file;
   }
 

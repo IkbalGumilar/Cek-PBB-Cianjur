@@ -372,7 +372,9 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
         _customCompareDesas.clear();
       }
       shouldAnimate = true;
-      DhkpWidgetSyncService.syncFromRecords(widget.records);
+      if (oldWidget.records.length != widget.records.length) {
+        DhkpWidgetSyncService.syncFromRecords(widget.records);
+      }
     }
 
     if (_compareYear != null) {
@@ -517,26 +519,56 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
     return base;
   }
 
+  static final RegExp _nonDigitRegex = RegExp(r'[^0-9]');
+
+  // Cache memoization untuk mencegah perhitungan ulang ribuan record di setiap frame animasi (60 FPS)
+  List<BlokRecord>? _cachedScopeWidgetRecords;
+  int _cachedScopeRecordsLen = -1;
+  int? _cachedScopeWilayah;
+  String? _cachedScopeDesaCode;
+  int? _cachedScopeDrillDusun;
+  String? _cachedScopeTahun;
+  bool? _cachedScopeDusunLocked;
+  _DhkpResolvedContext? _cachedScopeContext;
+
+  List<BlokRecord>? _cachedGroupInputRecords;
+  bool? _cachedGroupHasMultiDusun;
+  String? _cachedGroupDesaCode;
+  int? _cachedGroupDrillDusun;
+  bool? _cachedGroupSeDesa;
+  List<DhkpGroupInfo>? _cachedUnsortedGroups;
+  GrafikSortMode? _cachedSortedMode;
+  DhkpGrafikTab? _cachedSortedTab;
+  List<DhkpGroupInfo>? _cachedSortedGroups;
+
   List<DhkpGroupInfo> _groupData(
     List<BlokRecord> records, {
     required bool hasMultiDusun,
     double Function(DhkpGroupInfo)? sortValueFn,
     bool applySort = true,
   }) {
-    final allNonPemda = widget.records.where((r) => !r.isTargetPemda).toList();
-    final primaryKec = DhkpGrafikAnalytics.resolvePrimaryKecamatanCode(
-      allNonPemda,
-    );
-    final desaCodes = DhkpGrafikAnalytics.resolveDesaCodesInKecamatan(
-      allNonPemda,
-      primaryKec,
-    );
-    final effectiveDesa =
-        (desaCodes.length > 1 &&
-            _selectedDesaCode != null &&
-            desaCodes.contains(_selectedDesaCode))
-        ? _selectedDesaCode
-        : null;
+    final baseMatch =
+        identical(_cachedGroupInputRecords, records) &&
+        _cachedGroupHasMultiDusun == hasMultiDusun &&
+        _cachedGroupDesaCode == _selectedDesaCode &&
+        _cachedGroupDrillDusun == _drillDownDusun &&
+        _cachedGroupSeDesa == _seDesaMode;
+
+    if (!applySort && baseMatch && _cachedUnsortedGroups != null) {
+      return _cachedUnsortedGroups!;
+    }
+    if (applySort &&
+        baseMatch &&
+        _cachedSortedGroups != null &&
+        _cachedSortedMode == _sortMode &&
+        _cachedSortedTab == _activeTab) {
+      return _cachedSortedGroups!;
+    }
+
+    final scope = _resolveScopeContext();
+    final primaryKec = scope.primaryKecamatanCode;
+    final desaCodes = scope.desaCodes;
+    final effectiveDesa = scope.effectiveDesaCode;
     final isKecLevel = desaCodes.length > 1 && effectiveDesa == null;
     final isKedusunanScope =
         desaCodes.length <= 1 &&
@@ -548,8 +580,10 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
         !isKedusunanScope &&
         _drillDownDusun == null &&
         !_seDesaMode;
+
+    final List<DhkpGroupInfo> computed;
     if (isKecLevel) {
-      return DhkpGrafikAnalytics.groupData(
+      computed = DhkpGrafikAnalytics.groupData(
         records,
         hasMultiDusun: hasMultiDusun,
         groupByDusun: groupByDusun,
@@ -561,25 +595,43 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
         groupByDesa: !_seDesaMode,
         singleEntityLabel: _formatKecamatanLabel(primaryKec),
       );
+    } else {
+      final singleLabel = effectiveDesa != null
+          ? DhkpGrafikAnalytics.formatDesaLabel(effectiveDesa)
+          : (isKedusunanScope ? 'Se-Kedusunan' : 'Se-Desa');
+
+      computed = DhkpGrafikAnalytics.groupData(
+        records,
+        hasMultiDusun: isKedusunanScope ? false : hasMultiDusun,
+        groupByDusun: groupByDusun,
+        drillDownDusun: isKedusunanScope ? null : _drillDownDusun,
+        sortMode: _sortMode,
+        sortValueFn: sortValueFn,
+        applySort: applySort,
+        seDesaMode: isKedusunanScope
+            ? _seDesaMode
+            : (_seDesaMode && _drillDownDusun == null),
+        singleEntityLabel: singleLabel,
+      );
     }
 
-    final singleLabel = effectiveDesa != null
-        ? DhkpGrafikAnalytics.formatDesaLabel(effectiveDesa)
-        : (isKedusunanScope ? 'Se-Kedusunan' : 'Se-Desa');
-
-    return DhkpGrafikAnalytics.groupData(
-      records,
-      hasMultiDusun: isKedusunanScope ? false : hasMultiDusun,
-      groupByDusun: groupByDusun,
-      drillDownDusun: isKedusunanScope ? null : _drillDownDusun,
-      sortMode: _sortMode,
-      sortValueFn: sortValueFn,
-      applySort: applySort,
-      seDesaMode: isKedusunanScope
-          ? _seDesaMode
-          : (_seDesaMode && _drillDownDusun == null),
-      singleEntityLabel: singleLabel,
-    );
+    if (!baseMatch) {
+      _cachedGroupInputRecords = records;
+      _cachedGroupHasMultiDusun = hasMultiDusun;
+      _cachedGroupDesaCode = _selectedDesaCode;
+      _cachedGroupDrillDusun = _drillDownDusun;
+      _cachedGroupSeDesa = _seDesaMode;
+      _cachedUnsortedGroups = null;
+      _cachedSortedGroups = null;
+    }
+    if (!applySort) {
+      _cachedUnsortedGroups = computed;
+    } else {
+      _cachedSortedMode = _sortMode;
+      _cachedSortedTab = _activeTab;
+      _cachedSortedGroups = computed;
+    }
+    return computed;
   }
 
   // =========================================================================
@@ -777,11 +829,23 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
   }
 
   _DhkpResolvedContext _resolveScopeContext() {
+    final isLocked = DusunData.instance.isDusunLocked;
+    if (_cachedScopeContext != null &&
+        identical(_cachedScopeWidgetRecords, widget.records) &&
+        _cachedScopeRecordsLen == widget.records.length &&
+        _cachedScopeWilayah == widget.selectedWilayah &&
+        _cachedScopeDesaCode == _selectedDesaCode &&
+        _cachedScopeDrillDusun == _drillDownDusun &&
+        _cachedScopeTahun == _selectedTahun &&
+        _cachedScopeDusunLocked == isLocked) {
+      return _cachedScopeContext!;
+    }
+
     final allMurni = widget.records.where((r) => !r.isTargetPemda).toList();
 
     final kecSet = <String>{};
     for (final r in allMurni) {
-      final d = r.nop.replaceAll(RegExp(r'[^0-9]'), '');
+      final d = r.nop.replaceAll(_nonDigitRegex, '');
       if (d.length == 18) kecSet.add(nopKecamatan(d));
     }
     final primaryKecCode = DhkpGrafikAnalytics.resolvePrimaryKecamatanCode(
@@ -793,7 +857,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
     final scopedKecRecords = primaryKecCode.isEmpty
         ? allMurni
         : allMurni.where((r) {
-            final d = r.nop.replaceAll(RegExp(r'[^0-9]'), '');
+            final d = r.nop.replaceAll(_nonDigitRegex, '');
             return d.length != 18 || nopKecamatan(d) == primaryKecCode;
           }).toList();
 
@@ -812,7 +876,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
     var entityAcrossYears = scopedKecRecords;
     if (effectiveDesaCode != null) {
       entityAcrossYears = entityAcrossYears.where((r) {
-        final d = r.nop.replaceAll(RegExp(r'[^0-9]'), '');
+        final d = r.nop.replaceAll(_nonDigitRegex, '');
         return d.length == 18 && nopKelurahan(d) == effectiveDesaCode;
       }).toList();
     }
@@ -882,7 +946,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
           .toList();
     }
 
-    return _DhkpResolvedContext(
+    final resolved = _DhkpResolvedContext(
       murniRecords: murniRecords,
       entityRecordsAcrossYears: entityAcrossYears,
       allScopedRecordsAcrossYears: scopedKecRecords,
@@ -897,6 +961,15 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
       isKedusunanScope: isKedusunanScope,
       activeKedusunanNumber: activeKedusunanNumber,
     );
+    _cachedScopeWidgetRecords = widget.records;
+    _cachedScopeRecordsLen = widget.records.length;
+    _cachedScopeWilayah = widget.selectedWilayah;
+    _cachedScopeDesaCode = _selectedDesaCode;
+    _cachedScopeDrillDusun = _drillDownDusun;
+    _cachedScopeTahun = _selectedTahun;
+    _cachedScopeDusunLocked = isLocked;
+    _cachedScopeContext = resolved;
+    return resolved;
   }
 
   (

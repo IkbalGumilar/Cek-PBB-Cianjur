@@ -1,3 +1,5 @@
+import 'dart:isolate';
+
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 
@@ -79,13 +81,36 @@ class _KolektifImportScreenState extends State<KolektifImportScreen> {
     super.dispose();
   }
 
-  void _uraikan() {
-    final bacaan = bacaBerkasNop(
-      namaBerkas: widget.namaBerkas,
-      bytes: widget.bytes,
-      kelurahanCode: widget.group.kelurahanCode,
-      kolomPaksa: _kolomPilihan,
-    );
+  static bool get _canUseIsolate {
+    try {
+      final bindingName = WidgetsBinding.instance.runtimeType.toString();
+      return !bindingName.contains('Test');
+    } catch (_) {
+      return true;
+    }
+  }
+
+  Future<void> _uraikan() async {
+    final namaBerkas = widget.namaBerkas;
+    final bytes = widget.bytes;
+    final kelurahanCode = widget.group.kelurahanCode;
+    final kolomPaksa = _kolomPilihan;
+
+    final bacaan = _canUseIsolate
+        ? await Isolate.run(
+            () => bacaBerkasNop(
+              namaBerkas: namaBerkas,
+              bytes: bytes,
+              kelurahanCode: kelurahanCode,
+              kolomPaksa: kolomPaksa,
+            ),
+          )
+        : bacaBerkasNop(
+            namaBerkas: namaBerkas,
+            bytes: bytes,
+            kelurahanCode: kelurahanCode,
+            kolomPaksa: kolomPaksa,
+          );
 
     // Satu NOP hanya perlu dikirim sekali. Yang kembar di dalam berkas dan yang
     // sudah jadi anggota disingkirkan DI SINI, bukan dibiarkan ditolak server —
@@ -472,6 +497,12 @@ class _KolektifImportScreenState extends State<KolektifImportScreen> {
     String keterangan,
   ) {
     if (baris.isEmpty) return const SizedBox.shrink();
+    final lines = [
+      for (final b in baris)
+        'Baris ${b.nomorBaris}: ${b.asli}'
+            '${b.nop != null ? ' → ${b.nop}' : ''}'
+            '${b.alasan != null ? ' (${b.alasan})' : ''}',
+    ];
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: ExpansionTile(
@@ -479,15 +510,31 @@ class _KolektifImportScreenState extends State<KolektifImportScreen> {
         subtitle: Text(keterangan, style: const TextStyle(fontSize: 12)),
         childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
         children: [
-          SelectableText(
-            [
-              for (final b in baris)
-                'Baris ${b.nomorBaris}: ${b.asli}'
-                    '${b.nop != null ? ' → ${b.nop}' : ''}'
-                    '${b.alasan != null ? ' (${b.alasan})' : ''}',
-            ].join('\n'),
-            style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
-          ),
+          if (lines.length <= 50)
+            SelectableText(
+              lines.join('\n'),
+              style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+            )
+          else
+            SelectionArea(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 240),
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemExtent: 20,
+                  itemCount: lines.length,
+                  itemBuilder: (context, index) => Text(
+                    lines[index],
+                    style: const TextStyle(
+                      fontFamily: 'monospace',
+                      fontSize: 12,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -644,16 +691,41 @@ class _KolektifImportScreenState extends State<KolektifImportScreen> {
                       Card(
                         child: Padding(
                           padding: const EdgeInsets.all(12),
-                          child: SelectableText(
-                            [
-                              for (final b in tampil)
-                                '${b.nop}${b.dariSingkatan ? '   (dari ${b.asli})' : ''}',
-                            ].join('\n'),
-                            style: const TextStyle(
-                              fontFamily: 'monospace',
-                              fontSize: 12,
-                            ),
-                          ),
+                          child: tampil.length <= 50
+                              ? SelectableText(
+                                  [
+                                    for (final b in tampil)
+                                      '${b.nop}${b.dariSingkatan ? '   (dari ${b.asli})' : ''}',
+                                  ].join('\n'),
+                                  style: const TextStyle(
+                                    fontFamily: 'monospace',
+                                    fontSize: 12,
+                                  ),
+                                )
+                              : SelectionArea(
+                                  child: ConstrainedBox(
+                                    constraints: const BoxConstraints(
+                                      maxHeight: 280,
+                                    ),
+                                    child: ListView.builder(
+                                      shrinkWrap: true,
+                                      itemExtent: 20,
+                                      itemCount: tampil.length,
+                                      itemBuilder: (context, index) {
+                                        final b = tampil[index];
+                                        return Text(
+                                          '${b.nop}${b.dariSingkatan ? '   (dari ${b.asli})' : ''}',
+                                          style: const TextStyle(
+                                            fontFamily: 'monospace',
+                                            fontSize: 12,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                ),
                         ),
                       ),
 

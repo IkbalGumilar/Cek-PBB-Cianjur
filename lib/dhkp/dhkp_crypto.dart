@@ -1,11 +1,13 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:math';
 
 import 'package:crypto/crypto.dart' as legacy_crypto;
 import 'package:cryptography/cryptography.dart';
 import 'package:encrypt/encrypt.dart' as enc;
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 
 /// Enkripsi paket `.dkhp` menggunakan PBKDF2-HMAC-SHA256 dan AES-256-GCM.
 ///
@@ -17,6 +19,15 @@ import 'package:flutter/foundation.dart';
 /// - `[N-16..N-1]`(16 B) : GCM Authentication Tag (MAC)
 class DhkpCrypto {
   DhkpCrypto._();
+
+  static bool get _canUseIsolate {
+    try {
+      final bindingName = WidgetsBinding.instance.runtimeType.toString();
+      return !bindingName.contains('Test');
+    } catch (_) {
+      return true;
+    }
+  }
 
   static const magic = [0x44, 0x4B, 0x48, 0x50]; // Legacy "DKHP" (AES-256-CBC)
   static const dkh2Magic = [0x44, 0x4B, 0x48, 0x32]; // Default "DKH2" (AES-256-GCM)
@@ -51,22 +62,10 @@ class DhkpCrypto {
     return null;
   }
 
-  /// Mengenkripsi data paket `.dkhp` menggunakan format `DKH2` (`PBKDF2-HMAC-SHA256` + `AES-256-GCM`).
-  ///
-  /// Setiap berkas `.dkhp` memiliki tepat satu kunci enkripsi yang diturunkan dari [password]
-  /// (baik Kata Sandi Backup kustom pengguna maupun Recovery Key unik instalasi) yang aktif
-  /// saat backup dibuat. Tidak pernah menggunakan hardcoded shared secret.
-  static Future<Uint8List> encryptBytes(
-    Uint8List plainBytes, {
-    required String password,
-  }) async {
-    final trimmedPassword = password.trim();
-    if (trimmedPassword.length < minPasswordLength) {
-      throw const FormatException(
-        'Kata sandi backup harus terdiri dari minimal $minPasswordLength karakter.',
-      );
-    }
-
+  static Future<Uint8List> _encryptBytesInternal(
+    Uint8List plainBytes,
+    String trimmedPassword,
+  ) async {
     final salt = Uint8List.fromList(
       List<int>.generate(saltLength, (_) => Random.secure().nextInt(256)),
     );
@@ -83,6 +82,30 @@ class DhkpCrypto {
       aad: header,
     );
     return Uint8List.fromList([...header, ...box.cipherText, ...box.mac.bytes]);
+  }
+
+  /// Mengenkripsi data paket `.dkhp` menggunakan format `DKH2` (`PBKDF2-HMAC-SHA256` + `AES-256-GCM`).
+  ///
+  /// Setiap berkas `.dkhp` memiliki tepat satu kunci enkripsi yang diturunkan dari [password]
+  /// (baik Kata Sandi Backup kustom pengguna maupun Recovery Key unik instalasi) yang aktif
+  /// saat backup dibuat. Tidak pernah menggunakan hardcoded shared secret.
+  static Future<Uint8List> encryptBytes(
+    Uint8List plainBytes, {
+    required String password,
+  }) async {
+    final trimmedPassword = password.trim();
+    if (trimmedPassword.length < minPasswordLength) {
+      throw const FormatException(
+        'Kata sandi backup harus terdiri dari minimal $minPasswordLength karakter.',
+      );
+    }
+
+    if (_canUseIsolate) {
+      return Isolate.run(
+        () => _encryptBytesInternal(plainBytes, trimmedPassword),
+      );
+    }
+    return _encryptBytesInternal(plainBytes, trimmedPassword);
   }
 
   /// Enkripsi warisan AES-256-CBC (`DKHP`) — HANYA untuk pengujian regresi pembacaan backup lama.
@@ -142,10 +165,11 @@ class DhkpCrypto {
         );
       }
 
-      final decrypted = await _tryDecryptDkh2WithSecret(
-        fileBytes,
-        trimmedPassword,
-      );
+      final decrypted = _canUseIsolate
+          ? await Isolate.run(
+              () => _tryDecryptDkh2WithSecret(fileBytes, trimmedPassword),
+            )
+          : await _tryDecryptDkh2WithSecret(fileBytes, trimmedPassword);
       if (decrypted != null) return decrypted;
 
       throw const DkhpPasswordException(

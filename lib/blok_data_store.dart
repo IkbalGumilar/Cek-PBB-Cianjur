@@ -23,6 +23,7 @@ class BlokDataStore {
   static final instance = BlokDataStore._();
 
   List<BlokRecord>? _cache;
+  Map<String, int>? _keyToIndex;
 
   /// Notifier jumlah total catatan agar UI (seperti badge tombol Buku Catatan)
   /// dapat merespons secara reaktif tanpa perlu I/O disk ulang.
@@ -32,13 +33,23 @@ class BlokDataStore {
     return AppStorage.getDatabaseFile();
   }
 
+  void _rebuildIndex(List<BlokRecord> records) {
+    final map = <String, int>{};
+    for (var i = 0; i < records.length; i++) {
+      map[records[i].uniqueKey] = i;
+    }
+    _keyToIndex = map;
+  }
+
   void invalidateCache() {
     _cache = null;
+    _keyToIndex = null;
   }
 
   @visibleForTesting
   void resetForTesting() {
     _cache = null;
+    _keyToIndex = null;
     countNotifier.value = 0;
   }
 
@@ -48,12 +59,14 @@ class BlokDataStore {
     final file = await _dataFile();
     if (!file.existsSync()) {
       _cache = [];
+      _keyToIndex = {};
       countNotifier.value = 0;
       return _cache!;
     }
 
     final content = file.readAsStringSync();
     _cache = BlokCsvCodec.decodeDatabaseCsv(content);
+    _rebuildIndex(_cache!);
     countNotifier.value = _cache!.length;
     DhkpWidgetSyncService.syncFromRecords(_cache!);
     return _cache!;
@@ -63,6 +76,7 @@ class BlokDataStore {
     final file = await _dataFile();
     file.writeAsStringSync(BlokCsvCodec.encodeRecords(records));
     _cache = records;
+    _rebuildIndex(records);
     countNotifier.value = records.length;
     DhkpWidgetSyncService.syncFromRecords(records);
   }
@@ -72,9 +86,12 @@ class BlokDataStore {
   Future<void> upsertAll(Iterable<BlokRecord> newRecords) async {
     if (newRecords.isEmpty) return;
     final records = List<BlokRecord>.from(await loadAll());
-    final keyToIndex = <String, int>{};
-    for (var i = 0; i < records.length; i++) {
-      keyToIndex[records[i].uniqueKey] = i;
+    final keyToIndex = Map<String, int>.from(_keyToIndex ?? {});
+    if (keyToIndex.length != records.length) {
+      keyToIndex.clear();
+      for (var i = 0; i < records.length; i++) {
+        keyToIndex[records[i].uniqueKey] = i;
+      }
     }
 
     for (final record in newRecords) {
@@ -103,14 +120,14 @@ class BlokDataStore {
     required String tahun,
     required PbbResult result,
   }) async {
-    final records = List<BlokRecord>.from(await loadAll());
+    final current = await loadAll();
     final key = '$nop|$tahun';
-    final index = records.indexWhere((r) => r.uniqueKey == key);
+    final index = _keyToIndex?[key] ?? current.indexWhere((r) => r.uniqueKey == key);
 
     final isPaid = result.isPaid;
 
-    if (index != -1) {
-      final existing = records[index];
+    if (index != -1 && index < current.length) {
+      final existing = current[index];
       final wasUnpaid = !existing.isPaid;
 
       // Jika di server belum bayar dan di lokal juga belum, atau tidak ada perubahan
@@ -148,6 +165,7 @@ class BlokDataStore {
         catatan: updatedCatatan,
       );
 
+      final records = List<BlokRecord>.from(current);
       records[index] = updatedRecord;
       await _persist(records);
       await BlokBackupScheduler.instance.markDirty();
@@ -175,7 +193,7 @@ class BlokDataStore {
         statusBayar: 'Sudah Bayar',
         catatan: formatCatatanSudahBayar(tglBayar, tahun),
       );
-      records.add(newRecord);
+      final records = List<BlokRecord>.from(current)..add(newRecord);
       await _persist(records);
       await BlokBackupScheduler.instance.markDirty();
 

@@ -60,11 +60,35 @@ class StaffPortalParser {
     }
   }
 
+  static final RegExp _reJumlahOp = RegExp(
+    r'''id=["'](?:bb_)?tot_jumlah_op["'][^>]*>([^<]+)<''',
+    caseSensitive: false,
+  );
+  static final RegExp _rePokokKetetapan = RegExp(
+    r'''id=["'](?:bb_)?tot_pokok["'][^>]*>([^<]+)<''',
+    caseSensitive: false,
+  );
+  static final RegExp _rePokokBayar = RegExp(
+    r'''id=["'](?:tot_pokok_pembayaran|rea_pokok)["'][^>]*>([^<]+)<''',
+    caseSensitive: false,
+  );
+  static final RegExp _reDenda = RegExp(
+    r'''id=["'](?:tot_denda|bb_tot_denda|rea_denda)["'][^>]*>([^<]+)<''',
+    caseSensitive: false,
+  );
+  static final RegExp _reTotal = RegExp(
+    r'''id=["'](?:tot_penerimaan|bb_tot_penerimaan|rea_penerimaan)["'][^>]*>([^<]+)<''',
+    caseSensitive: false,
+  );
+
   /// Baca ringkasan angka (KPI/Totals) dari HTML hasil query Monitoring Wilayah
   /// (baik tab Sudah Bayar, Belum Bayar, maupun Realisasi).
-  static MonitoringSummaryTotals? parseSummaryTotals(String html) {
+  static MonitoringSummaryTotals? parseSummaryTotals(
+    String html, {
+    dom.Document? parsedDocument,
+  }) {
     if (html.isEmpty) return null;
-    final document = html_parser.parse(html);
+    final document = parsedDocument ?? html_parser.parse(html);
 
     String? getText(String id) => document.querySelector('#$id')?.text.trim();
 
@@ -92,26 +116,11 @@ class StaffPortalParser {
     }
 
     // Fallback: regex scan jika tag berada dalam potongan HTML tanpa body utuh
-    jumlahOpRaw ??= RegExp(
-      r'''id=["'](?:bb_)?tot_jumlah_op["'][^>]*>([^<]+)<''',
-      caseSensitive: false,
-    ).firstMatch(html)?.group(1);
-    pokokKetetapanRaw ??= RegExp(
-      r'''id=["'](?:bb_)?tot_pokok["'][^>]*>([^<]+)<''',
-      caseSensitive: false,
-    ).firstMatch(html)?.group(1);
-    pokokBayarRaw ??= RegExp(
-      r'''id=["'](?:tot_pokok_pembayaran|rea_pokok)["'][^>]*>([^<]+)<''',
-      caseSensitive: false,
-    ).firstMatch(html)?.group(1);
-    dendaRaw ??= RegExp(
-      r'''id=["'](?:tot_denda|bb_tot_denda|rea_denda)["'][^>]*>([^<]+)<''',
-      caseSensitive: false,
-    ).firstMatch(html)?.group(1);
-    totalRaw ??= RegExp(
-      r'''id=["'](?:tot_penerimaan|bb_tot_penerimaan|rea_penerimaan)["'][^>]*>([^<]+)<''',
-      caseSensitive: false,
-    ).firstMatch(html)?.group(1);
+    jumlahOpRaw ??= _reJumlahOp.firstMatch(html)?.group(1);
+    pokokKetetapanRaw ??= _rePokokKetetapan.firstMatch(html)?.group(1);
+    pokokBayarRaw ??= _rePokokBayar.firstMatch(html)?.group(1);
+    dendaRaw ??= _reDenda.firstMatch(html)?.group(1);
+    totalRaw ??= _reTotal.firstMatch(html)?.group(1);
 
     final summary = MonitoringSummaryTotals(
       jumlahOp: parseAngkaServer(jumlahOpRaw ?? ''),
@@ -140,7 +149,7 @@ class StaffPortalParser {
       );
     }
     final document = html_parser.parse(html);
-    final summary = parseSummaryTotals(html);
+    final summary = parseSummaryTotals(html, parsedDocument: document);
     final tables = document.querySelectorAll('table');
     if (tables.isEmpty) {
       final text = document.body?.text.trim();

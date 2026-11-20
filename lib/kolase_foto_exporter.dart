@@ -62,6 +62,7 @@ class KolaseFotoExporter {
     required KolaseGridTemplate template,
     String? blok,
     PdfPageFormat? pageFormat,
+    bool alreadyCropped = false,
   }) async {
     final doc = pw.Document();
     final effectiveFormat = pageFormat ?? f4PageFormat;
@@ -103,10 +104,12 @@ class KolaseFotoExporter {
     final capacity = template.capacity;
     final totalPages = (imageBytesList.length / capacity).ceil();
 
-    // Cache MemoryImage untuk efisiensi PDF, pastikan gambar 1:1 persegi
+    // Cache MemoryImage untuk efisiensi PDF, lewati decode ulang bila foto sudah 1:1 persegi
     final pwImages = <pw.MemoryImage>[];
     for (final bytes in imageBytesList) {
-      final squareBytes = ImageCropHelper.cropToSquare(bytes);
+      final squareBytes = alreadyCropped
+          ? bytes
+          : await ImageCropHelper.cropToSquareAsync(bytes);
       pwImages.add(pw.MemoryImage(squareBytes));
     }
 
