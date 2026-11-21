@@ -332,7 +332,9 @@ class GoogleDriveService {
       interactiveIfNeeded: true,
     );
     if (authHeaders == null) {
-      throw Exception('Akun Google belum terhubung atau token kadaluarsa.');
+      throw Exception(
+        'Akun Google belum terhubung atau sesi berakhir. Silakan masuk kembali.',
+      );
     }
 
     String? targetFolderId = folderId;
@@ -386,11 +388,18 @@ class GoogleDriveService {
           json.decode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
       return resData['id'] as String?;
     }
+    final rawUploadErr = _extractDriveErrorMessage(
+      res.body,
+      'status ${res.statusCode}',
+    );
+    debugPrint('Google Drive upload failed (${res.statusCode}): $rawUploadErr');
+    if (res.statusCode == 401 || res.statusCode == 403) {
+      throw Exception(
+        'Akses unggah ke Google Drive belum diizinkan atau sesi berakhir. Silakan hubungkan ulang Akun Google Anda.',
+      );
+    }
     throw Exception(
-      _extractDriveErrorMessage(
-        res.body,
-        'Google Drive upload error ${res.statusCode}',
-      ),
+      'Gagal mengunggah berkas ke Google Drive. Periksa koneksi internet Anda lalu coba lagi.',
     );
   }
 
@@ -524,17 +533,21 @@ class GoogleDriveService {
 
         return itemsById.values.toList();
       } else {
-        final errorMsg = _extractDriveErrorMessage(
+        final rawErrorMsg = _extractDriveErrorMessage(
           response.body,
-          'Google Drive REST API merespons status ${response.statusCode}',
+          'status ${response.statusCode}',
         );
-        if (response.statusCode == 403) {
+        debugPrint(
+          'Google Drive list failed (${response.statusCode}): $rawErrorMsg',
+        );
+        if (response.statusCode == 401 || response.statusCode == 403) {
           throw Exception(
-            'Google Drive API (403): $errorMsg\n\n'
-            'Solusi: Aktifkan "Google Drive API" di Google Cloud Console (Library), atau gunakan tombol File Manager HP.',
+            'Akses folder Google Drive belum diizinkan atau sesi berakhir. Silakan hubungkan ulang Akun Google atau pilih berkas dari penyimpanan perangkat.',
           );
         }
-        throw Exception(errorMsg);
+        throw Exception(
+          'Belum dapat memuat daftar berkas dari Google Drive. Silakan coba lagi atau pilih berkas dari penyimpanan perangkat.',
+        );
       }
     } catch (e) {
       debugPrint('Gagal mengambil daftar berkas Google Drive: $e');
@@ -570,8 +583,20 @@ class GoogleDriveService {
             _httpClient.send(http.Request('GET', url)..headers.addAll(headers)),
       );
       if (streamedResponse.statusCode != 200) {
+        debugPrint(
+          'Google Drive download failed (${streamedResponse.statusCode})',
+        );
+        if (streamedResponse.statusCode == 401 ||
+            streamedResponse.statusCode == 403) {
+          throw Exception(
+            'Berkas tidak dapat diakses. Pastikan Akun Google terhubung atau izin berbagi berkas sudah aktif.',
+          );
+        }
+        if (streamedResponse.statusCode == 404) {
+          throw Exception('Berkas tidak ditemukan di Google Drive.');
+        }
         throw Exception(
-          'Gagal mengunduh berkas Drive (Status ${streamedResponse.statusCode}).',
+          'Gagal mengunduh berkas dari Google Drive. Silakan coba lagi.',
         );
       }
 

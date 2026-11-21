@@ -60,6 +60,11 @@ class DhkpStatusBadge extends StatelessWidget {
           !displayStatus.toLowerCase().contains('daftar')) {
         displayStatus = 'Blacklist (≥ 5 Thn)';
       }
+    } else if (record.isBermasalah) {
+      bgColor = Colors.red.withValues(alpha: 0.15);
+      textColor = isDark ? Colors.red.shade300 : Colors.red.shade900;
+      borderColor = Colors.red;
+      displayStatus = 'Bermasalah';
     } else if (record.isPaid) {
       bgColor = Colors.green.withValues(alpha: 0.15);
       textColor = isDark ? Colors.green.shade300 : Colors.green.shade800;
@@ -493,7 +498,7 @@ class DhkpRowCelenganButton extends StatelessWidget {
     );
     final hasTabungan = tabungan.saldo > 0;
     final isLunas = tabungan.isLunas;
-    if (record.isPaid && !hasTabungan) {
+    if (record.isBermasalah || (record.isPaid && !hasTabungan)) {
       return const SizedBox.shrink();
     }
 

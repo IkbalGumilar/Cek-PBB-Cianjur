@@ -67,9 +67,11 @@ class BlokBatchCheckTracker {
     _initialized = true;
   }
 
+  static final RegExp _nonDigitRegex = RegExp(r'[^0-9]');
+
   /// Memeriksa apakah NOP tertentu sudah dicek pada siklus hari ini (sejak jam 02:00 terakhir).
   bool isCheckedToday(String nop) {
-    final cleanNop = nop.replaceAll(RegExp(r'[^0-9]'), '');
+    final cleanNop = nop.replaceAll(_nonDigitRegex, '');
     final dt = _timestamps[cleanNop];
     if (dt == null) return false;
     return dt.isAfter(currentCycleStart);
@@ -77,14 +79,14 @@ class BlokBatchCheckTracker {
 
   /// Mendapatkan waktu terakhir NOP diperiksa (jika ada).
   DateTime? getLastChecked(String nop) {
-    final cleanNop = nop.replaceAll(RegExp(r'[^0-9]'), '');
+    final cleanNop = nop.replaceAll(_nonDigitRegex, '');
     return _timestamps[cleanNop];
   }
 
   /// Mencatat bahwa NOP baru saja diperiksa.
   Future<void> recordChecked(String nop) async {
     if (!_initialized) await init();
-    final cleanNop = nop.replaceAll(RegExp(r'[^0-9]'), '');
+    final cleanNop = nop.replaceAll(_nonDigitRegex, '');
     _timestamps[cleanNop] = DateTime.now();
     await _persist();
   }
@@ -94,7 +96,7 @@ class BlokBatchCheckTracker {
     if (!_initialized) await init();
     final now = DateTime.now();
     for (final nop in nops) {
-      final cleanNop = nop.replaceAll(RegExp(r'[^0-9]'), '');
+      final cleanNop = nop.replaceAll(_nonDigitRegex, '');
       _timestamps[cleanNop] = now;
     }
     await _persist();

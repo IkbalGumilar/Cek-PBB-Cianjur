@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:material_ui/material_ui.dart';
 
 import '../feature_tour/feature_tour.dart';
@@ -17,7 +19,7 @@ import 'tab_sudah_bayar_kolektif.dart';
 
 /// Menu "Monitoring Wilayah" — replika 7 tab dari modul asli
 /// (`mMonitoringWilayahV3`): Sudah Bayar, Belum Bayar, Realisasi, Piutang,
-/// Sudah Bayar Kolektif, Belum Bayar Kolektif, Rangking Realisasi. Field per
+/// Sudah Bayar Kolektif, Belum Bayar Kolektif, Peringkat Realisasi. Field per
 /// tab dicocokkan langsung dengan HTML halaman aslinya (lihat masing-masing
 /// file `tab_*.dart`), tata letaknya dirombak jadi form bertumpuk yang lebih
 /// enak dipakai di layar sempit — bukan tabel 3 kolom seperti versi web.
@@ -64,7 +66,7 @@ class _MonitoringWilayahScreenState extends State<MonitoringWilayahScreen> {
     'Piutang',
     'Sudah Bayar Kolektif',
     'Belum Bayar Kolektif',
-    'Rangking Realisasi',
+    'Peringkat Realisasi',
   ];
 
   @override
@@ -110,8 +112,8 @@ class _MonitoringWilayahScreenState extends State<MonitoringWilayahScreen> {
         targetKey: _generateBtnKey,
         title: 'Generate Paket DHKP Baru (.dkhp)',
         description:
-            'Unduh data SPPT desa dari Portal Staf untuk menghasilkan file master & split per Kedusunan (.dkhp terenkripsi DKH2). '
-            'Data lokal tidak dihapus saat generate; pemasangan/penimpaan baru berjalan saat Anda memasang file .dkhp hasilnya.',
+            'Unduh data SPPT desa dari Portal Petugas untuk menghasilkan berkas master dan pecahan per dusun (.dkhp terenkripsi). '
+            'Data lokal tidak dihapus saat pembuatan paket; pemasangan baru berjalan saat Anda memasang berkas .dkhp hasilnya.',
         icon: Icons.auto_awesome_rounded,
       ),
       FeatureTourStep(
@@ -134,9 +136,11 @@ class _MonitoringWilayahScreenState extends State<MonitoringWilayahScreen> {
       FeatureTourStep(
         targetKey: _tabContentKey,
         title: 'Formulir Penyaring & Tabel/Kartu Hasil',
-        description:
-            'Atur tahun pajak, buku ketetapan, atau tanggal, lalu ketuk Tampilkan. '
-            'Anda dapat melipat panel filter, beralih mode Kartu/Tabel, serta Unduh atau Bagikan PDF & Excel.',
+        description: Platform.isAndroid
+            ? 'Atur tahun pajak, buku ketetapan, atau tanggal, lalu ketuk Tampilkan. '
+                  'Anda dapat melipat panel filter, beralih mode Kartu/Tabel, serta Unduh atau Bagikan PDF & Excel.'
+            : 'Atur tahun pajak, buku ketetapan, atau tanggal, lalu ketuk Tampilkan. '
+                  'Anda dapat melipat panel filter, beralih mode Kartu/Tabel, serta Unduh atau Cetak PDF & Excel.',
         icon: Icons.table_view_rounded,
       ),
     ];

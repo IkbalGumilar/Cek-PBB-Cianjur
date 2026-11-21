@@ -61,7 +61,7 @@ class _KolektifResultViewState extends State<KolektifResultView> {
             children: [
               Expanded(
                 child: Text(
-                  'Ketuk baris grup untuk Kelola Anggota / Hapus Group (${result.groups.length} grup).',
+                  'Ketuk baris grup untuk Kelola Anggota atau Hapus Grup (${result.groups.length} grup).',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: scheme.onSurfaceVariant,
                   ),
@@ -171,7 +171,7 @@ class _KolektifResultViewState extends State<KolektifResultView> {
       showCheckboxColumn: false,
       columns: const [
         DataColumn(label: Text('')),
-        DataColumn(label: Text('Nama Group')),
+        DataColumn(label: Text('Nama Grup')),
         DataColumn(label: Text('Nama Kolektor')),
         DataColumn(label: Text('HP Kolektor')),
         DataColumn(label: Text('Anggota')),
@@ -180,7 +180,7 @@ class _KolektifResultViewState extends State<KolektifResultView> {
         DataColumn(label: Text('Kecamatan')),
         DataColumn(label: Text('Kelurahan')),
         DataColumn(label: Text('Keterangan')),
-        DataColumn(label: Text('Tanggal Kadaluarsa')),
+        DataColumn(label: Text('Tanggal Kedaluwarsa')),
       ],
       rows: [
         for (final g in result.groups)
@@ -223,7 +223,7 @@ class _KolektifResultViewState extends State<KolektifResultView> {
   }
 }
 
-/// Isian mentah form Tambah Group, dibawa keluar dari dialog supaya layar
+/// Isian mentah form Tambah Grup, dibawa keluar dari dialog supaya layar
 /// konfirmasi bisa menampilkannya sebelum ada request yang dikirim.
 class IsianGroupBaru {
   final String namaGroup;
@@ -241,7 +241,7 @@ class IsianGroupBaru {
   });
 }
 
-/// Form "Tambah Group" / "Ubah Group".
+/// Form "Tambah Grup" / "Ubah Grup".
 class TambahGroupDialog extends StatefulWidget {
   final KolektifFormOptions options;
   final KolektifGroup? groupDiubah;
@@ -339,7 +339,7 @@ class _TambahGroupDialogState extends State<TambahGroupDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text(_modeUbah ? 'Ubah Group' : 'Tambah Group'),
+      title: Text(_modeUbah ? 'Ubah Grup' : 'Tambah Grup'),
       content: SingleChildScrollView(
         child: Form(
           key: _formKey,
@@ -351,10 +351,10 @@ class _TambahGroupDialogState extends State<TambahGroupDialog> {
                 textCapitalization: TextCapitalization.characters,
                 inputFormatters: [_teksDiizinkan, FormatHurufBesar()],
                 decoration: const InputDecoration(
-                  labelText: 'Nama Group',
+                  labelText: 'Nama Grup',
                   border: OutlineInputBorder(),
                 ),
-                validator: (v) => _wajib(v, 'Nama Group'),
+                validator: (v) => _wajib(v, 'Nama Grup'),
               ),
               const SizedBox(height: 12),
               TextFormField(
@@ -450,7 +450,7 @@ class _TambahGroupDialogState extends State<TambahGroupDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Kembali Ke Group'),
+          child: const Text('Batal'),
         ),
         FilledButton(onPressed: _lanjut, child: const Text('Lanjut')),
       ],
@@ -475,11 +475,11 @@ class _HapusGroupDialogState extends State<HapusGroupDialog> {
   String? _pilihan;
 
   static const _alasanSiapPakai = [
-    'Salah input data group',
+    'Salah input data grup',
     'Salah pilih kelurahan',
     'Nama atau nomor kolektor keliru',
-    'Group dibuat ganda',
-    'Group dibuat untuk uji coba',
+    'Grup dibuat ganda',
+    'Grup dibuat untuk uji coba',
     'Anggota batal ikut pembayaran kolektif',
   ];
 
@@ -505,7 +505,7 @@ class _HapusGroupDialogState extends State<HapusGroupDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Hapus Group Kolektif'),
+      title: const Text('Hapus Grup Kolektif'),
       content: SingleChildScrollView(
         child: Form(
           key: _formKey,
@@ -542,9 +542,9 @@ class _HapusGroupDialogState extends State<HapusGroupDialog> {
                 maxLines: 3,
                 decoration: const InputDecoration(
                   labelText: 'Alasan Penghapusan',
-                  hintText: 'Masukkan alasan penghapusan group kolektif',
+                  hintText: 'Masukkan alasan penghapusan grup kolektif',
                   helperText:
-                      'Tersimpan permanen di Log History Penghapusan beserta nama akun Anda.',
+                      'Tersimpan di riwayat penghapusan sistem bersama nama akun Anda.',
                   helperMaxLines: 2,
                   border: OutlineInputBorder(),
                 ),

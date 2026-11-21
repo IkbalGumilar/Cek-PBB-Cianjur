@@ -399,7 +399,11 @@ class BatchCheckManager extends ChangeNotifier {
             result: result,
           );
           if (_downloadStts && activeSession == _sessionId) {
-            await _downloadSttsFor(client, record);
+            await _downloadSttsFor(
+              client,
+              record,
+              preloadedBytes: result.sttsPdfBytes,
+            );
           }
         }
         await BlokBatchCheckTracker.instance.recordChecked(record.nop);
@@ -494,18 +498,27 @@ class BatchCheckManager extends ChangeNotifier {
     }
   }
 
-  Future<void> _downloadSttsFor(PbbClient client, TaxRecord record) async {
-    Uint8List? bytes;
-    for (int attempt = 0; attempt < 3; attempt++) {
-      try {
-        bytes = await client.fetchSttsPdfIfIssued(
-          nop: record.nop,
-          tahun: _tahun,
-        );
-        break;
-      } catch (_) {
-        if (attempt < 2) {
-          await Future<void>.delayed(const Duration(milliseconds: 1000));
+  Future<void> _downloadSttsFor(
+    PbbClient client,
+    TaxRecord record, {
+    Uint8List? preloadedBytes,
+  }) async {
+    Uint8List? bytes =
+        (preloadedBytes != null && preloadedBytes.isNotEmpty)
+        ? preloadedBytes
+        : null;
+    if (bytes == null) {
+      for (int attempt = 0; attempt < 3; attempt++) {
+        try {
+          bytes = await client.fetchSttsPdfIfIssued(
+            nop: record.nop,
+            tahun: _tahun,
+          );
+          break;
+        } catch (_) {
+          if (attempt < 2) {
+            await Future<void>.delayed(const Duration(milliseconds: 1000));
+          }
         }
       }
     }

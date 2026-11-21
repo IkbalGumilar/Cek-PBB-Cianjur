@@ -1,3 +1,4 @@
+import 'package:cek_pbb_app/monitoring_hub_screen.dart';
 import 'package:cek_pbb_app/staff_mfa_screen.dart';
 import 'package:cek_pbb_app/staff_portal/staff_authenticator_store.dart';
 import 'package:cek_pbb_app/staff_portal_client.dart';
@@ -52,7 +53,7 @@ void main() {
 
         // Memastikan kartu promosi tampil
         expect(find.text('Hubungkan Google Authenticator'), findsOneWidget);
-        expect(find.text('Hubungkan Kunci (Copas)'), findsOneWidget);
+        expect(find.text('Tempel Kunci Rahasia'), findsOneWidget);
         expect(find.text('Impor Gambar QR'), findsOneWidget);
 
         // Memastikan field kode verifikasi & tombol submit tampil
@@ -60,7 +61,7 @@ void main() {
         expect(find.text('Verifikasi & Masuk'), findsOneWidget);
 
         // Buka dialog hubungkan kunci
-        await tester.tap(find.text('Hubungkan Kunci (Copas)'));
+        await tester.tap(find.text('Tempel Kunci Rahasia'));
         await tester.pumpAndSettle();
 
         expect(find.text('Hubungkan Authenticator'), findsOneWidget);
@@ -126,7 +127,7 @@ void main() {
         // Memastikan kartu token terhubung muncul dengan nama akun
         expect(find.text('Google Authenticator Terhubung'), findsOneWidget);
         expect(find.text('BAPENDA (petugas_bobojong)'), findsOneWidget);
-        expect(find.text('KODE 2FA AKTIF'), findsOneWidget);
+        expect(find.text('KODE KEAMANAN AKTIF'), findsOneWidget);
 
         // Cek tombol 'Isi ke Kolom'
         expect(find.text('Isi ke Kolom'), findsOneWidget);
@@ -170,13 +171,11 @@ void main() {
       expect(fakeClient.lastSubmittedOtp, isNotNull);
       expect(fakeClient.lastSubmittedOtp!.length, equals(6));
 
-      // Dialog Login Berhasil muncul
+      // Langsung masuk ke MonitoringHubScreen tanpa dialog pemblokir
       await tester.pump();
-      await tester.pump(const Duration(milliseconds: 200));
-      expect(find.text('Login Berhasil'), findsOneWidget);
-      await tester.tap(find.text('OK'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.text('Login Berhasil'), findsNothing);
+      expect(find.byType(MonitoringHubScreen), findsOneWidget);
     });
 
     testWidgets(

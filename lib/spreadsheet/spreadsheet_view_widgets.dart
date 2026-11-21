@@ -16,6 +16,8 @@ class SpreadsheetDataView extends StatelessWidget {
   final VoidCallback onRetry;
   final void Function(int rowIndex, List<String> rowValues) onRowSelected;
 
+  static final RegExp _numericCellRegex = RegExp(r'^[0-9]+$');
+
   const SpreadsheetDataView({
     super.key,
     required this.isLoading,
@@ -51,8 +53,10 @@ class SpreadsheetDataView extends StatelessWidget {
     }
 
     if (errorMessage != null) {
+      final lowerErr = errorMessage!.toLowerCase();
       final isBiometricError =
-          isDkhp && errorMessage!.toLowerCase().contains('sidik jari');
+          isDkhp &&
+          (lowerErr.contains('sidik jari') || lowerErr.contains('verifikasi'));
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -61,7 +65,7 @@ class SpreadsheetDataView extends StatelessWidget {
             children: [
               Icon(
                 isBiometricError
-                    ? Icons.fingerprint_rounded
+                    ? Icons.verified_user_outlined
                     : Icons.error_outline_rounded,
                 size: 54,
                 color: isBiometricError ? Colors.blue : Colors.red,
@@ -86,12 +90,12 @@ class SpreadsheetDataView extends StatelessWidget {
                 onPressed: onRetry,
                 icon: Icon(
                   isBiometricError
-                      ? Icons.fingerprint_rounded
+                      ? Icons.verified_user_outlined
                       : Icons.refresh_rounded,
                   size: 18,
                 ),
                 label: Text(
-                  isBiometricError ? 'Pindai Sidik Jari' : 'Coba Lagi',
+                  isBiometricError ? 'Verifikasi Perangkat' : 'Coba Lagi',
                 ),
               ),
             ],
@@ -207,7 +211,7 @@ class SpreadsheetDataView extends StatelessWidget {
                       final value = columnIndex < rowValues.length
                           ? rowValues[columnIndex]
                           : '';
-                      final isNumeric = RegExp(r'^[0-9]+$').hasMatch(value);
+                      final isNumeric = _numericCellRegex.hasMatch(value);
                       return DataCell(
                         Text(
                           value,
@@ -367,7 +371,7 @@ class SpreadsheetImportBanner extends StatelessWidget {
           FilledButton.icon(
             onPressed: onImport,
             icon: const Icon(Icons.file_download_rounded, size: 18),
-            label: const Text('Impor ke Buku Catatan'),
+            label: const Text('Impor ke Data DHKP'),
             style: FilledButton.styleFrom(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               visualDensity: VisualDensity.compact,

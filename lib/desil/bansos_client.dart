@@ -415,7 +415,7 @@ class BansosClient extends BaseHttpClient {
     final location = response.headers.value('location');
     if (location == null || location.isEmpty) {
       throw const BansosException(
-        'Layanan Kemensos mengarahkan permintaan tanpa halaman hasil.',
+        'Layanan Kemensos belum mengembalikan halaman hasil. Silakan coba lagi.',
       );
     }
 
@@ -423,7 +423,7 @@ class BansosClient extends BaseHttpClient {
     final resultUri = baseUri.resolve(location);
     if (resultUri.scheme != baseUri.scheme || resultUri.host != baseUri.host) {
       throw const BansosException(
-        'Layanan Kemensos mengarahkan ke alamat yang tidak dikenali.',
+        'Respons layanan Kemensos tidak dikenali. Silakan coba beberapa saat lagi.',
       );
     }
 
@@ -439,7 +439,14 @@ class BansosClient extends BaseHttpClient {
 
   static String _networkMessage(DioException error) {
     if (error.type == DioExceptionType.badResponse) {
-      return 'Layanan Kemensos menolak permintaan (${error.response?.statusCode ?? 'tanpa status'}). Coba ulang captcha.';
+      final status = error.response?.statusCode;
+      if (status == 429) {
+        return 'Layanan Kemensos sedang sibuk karena banyak permintaan. Tunggu sebentar lalu coba lagi.';
+      }
+      if (status != null && status >= 500) {
+        return 'Server Kemensos sedang mengalami gangguan. Silakan coba beberapa saat lagi.';
+      }
+      return 'Layanan Kemensos belum dapat memproses permintaan. Silakan muat ulang kode lalu coba lagi.';
     }
     return BaseHttpClient.describeNetworkError(error, serviceName: 'Kemensos');
   }

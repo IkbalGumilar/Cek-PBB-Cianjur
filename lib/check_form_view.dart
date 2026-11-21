@@ -18,6 +18,7 @@ import 'pbb_client.dart';
 import 'tagihan_result.dart';
 import 'ui/app_design_system.dart';
 import 'unity_lerp_widgets.dart';
+import 'user_friendly_error.dart';
 
 class CheckFormView extends StatefulWidget {
   final CheckMode mode;
@@ -63,7 +64,9 @@ class _CheckFormViewState extends State<CheckFormView> {
   final _nopScanner = NopScanner();
   final _blokController = TextEditingController();
   final _wilayahController = TextEditingController();
-  final _tahunController = TextEditingController(text: '2026');
+  final _tahunController = TextEditingController(
+    text: DateTime.now().year.toString(),
+  );
   final _captchaController = TextEditingController();
   final _blokFocusNode = FocusNode();
   final _wilayahFocusNode = FocusNode();
@@ -177,6 +180,7 @@ class _CheckFormViewState extends State<CheckFormView> {
   /// Pindai gambar (kamera atau galeri) lalu isi kolom Blok & Nomor Wilayah
   /// dari NOP pertama yang berhasil dikenali OCR.
   Future<void> _scanAndFill() async {
+    if (!isMobilePlatform) return;
     // Pilih sumber gambar
     final source = await showDialog<ImageSource>(
       context: context,
@@ -315,8 +319,8 @@ class _CheckFormViewState extends State<CheckFormView> {
               title: const Text('Lebih dari 1 NOP Ditemukan'),
               content: Text(
                 'Ada ${nops.length} NOP yang berhasil dibaca dari dokumen.\n\n'
-                'Apakah Anda ingin memasukkan semuanya ke menu "Cek Massal / Import" '
-                'untuk dicek secara kolektif?',
+                'Apakah Anda ingin memasukkan semuanya ke menu "Cek Massal" '
+                'untuk dicek secara massal?',
               ),
               actions: [
                 TextButton(
@@ -325,7 +329,7 @@ class _CheckFormViewState extends State<CheckFormView> {
                 ),
                 FilledButton(
                   onPressed: () => Navigator.pop(ctx, true),
-                  child: const Text('Ya, cek kolektif'),
+                  child: const Text('Ya, cek massal'),
                 ),
               ],
             ),
@@ -371,7 +375,15 @@ class _CheckFormViewState extends State<CheckFormView> {
         }
       }
     } catch (e) {
-      if (mounted) setState(() => _errorText = 'Gagal scan: $e');
+      if (mounted) {
+        setState(
+          () => _errorText = friendlyErrorMessage(
+            e,
+            fallback:
+                'Gagal memindai dokumen. Coba ambil foto lebih jelas dan terang.',
+          ),
+        );
+      }
     } finally {
       if (mounted) setState(() => _scanningOcr = false);
     }
@@ -388,7 +400,13 @@ class _CheckFormViewState extends State<CheckFormView> {
       setState(() => _captchaBytes = bytes);
     } catch (e) {
       if (!mounted) return;
-      setState(() => _errorText = 'Gagal memuat gambar kode: $e');
+      setState(
+        () => _errorText = friendlyErrorMessage(
+          e,
+          fallback:
+              'Gagal memuat gambar kode. Periksa koneksi internet lalu coba lagi.',
+        ),
+      );
     } finally {
       if (mounted) {
         setState(() {
@@ -432,21 +450,21 @@ class _CheckFormViewState extends State<CheckFormView> {
 
   List<FeatureTourStep> _buildTourSteps({required bool fullTour}) {
     final isTagihan = widget.mode == CheckMode.tagihan;
+    final currentYear = DateTime.now().year;
+    final supportsVa = Platform.isAndroid;
     final steps = <FeatureTourStep>[];
 
     if (fullTour && widget.headerMenuKey != null) {
       steps.add(
         FeatureTourStep(
           targetKey: widget.headerMenuKey!,
-          title: 'Baris Menu Layanan Utama',
-          description:
-              'Gunakan deretan tombol di bagian atas ini untuk berpindah layanan kapan saja:\n'
-              '• Cek Tagihan: Melihat daftar tunggakan pajak per tahun dan membayar lewat QRIS atau Bank BJB.\n'
-              '• Cek Status Bayar: Memeriksa bukti lunas pembayaran pajak pada tahun tertentu.\n'
-              '• Monitoring: Khusus petugas untuk melihat progres pelunasan desa dan mengatur rombongan bayar.\n'
-              '• Cek Kendaraan & Cek Desil: Memeriksa pajak kendaraan bermotor serta status kesejahteraan keluarga.',
-          actionHint:
-              'Geser baris menu ke kiri atau kanan jika layar ponsel Anda berukuran kecil.',
+          title: 'Menu Layanan Utama',
+          description: supportsVa
+              ? 'Pindah layanan kapan saja: Cek Tagihan (QRIS/VA), Cek Status Bayar, Monitoring petugas, Cek Kendaraan, dan Cek Desil.'
+              : 'Pindah layanan kapan saja: Cek Tagihan (QRIS), Cek Status Bayar, Monitoring petugas, Cek Kendaraan, dan Cek Desil.',
+          actionHint: isMobilePlatform
+              ? 'Geser baris menu ke samping jika layar berukuran kecil.'
+              : 'Pilih tab layanan di bagian atas untuk langsung berpindah.',
           icon: Icons.apps_rounded,
         ),
       );
@@ -456,39 +474,39 @@ class _CheckFormViewState extends State<CheckFormView> {
       steps.add(
         FeatureTourStep(
           targetKey: _blokWilayahInputKey,
-          title: 'Wilayah Aktif, Kolom Blok & Nomor Wilayah',
+          title: 'Wilayah Aktif, Blok & Nomor Wilayah',
           description:
-              'Ketuk penanda Kecamatan/Desa di atas kolom jika ingin mengganti wilayah kerja, lalu ketik nomor Blok dan Nomor Urut Wilayah dari SPPT tanpa angka nol di depan.',
-          actionHint:
-              'Contoh: untuk Blok 017 Nomor 0154, cukup ketik 17 pada kolom Blok dan 154 pada kolom Nomor Wilayah.',
+              'Ketuk "Ganti Desa" untuk mengganti desa, atau buka Pengaturan → Wilayah Kerja untuk ganti kecamatan. Isi Blok dan Nomor Wilayah tanpa nol di depan.',
+          actionHint: 'Contoh: Blok 017 Nomor 0154 cukup diisi 17 dan 154.',
           icon: Icons.pin_outlined,
         ),
       );
 
-      steps.add(
-        FeatureTourStep(
-          targetKey: _scanButtonKey,
-          title: 'Tombol Pindai Foto SPPT Otomatis',
-          description:
-              'Malas mengetik nomor secara manual? Tekan tombol ini untuk memotret lembaran SPPT warga menggunakan kamera atau memilih foto dari galeri. '
-              'Aplikasi akan otomatis membaca nomor pajak dan mengisikannya ke kolom Blok & Nomor Wilayah.',
-          actionHint:
-              'Jika pada foto ditemukan lebih dari satu nomor pajak, Anda bisa memilih salah satu atau memeriksa semuanya sekaligus.',
-          icon: Icons.document_scanner_outlined,
-        ),
-      );
+      if (isMobilePlatform) {
+        steps.add(
+          FeatureTourStep(
+            targetKey: _scanButtonKey,
+            title: 'Pindai Foto SPPT Otomatis',
+            description:
+                'Potret lembar SPPT dari kamera atau galeri agar aplikasi otomatis membaca dan mengisi kolom Blok & Nomor Wilayah.',
+            actionHint:
+                'Jika ditemukan lebih dari satu NOP, Anda bisa memilih satu atau langsung cek massal.',
+            icon: Icons.document_scanner_outlined,
+          ),
+        );
+      }
     }
 
     if (!isTagihan) {
       steps.add(
         FeatureTourStep(
           targetKey: _importButtonKey,
-          title: 'Periksa Banyak Data Sekaligus (Latar Belakang)',
-          description:
-              'Tekan tombol ini untuk memeriksa status lunas puluhan hingga ratusan NOP sekaligus dari Excel, CSV, TXT, atau foto daftar. '
-              'Proses dapat disembunyikan di latar belakang dan otomatis memperbarui DHKP saat selesai.',
+          title: 'Cek Massal dari Berkas',
+          description: isMobilePlatform
+              ? 'Periksa status lunas banyak NOP sekaligus dari Excel, CSV, TXT, atau foto daftar. Bisa berjalan di latar belakang dan memperbarui DHKP.'
+              : 'Periksa status lunas banyak NOP sekaligus dari berkas Excel, CSV, atau TXT. Bisa berjalan di latar belakang dan memperbarui DHKP.',
           actionHint:
-              'Dari halaman DHKP, petugas Kedusunan juga bisa langsung memeriksa Seluruh Blok dusunnya sekaligus.',
+              'Dari halaman Data DHKP, petugas dusun juga dapat memeriksa seluruh blok sekaligus.',
           icon: Icons.upload_file_rounded,
         ),
       );
@@ -498,9 +516,9 @@ class _CheckFormViewState extends State<CheckFormView> {
           targetKey: _tahunInputKey,
           title: 'Kolom Tahun Pajak',
           description:
-              'Isi tahun pajak yang ingin Anda periksa bukti pembayarannya (secara bawaan terisi tahun berjalan). '
-              'Ubah angkanya jika warga ingin mengecek bukti lunas tahun-tahun sebelumnya.',
-          actionHint: 'Pastikan tahun diisi 4 angka, misalnya 2026 atau 2025.',
+              'Isi tahun pajak yang ingin diperiksa bukti bayarnya. Secara bawaan terisi tahun berjalan dan dapat diubah ke tahun sebelumnya.',
+          actionHint:
+              'Isi 4 digit angka tahun, misalnya $currentYear atau ${currentYear - 1}.',
           icon: Icons.calendar_today_outlined,
         ),
       );
@@ -510,12 +528,11 @@ class _CheckFormViewState extends State<CheckFormView> {
       steps.add(
         FeatureTourStep(
           targetKey: _captchaAreaKey,
-          title: 'Gambar Kode Pengaman & Tombol Ganti Gambar',
+          title: 'Kode Pengaman Bapenda',
           description:
-              'Bagian ini menampilkan gambar huruf/angka pengaman dari layanan Bapenda. '
-              'Jika tulisan pada gambar terlihat buram atau sulit dibaca, tekan tombol "Ganti Kode Gambar" di bawahnya untuk menampilkan gambar baru yang lebih jelas.',
+              'Menampilkan gambar huruf/angka pengaman dari Bapenda. Jika kurang jelas, tekan "Ganti Kode Gambar" untuk memuat gambar baru.',
           actionHint:
-              'Gambar kode akan diperbarui secara otomatis setiap kali Anda selesai melakukan pengecekan.',
+              'Gambar kode otomatis diperbarui setiap kali pengecekan selesai.',
           icon: Icons.refresh_rounded,
         ),
       );
@@ -523,11 +540,11 @@ class _CheckFormViewState extends State<CheckFormView> {
       steps.add(
         FeatureTourStep(
           targetKey: _captchaInputKey,
-          title: 'Kolom Pengisian Kode Verifikasi',
+          title: 'Isi Kode Verifikasi',
           description:
-              'Ketikkan huruf atau angka yang terlihat pada gambar kode pengaman di atas ke dalam kotak ini.',
+              'Ketikkan huruf atau angka yang tampil pada gambar kode pengaman di atas.',
           actionHint:
-              'Setelah mengetik kode, Anda bisa langsung menekan tombol Masuk/Go di papan ketik atau menekan tombol Cek di bawah.',
+              'Tekan Enter/Go atau tombol Cek di bawah untuk memulai pencarian.',
           icon: Icons.keyboard_alt_outlined,
         ),
       );
@@ -536,14 +553,13 @@ class _CheckFormViewState extends State<CheckFormView> {
     steps.add(
       FeatureTourStep(
         targetKey: _submitButtonKey,
-        title: isTagihan
-            ? 'Tombol Cek Rincian Tagihan'
-            : 'Tombol Cek Status Pembayaran',
+        title: isTagihan ? 'Cek Rincian Tagihan' : 'Cek Status Pembayaran',
         description: isTagihan
-            ? 'Tekan tombol ini untuk menampilkan nama wajib pajak, rincian tagihan per tahun, denda (jika ada), serta tombol pembayaran langsung menggunakan QRIS atau Virtual Account Bank BJB.'
-            : 'Tekan tombol ini untuk memeriksa apakah pajak tahun tersebut sudah lunas. Jika sudah lunas, warga dapat melihat dan mengunduh lembar bukti bayar resminya, dan catatan DHKP otomatis diperbarui.',
-        actionHint:
-            'Hasil pemeriksaan akan langsung muncul di bagian bawah kartu formulir ini.',
+            ? (supportsVa
+                  ? 'Tampilkan nama wajib pajak, rincian tagihan per tahun, denda, serta pembayaran langsung lewat QRIS atau Virtual Account.'
+                  : 'Tampilkan nama wajib pajak, rincian tagihan per tahun, denda, serta pembayaran langsung lewat QRIS.')
+            : 'Periksa status lunas tahun pajak terpilih. Jika lunas, bukti bayar resmi dapat dilihat atau diunduh dan Data DHKP otomatis diperbarui.',
+        actionHint: 'Hasil pemeriksaan tampil langsung di bawah kartu formulir.',
         icon: Icons.search_rounded,
       ),
     );
@@ -552,26 +568,25 @@ class _CheckFormViewState extends State<CheckFormView> {
       steps.add(
         FeatureTourStep(
           targetKey: widget.dhkpFabKey!,
-          title: 'Tombol Buku Catatan DHKP',
+          title: 'Tombol Data DHKP',
           description:
-              'Tekan tombol melayang ini untuk membuka Buku Catatan DHKP desa. '
-              'Di dalamnya Anda dapat melihat daftar seluruh wajib pajak per blok dan dusun, memantau grafik pelunasan, membuat kolase foto STTS, hingga mengekspor laporan lengkap.',
+              'Buka Data DHKP desa untuk melihat daftar wajib pajak per blok, grafik pelunasan, kolase foto STTS, hingga ekspor laporan.',
           actionHint:
-              'Angka kecil di pojok tombol menunjukkan jumlah data wajib pajak yang sudah tersimpan di perangkat Anda.',
+              'Angka di sudut tombol menunjukkan jumlah data wajib pajak tersimpan.',
           icon: Icons.table_chart_outlined,
         ),
       );
     }
 
-    if (widget.emergencyFabKey?.currentContext != null) {
+    if (isMobilePlatform && widget.emergencyFabKey?.currentContext != null) {
       steps.add(
         FeatureTourStep(
           targetKey: widget.emergencyFabKey!,
-          title: 'Tombol Kontak Darurat 112 Cianjur',
+          title: 'Kontak Darurat 112 Cianjur',
           description:
-              'Akses cepat satu ketuk ke Cianjur Siaga 112 (bebas pulsa 24 jam), Polres, BPBD, RSUD/PSC 119, 6 Pos Damkar, PLN, SP4N-LAPOR!, serta kontak darurat desa seperti Bidan Desa & Kepala Desa.',
+              'Akses cepat ke Cianjur Siaga 112, Polres, BPBD, RSUD/PSC 119, Damkar, PLN, SP4N-LAPOR!, serta kontak darurat desa.',
           actionHint:
-              'Anda juga dapat menambahkan kontak darurat desa sendiri yang otomatis tersinkron ke akun Google.',
+              'Kontak darurat desa tambahan otomatis tersinkron ke akun Google.',
           icon: Icons.emergency_rounded,
         ),
       );
@@ -581,11 +596,11 @@ class _CheckFormViewState extends State<CheckFormView> {
       steps.add(
         FeatureTourStep(
           targetKey: widget.headerSettingsKey!,
-          title: 'Tombol Pengaturan Aplikasi',
+          title: 'Pengaturan Aplikasi',
           description:
-              'Tekan ikon roda gigi di pojok kanan atas untuk mengatur wilayah kerja dusun/blok, mengganti warna tampilan dan mode gelap, mengatur ukuran tulisan, mencadangkan data ke Google Drive, atau mengulang panduan fitur ini.',
+              'Buka Pengaturan untuk mengatur tema tampilan, keamanan, pencadangan, dan wilayah kerja, atau mengulang panduan fitur.',
           actionHint:
-              'Anda juga selalu bisa menekan tombol tanda tanya (?) di sebelah tombol pengaturan untuk membuka kembali panduan layar yang sedang aktif.',
+              'Ketuk ikon tanda tanya (?) di sebelahnya kapan saja untuk membuka panduan layar aktif.',
           icon: Icons.settings_outlined,
         ),
       );
@@ -804,7 +819,12 @@ class _CheckFormViewState extends State<CheckFormView> {
       if (mounted) _captchaFocusNode.requestFocus();
     } catch (e) {
       if (!mounted) return;
-      setState(() => _errorText = 'Gagal cek: $e');
+      setState(
+        () => _errorText = friendlyErrorMessage(
+          e,
+          fallback: 'Gagal memeriksa tagihan PBB. Silakan coba lagi.',
+        ),
+      );
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -898,7 +918,9 @@ class _CheckFormViewState extends State<CheckFormView> {
                                 const SizedBox(height: 2),
                                 Text(
                                   isTagihan
-                                      ? 'Lihat rincian tunggakan dan bayar lewat QRIS atau VA'
+                                      ? (Platform.isAndroid
+                                            ? 'Lihat rincian tunggakan dan bayar lewat QRIS atau VA'
+                                            : 'Lihat rincian tunggakan dan bayar lewat QRIS')
                                       : 'Periksa bukti lunas pembayaran PBB per tahun',
                                   style: Theme.of(context).textTheme.bodySmall
                                       ?.copyWith(
@@ -986,26 +1008,29 @@ class _CheckFormViewState extends State<CheckFormView> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Expanded(child: fieldsRow),
-                                const SizedBox(width: 8),
-                                _scanningOcr
-                                    ? const Padding(
-                                        padding: EdgeInsets.all(12),
-                                        child: SizedBox(
-                                          width: 24,
-                                          height: 24,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
+                                if (isMobilePlatform) ...[
+                                  const SizedBox(width: 8),
+                                  _scanningOcr
+                                      ? const Padding(
+                                          padding: EdgeInsets.all(12),
+                                          child: SizedBox(
+                                            width: 24,
+                                            height: 24,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                            ),
                                           ),
+                                        )
+                                      : IconButton.filledTonal(
+                                          key: _scanButtonKey,
+                                          onPressed: _scanAndFill,
+                                          icon: const Icon(
+                                            Icons.document_scanner_outlined,
+                                          ),
+                                          tooltip:
+                                              'Pindai Nomor dari Foto SPPT',
                                         ),
-                                      )
-                                    : IconButton.filledTonal(
-                                        key: _scanButtonKey,
-                                        onPressed: _scanAndFill,
-                                        icon: const Icon(
-                                          Icons.document_scanner_outlined,
-                                        ),
-                                        tooltip: 'Pindai Nomor dari Foto SPPT',
-                                      ),
+                                ],
                                 if (!isTagihan) ...[
                                   const SizedBox(width: 8),
                                   IconButton.filledTonal(
@@ -1023,46 +1048,51 @@ class _CheckFormViewState extends State<CheckFormView> {
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
                               fieldsRow,
-                              const SizedBox(height: 10),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: FilledButton.tonalIcon(
-                                      key: _scanButtonKey,
-                                      onPressed: _scanningOcr
-                                          ? null
-                                          : _scanAndFill,
-                                      icon: _scanningOcr
-                                          ? const SizedBox(
-                                              width: 18,
-                                              height: 18,
-                                              child: CircularProgressIndicator(
-                                                strokeWidth: 2,
-                                              ),
-                                            )
-                                          : const Icon(
-                                              Icons.document_scanner_outlined,
-                                              size: 18,
-                                            ),
-                                      label: const Text('Pindai SPPT'),
-                                    ),
-                                  ),
-                                  if (!isTagihan) ...[
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: FilledButton.tonalIcon(
-                                        key: _importButtonKey,
-                                        onPressed: widget.onImportPressed,
-                                        icon: const Icon(
-                                          Icons.upload_file,
-                                          size: 18,
+                              if (isMobilePlatform || !isTagihan) ...[
+                                const SizedBox(height: 10),
+                                Row(
+                                  children: [
+                                    if (isMobilePlatform)
+                                      Expanded(
+                                        child: FilledButton.tonalIcon(
+                                          key: _scanButtonKey,
+                                          onPressed: _scanningOcr
+                                              ? null
+                                              : _scanAndFill,
+                                          icon: _scanningOcr
+                                              ? const SizedBox(
+                                                  width: 18,
+                                                  height: 18,
+                                                  child:
+                                                      CircularProgressIndicator(
+                                                        strokeWidth: 2,
+                                                      ),
+                                                )
+                                              : const Icon(
+                                                  Icons
+                                                      .document_scanner_outlined,
+                                                  size: 18,
+                                                ),
+                                          label: const Text('Pindai SPPT'),
                                         ),
-                                        label: const Text('Impor Berkas'),
                                       ),
-                                    ),
+                                    if (isMobilePlatform && !isTagihan)
+                                      const SizedBox(width: 8),
+                                    if (!isTagihan)
+                                      Expanded(
+                                        child: FilledButton.tonalIcon(
+                                          key: _importButtonKey,
+                                          onPressed: widget.onImportPressed,
+                                          icon: const Icon(
+                                            Icons.upload_file,
+                                            size: 18,
+                                          ),
+                                          label: const Text('Impor Berkas'),
+                                        ),
+                                      ),
                                   ],
-                                ],
-                              ),
+                                ),
+                              ],
                             ],
                           );
                         },

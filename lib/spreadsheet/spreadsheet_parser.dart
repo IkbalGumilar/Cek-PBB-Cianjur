@@ -1,8 +1,11 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
+import 'dart:typed_data';
 
 import 'package:csv/csv.dart';
 import 'package:excel/excel.dart' hide Border;
+import 'package:flutter/widgets.dart';
 
 import '../base_table_exporter.dart';
 import '../dkhp_package_helper.dart';
@@ -26,6 +29,15 @@ class SpreadsheetTable extends SimpleExportableTable {
 abstract class BaseSpreadsheetParser {
   static const int maxSafeSizeBytes = 100 * 1024 * 1024;
 
+  static bool get canUseIsolate {
+    try {
+      final bindingName = WidgetsBinding.instance.runtimeType.toString();
+      return !bindingName.contains('Test');
+    } catch (_) {
+      return true;
+    }
+  }
+
   void validateFileSize(int bytes) {
     if (bytes > maxSafeSizeBytes) {
       throw const FormatException(
@@ -47,11 +59,18 @@ class ExcelSpreadsheetParser extends BaseSpreadsheetParser {
     validateFileSize(length);
 
     final bytes = await file.readAsBytes();
+    if (BaseSpreadsheetParser.canUseIsolate) {
+      return Isolate.run(() => _decodeExcelBytes(bytes));
+    }
+    return _decodeExcelBytes(bytes);
+  }
+
+  static List<SpreadsheetTable> _decodeExcelBytes(Uint8List bytes) {
     Excel excel;
     try {
       excel = Excel.decodeBytes(bytes);
     } catch (e) {
-      throw FormatException(
+      throw const FormatException(
         'Gagal membaca berkas Excel: Format berkas tidak valid atau rusak.',
       );
     }
@@ -153,6 +172,13 @@ class CsvSpreadsheetParser extends BaseSpreadsheetParser {
     validateFileSize(length);
 
     final bytes = await file.readAsBytes();
+    if (BaseSpreadsheetParser.canUseIsolate) {
+      return Isolate.run(() => _decodeCsvBytes(bytes));
+    }
+    return _decodeCsvBytes(bytes);
+  }
+
+  static List<SpreadsheetTable> _decodeCsvBytes(Uint8List bytes) {
     String content;
     try {
       content = utf8.decode(bytes);

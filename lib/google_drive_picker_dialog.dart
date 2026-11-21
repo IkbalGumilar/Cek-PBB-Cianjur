@@ -11,11 +11,12 @@ import 'cloud_sync/google_drive_service.dart';
 import 'google_auth_service.dart';
 import 'google_drive_backup_policy.dart';
 import 'unity_lerp_widgets.dart';
+import 'user_friendly_error.dart';
 
 export 'cloud_sync/google_drive_service.dart';
 
-/// Menampilkan dialog pemilih berkas Google Drive interaktif.
-/// Mengembalikan path berkas lokal yang telah diunduh, atau `null` jika dibatalkan.
+/// Menampilkan dialog pemilih berkas Google Drive & perangkat interaktif.
+/// Mengembalikan path berkas lokal yang telah diunduh/dipilih, atau `null` jika dibatalkan.
 Future<String?> showGoogleDrivePickerDialog(BuildContext context) {
   return showDialog<String>(
     context: context,
@@ -44,6 +45,16 @@ class _GoogleDrivePickerDialogState extends State<GoogleDrivePickerDialog>
   String? _error;
   List<GoogleDriveItem> _items = [];
   String _currentAccount = '';
+  final List<({String? id, String name})> _folderStack = [];
+
+  String? get _currentFolderId =>
+      _folderStack.isEmpty ? null : _folderStack.last.id;
+
+  String get _currentFolderName => _folderStack.isEmpty
+      ? GoogleDriveBackupPolicy.dedicatedFolderName
+      : _folderStack.last.name;
+
+  bool get _isBusy => _downloading || _uploading;
 
   @override
   void initState() {
@@ -60,6 +71,7 @@ class _GoogleDrivePickerDialogState extends State<GoogleDrivePickerDialog>
   }
 
   Future<void> _loadAccountAndFiles({String? customFolderId}) async {
+    final targetFolderId = customFolderId ?? _currentFolderId;
     setState(() {
       _loading = true;
       _error = null;
@@ -72,7 +84,7 @@ class _GoogleDrivePickerDialogState extends State<GoogleDrivePickerDialog>
       // Jika ada akun terhubung atau ada mock test, muat berkas
       if (_currentAccount.isNotEmpty || GoogleDriveService.hasMockItems) {
         final files = await GoogleDriveService.instance.listDkhpFiles(
-          folderId: customFolderId,
+          folderId: targetFolderId,
         );
         if (mounted) {
           setState(() {
@@ -89,29 +101,28 @@ class _GoogleDrivePickerDialogState extends State<GoogleDrivePickerDialog>
       }
     } catch (e) {
       if (mounted) {
-        final errStr = e.toString();
-        String friendlyError;
-        if (errStr.contains('403')) {
-          friendlyError =
-              'Akses folder Google Drive belum diizinkan. Anda tetap dapat memilih berkas langsung dari penyimpanan perangkat di bawah.';
-        } else if (errStr.contains('SocketException') ||
-            errStr.contains('Failed host lookup') ||
-            errStr.contains('ClientException')) {
-          friendlyError =
-              'Gagal terhubung ke Google Drive karena koneksi internet sedang bermasalah. Silakan periksa sinyal atau pilih berkas dari perangkat.';
-        } else {
-          friendlyError =
-              'Belum dapat memuat daftar berkas dari Google Drive. Silakan coba lagi atau pilih berkas dari penyimpanan perangkat.';
-        }
         setState(() {
-          _error = friendlyError;
+          _error = friendlyErrorMessage(
+            e,
+            fallback:
+                'Belum dapat memuat daftar berkas dari Google Drive. Silakan coba lagi atau pilih berkas dari penyimpanan perangkat.',
+          );
           _loading = false;
         });
       }
     }
   }
 
+  Future<void> _navigateUpFolder() async {
+    if (_folderStack.isEmpty || _loading || _isBusy) return;
+    setState(() {
+      _folderStack.removeLast();
+    });
+    await _loadAccountAndFiles(customFolderId: _currentFolderId);
+  }
+
   Future<void> _pickViaSystemFileManager() async {
+    if (_isBusy) return;
     try {
       final files = await FilePicker.pickFiles(type: FileType.any);
       if (!mounted) return;
@@ -131,9 +142,16 @@ class _GoogleDrivePickerDialogState extends State<GoogleDrivePickerDialog>
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Gagal membuka berkas: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              friendlyErrorMessage(
+                e,
+                fallback: 'Gagal membuka berkas dari perangkat.',
+              ),
+            ),
+          ),
+        );
       }
     }
   }
@@ -148,6 +166,7 @@ class _GoogleDrivePickerDialogState extends State<GoogleDrivePickerDialog>
       if (!mounted) return;
       if (user != null) {
         _currentAccount = user.email;
+        _folderStack.clear();
         // Otomatis pastikan folder khusus "Cek PBB Cianjur" ada di Google Drive
         unawaited(GoogleDriveService.instance.ensureDedicatedFolder());
         await _loadAccountAndFiles();
@@ -157,13 +176,17 @@ class _GoogleDrivePickerDialogState extends State<GoogleDrivePickerDialog>
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = 'Gagal menghubungkan akun Google: $e';
+        _error = friendlyErrorMessage(
+          e,
+          fallback: 'Gagal menghubungkan akun Google. Silakan coba lagi.',
+        );
         _loading = false;
       });
     }
   }
 
   Future<void> _uploadLocalFileToDrive() async {
+    if (_isBusy) return;
     try {
       final picked = await FilePicker.pickFiles(type: FileType.any);
       if (picked.isEmpty || picked.first.path == null) return;
@@ -189,6 +212,7 @@ class _GoogleDrivePickerDialogState extends State<GoogleDrivePickerDialog>
 
       await GoogleDriveService.instance.uploadFile(
         file: file,
+        folderId: _currentFolderId,
         customFileName: fileName,
       );
 
@@ -202,18 +226,25 @@ class _GoogleDrivePickerDialogState extends State<GoogleDrivePickerDialog>
           backgroundColor: Colors.green[800],
         ),
       );
-      await _loadAccountAndFiles();
+      await _loadAccountAndFiles(customFolderId: _currentFolderId);
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _uploading = false;
-        _error = 'Gagal mengunggah berkas: $e';
+        _error = friendlyErrorMessage(
+          e,
+          fallback: 'Gagal mengunggah berkas ke Google Drive.',
+        );
       });
     }
   }
 
   Future<void> _downloadAndSelect(GoogleDriveItem item) async {
+    if (_isBusy) return;
     if (item.isFolder) {
+      setState(() {
+        _folderStack.add((id: item.id, name: item.name));
+      });
       await _loadAccountAndFiles(customFolderId: item.id);
       return;
     }
@@ -243,12 +274,14 @@ class _GoogleDrivePickerDialogState extends State<GoogleDrivePickerDialog>
       if (!mounted) return;
       setState(() {
         _downloading = false;
-        _error = 'Gagal mengunduh berkas "${item.name}": $e';
+        _error =
+            'Gagal mengunduh berkas "${item.name}": ${friendlyErrorMessage(e, fallback: 'Silakan coba lagi.')}';
       });
     }
   }
 
   Future<void> _downloadFromLink() async {
+    if (_isBusy) return;
     final raw = _linkController.text.trim();
     if (raw.isEmpty) {
       setState(() => _error = 'Masukkan tautan berkas Google Drive.');
@@ -286,7 +319,11 @@ class _GoogleDrivePickerDialogState extends State<GoogleDrivePickerDialog>
       if (!mounted) return;
       setState(() {
         _downloading = false;
-        _error = 'Gagal mengunduh berkas dari tautan Google Drive: $e';
+        _error = friendlyErrorMessage(
+          e,
+          fallback:
+              'Gagal mengunduh berkas dari tautan Google Drive. Pastikan tautan dapat diakses lalu coba lagi.',
+        );
       });
     }
   }
@@ -322,6 +359,48 @@ class _GoogleDrivePickerDialogState extends State<GoogleDrivePickerDialog>
     return const Icon(Icons.insert_drive_file, color: Colors.blue, size: 28);
   }
 
+  Widget _buildFolderNavigationBar(ThemeData theme) {
+    if (_folderStack.isEmpty) return const SizedBox.shrink();
+    final scheme = theme.colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest.withValues(alpha: 0.45),
+        border: Border(
+          bottom: BorderSide(
+            color: scheme.outlineVariant.withValues(alpha: 0.5),
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          TextButton.icon(
+            onPressed: (_loading || _isBusy) ? null : _navigateUpFolder,
+            icon: const Icon(Icons.arrow_back_rounded, size: 18),
+            label: const Text('Kembali'),
+            style: TextButton.styleFrom(
+              visualDensity: VisualDensity.compact,
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            ),
+          ),
+          const SizedBox(width: 6),
+          const Icon(Icons.folder_open_rounded, size: 18, color: Colors.amber),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              _currentFolderName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -349,7 +428,7 @@ class _GoogleDrivePickerDialogState extends State<GoogleDrivePickerDialog>
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text(
-                          'Google Drive',
+                          'Pilih Berkas DHKP',
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
@@ -357,8 +436,8 @@ class _GoogleDrivePickerDialogState extends State<GoogleDrivePickerDialog>
                         ),
                         Text(
                           _currentAccount.isNotEmpty
-                              ? _currentAccount
-                              : 'Pilih dan buka berkas langsung dari Drive',
+                              ? 'Google Drive • $_currentAccount'
+                              : 'Pilih dari Google Drive atau penyimpanan perangkat',
                           style: theme.textTheme.bodySmall,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -369,15 +448,11 @@ class _GoogleDrivePickerDialogState extends State<GoogleDrivePickerDialog>
                     IconButton(
                       icon: const Icon(Icons.upload_file_outlined),
                       tooltip: 'Unggah Berkas ke Google Drive',
-                      onPressed: (_downloading || _uploading)
-                          ? null
-                          : _uploadLocalFileToDrive,
+                      onPressed: _isBusy ? null : _uploadLocalFileToDrive,
                     ),
                   IconButton(
                     icon: const Icon(Icons.close),
-                    onPressed: _downloading || _uploading
-                        ? null
-                        : () => Navigator.of(context).pop(),
+                    onPressed: _isBusy ? null : () => Navigator.of(context).pop(),
                   ),
                 ],
               ),
@@ -441,15 +516,12 @@ class _GoogleDrivePickerDialogState extends State<GoogleDrivePickerDialog>
                     ),
                     const SizedBox(height: 10),
                     FilledButton.icon(
-                      onPressed: _pickViaSystemFileManager,
+                      onPressed: _isBusy ? null : _pickViaSystemFileManager,
                       style: FilledButton.styleFrom(
                         backgroundColor: Colors.blue.shade700,
                         foregroundColor: Colors.white,
                       ),
-                      icon: const FaIcon(
-                        FontAwesomeIcons.googleDrive,
-                        size: 16,
-                      ),
+                      icon: const Icon(Icons.folder_open_rounded, size: 18),
                       label: const Text(
                         'Pilih Berkas dari Penyimpanan Perangkat',
                       ),
@@ -463,7 +535,7 @@ class _GoogleDrivePickerDialogState extends State<GoogleDrivePickerDialog>
                 controller: _tabController,
                 children: [
                   // Tab 1: Berkas Drive
-                  _buildDriveFilesTab(),
+                  _buildDriveFilesTab(theme),
                   // Tab 2: Tempel Link
                   _buildLinkTab(),
                 ],
@@ -478,13 +550,15 @@ class _GoogleDrivePickerDialogState extends State<GoogleDrivePickerDialog>
                   TextButton.icon(
                     onPressed: _openDriveApp,
                     icon: const Icon(Icons.open_in_new, size: 16),
-                    label: const Text('Buka Aplikasi Drive'),
+                    label: Text(
+                      isDesktopPlatform
+                          ? 'Buka Google Drive di Browser'
+                          : 'Buka Aplikasi Drive',
+                    ),
                   ),
                   const Spacer(),
                   TextButton(
-                    onPressed: _downloading
-                        ? null
-                        : () => Navigator.of(context).pop(),
+                    onPressed: _isBusy ? null : () => Navigator.of(context).pop(),
                     child: const Text('Tutup'),
                   ),
                 ],
@@ -496,14 +570,21 @@ class _GoogleDrivePickerDialogState extends State<GoogleDrivePickerDialog>
     );
   }
 
-  Widget _buildDriveFilesTab() {
+  Widget _buildDriveFilesTab(ThemeData theme) {
     if (_loading) {
-      return const SmoothLoadingCard(
-        icon: Icons.cloud_sync_outlined,
-        title: 'Menghubungkan ke Google Drive...',
-        subtitle:
-            'Memuat daftar berkas data DHKP dan cadangan dari Google Drive Anda...',
-        badgeText: 'Memuat daftar berkas Drive',
+      return Column(
+        children: [
+          _buildFolderNavigationBar(theme),
+          const Expanded(
+            child: SmoothLoadingCard(
+              icon: Icons.cloud_sync_outlined,
+              title: 'Menghubungkan ke Google Drive...',
+              subtitle:
+                  'Memuat daftar berkas data DHKP dan cadangan dari Google Drive Anda...',
+              badgeText: 'Memuat daftar berkas Drive',
+            ),
+          ),
+        ],
       );
     }
 
@@ -526,7 +607,7 @@ class _GoogleDrivePickerDialogState extends State<GoogleDrivePickerDialog>
               ),
               const SizedBox(height: 6),
               const Text(
-                'Hubungkan akun Google Anda untuk melihat dan memilih berkas data DHKP langsung dari Google Drive.',
+                'Hubungkan akun Google Anda untuk melihat dan memilih berkas data DHKP langsung dari Google Drive, atau pilih berkas langsung dari perangkat.',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 13),
               ),
@@ -536,6 +617,12 @@ class _GoogleDrivePickerDialogState extends State<GoogleDrivePickerDialog>
                 icon: const FaIcon(FontAwesomeIcons.google, size: 16),
                 label: const Text('Hubungkan Akun Google'),
               ),
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                onPressed: _isBusy ? null : _pickViaSystemFileManager,
+                icon: const Icon(Icons.folder_open_rounded, size: 18),
+                label: const Text('Pilih dari Penyimpanan Perangkat'),
+              ),
             ],
           ),
         ),
@@ -543,145 +630,175 @@ class _GoogleDrivePickerDialogState extends State<GoogleDrivePickerDialog>
     }
 
     if (_items.isEmpty) {
-      return Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(
-                Icons.folder_open_outlined,
-                size: 48,
-                color: Colors.grey,
-              ),
-              const SizedBox(height: 12),
-              const Text(
-                'Belum Ada Berkas DHKP Terdeteksi',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-              ),
-              const SizedBox(height: 6),
-              const Text(
-                'Jika berkas berada di folder lain, Anda dapat langsung memilihnya dari aplikasi Google Drive atau penyimpanan perangkat.',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 12),
-              ),
-              const SizedBox(height: 16),
-              FilledButton.icon(
-                onPressed: _uploadLocalFileToDrive,
-                style: FilledButton.styleFrom(
-                  backgroundColor: Colors.teal.shade700,
-                  foregroundColor: Colors.white,
+      return Column(
+        children: [
+          _buildFolderNavigationBar(theme),
+          Expanded(
+            child: Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.folder_open_outlined,
+                      size: 48,
+                      color: Colors.grey,
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      _folderStack.isNotEmpty
+                          ? 'Folder "$_currentFolderName" Kosong'
+                          : 'Belum Ada Berkas DHKP Terdeteksi',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Jika berkas berada di folder lain, Anda dapat kembali ke folder sebelumnya atau memilihnya dari penyimpanan perangkat.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 12),
+                    ),
+                    const SizedBox(height: 16),
+                    FilledButton.icon(
+                      onPressed: _isBusy ? null : _uploadLocalFileToDrive,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: Colors.teal.shade700,
+                        foregroundColor: Colors.white,
+                      ),
+                      icon: const Icon(Icons.upload_file, size: 16),
+                      label: const Text('Unggah Berkas ke Folder Ini'),
+                    ),
+                    const SizedBox(height: 10),
+                    FilledButton.icon(
+                      onPressed: _isBusy ? null : _pickViaSystemFileManager,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: Colors.blue.shade700,
+                        foregroundColor: Colors.white,
+                      ),
+                      icon: const Icon(Icons.folder_open_rounded, size: 18),
+                      label: const Text('Pilih dari Penyimpanan Perangkat'),
+                    ),
+                    const SizedBox(height: 10),
+                    OutlinedButton.icon(
+                      onPressed: () =>
+                          _loadAccountAndFiles(customFolderId: _currentFolderId),
+                      icon: const Icon(Icons.refresh, size: 16),
+                      label: const Text('Muat Ulang'),
+                    ),
+                  ],
                 ),
-                icon: const Icon(Icons.upload_file, size: 16),
-                label: const Text('Unggah Berkas ke Folder Ini'),
               ),
-              const SizedBox(height: 10),
-              FilledButton.icon(
-                onPressed: _pickViaSystemFileManager,
-                style: FilledButton.styleFrom(
-                  backgroundColor: Colors.blue.shade700,
-                  foregroundColor: Colors.white,
-                ),
-                icon: const FaIcon(FontAwesomeIcons.googleDrive, size: 16),
-                label: const Text('Pilih dari Penyimpanan Perangkat'),
-              ),
-              const SizedBox(height: 10),
-              OutlinedButton.icon(
-                onPressed: _loadAccountAndFiles,
-                icon: const Icon(Icons.refresh, size: 16),
-                label: const Text('Muat Ulang'),
-              ),
-            ],
+            ),
           ),
-        ),
+        ],
       );
     }
 
-    return RefreshIndicator(
-      onRefresh: _loadAccountAndFiles,
-      child: ListView.separated(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        itemCount: _items.length + 1,
-        separatorBuilder: (_, _) => const Divider(height: 1),
-        itemBuilder: (ctx, idx) {
-          if (idx == 0) {
-            return Padding(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-              child: Material(
-                color: Colors.blue.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(10),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(10),
-                  onTap: _pickViaSystemFileManager,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 10,
-                    ),
-                    decoration: BoxDecoration(
+    return Column(
+      children: [
+        _buildFolderNavigationBar(theme),
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: () =>
+                _loadAccountAndFiles(customFolderId: _currentFolderId),
+            child: ListView.separated(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              itemCount: _items.length + 1,
+              separatorBuilder: (_, _) => const Divider(height: 1),
+              itemBuilder: (ctx, idx) {
+                if (idx == 0) {
+                  return Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                    child: Material(
+                      color: Colors.blue.withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: Colors.blue.withValues(alpha: 0.3),
-                      ),
-                    ),
-                    child: const Row(
-                      children: [
-                        FaIcon(
-                          FontAwesomeIcons.googleDrive,
-                          color: Colors.blue,
-                          size: 22,
-                        ),
-                        SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(10),
+                        onTap: _isBusy ? null : _pickViaSystemFileManager,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: Colors.blue.withValues(alpha: 0.3),
+                            ),
+                          ),
+                          child: const Row(
                             children: [
-                              Text(
-                                'Pilih dari Penyimpanan Perangkat',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 13,
+                              Icon(
+                                Icons.folder_open_rounded,
+                                color: Colors.blue,
+                                size: 22,
+                              ),
+                              SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Pilih dari Penyimpanan Perangkat',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                    Text(
+                                      'Pilih berkas DHKP langsung dari folder di perangkat Anda',
+                                      style: TextStyle(fontSize: 11),
+                                    ),
+                                  ],
                                 ),
                               ),
-                              Text(
-                                'Pilih berkas langsung dari folder perangkat atau menu Google Drive',
-                                style: TextStyle(fontSize: 11),
+                              Icon(
+                                Icons.arrow_forward_ios,
+                                size: 13,
+                                color: Colors.blue,
                               ),
                             ],
                           ),
                         ),
-                        Icon(
-                          Icons.arrow_forward_ios,
-                          size: 13,
-                          color: Colors.blue,
-                        ),
-                      ],
+                      ),
+                    ),
+                  );
+                }
+                final item = _items[idx - 1];
+                return ListTile(
+                  leading: _buildFileIcon(item),
+                  title: Text(
+                    item.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
-                ),
-              ),
-            );
-          }
-          final item = _items[idx - 1];
-          return ListTile(
-            leading: _buildFileIcon(item),
-            title: Text(
-              item.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                  subtitle: Text(
+                    '${item.formattedSize} • ${item.formattedModifiedDate}',
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                  trailing: _isBusy
+                      ? null
+                      : Icon(
+                          item.isFolder
+                              ? Icons.chevron_right_rounded
+                              : Icons.download,
+                          size: 20,
+                          color: item.isFolder ? null : Colors.blue,
+                        ),
+                  onTap: _isBusy ? null : () => _downloadAndSelect(item),
+                );
+              },
             ),
-            subtitle: Text(
-              '${item.formattedSize} • ${item.formattedModifiedDate}',
-              style: const TextStyle(fontSize: 12),
-            ),
-            trailing: _downloading
-                ? null
-                : const Icon(Icons.download, size: 20, color: Colors.blue),
-            onTap: _downloading ? null : () => _downloadAndSelect(item),
-          );
-        },
-      ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -716,7 +833,7 @@ class _GoogleDrivePickerDialogState extends State<GoogleDrivePickerDialog>
           ),
           const SizedBox(height: 16),
           FilledButton.icon(
-            onPressed: _downloading ? null : _downloadFromLink,
+            onPressed: _isBusy ? null : _downloadFromLink,
             icon: const Icon(Icons.cloud_download_outlined),
             label: const Text('Unduh & Buka Berkas'),
           ),

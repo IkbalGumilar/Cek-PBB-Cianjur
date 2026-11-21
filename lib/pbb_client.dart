@@ -20,12 +20,14 @@ class SttsExtractResult {
   final String? nomorStan;
   final String? namaWajibPajak;
   final String? jumlahPbb;
+  final Uint8List? pdfBytes;
 
   const SttsExtractResult({
     required this.tanggalBayar,
     this.nomorStan,
     this.namaWajibPajak,
     this.jumlahPbb,
+    this.pdfBytes,
   });
 }
 
@@ -36,6 +38,7 @@ class PbbResult {
   final String? tanggalBayar;
   final String? jumlahPbb;
   final String? nomorStan;
+  final Uint8List? sttsPdfBytes;
 
   PbbResult(
     this.status,
@@ -44,6 +47,7 @@ class PbbResult {
     this.tanggalBayar,
     this.jumlahPbb,
     this.nomorStan,
+    this.sttsPdfBytes,
   });
 
   bool get isPaid {
@@ -215,6 +219,7 @@ class PbbClient extends BaseHttpClient {
             tanggalBayar: stts?.tanggalBayar,
             jumlahPbb: stts?.jumlahPbb,
             nomorStan: stts?.nomorStan,
+            sttsPdfBytes: stts?.pdfBytes,
           );
         } catch (_) {}
       }
@@ -235,23 +240,26 @@ class PbbClient extends BaseHttpClient {
         );
       }
 
-      // Periksa via STTS jika ada bukti bayar spesifik tahun target
-      try {
-        final stts = await extractSttsInMemory(
-          nop: cleanNop,
-          tahun: targetYear,
-        );
-        if (stts != null && stts.tanggalBayar.trim().isNotEmpty) {
-          return PbbResult(
-            'Sudah Bayar',
-            'PBB tahun $targetYear LUNAS (terdapat riwayat tunggakan tahun lain)',
-            namaWajibPajak: stts.namaWajibPajak ?? namaFromPdf,
-            tanggalBayar: stts.tanggalBayar,
-            jumlahPbb: stts.jumlahPbb,
-            nomorStan: stts.nomorStan,
+      // Periksa via STTS hanya jika tahun target tidak tercantum eksplisit di tabel tunggakan
+      if (!isTargetYearUnpaid) {
+        try {
+          final stts = await extractSttsInMemory(
+            nop: cleanNop,
+            tahun: targetYear,
           );
-        }
-      } catch (_) {}
+          if (stts != null && stts.tanggalBayar.trim().isNotEmpty) {
+            return PbbResult(
+              'Sudah Bayar',
+              'PBB tahun $targetYear LUNAS (terdapat riwayat tunggakan tahun lain)',
+              namaWajibPajak: stts.namaWajibPajak ?? namaFromPdf,
+              tanggalBayar: stts.tanggalBayar,
+              jumlahPbb: stts.jumlahPbb,
+              nomorStan: stts.nomorStan,
+              sttsPdfBytes: stts.pdfBytes,
+            );
+          }
+        } catch (_) {}
+      }
 
       return PbbResult(
         'Belum Bayar',
@@ -286,6 +294,7 @@ class PbbClient extends BaseHttpClient {
         tanggalBayar: tanggalBayar,
         jumlahPbb: jml,
         nomorStan: stan,
+        sttsPdfBytes: stts?.pdfBytes,
       );
     }
 
@@ -338,7 +347,8 @@ class PbbClient extends BaseHttpClient {
           contentType.contains('application/pdf');
       if (!isPdf) return null;
 
-      final document = PdfDocument(inputBytes: bytes);
+      final pdfBytes = Uint8List.fromList(bytes);
+      final document = PdfDocument(inputBytes: pdfBytes);
       final text = PdfTextExtractor(document).extractText();
       document.dispose();
 
@@ -375,6 +385,7 @@ class PbbClient extends BaseHttpClient {
         nomorStan: matchStan?.group(1)?.trim(),
         namaWajibPajak: matchNama?.group(1)?.trim(),
         jumlahPbb: cleanJumlah,
+        pdfBytes: pdfBytes,
       );
     } catch (_) {
       return null;
@@ -816,7 +827,7 @@ class PbbClient extends BaseHttpClient {
       if (json is Map && json['rc'] != '0000') {
         if (json['rc'] == '0014') {
           throw QrisGenerationError(
-            'NOP ini untuk tahun $tahun sudah pernah generate VA. Silakan gunakan pembayaran VA.',
+            'NOP ini untuk tahun $tahun sudah pernah membuat Virtual Account. Silakan gunakan pembayaran VA.',
           );
         }
         throw QrisGenerationError(
@@ -877,7 +888,7 @@ class PbbClient extends BaseHttpClient {
       final rc = json is Map ? json['rc'] : null;
       if (rc == '0014') {
         throw VaGenerationError(
-          'NOP ini untuk tahun $tahun sudah pernah generate QRIS. Silakan gunakan pembayaran QRIS.',
+          'NOP ini untuk tahun $tahun sudah pernah membuat kode QRIS. Silakan gunakan pembayaran QRIS.',
         );
       }
       final rcm = json is Map ? json['rcm'] as String? : null;

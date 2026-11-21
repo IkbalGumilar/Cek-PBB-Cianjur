@@ -8,6 +8,7 @@ import 'staff_mfa_screen.dart';
 import 'staff_portal_client.dart';
 import 'theme_controller.dart';
 import 'ui/app_design_system.dart';
+import 'user_friendly_error.dart';
 
 /// Layar login Portal Staf (cianjurkab.v-tax.id) — BEDA dari alur Cek Tagihan
 /// / Cek Status Bayar di layar utama (yang itu portal publik, tanpa login).
@@ -19,10 +20,15 @@ class StaffLoginScreen extends StatefulWidget {
   final StaffPortalClient client;
   final ThemeController themeController;
 
+  /// Lewati pengecekan sesi jaringan awal bila pemanggil (mis. MainShell)
+  /// sudah memverifikasi sesi tidak aktif tepat sebelum membuka layar ini.
+  final bool skipInitialSessionCheck;
+
   const StaffLoginScreen({
     super.key,
     required this.client,
     required this.themeController,
+    this.skipInitialSessionCheck = false,
   });
 
   @override
@@ -43,7 +49,11 @@ class _StaffLoginScreenState extends State<StaffLoginScreen> {
   @override
   void initState() {
     super.initState();
-    _checkExistingSession();
+    if (widget.skipInitialSessionCheck) {
+      _loadCaptcha();
+    } else {
+      _checkExistingSession();
+    }
     _prefillSavedCredentials();
   }
 
@@ -96,7 +106,12 @@ class _StaffLoginScreenState extends State<StaffLoginScreen> {
       setState(() => _captchaBytes = bytes);
     } catch (e) {
       if (!mounted) return;
-      setState(() => _errorText = 'Gagal ambil captcha: $e');
+      setState(
+        () => _errorText = friendlyErrorMessage(
+          e,
+          fallback: 'Gagal memuat kode verifikasi. Silakan muat ulang.',
+        ),
+      );
     } finally {
       if (mounted) setState(() => _loadingCaptcha = false);
     }
@@ -109,8 +124,8 @@ class _StaffLoginScreenState extends State<StaffLoginScreen> {
 
     if (username.isEmpty || password.isEmpty || captcha.isEmpty) {
       setState(
-        () =>
-            _errorText = 'Username, password, dan kode verifikasi wajib diisi.',
+        () => _errorText =
+            'Nama pengguna, kata sandi, dan kode verifikasi wajib diisi.',
       );
       return;
     }
@@ -148,7 +163,14 @@ class _StaffLoginScreenState extends State<StaffLoginScreen> {
         await _loadCaptcha();
       }
     } catch (e) {
-      if (mounted) setState(() => _errorText = 'Gagal login: $e');
+      if (mounted) {
+        setState(
+          () => _errorText = friendlyErrorMessage(
+            e,
+            fallback: 'Gagal masuk ke Portal Petugas. Silakan coba lagi.',
+          ),
+        );
+      }
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -158,7 +180,7 @@ class _StaffLoginScreenState extends State<StaffLoginScreen> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Scaffold(
-      appBar: AppBar(title: const Text('Login Portal Staf')),
+      appBar: AppBar(title: const Text('Masuk Portal Petugas')),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(16),

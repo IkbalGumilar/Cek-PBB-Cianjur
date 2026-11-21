@@ -33,6 +33,7 @@ import 'feature_tour/feature_tour.dart';
 import 'tagihan_result.dart' show formatRupiah;
 import 'ui/app_design_system.dart';
 import 'unity_lerp_widgets.dart' show UnityAnimationCurve, unityLerp;
+import 'user_friendly_error.dart';
 
 export 'dhkp/dhkp_grafik_analytics.dart';
 
@@ -212,59 +213,49 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
   }
 
   List<FeatureTourStep> _buildTourSteps() {
+    final exportButtons = Platform.isAndroid
+        ? 'Unduh PNG atau PDF, Bagikan, dan Cetak'
+        : 'Unduh PNG atau PDF dan Cetak';
     return [
       FeatureTourStep(
         targetKey: _topTabsKey,
-        title: '5 Pilihan Kategori Laporan Grafik',
+        title: '5 Kategori Laporan Grafik',
         description:
-            'Pilih sudut pandang grafik yang ingin Anda pantau:\n'
-            '• Jumlah Persentase: Perbandingan persen lunas antar dusun atau blok.\n'
-            '• Jumlah Pendapatan: Total nominal pajak masuk dibandingkan target.\n'
-            '• Sudah Bayar & Belum Bayar: Rincian jumlah SPPT lunas dan tunggakan.\n'
-            '• Tren Pembayaran: Kurva realisasi bulanan serta perbandingan antar tahun.',
-        actionHint:
-            'Ketuk salah satu kategori di atas untuk langsung mengganti grafik.',
+            'Pilih sudut pandang grafik: Persentase lunas, Pendapatan, Sudah/Belum Bayar, atau Tren Pembayaran bulanan.',
+        actionHint: 'Ketuk salah satu kategori di atas untuk mengganti grafik.',
         icon: Icons.analytics_outlined,
       ),
       FeatureTourStep(
         targetKey: _scopeBarKey,
-        title: 'Pilihan Cakupan Wilayah Cepat',
+        title: 'Cakupan Wilayah Cepat',
         description:
-            'Menyesuaikan tingkat wilayah yang sedang aktif:\n'
-            '• Wilayah Kedusunan: Hanya menampilkan 2 tab ringkas — "Se-Kedusunan" dan "Semua Blok".\n'
-            '• Wilayah Desa: Menampilkan Se-Desa, Semua Dusun, serta tab tiap Dusun.\n'
-            '• Filter 1 Blok: Bilah cakupan otomatis disembunyikan agar tampilan grafik blok lebih lega.',
-        actionHint:
-            'Anda juga dapat mengetuk batang dusun/blok langsung di grafik untuk melihat detailnya.',
+            'Ganti cakupan sesuai wilayah aktif (Se-Desa, Dusun, atau Semua Blok). Bilah otomatis disembunyikan saat memilih 1 Blok.',
+        actionHint: 'Ketuk batang dusun/blok pada grafik untuk melihat detail.',
         icon: Icons.place_outlined,
       ),
       FeatureTourStep(
         targetKey: _statCardsKey,
-        title: 'Gauge Realisasi & 3 Kartu Tren KPI',
+        title: 'Indikator Capaian & 3 Kartu Tren',
         description:
-            'Menampilkan indikator setengah lingkaran (Gauge) capaian pelunasan beserta 3 kartu metrik utama (sparkline tren, perbandingan tahun sebelumnya, jumlah SPPT, dan nilai rupiah).',
+            'Menampilkan Indikator Capaian pelunasan beserta 3 kartu ringkasan berisi grafik tren, perbandingan tahun lalu, jumlah SPPT, dan nilai rupiah.',
         icon: Icons.assessment_outlined,
       ),
       FeatureTourStep(
         targetKey: _controlToolbarKey,
-        title: 'Bentuk Diagram, Pas Layar, Urutan & Lipat Kartu',
+        title: 'Bentuk Diagram, Urutan & Lipat Kartu',
         description:
-            '• Bentuk Diagram: Pilih Batang Tegak, Batang Mendatar, Diagram Lingkaran, atau Semua.\n'
-            '• Pas Layar / Geser: Rapatkan seluruh batang agar muat di satu layar atau ubah ke mode geser horizontal.\n'
-            '• Urutkan & Lipat/Buka Semua: Atur urutan wilayah dan rapikan kartu grafik.',
-        actionHint:
-            'Seluruh pilihan tampilan ini tersimpan otomatis saat Anda kembali membuka grafik.',
+            'Atur bentuk diagram (Batang Tegak, Mendatar, Lingkaran), mode Pas Layar/Geser, urutan wilayah, serta lipat/buka kartu.',
+        actionHint: 'Pilihan tampilan tersimpan otomatis.',
         icon: Icons.tune_rounded,
       ),
       FeatureTourStep(
         targetKey: _chartContentKey,
-        title: 'Grafik Interaktif, Bandingkan Tahun & Ekspor PDF/PNG',
+        title: 'Grafik Interaktif & Ekspor PNG/PDF',
         description:
             '• Ketuk batang atau titik bulan untuk melihat rincian wajib pajak.\n'
-            '• Pada tab Tren Pembayaran, gunakan tombol "Bandingkan" di pojok kanan bawah untuk membandingkan 2 tahun sekaligus.\n'
-            '• Di pojok kanan atas setiap kartu tersedia tombol Unduh PNG/PDF/Excel, Bagikan, dan Cetak (dilengkapi Batal Cetak).',
-        actionHint:
-            'Geser layar ke bawah untuk melihat tabel perbandingan lengkap di bawah grafik.',
+            '• Pada tab Tren Pembayaran, tekan "Bandingkan" untuk membandingkan 2 tahun sekaligus.\n'
+            '• Di pojok kanan atas kartu tersedia tombol $exportButtons.',
+        actionHint: 'Geser ke bawah untuk melihat tabel perbandingan lengkap.',
         icon: Icons.bar_chart_rounded,
       ),
     ];
@@ -381,7 +372,9 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
         _customCompareDesas.clear();
       }
       shouldAnimate = true;
-      DhkpWidgetSyncService.syncFromRecords(widget.records);
+      if (oldWidget.records.length != widget.records.length) {
+        DhkpWidgetSyncService.syncFromRecords(widget.records);
+      }
     }
 
     if (_compareYear != null) {
@@ -526,26 +519,56 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
     return base;
   }
 
+  static final RegExp _nonDigitRegex = RegExp(r'[^0-9]');
+
+  // Cache memoization untuk mencegah perhitungan ulang ribuan record di setiap frame animasi (60 FPS)
+  List<BlokRecord>? _cachedScopeWidgetRecords;
+  int _cachedScopeRecordsLen = -1;
+  int? _cachedScopeWilayah;
+  String? _cachedScopeDesaCode;
+  int? _cachedScopeDrillDusun;
+  String? _cachedScopeTahun;
+  bool? _cachedScopeDusunLocked;
+  _DhkpResolvedContext? _cachedScopeContext;
+
+  List<BlokRecord>? _cachedGroupInputRecords;
+  bool? _cachedGroupHasMultiDusun;
+  String? _cachedGroupDesaCode;
+  int? _cachedGroupDrillDusun;
+  bool? _cachedGroupSeDesa;
+  List<DhkpGroupInfo>? _cachedUnsortedGroups;
+  GrafikSortMode? _cachedSortedMode;
+  DhkpGrafikTab? _cachedSortedTab;
+  List<DhkpGroupInfo>? _cachedSortedGroups;
+
   List<DhkpGroupInfo> _groupData(
     List<BlokRecord> records, {
     required bool hasMultiDusun,
     double Function(DhkpGroupInfo)? sortValueFn,
     bool applySort = true,
   }) {
-    final allNonPemda = widget.records.where((r) => !r.isTargetPemda).toList();
-    final primaryKec = DhkpGrafikAnalytics.resolvePrimaryKecamatanCode(
-      allNonPemda,
-    );
-    final desaCodes = DhkpGrafikAnalytics.resolveDesaCodesInKecamatan(
-      allNonPemda,
-      primaryKec,
-    );
-    final effectiveDesa =
-        (desaCodes.length > 1 &&
-            _selectedDesaCode != null &&
-            desaCodes.contains(_selectedDesaCode))
-        ? _selectedDesaCode
-        : null;
+    final baseMatch =
+        identical(_cachedGroupInputRecords, records) &&
+        _cachedGroupHasMultiDusun == hasMultiDusun &&
+        _cachedGroupDesaCode == _selectedDesaCode &&
+        _cachedGroupDrillDusun == _drillDownDusun &&
+        _cachedGroupSeDesa == _seDesaMode;
+
+    if (!applySort && baseMatch && _cachedUnsortedGroups != null) {
+      return _cachedUnsortedGroups!;
+    }
+    if (applySort &&
+        baseMatch &&
+        _cachedSortedGroups != null &&
+        _cachedSortedMode == _sortMode &&
+        _cachedSortedTab == _activeTab) {
+      return _cachedSortedGroups!;
+    }
+
+    final scope = _resolveScopeContext();
+    final primaryKec = scope.primaryKecamatanCode;
+    final desaCodes = scope.desaCodes;
+    final effectiveDesa = scope.effectiveDesaCode;
     final isKecLevel = desaCodes.length > 1 && effectiveDesa == null;
     final isKedusunanScope =
         desaCodes.length <= 1 &&
@@ -557,8 +580,10 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
         !isKedusunanScope &&
         _drillDownDusun == null &&
         !_seDesaMode;
+
+    final List<DhkpGroupInfo> computed;
     if (isKecLevel) {
-      return DhkpGrafikAnalytics.groupData(
+      computed = DhkpGrafikAnalytics.groupData(
         records,
         hasMultiDusun: hasMultiDusun,
         groupByDusun: groupByDusun,
@@ -570,25 +595,43 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
         groupByDesa: !_seDesaMode,
         singleEntityLabel: _formatKecamatanLabel(primaryKec),
       );
+    } else {
+      final singleLabel = effectiveDesa != null
+          ? DhkpGrafikAnalytics.formatDesaLabel(effectiveDesa)
+          : (isKedusunanScope ? 'Se-Kedusunan' : 'Se-Desa');
+
+      computed = DhkpGrafikAnalytics.groupData(
+        records,
+        hasMultiDusun: isKedusunanScope ? false : hasMultiDusun,
+        groupByDusun: groupByDusun,
+        drillDownDusun: isKedusunanScope ? null : _drillDownDusun,
+        sortMode: _sortMode,
+        sortValueFn: sortValueFn,
+        applySort: applySort,
+        seDesaMode: isKedusunanScope
+            ? _seDesaMode
+            : (_seDesaMode && _drillDownDusun == null),
+        singleEntityLabel: singleLabel,
+      );
     }
 
-    final singleLabel = effectiveDesa != null
-        ? DhkpGrafikAnalytics.formatDesaLabel(effectiveDesa)
-        : (isKedusunanScope ? 'Se-Kedusunan' : 'Se-Desa');
-
-    return DhkpGrafikAnalytics.groupData(
-      records,
-      hasMultiDusun: isKedusunanScope ? false : hasMultiDusun,
-      groupByDusun: groupByDusun,
-      drillDownDusun: isKedusunanScope ? null : _drillDownDusun,
-      sortMode: _sortMode,
-      sortValueFn: sortValueFn,
-      applySort: applySort,
-      seDesaMode: isKedusunanScope
-          ? _seDesaMode
-          : (_seDesaMode && _drillDownDusun == null),
-      singleEntityLabel: singleLabel,
-    );
+    if (!baseMatch) {
+      _cachedGroupInputRecords = records;
+      _cachedGroupHasMultiDusun = hasMultiDusun;
+      _cachedGroupDesaCode = _selectedDesaCode;
+      _cachedGroupDrillDusun = _drillDownDusun;
+      _cachedGroupSeDesa = _seDesaMode;
+      _cachedUnsortedGroups = null;
+      _cachedSortedGroups = null;
+    }
+    if (!applySort) {
+      _cachedUnsortedGroups = computed;
+    } else {
+      _cachedSortedMode = _sortMode;
+      _cachedSortedTab = _activeTab;
+      _cachedSortedGroups = computed;
+    }
+    return computed;
   }
 
   // =========================================================================
@@ -671,7 +714,11 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
         final savedPath = await DownloadHelper.saveBytes(bytes, fileName);
         if (savedPath == null) return;
         messenger.showSnackBar(
-          SnackBar(content: Text('Gambar grafik disimpan di: $savedPath')),
+          SnackBar(
+            content: Text(
+              'Gambar grafik disimpan: ${friendlyFileName(savedPath)}',
+            ),
+          ),
         );
       } else {
         final pdfBytes = await _generateSectionPdf(
@@ -684,12 +731,18 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
         final savedPath = await DownloadHelper.saveBytes(pdfBytes, fileName);
         if (savedPath == null) return;
         messenger.showSnackBar(
-          SnackBar(content: Text('Dokumen PDF grafik disimpan di: $savedPath')),
+          SnackBar(
+            content: Text(
+              'Dokumen PDF grafik disimpan: ${friendlyFileName(savedPath)}',
+            ),
+          ),
         );
       }
     } catch (e) {
       messenger.showSnackBar(
-        SnackBar(content: Text('Gagal mengunduh grafik: $e')),
+        SnackBar(
+          content: Text('Gagal mengunduh grafik: ${friendlyErrorMessage(e)}'),
+        ),
       );
     }
   }
@@ -729,7 +782,9 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
           await NativeFileHelper.showInFileManager(savedPath);
           messenger.showSnackBar(
             SnackBar(
-              content: Text('Gambar grafik disimpan dan dibuka di: $savedPath'),
+              content: Text(
+                'Gambar grafik disimpan: ${friendlyFileName(savedPath)}',
+              ),
             ),
           );
         }
@@ -758,7 +813,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
           messenger.showSnackBar(
             SnackBar(
               content: Text(
-                'Dokumen PDF grafik disimpan dan dibuka di: $savedPath',
+                'Dokumen PDF grafik disimpan: ${friendlyFileName(savedPath)}',
               ),
             ),
           );
@@ -766,17 +821,31 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
       }
     } catch (e) {
       messenger.showSnackBar(
-        SnackBar(content: Text('Gagal membagikan grafik: $e')),
+        SnackBar(
+          content: Text('Gagal membagikan grafik: ${friendlyErrorMessage(e)}'),
+        ),
       );
     }
   }
 
   _DhkpResolvedContext _resolveScopeContext() {
+    final isLocked = DusunData.instance.isDusunLocked;
+    if (_cachedScopeContext != null &&
+        identical(_cachedScopeWidgetRecords, widget.records) &&
+        _cachedScopeRecordsLen == widget.records.length &&
+        _cachedScopeWilayah == widget.selectedWilayah &&
+        _cachedScopeDesaCode == _selectedDesaCode &&
+        _cachedScopeDrillDusun == _drillDownDusun &&
+        _cachedScopeTahun == _selectedTahun &&
+        _cachedScopeDusunLocked == isLocked) {
+      return _cachedScopeContext!;
+    }
+
     final allMurni = widget.records.where((r) => !r.isTargetPemda).toList();
 
     final kecSet = <String>{};
     for (final r in allMurni) {
-      final d = r.nop.replaceAll(RegExp(r'[^0-9]'), '');
+      final d = r.nop.replaceAll(_nonDigitRegex, '');
       if (d.length == 18) kecSet.add(nopKecamatan(d));
     }
     final primaryKecCode = DhkpGrafikAnalytics.resolvePrimaryKecamatanCode(
@@ -788,7 +857,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
     final scopedKecRecords = primaryKecCode.isEmpty
         ? allMurni
         : allMurni.where((r) {
-            final d = r.nop.replaceAll(RegExp(r'[^0-9]'), '');
+            final d = r.nop.replaceAll(_nonDigitRegex, '');
             return d.length != 18 || nopKecamatan(d) == primaryKecCode;
           }).toList();
 
@@ -807,7 +876,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
     var entityAcrossYears = scopedKecRecords;
     if (effectiveDesaCode != null) {
       entityAcrossYears = entityAcrossYears.where((r) {
-        final d = r.nop.replaceAll(RegExp(r'[^0-9]'), '');
+        final d = r.nop.replaceAll(_nonDigitRegex, '');
         return d.length == 18 && nopKelurahan(d) == effectiveDesaCode;
       }).toList();
     }
@@ -877,7 +946,7 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
           .toList();
     }
 
-    return _DhkpResolvedContext(
+    final resolved = _DhkpResolvedContext(
       murniRecords: murniRecords,
       entityRecordsAcrossYears: entityAcrossYears,
       allScopedRecordsAcrossYears: scopedKecRecords,
@@ -892,6 +961,15 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
       isKedusunanScope: isKedusunanScope,
       activeKedusunanNumber: activeKedusunanNumber,
     );
+    _cachedScopeWidgetRecords = widget.records;
+    _cachedScopeRecordsLen = widget.records.length;
+    _cachedScopeWilayah = widget.selectedWilayah;
+    _cachedScopeDesaCode = _selectedDesaCode;
+    _cachedScopeDrillDusun = _drillDownDusun;
+    _cachedScopeTahun = _selectedTahun;
+    _cachedScopeDusunLocked = isLocked;
+    _cachedScopeContext = resolved;
+    return resolved;
   }
 
   (
@@ -1279,7 +1357,14 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
       );
     } catch (e) {
       messenger.showSnackBar(
-        SnackBar(content: Text('Gagal menyiapkan cetak laporan bulanan: $e')),
+        SnackBar(
+          content: Text(
+            friendlyErrorMessage(
+              e,
+              fallback: 'Gagal menyiapkan cetak laporan bulanan.',
+            ),
+          ),
+        ),
       );
     }
   }
@@ -1509,7 +1594,14 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
       );
     } catch (e) {
       messenger.showSnackBar(
-        SnackBar(content: Text('Gagal menyiapkan cetak grafik: $e')),
+        SnackBar(
+          content: Text(
+            friendlyErrorMessage(
+              e,
+              fallback: 'Gagal menyiapkan cetak grafik.',
+            ),
+          ),
+        ),
       );
     }
   }
@@ -3006,28 +3098,29 @@ class _DhkpGrafikViewState extends State<DhkpGrafikView>
                       groups: groups,
                     ),
                   ),
-                  IconButton(
-                    visualDensity: VisualDensity.compact,
-                    constraints: const BoxConstraints(
-                      minWidth: 32,
-                      minHeight: 32,
+                  if (Platform.isAndroid)
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      constraints: const BoxConstraints(
+                        minWidth: 32,
+                        minHeight: 32,
+                      ),
+                      padding: const EdgeInsets.all(4),
+                      tooltip: 'Bagikan Grafik (Gambar / PDF)',
+                      icon: Icon(
+                        Icons.share_outlined,
+                        size: 17,
+                        color: isDark
+                            ? Colors.grey.shade300
+                            : accentColor.shade700,
+                      ),
+                      onPressed: () => _handleShareSection(
+                        sectionKey: sectionKey,
+                        title: title,
+                        subtitle: subtitle,
+                        groups: groups,
+                      ),
                     ),
-                    padding: const EdgeInsets.all(4),
-                    tooltip: 'Bagikan Grafik (Gambar / PDF)',
-                    icon: Icon(
-                      Icons.share_outlined,
-                      size: 17,
-                      color: isDark
-                          ? Colors.grey.shade300
-                          : accentColor.shade700,
-                    ),
-                    onPressed: () => _handleShareSection(
-                      sectionKey: sectionKey,
-                      title: title,
-                      subtitle: subtitle,
-                      groups: groups,
-                    ),
-                  ),
                   IconButton(
                     visualDensity: VisualDensity.compact,
                     constraints: const BoxConstraints(

@@ -161,18 +161,15 @@ class GoogleDriveBackupPolicy {
   }) {
     for (final scope in requestedScopes) {
       if (!isScopeAllowed(scope)) {
-        throw SecurityException(
-          'Scope Google Drive "$scope" dilarang! '
-          'Aplikasi hanya diizinkan menggunakan scope terbatas: $allowedScopes.',
+        throw const SecurityException(
+          'Izin akses Google Drive yang diminta tidak sesuai kebijakan keamanan aplikasi.',
         );
       }
     }
 
     if (!isFolderAllowed(targetFolder)) {
-      throw SecurityException(
-        'Akses ke folder "$targetFolder" dilarang! '
-        'Aplikasi hanya boleh membuat dan mengakses folder khusus: '
-        '"$dedicatedFolderName" atau "$appDataFolderId".',
+      throw const SecurityException(
+        'Akses folder Google Drive ditolak. Aplikasi hanya diizinkan mengakses folder khusus "$dedicatedFolderName".',
       );
     }
   }
@@ -184,11 +181,6 @@ class GoogleDriveBackupPolicy {
       'Aplikasi hanya menggunakan folder khusus "$dedicatedFolderName" '
       'untuk menyimpan cadangan. Dokumen dan foto pribadi Anda di Google Drive '
       'tetap aman dan tidak bisa dibuka oleh aplikasi.';
-
-  /// Pemberitahuan syarat izin Editor pada folder bersama.
-  static const String editorRequirementNotice =
-      'Pastikan akun Google Anda sudah diberi izin Edit pada folder bersama '
-      'ini agar cadangan bisa disimpan.';
 }
 
 /// Pengecualian keamanan saat terjadi pelanggaran izin atau akses folder.

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/gestures.dart';
 import 'package:material_ui/material_ui.dart';
@@ -763,22 +764,24 @@ class _NopKalkulatorDialogContentState
                 label: const Text('Salin Rincian WA'),
               ),
             ),
-            const SizedBox(width: 8),
-            IconButton.filledTonal(
-              onPressed: () {
-                final text = PbbCalculatorHelper.formatWhatsAppDenda(
-                  nop: widget.record.formattedNop,
-                  namaWp: widget.record.namaWajibPajak,
-                  dendaResult: dendaResult,
-                );
-                NativeFileHelper.shareText(
-                  text: text,
-                  title: 'Rincian Denda PBB',
-                );
-              },
-              icon: const Icon(Icons.share_rounded, size: 18),
-              tooltip: 'Bagikan',
-            ),
+            if (Platform.isAndroid) ...[
+              const SizedBox(width: 8),
+              IconButton.filledTonal(
+                onPressed: () {
+                  final text = PbbCalculatorHelper.formatWhatsAppDenda(
+                    nop: widget.record.formattedNop,
+                    namaWp: widget.record.namaWajibPajak,
+                    dendaResult: dendaResult,
+                  );
+                  NativeFileHelper.shareText(
+                    text: text,
+                    title: 'Rincian Denda PBB',
+                  );
+                },
+                icon: const Icon(Icons.share_rounded, size: 18),
+                tooltip: 'Bagikan',
+              ),
+            ],
           ],
         ),
       ],
@@ -1544,22 +1547,24 @@ class _NopKalkulatorDialogContentState
                 label: const Text('Salin Rincian Tabungan'),
               ),
             ),
-            const SizedBox(width: 8),
-            IconButton.filledTonal(
-              onPressed: () {
-                final text = PbbTabunganHelper.formatWhatsAppTabungan(
-                  nop: widget.record.formattedNop,
-                  namaWp: widget.record.namaWajibPajak,
-                  tabungan: _tabungan,
-                );
-                NativeFileHelper.shareText(
-                  text: text,
-                  title: 'Tabungan PBB Warga',
-                );
-              },
-              icon: const Icon(Icons.share_rounded, size: 18),
-              tooltip: 'Bagikan ke WhatsApp',
-            ),
+            if (Platform.isAndroid) ...[
+              const SizedBox(width: 8),
+              IconButton.filledTonal(
+                onPressed: () {
+                  final text = PbbTabunganHelper.formatWhatsAppTabungan(
+                    nop: widget.record.formattedNop,
+                    namaWp: widget.record.namaWajibPajak,
+                    tabungan: _tabungan,
+                  );
+                  NativeFileHelper.shareText(
+                    text: text,
+                    title: 'Tabungan PBB Warga',
+                  );
+                },
+                icon: const Icon(Icons.share_rounded, size: 18),
+                tooltip: 'Bagikan ke WhatsApp',
+              ),
+            ],
           ],
         ),
       ],
@@ -2009,22 +2014,24 @@ class _NopKalkulatorDialogContentState
                 label: const Text('Salin Rincian AJB'),
               ),
             ),
-            const SizedBox(width: 8),
-            IconButton.filledTonal(
-              onPressed: () {
-                final text = PbbCalculatorHelper.formatWhatsAppAjb(
-                  nop: widget.record.formattedNop,
-                  namaWp: widget.record.namaWajibPajak,
-                  ajbResult: ajbResult,
-                );
-                NativeFileHelper.shareText(
-                  text: text,
-                  title: 'Estimasi AJB & Pajak',
-                );
-              },
-              icon: const Icon(Icons.share_rounded, size: 18),
-              tooltip: 'Bagikan',
-            ),
+            if (Platform.isAndroid) ...[
+              const SizedBox(width: 8),
+              IconButton.filledTonal(
+                onPressed: () {
+                  final text = PbbCalculatorHelper.formatWhatsAppAjb(
+                    nop: widget.record.formattedNop,
+                    namaWp: widget.record.namaWajibPajak,
+                    ajbResult: ajbResult,
+                  );
+                  NativeFileHelper.shareText(
+                    text: text,
+                    title: 'Estimasi AJB & Pajak',
+                  );
+                },
+                icon: const Icon(Icons.share_rounded, size: 18),
+                tooltip: 'Bagikan',
+              ),
+            ],
           ],
         ),
       ],
@@ -2345,20 +2352,22 @@ class _StandaloneAjbDialogContentState
                             label: const Text('Salin Rincian AJB'),
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        IconButton.filledTonal(
-                          onPressed: () {
-                            final text = PbbCalculatorHelper.formatWhatsAppAjb(
-                              ajbResult: ajbResult,
-                            );
-                            NativeFileHelper.shareText(
-                              text: text,
-                              title: 'Estimasi AJB & Pajak',
-                            );
-                          },
-                          icon: const Icon(Icons.share_rounded, size: 18),
-                          tooltip: 'Bagikan',
-                        ),
+                        if (Platform.isAndroid) ...[
+                          const SizedBox(width: 8),
+                          IconButton.filledTonal(
+                            onPressed: () {
+                              final text = PbbCalculatorHelper.formatWhatsAppAjb(
+                                ajbResult: ajbResult,
+                              );
+                              NativeFileHelper.shareText(
+                                text: text,
+                                title: 'Estimasi AJB & Pajak',
+                              );
+                            },
+                            icon: const Icon(Icons.share_rounded, size: 18),
+                            tooltip: 'Bagikan',
+                          ),
+                        ],
                       ],
                     ),
                   ],

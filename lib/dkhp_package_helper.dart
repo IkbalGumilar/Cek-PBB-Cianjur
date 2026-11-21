@@ -171,13 +171,14 @@ class DhkpPackageHelper {
   }
 
   /// Memeriksa apakah satu baris DHKP memiliki perubahan dari petugas
-  /// (status bayar lunas, tanggal bayar, catatan, gambar dokumentasi, target pemda, atau blacklist).
+  /// (status bayar lunas, tanggal bayar, catatan, gambar dokumentasi, target pemda, blacklist, atau bermasalah).
   static bool isChangedRecord(BlokRecord r) {
     return r.isPaid ||
         r.catatan.trim().isNotEmpty ||
         r.hasPhoto ||
         r.isTargetPemda ||
-        r.isBlacklist;
+        r.isBlacklist ||
+        r.isBermasalah;
   }
 
   /// Mengambil daftar baris DHKP yang mengalami perubahan saja.
@@ -281,7 +282,7 @@ class DhkpPackageHelper {
       rawBytes,
       password: password,
       errorMsgOnNull:
-          'Gagal mendekripsi berkas: format atau kunci enkripsi tidak cocok.',
+          'Kata sandi salah atau berkas tidak dapat dibuka di perangkat ini.',
     );
 
     final archive = ZipDecoder().decodeBytes(zipBytes);
@@ -428,6 +429,42 @@ class DhkpPackageHelper {
     return null;
   }
 
+  static String? _cachedInspectPath;
+  static int? _cachedInspectLen;
+  static int? _cachedInspectMtimeMs;
+  static String? _cachedInspectPassword;
+  static Uint8List? _cachedInspectZipBytes;
+
+  static Future<Uint8List> _readAndDecryptZipBytesCached(
+    File file, {
+    String? password,
+  }) async {
+    final stat = await file.stat();
+    final len = stat.size;
+    final mtime = stat.modified.millisecondsSinceEpoch;
+    final normPass = password?.trim() ?? '';
+    if (_cachedInspectZipBytes != null &&
+        _cachedInspectPath == file.path &&
+        _cachedInspectLen == len &&
+        _cachedInspectMtimeMs == mtime &&
+        _cachedInspectPassword == normPass) {
+      return _cachedInspectZipBytes!;
+    }
+    final rawBytes = await file.readAsBytes();
+    final zipBytes = await _resolveArchiveZipBytes(
+      rawBytes,
+      password: password,
+      errorMsgOnNull:
+          'Kata sandi salah atau berkas tidak dapat dibuka di perangkat ini.',
+    );
+    _cachedInspectPath = file.path;
+    _cachedInspectLen = len;
+    _cachedInspectMtimeMs = mtime;
+    _cachedInspectPassword = normPass;
+    _cachedInspectZipBytes = zipBytes;
+    return zipBytes;
+  }
+
   /// Memeriksa isi berkas `.dkhp`/`.dat` tanpa memodifikasi database lokal
   /// untuk mengetahui apakah tahun pajak pada paket masih kosong atau sudah
   /// memiliki data di aplikasi (sehingga perlu konfirmasi timpa).
@@ -440,12 +477,9 @@ class DhkpPackageHelper {
       throw FileSystemException('Berkas .dkhp tidak ditemukan', filePath);
     }
 
-    final rawBytes = await file.readAsBytes();
-    final zipBytes = await _resolveArchiveZipBytes(
-      rawBytes,
+    final zipBytes = await _readAndDecryptZipBytesCached(
+      file,
       password: password,
-      errorMsgOnNull:
-          'Gagal mendekripsi berkas .dkhp: Kunci atau format enkripsi tidak cocok.',
     );
 
     final archive = ZipDecoder().decodeBytes(zipBytes);
@@ -538,13 +572,11 @@ class DhkpPackageHelper {
       throw FileSystemException('Berkas .dkhp tidak ditemukan', filePath);
     }
 
-    final rawBytes = await file.readAsBytes();
-    final zipBytes = await _resolveArchiveZipBytes(
-      rawBytes,
+    final zipBytes = await _readAndDecryptZipBytesCached(
+      file,
       password: password,
-      errorMsgOnNull:
-          'Gagal mendekripsi berkas .dkhp: Kunci atau format enkripsi tidak cocok.',
     );
+    _cachedInspectZipBytes = null;
 
     final archive = ZipDecoder().decodeBytes(zipBytes);
     final photosDir = await photosDirectory();
@@ -625,7 +657,7 @@ class DhkpPackageHelper {
           await DusunData.instance.setDusuns(parsedDusuns);
         }
       }
-      if (manifest['scope'] is Map) {
+      if (!isDeltaArchive && manifest['scope'] is Map) {
         final scopeMap = Map<String, dynamic>.from(manifest['scope'] as Map);
         final parsedScope = DusunScope.fromJson(scopeMap);
         await DusunData.instance.setScope(parsedScope);
@@ -1020,19 +1052,62 @@ class DhkpPackageHelper {
 
   static BlokRecord _mergeDeltaWithBase(BlokRecord r, BlokRecord base) {
     final sameYear = r.tahunBayar == base.tahunBayar;
+    final effectiveTargetPemda = r.isTargetPemda || base.isTargetPemda;
+
+    final String resolvedTanggal = r.hasValidTanggalBayar
+        ? r.tanggalBayar
+        : (sameYear && base.hasValidTanggalBayar
+              ? base.tanggalBayar
+              : (r.tanggalBayar.isNotEmpty
+                    ? r.tanggalBayar
+                    : (sameYear ? base.tanggalBayar : '')));
+
+    final String resolvedStatus;
+    if (!effectiveTargetPemda &&
+        (r.isBermasalah || (sameYear && base.isBermasalah && !r.isPaid))) {
+      resolvedStatus = 'Bermasalah';
+    } else if (r.isPaid || (sameYear && base.isPaid)) {
+      resolvedStatus = 'Sudah Bayar';
+    } else if (r.isBlacklist || (sameYear && base.isBlacklist)) {
+      resolvedStatus = r.isBlacklist ? r.statusBayar : base.statusBayar;
+    } else {
+      resolvedStatus = r.statusBayar.isNotEmpty
+          ? r.statusBayar
+          : base.statusBayar;
+    }
+
+    String resolvedCatatan;
+    if (!sameYear || base.catatan.trim().isEmpty) {
+      resolvedCatatan = r.catatan;
+    } else if (r.catatan.trim().isEmpty) {
+      resolvedCatatan = base.catatan;
+    } else if (r.catatan.trim() == base.catatan.trim()) {
+      resolvedCatatan = r.catatan;
+    } else {
+      final rIsAutoPaid = r.catatan.trim().toLowerCase().startsWith(
+        'sudah bayar',
+      );
+      final baseIsAutoPaid = base.catatan.trim().toLowerCase().startsWith(
+        'sudah bayar',
+      );
+      if (rIsAutoPaid && !baseIsAutoPaid) {
+        resolvedCatatan = base.catatan;
+      } else if (!rIsAutoPaid && baseIsAutoPaid) {
+        resolvedCatatan = r.catatan;
+      } else {
+        resolvedCatatan = r.catatan;
+      }
+    }
+
     return base.copyWith(
       tahunBayar: r.tahunBayar,
-      statusBayar: r.statusBayar,
-      tanggalBayar: r.tanggalBayar.isNotEmpty
-          ? r.tanggalBayar
-          : (sameYear ? base.tanggalBayar : ''),
-      catatan: r.catatan.isNotEmpty
-          ? r.catatan
-          : (sameYear ? base.catatan : ''),
+      statusBayar: resolvedStatus,
+      tanggalBayar: resolvedTanggal,
+      catatan: resolvedCatatan,
       namaFoto: (r.namaFoto != null && r.namaFoto!.isNotEmpty)
           ? r.namaFoto
           : (sameYear ? base.namaFoto : null),
-      isTargetPemda: r.isTargetPemda,
+      isTargetPemda: effectiveTargetPemda,
       namaWajibPajak:
           (r.namaWajibPajak.isNotEmpty && !r.namaWajibPajak.startsWith('WP '))
           ? r.namaWajibPajak
@@ -1284,7 +1359,7 @@ class DhkpPackageHelper {
     }
 
     final file = File(outputPath);
-    file.writeAsBytesSync(outputBytes);
+    await file.writeAsBytes(outputBytes, flush: true);
     return file;
   }
 

@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import 'download_helper.dart';
@@ -31,16 +32,18 @@ class ApkShareHelper {
     try {
       final path = await _channel.invokeMethod<String>('exportApk');
       if (path == null || path.isEmpty) {
-        throw Exception('Gagal menyiapkan berkas APK.');
+        throw Exception('Gagal menyiapkan berkas aplikasi.');
       }
       exportedPath = path;
     } on PlatformException catch (e) {
-      throw Exception('Gagal menyiapkan berkas APK: ${e.message ?? e.code}');
+      debugPrint('ApkShareHelper exportApk error: ${e.code} ${e.message}');
+      throw Exception('Gagal menyiapkan berkas aplikasi untuk dibagikan.');
     }
 
     final exportedFile = File(exportedPath);
     if (!await exportedFile.exists()) {
-      throw Exception('Berkas APK tidak ditemukan di $exportedPath.');
+      debugPrint('ApkShareHelper: berkas APK tidak ditemukan di $exportedPath');
+      throw Exception('Berkas aplikasi tidak ditemukan.');
     }
 
     // Buka share sheet duluan (pakai berkas hasil export, tidak menunggu
@@ -49,7 +52,8 @@ class ApkShareHelper {
     try {
       await _channel.invokeMethod<void>('shareApk');
     } on PlatformException catch (e) {
-      throw Exception('Gagal membuka share sheet: ${e.message ?? e.code}');
+      debugPrint('ApkShareHelper shareApk error: ${e.code} ${e.message}');
+      throw Exception('Gagal membuka menu berbagi perangkat.');
     }
 
     final bytes = await exportedFile.readAsBytes();

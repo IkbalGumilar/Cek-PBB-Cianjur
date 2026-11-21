@@ -46,6 +46,22 @@ abstract class BaseHttpClient {
     DioException error, {
     String serviceName = 'layanan',
   }) {
+    if (error.type == DioExceptionType.badResponse) {
+      final status = error.response?.statusCode;
+      if (status == 401 || status == 403) {
+        return 'Sesi akses $serviceName tidak berlaku. Silakan masuk ulang lalu coba lagi.';
+      }
+      if (status == 404) {
+        return 'Data atau halaman $serviceName tidak ditemukan.';
+      }
+      if (status == 429) {
+        return 'Terlalu banyak permintaan ke $serviceName. Tunggu sebentar lalu coba lagi.';
+      }
+      if (status != null && status >= 500) {
+        return 'Server $serviceName sedang mengalami gangguan. Silakan coba beberapa saat lagi.';
+      }
+      return 'Layanan $serviceName belum dapat memproses permintaan. Silakan coba lagi.';
+    }
     return switch (error.type) {
       DioExceptionType.connectionTimeout =>
         'Koneksi ke $serviceName terlalu lama. Coba lagi nanti.',
@@ -54,9 +70,10 @@ abstract class BaseHttpClient {
       DioExceptionType.sendTimeout =>
         'Pengiriman data ke $serviceName gagal karena batas waktu terlampaui.',
       DioExceptionType.connectionError =>
-        'Domain $serviceName tidak dapat dihubungi. Periksa internet atau DNS perangkat.',
-      DioExceptionType.badResponse =>
-        'Layanan $serviceName menolak permintaan (${error.response?.statusCode ?? 'tanpa status'}).',
+        'Tidak dapat terhubung ke $serviceName. Periksa koneksi internet Anda lalu coba lagi.',
+      DioExceptionType.badCertificate =>
+        'Koneksi aman ke $serviceName tidak dapat diverifikasi.',
+      DioExceptionType.cancel => 'Permintaan ke $serviceName dibatalkan.',
       _ => 'Koneksi ke $serviceName gagal. Coba lagi nanti.',
     };
   }

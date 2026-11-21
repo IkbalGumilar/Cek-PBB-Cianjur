@@ -1,11 +1,13 @@
 import 'dart:io';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'apk_installer.dart';
 import 'update_info.dart';
+import 'user_friendly_error.dart';
 
 class UpdateCheckError implements Exception {
   final String message;
@@ -84,8 +86,22 @@ class UpdateChecker {
         rawReleases = response.data ?? const [];
       } on DioException catch (e) {
         if (e.response?.statusCode == 404) return null; // belum pernah rilis
+        debugPrint('UpdateChecker DioException: ${e.type} ${e.message}');
         throw UpdateCheckError(
-          'Gagal memeriksa pembaruan: ${e.message ?? e.type}',
+          friendlyErrorMessage(
+            e,
+            fallback:
+                'Gagal memeriksa pembaruan. Periksa koneksi internet Anda lalu coba lagi.',
+          ),
+        );
+      } catch (e) {
+        debugPrint('UpdateChecker error: $e');
+        throw UpdateCheckError(
+          friendlyErrorMessage(
+            e,
+            fallback:
+                'Gagal memeriksa pembaruan. Periksa koneksi internet Anda lalu coba lagi.',
+          ),
         );
       }
     }

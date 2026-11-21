@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:material_ui/material_ui.dart';
 
@@ -42,7 +43,24 @@ class _AppLockScreenState extends State<AppLockScreen> {
   }
 
   Future<void> _initLockState() async {
-    final type = await _service.getLockType();
+    var type = await _service.getLockType();
+    if (type == AppLockType.device) {
+      final supported = await _service.isDeviceSupported();
+      if (!supported) {
+        if (await _service.hasCustomPin()) {
+          type = AppLockType.pin;
+        } else if (await _service.hasCustomPassword()) {
+          type = AppLockType.password;
+        } else {
+          // Jangan kunci pengguna jika kunci perangkat tidak tersedia dan belum ada PIN/sandi.
+          _service.unlock();
+          if (mounted) {
+            widget.onUnlocked?.call();
+          }
+          return;
+        }
+      }
+    }
     final attempts = await _service.getFailedPinAttempts();
     final lockoutUntil = await _service.getLockoutUntil();
 
@@ -249,7 +267,9 @@ class _AppLockScreenState extends State<AppLockScreen> {
                         const SizedBox(height: 6),
                         Text(
                           _lockType == AppLockType.device
-                              ? 'Gunakan Sidik Jari, Wajah, atau Kunci Layar HP'
+                              ? (Platform.isWindows
+                                    ? 'Gunakan Windows Hello atau Kunci Perangkat'
+                                    : 'Gunakan Sidik Jari, Wajah, atau Kunci Perangkat')
                               : (_lockType == AppLockType.pin
                                     ? 'Masukkan 6 Digit PIN Keamanan'
                                     : 'Masukkan Kata Sandi Aplikasi'),
@@ -315,15 +335,24 @@ class _AppLockScreenState extends State<AppLockScreen> {
             elevation: 2,
           ),
           onPressed: _isLockedOut() ? null : _triggerDeviceAuth,
-          icon: const Icon(Icons.fingerprint_rounded, size: 28),
-          label: const Text(
-            'Buka dengan Biometrik / Kunci HP',
-            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+          icon: Icon(
+            Platform.isWindows
+                ? Icons.verified_user_outlined
+                : Icons.fingerprint_rounded,
+            size: 28,
+          ),
+          label: Text(
+            Platform.isWindows
+                ? 'Buka dengan Windows Hello / Kunci Perangkat'
+                : 'Buka dengan Biometrik / Kunci Perangkat',
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
           ),
         ),
         const SizedBox(height: 24),
         Text(
-          'Mendukung Sensor Sidik Jari, Pengenalan Wajah,\ndan Kunci Layar (PIN / Pola) bawaan ponsel.',
+          Platform.isWindows
+              ? 'Mendukung Windows Hello (PIN, Wajah, atau Sidik Jari)\ndan Kunci Layar bawaan perangkat.'
+              : 'Mendukung Sidik Jari, Pengenalan Wajah,\ndan Kunci Layar (PIN / Pola) bawaan perangkat.',
           textAlign: TextAlign.center,
           style: theme.textTheme.bodySmall?.copyWith(
             color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.8),

@@ -32,10 +32,10 @@ class PlatScanResult {
   const PlatScanResult({required this.candidates, required this.color});
 
   String get colorMessage => switch (color) {
-    PlatSurfaceColor.black => 'TNKB hitam terdeteksi.',
+    PlatSurfaceColor.black => 'Pelat nomor hitam terdeteksi.',
     PlatSurfaceColor.white =>
-      'TNKB putih terdeteksi dan dipetakan sebagai plat pribadi.',
-    PlatSurfaceColor.unknown => 'Warna TNKB belum dapat dipastikan.',
+      'Pelat nomor putih terdeteksi dan dipetakan sebagai pelat pribadi.',
+    PlatSurfaceColor.unknown => 'Warna pelat nomor belum dapat dipastikan.',
   };
 }
 

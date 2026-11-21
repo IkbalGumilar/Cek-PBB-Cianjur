@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../cianjur_wilayah_data.dart';
 import '../nop_helper.dart';
+import '../user_friendly_error.dart';
 
 /// Halaman Pengaturan Wilayah Kerja & Profil Desa.
 /// Memungkinkan petugas mengubah Kecamatan dan Desa penugasan tanpa mereset
@@ -64,10 +65,16 @@ class _WilayahSettingsScreenState extends State<WilayahSettingsScreen> {
       (d) => d.code == _selectedDesaCode,
     );
     if (!hasMatchingDesa) {
-      _selectedDesaCode = null;
-      _desaNameController.text = '';
-      _kelCodeController.text = '';
-      _isManualDesa = false;
+      _isManualDesa = true;
+      _selectedDesaCode = 'custom';
+      if (_kelCodeController.text.trim().isEmpty &&
+          activeKelurahanCode.isNotEmpty) {
+        _kelCodeController.text = activeKelurahanCode;
+      }
+      if (_desaNameController.text.trim().isEmpty &&
+          activeDesaName.isNotEmpty) {
+        _desaNameController.text = activeDesaName;
+      }
     } else {
       _isManualDesa = false;
       final desa = kec.desaList.firstWhere((d) => d.code == _selectedDesaCode);
@@ -122,7 +129,11 @@ class _WilayahSettingsScreenState extends State<WilayahSettingsScreen> {
       if (!mounted) return;
       setState(() => _saving = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal menyimpan perubahan wilayah: $e')),
+        SnackBar(
+          content: Text(
+            'Gagal menyimpan perubahan wilayah: ${friendlyErrorMessage(e)}',
+          ),
+        ),
       );
     }
   }
@@ -187,7 +198,7 @@ class _WilayahSettingsScreenState extends State<WilayahSettingsScreen> {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            'Prefix NOP: $activeNopPrefix (Format: 32.05.$activeKecamatanCode.$activeKelurahanCode)',
+                            'Kode Awalan NOP: $activeNopPrefix (Format: 32.05.$activeKecamatanCode.$activeKelurahanCode)',
                             style: theme.textTheme.bodySmall?.copyWith(
                               color: scheme.onSurfaceVariant,
                             ),
@@ -224,7 +235,7 @@ class _WilayahSettingsScreenState extends State<WilayahSettingsScreen> {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      'Pilih Kecamatan dan Desa/Kelurahan penugasan Anda. Pengaturan ini akan memperbarui prefix pencarian online di menu Cek Tagihan & Status Bayar.',
+                      'Pilih Kecamatan dan Desa/Kelurahan penugasan Anda. Pengaturan ini akan memperbarui kode awalan NOP untuk pencarian online di menu Cek Tagihan & Status Bayar.',
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: scheme.onSurfaceVariant,
                       ),
@@ -293,12 +304,15 @@ class _WilayahSettingsScreenState extends State<WilayahSettingsScreen> {
                           }),
                           const DropdownMenuItem<String>(
                             value: 'custom',
-                            child: Text('✏️ Masukkan Kode / Nama Lainnya...'),
+                            child: Text('Masukkan Kode / Nama Lainnya...'),
                           ),
                         ],
                         onChanged: (val) {
                           if (val == 'custom') {
-                            setState(() => _isManualDesa = true);
+                            setState(() {
+                              _isManualDesa = true;
+                              _selectedDesaCode = 'custom';
+                            });
                           } else if (val != null) {
                             final d = currentKec.desaList.firstWhere(
                               (item) => item.code == val,
@@ -355,7 +369,19 @@ class _WilayahSettingsScreenState extends State<WilayahSettingsScreen> {
                             onPressed: () {
                               setState(() {
                                 _isManualDesa = false;
-                                _syncDesaSelection();
+                                final typedCode = _kelCodeController.text
+                                    .trim();
+                                final match = currentKec.desaList.any(
+                                  (d) => d.code == typedCode,
+                                );
+                                if (match) {
+                                  _selectedDesaCode = typedCode;
+                                  _syncDesaSelection();
+                                } else {
+                                  _selectedDesaCode = null;
+                                  _desaNameController.text = '';
+                                  _kelCodeController.text = '';
+                                }
                               });
                             },
                           ),
@@ -364,7 +390,7 @@ class _WilayahSettingsScreenState extends State<WilayahSettingsScreen> {
                     ],
                     const SizedBox(height: 16),
 
-                    // Badge Live Preview NOP Prefix
+                    // Badge Live Preview Kode Awalan NOP
                     Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 14,
@@ -388,7 +414,7 @@ class _WilayahSettingsScreenState extends State<WilayahSettingsScreen> {
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            'Prefix NOP 10 Digit:',
+                            'Kode Awalan NOP 10 Digit:',
                             style: theme.textTheme.bodySmall?.copyWith(
                               fontWeight: FontWeight.w600,
                             ),

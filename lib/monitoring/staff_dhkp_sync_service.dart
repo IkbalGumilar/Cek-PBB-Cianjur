@@ -8,10 +8,10 @@ import '../blok_record.dart';
 import '../cianjur_wilayah_data.dart';
 import '../currency_format.dart';
 import '../dhkp/dhkp_grafik_analytics.dart';
-import '../dhkp_widget_sync_service.dart';
 import '../dusun_data.dart';
 import '../nop_helper.dart';
 import '../staff_portal_client.dart';
+import '../user_friendly_error.dart';
 
 
 /// Pilihan mode sinkronisasi DHKP dari Portal Staf
@@ -136,14 +136,15 @@ class StaffDhkpSyncService {
   /// Hasil sinkronisasi DHKP terakhir untuk laporan popup atau notifikasi klik
   static StaffDhkpSyncOutcome? lastOutcome;
 
-  /// Parse satu baris data dari sel tabel HTML Monitoring Wilayah
-  static ParsedStaffRow? parseRow(
-    List<String> cells,
-    List<String> headers, {
-    String? defaultTahun,
-  }) {
-    if (cells.isEmpty) return null;
+  static final RegExp _nonDigitRegex = RegExp(r'[^0-9]');
+  static List<String>? _cachedHeadersRef;
+  static List<int>? _cachedHeaderIndices;
 
+  static List<int> _resolveHeaderIndices(List<String> headers) {
+    if (identical(_cachedHeadersRef, headers) &&
+        _cachedHeaderIndices != null) {
+      return _cachedHeaderIndices!;
+    }
     int nopIdx = -1;
     int namaIdx = -1;
     int alamatWpIdx = -1;
@@ -223,13 +224,66 @@ class StaffDhkpSyncService {
       }
     }
 
+    final indices = <int>[
+      nopIdx,
+      namaIdx,
+      alamatWpIdx,
+      alamatOpIdx,
+      rtIdx,
+      rwIdx,
+      luasBumiIdx,
+      njopBumiIdx,
+      luasBgnIdx,
+      njopBgnIdx,
+      pokokBayarIdx,
+      pokokKetetapanIdx,
+      totalIdx,
+      fallbackPokokIdx,
+      statusIdx,
+      tglIdx,
+      jamIdx,
+      tahunIdx,
+    ];
+    _cachedHeadersRef = headers;
+    _cachedHeaderIndices = indices;
+    return indices;
+  }
+
+  /// Parse satu baris data dari sel tabel HTML Monitoring Wilayah
+  static ParsedStaffRow? parseRow(
+    List<String> cells,
+    List<String> headers, {
+    String? defaultTahun,
+  }) {
+    if (cells.isEmpty) return null;
+
+    final idx = _resolveHeaderIndices(headers);
+    final nopIdx = idx[0];
+    final namaIdx = idx[1];
+    final alamatWpIdx = idx[2];
+    final alamatOpIdx = idx[3];
+    final rtIdx = idx[4];
+    final rwIdx = idx[5];
+    final luasBumiIdx = idx[6];
+    final njopBumiIdx = idx[7];
+    final luasBgnIdx = idx[8];
+    final njopBgnIdx = idx[9];
+    final pokokBayarIdx = idx[10];
+    final pokokKetetapanIdx = idx[11];
+    final totalIdx = idx[12];
+    final fallbackPokokIdx = idx[13];
+    final statusIdx = idx[14];
+    final tglIdx = idx[15];
+    final jamIdx = idx[16];
+    final tahunIdx = idx[17];
+
     String rawNop = '';
     if (nopIdx != -1 && nopIdx < cells.length) {
       rawNop = cells[nopIdx];
     } else {
       // Fallback: cari sel yang memuat tepat 18 digit
       for (final c in cells) {
-        final digits = c.replaceAll(RegExp(r'[^0-9]'), '');
+        final digits = c.replaceAll(_nonDigitRegex, '');
         if (digits.length == 18) {
           rawNop = digits;
           break;
@@ -237,7 +291,7 @@ class StaffDhkpSyncService {
       }
     }
 
-    final clean = rawNop.replaceAll(RegExp(r'[^0-9]'), '');
+    final clean = rawNop.replaceAll(_nonDigitRegex, '');
     if (clean.length != 18) return null;
 
     final nama = (namaIdx != -1 && namaIdx < cells.length)
@@ -419,7 +473,10 @@ class StaffDhkpSyncService {
         tableResult = MonitoringTableResult(
           headers: const [],
           rows: const [],
-          errorMessage: 'Kesalahan jaringan pada halaman $page: $e',
+          errorMessage: friendlyErrorMessage(
+            e,
+            fallback: 'Koneksi terganggu saat memuat halaman $page.',
+          ),
         );
       }
       sw.stop();
@@ -517,7 +574,7 @@ class StaffDhkpSyncService {
     // 1. Notifikasi awal (Android Foreground Service & 1 notif awal di Desktop)
     await BatchNotificationService.instance.showStarted(
       title: 'Sinkronisasi DHKP Dimulai ($blokSummaryLabel)',
-      content: 'Menghubungkan ke Portal Staf Bapenda ($totalBloks blok)...',
+      content: 'Menghubungkan ke Portal Petugas Bapenda ($totalBloks blok)...',
       total: totalBloks,
     );
 
@@ -843,7 +900,7 @@ class StaffDhkpSyncService {
           blokLabel: blokSummaryLabel,
           tahun: tahun,
           errorMessage:
-              'Sesi login ke Portal Staf telah kedaluwarsa. Silakan masuk kembali melalui Menu Petugas sebelum melanjutkan sinkronisasi.',
+              'Sesi login ke Portal Petugas telah kedaluwarsa. Silakan masuk kembali melalui Menu Petugas sebelum melanjutkan sinkronisasi.',
         );
       }
 
@@ -1109,7 +1166,7 @@ class StaffDhkpSyncService {
             luasBangunan: parsed.luasBangunan,
             njopBangunan: parsed.njopBangunan,
             isTargetPemda: parsedPbbVal >= 2000000,
-            catatan: 'SPPT Baru terdeteksi dari Portal Staf',
+            catatan: 'SPPT Baru terdeteksi dari Portal Petugas',
           );
           keyToExisting[key] = newRecord;
           recordsToUpsertMap[key] = newRecord;
@@ -1119,13 +1176,10 @@ class StaffDhkpSyncService {
         }
       }
 
-      // 3. Simpan seluruh pembaruan sekaligus ke database lokal
+      // 3. Simpan seluruh pembaruan sekaligus ke database lokal (upsertAll sudah otomatis menyinkronkan widget beranda)
       if (recordsToUpsertMap.isNotEmpty) {
         await BlokDataStore.instance.upsertAll(
           recordsToUpsertMap.values.toList(),
-        );
-        DhkpWidgetSyncService.syncFromRecords(
-          await BlokDataStore.instance.loadAll(),
         );
       }
 
@@ -1165,7 +1219,10 @@ class StaffDhkpSyncService {
         newNops: newNops,
         updatedRecords: updatedRecords,
         newRecords: newRecords,
-        errorMessage: 'Gagal menyinkronkan data: $e',
+        errorMessage: friendlyErrorMessage(
+          e,
+          fallback: 'Gagal menyinkronkan data DHKP. Silakan coba lagi.',
+        ),
       );
       lastOutcome = errOutcome;
       return errOutcome;

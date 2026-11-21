@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
@@ -16,6 +18,7 @@ import 'native_file_helper.dart';
 import 'nop_helper.dart';
 import 'staff_portal_client.dart';
 import 'ui/app_design_system.dart';
+import 'user_friendly_error.dart';
 
 /// Layar "Kelola Anggota" satu grup kolektif — replika modal "Tambah NOP Pada
 /// Group" di halaman asli, dengan tiga aksinya:
@@ -97,6 +100,20 @@ class _KelolaAnggotaScreenState extends State<KelolaAnggotaScreen> {
   /// status selain Draft, jadi di sini pun begitu.
   bool get _bisaDiubah => widget.group.statusCode == '0';
 
+  /// Hanya benar-benar lunas bila statusCode == '2' (Sudah Dibayar).
+  /// Grup berstatus Draft ('0'), Siap Dibayar ('1'), atau Kedaluwarsa ('99')
+  /// belum dibayar sehingga TIDAK boleh otomatis ditandai 'Sudah Bayar' di DHKP.
+  bool get _isGroupPaid {
+    final code = widget.group.statusCode.trim();
+    if (code == '2') return true;
+    if (code == '0' || code == '1' || code == '99') return false;
+    final lower = widget.group.status.trim().toLowerCase();
+    return lower.contains('sudah bayar') ||
+        lower.contains('sudah dibayar') ||
+        lower.contains('sudah di bayar') ||
+        lower.contains('lunas');
+  }
+
   static const _bukuOptions = [
     ('1', 'Buku 1'),
     ('12', 'Buku 1,2'),
@@ -150,9 +167,12 @@ class _KelolaAnggotaScreenState extends State<KelolaAnggotaScreen> {
         ),
       FeatureTourStep(
         targetKey: _memberToolbarKey,
-        title: 'Unduh, Bagikan, Cetak & Muat Ulang',
-        description:
-            'Gunakan deretan ikon ini untuk mengunduh daftar anggota grup ke PDF/Excel, membagikan ke WhatsApp, mencetak daftar anggota, atau memuat ulang data terbaru.',
+        title: Platform.isAndroid
+            ? 'Unduh, Bagikan, Cetak & Muat Ulang'
+            : 'Unduh, Cetak & Muat Ulang',
+        description: Platform.isAndroid
+            ? 'Gunakan deretan ikon ini untuk mengunduh daftar anggota grup ke PDF/Excel, membagikan ke WhatsApp, mencetak daftar anggota, atau memuat ulang data terbaru.'
+            : 'Gunakan deretan ikon ini untuk mengunduh daftar anggota grup ke PDF/Excel, mencetak daftar anggota, atau memuat ulang data terbaru.',
         icon: Icons.print_outlined,
       ),
       FeatureTourStep(
@@ -272,10 +292,25 @@ class _KelolaAnggotaScreenState extends State<KelolaAnggotaScreen> {
       );
       final lokasi = await DownloadHelper.saveBytes(bytes, namaBerkas);
       if (!mounted || lokasi == null) return;
-      _snack('Tersimpan di $lokasi');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Tersimpan: ${friendlyFileName(lokasi)}'),
+          action: isDesktopPlatform
+              ? SnackBarAction(
+                  label: 'Buka Folder',
+                  onPressed: () => NativeFileHelper.showInFileManager(lokasi),
+                )
+              : null,
+        ),
+      );
     } catch (e) {
       if (!mounted) return;
-      _snack('Gagal mengunduh: $e');
+      _snack(
+        friendlyErrorMessage(
+          e,
+          fallback: 'Gagal mengunduh berkas. Silakan coba lagi.',
+        ),
+      );
     } finally {
       if (mounted) setState(() => _aksiBerjalan = false);
     }
@@ -303,7 +338,12 @@ class _KelolaAnggotaScreenState extends State<KelolaAnggotaScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      _snack('Gagal membagikan: $e');
+      _snack(
+        friendlyErrorMessage(
+          e,
+          fallback: 'Gagal membagikan berkas. Silakan coba lagi.',
+        ),
+      );
     } finally {
       if (mounted) setState(() => _aksiBerjalan = false);
     }
@@ -325,7 +365,12 @@ class _KelolaAnggotaScreenState extends State<KelolaAnggotaScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      _snack('Gagal menyiapkan cetakan: $e');
+      _snack(
+        friendlyErrorMessage(
+          e,
+          fallback: 'Gagal menyiapkan cetakan. Silakan coba lagi.',
+        ),
+      );
     } finally {
       if (mounted) setState(() => _aksiBerjalan = false);
     }
@@ -346,16 +391,17 @@ class _KelolaAnggotaScreenState extends State<KelolaAnggotaScreen> {
       if (!mounted) return;
       setState(() {
         _result = result;
-        if (result.members.isNotEmpty) {
-          _tampil = result.members.length;
-        }
+        _tampil = _pageSize;
       });
       await _sinkronkanAnggotaKeDhkpSekali(result);
     } catch (e) {
       if (!mounted) return;
       setState(
         () => _result = KolektifMemberListResult(
-          errorMessage: 'Gagal memuat daftar anggota: $e',
+          errorMessage: friendlyErrorMessage(
+            e,
+            fallback: 'Gagal memuat daftar anggota. Silakan coba lagi.',
+          ),
         ),
       );
     } finally {
@@ -365,14 +411,19 @@ class _KelolaAnggotaScreenState extends State<KelolaAnggotaScreen> {
 
   /// Otomatis menyinkronkan seluruh anggota di dalam grup ini ke database DHKP
   /// lokal ([BlokDataStore]) menjadi berstatus `Sudah Bayar` saat halaman
-  /// `Kelola Anggota` dibuka pertama kali.
+  /// `Kelola Anggota` dibuka pertama kali — **HANYA** jika grup kolektif
+  /// benar-benar sudah berstatus lunas (`statusCode == '2'` / Sudah Dibayar).
   ///
-  /// Hanya berjalan **1 kali** untuk setiap grup: jika pengguna membuka halaman
-  /// ini untuk ke-2 kalinya (atau memuat ulang), proses sinkronisasi otomatis
-  /// ini tidak akan dijalankan lagi.
+  /// Grup berstatus Draft (`0`), Siap Dibayar (`1`), atau Kedaluwarsa (`99`)
+  /// dilewati agar tidak pernah merusak data DHKP lokal.
+  ///
+  /// Hanya berjalan **1 kali** untuk setiap grup lunas: jika pengguna membuka
+  /// halaman ini untuk ke-2 kalinya (atau memuat ulang), proses sinkronisasi
+  /// otomatis ini tidak akan dijalankan lagi.
   Future<void> _sinkronkanAnggotaKeDhkpSekali(
     KolektifMemberListResult result,
   ) async {
+    if (!_isGroupPaid) return;
     if (result.errorMessage != null || result.members.isEmpty) return;
 
     final groupKey = widget.group.id.trim().isNotEmpty
@@ -607,7 +658,8 @@ class _KelolaAnggotaScreenState extends State<KelolaAnggotaScreen> {
         success: false,
         message:
             'Koneksi terputus saat menunggu jawaban server, jadi hasilnya belum pasti. '
-            'Periksa dulu daftar anggota di bawah sebelum mencoba lagi.\n\n$e',
+            'Periksa dulu daftar anggota di bawah sebelum mencoba lagi.\n\n'
+            '${friendlyErrorMessage(e)}',
       );
     } finally {
       if (mounted) setState(() => _aksiBerjalan = false);
@@ -651,7 +703,13 @@ class _KelolaAnggotaScreenState extends State<KelolaAnggotaScreen> {
       );
     } on Exception catch (e) {
       if (!mounted) return;
-      _pesan('Gagal membuka berkas', 'Pemilih berkas tidak bisa dibuka: $e');
+      _pesan(
+        'Gagal membuka berkas',
+        friendlyErrorMessage(
+          e,
+          fallback: 'Pemilih berkas tidak bisa dibuka. Silakan coba lagi.',
+        ),
+      );
       return;
     }
     if (berkas.isEmpty || !mounted) return;
@@ -665,7 +723,10 @@ class _KelolaAnggotaScreenState extends State<KelolaAnggotaScreen> {
       setState(() => _aksiBerjalan = false);
       _pesan(
         'Gagal membaca berkas',
-        'Isi "${berkas.first.name}" tidak bisa dibaca: $e',
+        friendlyErrorMessage(
+          e,
+          fallback: 'Isi "${berkas.first.name}" tidak dapat dibaca.',
+        ),
       );
       return;
     }
@@ -724,7 +785,8 @@ class _KelolaAnggotaScreenState extends State<KelolaAnggotaScreen> {
         success: false,
         message:
             'Koneksi terputus saat menunggu jawaban server, jadi hasilnya belum pasti. '
-            'Periksa dulu daftar anggota di bawah sebelum mencoba lagi.\n\n$e',
+            'Periksa dulu daftar anggota di bawah sebelum mencoba lagi.\n\n'
+            '${friendlyErrorMessage(e)}',
       );
     } finally {
       if (mounted) setState(() => _aksiBerjalan = false);
@@ -764,7 +826,8 @@ class _KelolaAnggotaScreenState extends State<KelolaAnggotaScreen> {
         success: false,
         message:
             'Koneksi terputus saat menunggu jawaban server, jadi hasilnya '
-            'belum pasti. Periksa status grup sebelum mencoba lagi.\n\n$e',
+            'belum pasti. Periksa status grup sebelum mencoba lagi.\n\n'
+            '${friendlyErrorMessage(e)}',
         responsDikenali: false,
       );
     } finally {
@@ -1088,11 +1151,12 @@ class _KelolaAnggotaScreenState extends State<KelolaAnggotaScreen> {
                         icon: const Icon(Icons.download_outlined),
                         tooltip: 'Unduh (PDF/Excel/CSV)',
                       ),
-                      IconButton(
-                        onPressed: sibuk ? null : () => _bagikan(_result!),
-                        icon: const Icon(Icons.share_outlined),
-                        tooltip: 'Bagikan (PDF/Excel/CSV)',
-                      ),
+                      if (Platform.isAndroid)
+                        IconButton(
+                          onPressed: sibuk ? null : () => _bagikan(_result!),
+                          icon: const Icon(Icons.share_outlined),
+                          tooltip: 'Bagikan (PDF/Excel/CSV)',
+                        ),
                       IconButton(
                         onPressed: sibuk ? null : () => _cetak(_result!),
                         icon: const Icon(Icons.print_outlined),

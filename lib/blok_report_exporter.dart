@@ -156,6 +156,8 @@ class BlokReportExporter extends BaseTableExporter {
         DhkpKategoriFilter.sudahBayar => 'sudah_bayar',
         DhkpKategoriFilter.belumBayar => 'belum_bayar',
         DhkpKategoriFilter.blacklist => 'blacklist',
+        DhkpKategoriFilter.bermasalah => 'bermasalah',
+        DhkpKategoriFilter.nihil => 'nihil',
         DhkpKategoriFilter.targetPemda => 'target_pemda',
         DhkpKategoriFilter.semua => '',
       };

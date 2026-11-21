@@ -163,7 +163,7 @@ class KendaraanClient extends BaseHttpClient {
       throw const KendaraanException('Nomor polisi belum lengkap.');
     }
     if (!RegExp(r'^[1-3]$').hasMatch(warna)) {
-      throw const KendaraanException('Warna TNKB tidak valid.');
+      throw const KendaraanException('Warna plat nomor kendaraan tidak valid.');
     }
 
     // The Sambara Bapenda Jabar backend strictly enforces that `no_polisi` must
@@ -340,7 +340,7 @@ class KendaraanClient extends BaseHttpClient {
     final status = error.response?.statusCode;
     if (status != null && status >= 500) {
       return KendaraanException(
-        'Server Samsat/Bapenda sedang bermasalah (HTTP $status). Silakan coba lagi nanti.',
+        'Server Samsat/Bapenda sedang mengalami gangguan. Silakan coba beberapa saat lagi.',
         kind: KendaraanErrorKind.service,
         code: status,
       );

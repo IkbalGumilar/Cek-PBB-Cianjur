@@ -1,6 +1,6 @@
 # Cek PBB Cianjur
 
-[![Version](https://img.shields.io/badge/Version-v1.0.0-brightgreen.svg)](https://github.com/IkbalGumilar/Cek-PBB-Cianjur/releases/latest)
+[![Version](https://img.shields.io/badge/Version-v1.1.0-brightgreen.svg)](https://github.com/IkbalGumilar/Cek-PBB-Cianjur/releases/latest)
 [![Flutter](https://img.shields.io/badge/Flutter-%E2%89%A53.50-02569B?logo=flutter)](https://flutter.dev)
 [![Dart](https://img.shields.io/badge/Dart-^3.14.0-0175C2?logo=dart)](https://dart.dev)
 [![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20iOS%20%7C%20Windows%20%7C%20Linux-green.svg)]()
@@ -10,9 +10,9 @@
 Aplikasi manajemen, pengecekan, monitoring, analisis realisasi, dan pelaporan Pajak Bumi dan Bangunan Perdesaan dan Perkotaan (PBB-P2) lintas platform untuk memfasilitasi kerja petugas/kolektor dan perangkat desa/kelurahan di seluruh **Kabupaten Cianjur** (**32 Kecamatan · 337 Desa/Kelurahan**). Aplikasi berkomunikasi langsung secara terenkripsi dengan portal layanan BAPENDA Kabupaten Cianjur, Bapenda Jawa Barat, dan Kemensos RI tanpa memerlukan navigasi manual di peramban web.
 
 > [!NOTE]
-> **Rilis Stabil Multi-Platform (`v1.0.0`)**  
-> Tersedia di [GitHub Releases](https://github.com/IkbalGumilar/Cek-PBB-Cianjur/releases/latest) dalam bentuk **APK teroptimasi per arsitektur (*Split per ABI*, `20,1–21,2 MB`)** untuk Android, **Installer Mandiri Inno Setup (`16 MB`)** & **Portable (`.zip`, `19 MB`)** untuk Windows x64, arsip **Linux Desktop (`17 MB`)**, serta konfigurasi siap rilis **iOS (App Store)**.  
-> Sistem pembaruan bawaan memverifikasi integritas berkas rilis menggunakan **checksum SHA-256** dan pemeriksaan **magic bytes** header biner sebelum instalasi dijalankan. Lihat rincian lengkap peningkatan di [`RELEASE_NOTES.md`](RELEASE_NOTES.md) dan [`CHANGELOG.md`](CHANGELOG.md).
+> **Rilis Stabil Multi-Platform (`v1.1.0`)**  
+> Tersedia di [GitHub Releases](https://github.com/IkbalGumilar/Cek-PBB-Cianjur/releases/latest) dalam bentuk **APK teroptimasi per arsitektur (*Split per ABI*, `20,1–21,3 MB`)** untuk Android, **Installer Mandiri Inno Setup (`16 MB`)** & **Portable (`.zip`, `19 MB`)** untuk Windows x64, arsip **Linux Desktop (`17 MB`)**, serta konfigurasi siap rilis **iOS (App Store)**.  
+> Sistem pembaruan bawaan memverifikasi integritas berkas rilis menggunakan **checksum SHA-256** dan pemeriksaan **magic bytes** header biner sebelum instalasi dijalankan. Lihat rincian lengkap perubahan di [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
@@ -216,7 +216,7 @@ Fitur **Periksa Banyak Data (Banyak NOP)** mendukung pemasukan banyak NOP secara
 
 ### 3. Manajemen Data DHKP, Kalkulator Pajak & Paket Laporan (.dat / .dkhp)
 
-Buku Catatan DHKP mengelola ribuan data objek pajak secara luring maupun sinkron, dilengkapi kartu metrik pelunasan, penyaringan (*Sudah Bayar*, *Belum Bayar*, *Target Pemda*, *Sembunyikan Rp 0*, status *Blacklist*), serta pencatatan **status bayar, catatan lapangan, foto bukti serah terima SPPT**, dan **menu aksi kanan atas** yang komprehensif.
+Buku Catatan DHKP mengelola ribuan data objek pajak secara luring maupun sinkron, dilengkapi kartu metrik pelunasan, **Multi-Filter Kategori** (*Semua Data*, *Nihil (Rp 0)*, *Target Pemda*, *Sudah Bayar*, *Belum Bayar*, *Blacklist*, serta kategori & mark merah ***Bermasalah*** khusus Target Desa dengan dialog konfirmasi), tombol cepat pilih tunggal (**Hanya**), serta pencatatan **status bayar, catatan lapangan, foto bukti serah terima SPPT**, dan **menu aksi kanan atas** yang komprehensif.
 
 <table>
   <thead>
@@ -508,7 +508,7 @@ Modul panduan visual bawaan (`UserGuideRepository`) berisi **19 Layar Fitur**, *
 
 ### 13. Tema Adaptif, Keamanan Berlapis, Pencadangan & Legalitas
 
-Panel Pengaturan menyatukan kontrol wilayah kerja, 4 mode tema & Material You, pengamanan berlapis (*AppLock* + *Kata Sandi Cadangan*), pencadangan delta `.dat`, buku panduan, cek pembaruan & bagikan aplikasi, serta kebijakan privasi dan syarat ketentuan.
+Panel Pengaturan menyatukan kontrol wilayah kerja, 4 mode tema & Material You, pengamanan berlapis (*AppLock* + *Kata Sandi Cadangan*), pencadangan delta `.dat`/`.dkhp`, **Smart Cloud Merger (pemeriksaan ringan tiap 3 jam lintas perangkat untuk Akun Google yang sama)**, buku panduan, cek pembaruan & bagikan aplikasi, serta kebijakan privasi dan syarat ketentuan.
 
 <table>
   <thead>
@@ -597,10 +597,10 @@ Panel Pengaturan menyatukan kontrol wilayah kerja, 4 mode tema & Material You, p
      ```bash
      flutter build apk --release --split-per-abi --obfuscate --split-debug-info=build/symbols/android --tree-shake-icons
      ```
-     Menghasilkan paket APK terpisah berdasarkan arsitektur CPU pada direktori `build/app/outputs/flutter-apk/`:
-     - `app-arm64-v8a-release.apk` (`20,9 MB` — Smartphone Android 64-bit modern)
-     - `app-armeabi-v7a-release.apk` (`20,1 MB` — Perangkat Android 32-bit legacy)
-     - `app-x86_64-release.apk` (`21,2 MB` — Emulator / perangkat x86_64)
+     Menghasilkan paket APK terpisah berdasarkan arsitektur CPU pada direktori `build/app/outputs/flutter-apk/` (tersalin rapi ke `dist/`):
+     - `Cek-PBB-Cianjur-v1.1.0-arm64-v8a.apk` (`21,0 MB` — Smartphone Android 64-bit modern)
+     - `Cek-PBB-Cianjur-v1.1.0-armeabi-v7a.apk` (`20,1 MB` — Perangkat Android 32-bit legacy)
+     - `Cek-PBB-Cianjur-v1.1.0-x86_64.apk` (`21,3 MB` — Emulator / perangkat x86_64)
      > [!TIP]
      > **Efisiensi Memori & Ukuran (`useLegacyPackaging` + `R8` + `split-debug-info`)**  
      > Konfigurasi [`android/app/build.gradle.kts`](android/app/build.gradle.kts) mengaktifkan `isMinifyEnabled = true`, `isShrinkResources = true`, serta `packaging { jniLibs { useLegacyPackaging = true } }`, dipadukan dengan `--split-debug-info` dan `--tree-shake-icons` agar biner tetap ramping dan simbol debug terpisah.
@@ -619,21 +619,21 @@ Panel Pengaturan menyatukan kontrol wilayah kerja, 4 mode tema & Material You, p
      "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" windows\installer.iss
      ```
      Hasil biner rilis di folder `dist\`:
-     - `dist\Cek-PBB-Cianjur-Setup-v1.0.0.exe` (`16 MB` — Installer Mandiri Inno Setup)
-     - `dist\Cek-PBB-Cianjur-Portable-v1.0.0.zip` (`19 MB` — Portable ZIP x64)
-     - `dist\Cek-PBB-Cianjur-v1.0.0-checksums.sha256` (Checksum SHA-256 tergabung seluruh platform)
+     - `dist\Cek-PBB-Cianjur-Setup-v1.1.0.exe` (`16 MB` — Installer Mandiri Inno Setup)
+     - `dist\Cek-PBB-Cianjur-Portable-v1.1.0.zip` (`19 MB` — Portable ZIP x64)
+     - `dist\Cek-PBB-Cianjur-v1.1.0-checksums.sha256` (Checksum SHA-256 tergabung seluruh platform)
    - **Linux Desktop**:
      ```bash
      flutter build linux --release --obfuscate --split-debug-info=build/symbols/linux --tree-shake-icons --dart-define-from-file=env.desktop.json
      ```
-     Biner rilis dan pustaka pendukung dihasilkan di `build/linux/x64/release/bundle/`, serta arsip portabel terkompresi di `dist/Cek-PBB-Cianjur-Linux-x64-v1.0.0.tar.gz` (`17 MB`).
+     Biner rilis dan pustaka pendukung dihasilkan di `build/linux/x64/release/bundle/`, serta arsip portabel terkompresi di `dist/Cek-PBB-Cianjur-Linux-x64-v1.1.0.tar.gz` (`17 MB`).
 
 5. **Verifikasi Pengujian & Analisis Statis**:
    ```bash
    flutter analyze
    flutter test
    ```
-   *(Terverifikasi pada `v1.0.0`: `0` isu analisis statis dan `282/282` Unit & Widget Tests lolos).*
+   *(Terverifikasi pada `v1.1.0`: `0` isu analisis statis dan `283/283` Unit & Widget Tests lolos — rincian rilis tersedia di [`CHANGELOG.md`](CHANGELOG.md)).*
 
 > [!IMPORTANT]
 > **Penandatanganan Rilis Android (Keystore)**  

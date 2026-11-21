@@ -11,6 +11,7 @@ import 'kolektif_nop_berkas.dart';
 import 'staff_portal/staff_portal_models.dart';
 import 'staff_portal/staff_portal_parser.dart';
 import 'staff_portal_token_extractor.dart';
+import 'user_friendly_error.dart';
 
 export 'staff_portal/staff_portal_models.dart';
 
@@ -347,12 +348,15 @@ class StaffPortalClient extends BaseHttpClient {
       return MonitoringTableResult(
         errorMessage: BaseHttpClient.describeNetworkError(
           e,
-          serviceName: 'Portal Staf V-Tax',
+          serviceName: 'Portal Petugas',
         ),
       );
     } catch (e) {
       return MonitoringTableResult(
-        errorMessage: 'Gagal menghubungkan ke Portal Staf: $e',
+        errorMessage: friendlyErrorMessage(
+          e,
+          fallback: 'Gagal terhubung ke Portal Petugas.',
+        ),
       );
     }
 
@@ -366,8 +370,8 @@ class StaffPortalClient extends BaseHttpClient {
       _pageQ23 = null;
       return const MonitoringTableResult(
         errorMessage:
-            'Gagal membaca token halaman Monitoring — sesi login mungkin sudah berakhir. '
-            'Silakan masuk kembali melalui Menu Petugas.',
+            'Sesi halaman Monitoring tidak dapat dibaca atau sudah berakhir. '
+            'Silakan masuk kembali melalui Portal Petugas.',
       );
     }
 
@@ -398,7 +402,7 @@ class StaffPortalClient extends BaseHttpClient {
         _pageQ23 = null;
         return const MonitoringTableResult(
           errorMessage:
-              'Sesi login ke Portal Staf telah kedaluwarsa. Silakan masuk kembali melalui Menu Petugas.',
+              'Sesi Portal Petugas telah berakhir. Silakan masuk kembali.',
         );
       }
 
@@ -411,12 +415,15 @@ class StaffPortalClient extends BaseHttpClient {
       return MonitoringTableResult(
         errorMessage: BaseHttpClient.describeNetworkError(
           e,
-          serviceName: 'Portal Staf V-Tax',
+          serviceName: 'Portal Petugas',
         ),
       );
     } catch (e) {
       return MonitoringTableResult(
-        errorMessage: 'Gagal memuat data dari server: $e',
+        errorMessage: friendlyErrorMessage(
+          e,
+          fallback: 'Gagal memuat data dari server.',
+        ),
       );
     }
   }
@@ -882,7 +889,7 @@ class StaffPortalClient extends BaseHttpClient {
     if (q == null || funcMode == null) {
       return const MonitoringExcelQueueResult(
         errorMessage:
-            'Gagal membaca token antrean Excel dari halaman Monitoring.',
+            'Sesi halaman Monitoring tidak dapat dibaca. Silakan muat ulang atau masuk kembali.',
       );
     }
     try {
@@ -904,12 +911,15 @@ class StaffPortalClient extends BaseHttpClient {
       return MonitoringExcelQueueResult(
         errorMessage: BaseHttpClient.describeNetworkError(
           e,
-          serviceName: 'Portal Staf V-Tax',
+          serviceName: 'Portal Petugas',
         ),
       );
     } catch (e) {
       return MonitoringExcelQueueResult(
-        errorMessage: 'Gagal memuat antrean unduhan Excel: $e',
+        errorMessage: friendlyErrorMessage(
+          e,
+          fallback: 'Gagal memuat antrean unduhan Excel.',
+        ),
       );
     }
   }
@@ -932,7 +942,8 @@ class StaffPortalClient extends BaseHttpClient {
     if (q == null || funcMode == null) {
       return (
         success: false,
-        message: 'Gagal membaca token ekspor Excel dari halaman Monitoring.',
+        message:
+            'Sesi ekspor Excel tidak dapat dibaca. Silakan muat ulang atau masuk kembali.',
       );
     }
     final response = await _dio.post<String>(
@@ -1352,7 +1363,7 @@ class StaffPortalClient extends BaseHttpClient {
     if (funcMode == null) {
       return const KolektifMemberListResult(
         errorMessage:
-            'Gagal membaca token daftar anggota — coba buka ulang menu Pembayaran Kolektif.',
+            'Sesi halaman daftar anggota tidak dapat dibaca — coba buka ulang menu Pembayaran Kolektif.',
       );
     }
 
@@ -1392,12 +1403,15 @@ class StaffPortalClient extends BaseHttpClient {
       return KolektifMemberListResult(
         errorMessage: BaseHttpClient.describeNetworkError(
           e,
-          serviceName: 'Portal Staf V-Tax',
+          serviceName: 'Portal Petugas',
         ),
       );
     } catch (e) {
       return KolektifMemberListResult(
-        errorMessage: 'Gagal memuat daftar anggota grup: $e',
+        errorMessage: friendlyErrorMessage(
+          e,
+          fallback: 'Gagal memuat daftar anggota grup.',
+        ),
       );
     }
   }
@@ -1425,8 +1439,8 @@ class StaffPortalClient extends BaseHttpClient {
       return const KolektifActionResult(
         success: false,
         message:
-            'Token halaman Pembayaran Kolektif tidak terbaca, jadi TIDAK ada NOP yang ditambahkan. '
-            'Sesi mungkin sudah berakhir — masuk ulang lalu coba lagi.',
+            'Sesi halaman Pembayaran Kolektif tidak terbaca, jadi tidak ada NOP yang ditambahkan. '
+            'Silakan masuk ulang lalu coba lagi.',
       );
     }
 
@@ -1476,8 +1490,8 @@ class StaffPortalClient extends BaseHttpClient {
     if (funcMode == null || userId == null) {
       return const HasilImporNop(
         errorFatal:
-            'Token halaman Pembayaran Kolektif tidak terbaca, jadi TIDAK ada NOP yang dikirim. '
-            'Sesi mungkin sudah berakhir — masuk ulang lalu coba lagi.',
+            'Sesi halaman Pembayaran Kolektif tidak terbaca, jadi tidak ada NOP yang dikirim. '
+            'Silakan masuk ulang lalu coba lagi.',
       );
     }
 
@@ -1513,15 +1527,14 @@ class StaffPortalClient extends BaseHttpClient {
           ),
         );
         hasil = StaffPortalParser.parseKolektifActionJson(response.data ?? '');
-      } on DioException catch (e) {
+      } on DioException {
         gagalBeruntun++;
         item.add(
           ItemImporNop(
             nop: nop,
             status: StatusImporNop.perluDiperiksa,
             pesan:
-                'Koneksi terputus sebelum jawaban server sampai, jadi belum pasti masuk atau tidak. '
-                '(${e.type.name})',
+                'Koneksi terputus sebelum jawaban server sampai, jadi belum pasti masuk atau tidak.',
           ),
         );
         if (gagalBeruntun >= 3) {
@@ -1538,7 +1551,7 @@ class StaffPortalClient extends BaseHttpClient {
       if (!hasil.responsDikenali) {
         errorFatal =
             'Server berhenti menjawab dalam format yang dikenali di NOP ke-${i + 1} — '
-            'biasanya berarti sesi login sudah berakhir. Sisa NOP TIDAK dikirim. '
+            'biasanya berarti sesi login sudah berakhir. Sisa NOP tidak dikirim. '
             'Masuk ulang, periksa daftar anggota, lalu ulangi untuk yang belum masuk.';
         break;
       }
@@ -1581,8 +1594,8 @@ class StaffPortalClient extends BaseHttpClient {
       return const KolektifActionResult(
         success: false,
         message:
-            'Token halaman Pembayaran Kolektif tidak terbaca, jadi TIDAK ada anggota yang dihapus. '
-            'Sesi mungkin sudah berakhir — masuk ulang lalu coba lagi.',
+            'Sesi halaman Pembayaran Kolektif tidak terbaca, jadi tidak ada anggota yang dihapus. '
+            'Silakan masuk ulang lalu coba lagi.',
       );
     }
 
@@ -1636,7 +1649,7 @@ class StaffPortalClient extends BaseHttpClient {
     if (funcMode == null || userId == null) {
       return const KolektifListResult(
         errorMessage:
-            'Gagal membaca token halaman Pembayaran Kolektif — coba buka ulang menunya.',
+            'Sesi halaman Pembayaran Kolektif tidak dapat dibaca — coba buka ulang menunya.',
       );
     }
 
@@ -1682,12 +1695,15 @@ class StaffPortalClient extends BaseHttpClient {
       return KolektifListResult(
         errorMessage: BaseHttpClient.describeNetworkError(
           e,
-          serviceName: 'Portal Staf V-Tax',
+          serviceName: 'Portal Petugas',
         ),
       );
     } catch (e) {
       return KolektifListResult(
-        errorMessage: 'Gagal memuat daftar grup kolektif: $e',
+        errorMessage: friendlyErrorMessage(
+          e,
+          fallback: 'Gagal memuat daftar grup kolektif.',
+        ),
       );
     }
   }

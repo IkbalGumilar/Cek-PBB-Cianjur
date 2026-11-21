@@ -2,6 +2,8 @@ import 'package:material_ui/material_ui.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'user_friendly_error.dart';
+
 enum LegalDocumentType { privacyPolicy, termsOfService }
 
 /// Layar terpadu untuk menampilkan Kebijakan Privasi dan Syarat & Ketentuan Layanan.
@@ -56,14 +58,18 @@ class _LegalDocumentScreenState extends State<LegalDocumentScreen>
       );
       if (!launched && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Tidak dapat membuka browser: $url')),
+          const SnackBar(
+            content: Text('Tidak dapat membuka peramban untuk dokumen ini.'),
+          ),
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Gagal membuka tautan: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal membuka tautan: ${friendlyErrorMessage(e)}'),
+          ),
+        );
       }
     }
   }
@@ -147,7 +153,7 @@ class _LegalDocumentScreenState extends State<LegalDocumentScreen>
                 children: [
                   _buildSubHeading('A. Data Pajak & Catatan Kolektor (Lokal)'),
                   const Text(
-                    'Aplikasi memproses Nomor Objek Pajak (NOP), nama wajib pajak, alamat objek pajak, ketetapan tagihan, serta status pembayaran (lunas / titip bayar) dari berkas DHKP resmi desa atau portal publik PBB Bapenda Cianjur. Data kerja disimpan di direktori privat aplikasi pada perangkat dan cadangan paket (.dkhp / .dat / .bin) dilindungi dengan enkripsi kriptografi.',
+                    'Aplikasi memproses Nomor Objek Pajak (NOP), nama wajib pajak, alamat objek pajak, ketetapan tagihan, serta status pembayaran (lunas / titip bayar) dari berkas DHKP resmi desa atau portal publik PBB Bapenda Cianjur. Data kerja disimpan di direktori privat aplikasi pada perangkat dan cadangan paket (.dkhp / .dat) dilindungi dengan enkripsi kriptografi.',
                     style: TextStyle(fontSize: 13, height: 1.5),
                   ),
                   const Divider(height: 24),
@@ -228,10 +234,10 @@ class _LegalDocumentScreenState extends State<LegalDocumentScreen>
                     'Enkripsi Berkas DHKP: Berkas cadangan yang diunggah dilindungi enkripsi standar industri AES-256 (CBC/GCM) dengan PBKDF2-HMAC-SHA256.',
                   ),
                   _buildBulletItem(
-                    'Penyimpanan Kredensial Aman: Token Google OAuth disimpan dalam Android Keystore / Flutter Secure Storage.',
+                    'Penyimpanan Kredensial Aman: Token akun Google disimpan pada penyimpanan aman perangkat.',
                   ),
                   _buildBulletItem(
-                    'Kunci Biometrik: Dilengkapi fitur autentikasi sidik jari / wajah (Fingerprint / Face ID) bawaan perangkat.',
+                    'Kunci Keamanan: Dilengkapi fitur autentikasi biometrik perangkat (Sidik Jari / Pengenalan Wajah / Windows Hello) serta PIN dan Kata Sandi aplikasi.',
                   ),
                 ],
               ),
@@ -241,7 +247,7 @@ class _LegalDocumentScreenState extends State<LegalDocumentScreen>
                 isDark: isDark,
                 children: [
                   _buildBulletItem(
-                    'Anda dapat melepas tautan akun Google kapan saja via menu Pengaturan > Lepas Akun Google.',
+                    'Anda dapat melepas tautan akun Google kapan saja via menu Pengaturan > Pencadangan Data > Akun Google > Putuskan Akun.',
                   ),
                   _buildBulletItem(
                     'Anda dapat mencabut izin aplikasi kapan saja melalui Google Account Permissions (myaccount.google.com/permissions).',

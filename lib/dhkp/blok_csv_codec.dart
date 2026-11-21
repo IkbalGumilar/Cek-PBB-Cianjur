@@ -101,9 +101,6 @@ class BlokCsvCodec {
       if (nop.length != 18) continue;
       final tanggalBayar = row[3].toString().trim();
       final rawStatus = row.length > 5 ? row[5].toString().trim() : '';
-      final status = (tanggalBayar.isNotEmpty && tanggalBayar != '0')
-          ? 'Sudah Bayar'
-          : (rawStatus.isNotEmpty ? rawStatus : 'Belum Bayar');
       final namaFoto = row.length > 6 && row[6].toString().trim().isNotEmpty
           ? row[6].toString().trim()
           : null;
@@ -111,6 +108,12 @@ class BlokCsvCodec {
           ? row[7].toString().trim().toLowerCase()
           : '';
       final isTargetPemda = _isTruthyTargetPemda(rawTargetPemda);
+      final status = (!isTargetPemda &&
+              rawStatus.toLowerCase().contains('bermasalah'))
+          ? 'Bermasalah'
+          : ((tanggalBayar.isNotEmpty && tanggalBayar != '0')
+                ? 'Sudah Bayar'
+                : (rawStatus.isNotEmpty ? rawStatus : 'Belum Bayar'));
       records.add(
         BlokRecord(
           namaWajibPajak: row[0].toString().trim(),
@@ -162,9 +165,6 @@ class BlokCsvCodec {
       final tanggal = _cell(row, 3);
       final pokok = _cell(row, 4);
       final rawStatus = _cell(row, 5);
-      final status = (tanggal.isNotEmpty && tanggal != '0')
-          ? 'Sudah Bayar'
-          : (rawStatus.isNotEmpty ? rawStatus : 'Belum Bayar');
       final namaFoto = row.length > 6 && row[6].toString().trim().isNotEmpty
           ? row[6].toString().trim()
           : null;
@@ -175,6 +175,12 @@ class BlokCsvCodec {
       final isTargetPemda =
           _isTruthyTargetPemda(rawTargetPemda) ||
           (rawTargetPemda.isEmpty && pokokVal >= 2000000);
+      final status = (!isTargetPemda &&
+              rawStatus.toLowerCase().contains('bermasalah'))
+          ? 'Bermasalah'
+          : ((tanggal.isNotEmpty && tanggal != '0')
+                ? 'Sudah Bayar'
+                : (rawStatus.isNotEmpty ? rawStatus : 'Belum Bayar'));
 
       records.add(
         BlokRecord(

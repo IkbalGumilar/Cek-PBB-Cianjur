@@ -157,7 +157,7 @@ class GoogleAuthService {
     }
 
     if (!isSupportedPlatform) {
-      throw Exception('Platform saat ini tidak didukung untuk Google Sign-In.');
+      throw Exception('Masuk dengan Akun Google tidak tersedia pada perangkat ini.');
     }
 
     // Jika berjalan di platform desktop (Linux / Windows / macOS), gunakan Loopback Browser
@@ -226,9 +226,7 @@ class GoogleAuthService {
   Future<GoogleAuthUser?> _signInDesktop() async {
     if (!hasDesktopOAuthCredentials) {
       throw Exception(
-        'Kredensial OAuth Desktop Google (GOOGLE_DESKTOP_CLIENT_ID & '
-        'GOOGLE_DESKTOP_CLIENT_SECRET) belum terpasang pada build ini. '
-        'Jalankan/build aplikasi dengan --dart-define-from-file=env.desktop.json.',
+        'Layanan masuk Akun Google belum tersedia pada versi aplikasi desktop ini.',
       );
     }
 
@@ -266,7 +264,9 @@ class GoogleAuthService {
         mode: LaunchMode.externalApplication,
       );
       if (!launched) {
-        throw Exception('Gagal membuka web browser sistem.');
+        throw Exception(
+          'Gagal membuka peramban di perangkat untuk masuk Akun Google.',
+        );
       }
 
       // 5. Tunggu respon callback OAuth yang valid dari browser (timeout 3 menit)
@@ -319,8 +319,11 @@ class GoogleAuthService {
         final err =
             tokenJson['error_description'] ??
             tokenJson['error'] ??
-            'Gagal menukarkan token';
-        throw Exception('Gagal mendapatkan token dari Google: $err');
+            'token exchange failed';
+        debugPrint('Google Desktop token exchange failed: $err');
+        throw Exception(
+          'Gagal menyelesaikan proses masuk Akun Google. Silakan coba lagi.',
+        );
       }
 
       final accessToken = tokenJson['access_token'] as String;
@@ -353,7 +356,7 @@ class GoogleAuthService {
       final sub = userJson['sub'] as String? ?? '';
 
       if (email.isEmpty) {
-        throw Exception('Gagal mendapatkan informasi email akun Google.');
+        throw Exception('Gagal membaca informasi email Akun Google Anda.');
       }
 
       final user = GoogleAuthUser(
@@ -428,7 +431,7 @@ class GoogleAuthService {
         if (!hasCode && !hasError) {
           request.response.statusCode = HttpStatus.notFound;
           request.response.headers.contentType = ContentType.text;
-          request.response.write('Menunggu callback OAuth...');
+          request.response.write('Menunggu konfirmasi masuk Akun Google...');
           await request.response.close();
           continue;
         }
@@ -440,9 +443,7 @@ class GoogleAuthService {
             isSuccess: false,
             message: 'Otorisasi dibatalkan: $rawError',
           );
-          throw Exception(
-            'Otorisasi akun Google dibatalkan di browser ($rawError).',
-          );
+          throw Exception('Proses masuk Akun Google dibatalkan di browser.');
         }
 
         final returnedState = queryParams['state'];
@@ -454,24 +455,26 @@ class GoogleAuthService {
           await _sendHtmlResponse(
             request.response,
             isSuccess: false,
-            message: 'Parameter otorisasi (state/code) tidak valid.',
+            message: 'Sesi otorisasi tidak valid atau sudah kedaluwarsa.',
           );
           throw Exception(
-            'Kode otorisasi Google tidak valid atau sesi kadaluarsa.',
+            'Sesi masuk Akun Google tidak valid atau kedaluwarsa. Silakan coba lagi.',
           );
         }
 
         await _sendHtmlResponse(request.response, isSuccess: true);
         return authCode.trim();
       }
-      throw Exception('Server loopback OAuth ditutup sebelum menerima respon.');
+      throw Exception(
+        'Proses masuk Akun Google terhenti sebelum selesai. Silakan coba lagi.',
+      );
     }
 
     try {
       return await listenLoop().timeout(
         timeout,
         onTimeout: () => throw TimeoutException(
-          'Waktu otorisasi di browser telah habis (timeout).',
+          'Waktu tunggu masuk Akun Google di browser telah habis. Silakan coba lagi.',
         ),
       );
     } finally {

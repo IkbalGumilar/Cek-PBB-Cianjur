@@ -272,9 +272,7 @@ class LocationService {
             longitude: pos.longitude,
             accuracyMeters: pos.accuracy > 0 ? pos.accuracy : null,
             isFallbackIp: false,
-            sourceDescription: (Platform.isAndroid || Platform.isIOS)
-                ? 'GPS Perangkat'
-                : 'Sensor Lokasi OS',
+            sourceDescription: 'GPS Perangkat',
           );
         }
       } catch (e) {
@@ -287,7 +285,7 @@ class LocationService {
               longitude: lastPos.longitude,
               accuracyMeters: lastPos.accuracy > 0 ? lastPos.accuracy : null,
               isFallbackIp: false,
-              sourceDescription: 'GPS Terakhir Perangkat',
+              sourceDescription: 'GPS Perangkat',
             );
           }
         } catch (_) {}
@@ -300,7 +298,7 @@ class LocationService {
         latitude: ipLoc.lat,
         longitude: ipLoc.lng,
         isFallbackIp: true,
-        sourceDescription: 'Perkiraan Jaringan Internet (IP)',
+        sourceDescription: 'Perkiraan Jaringan Internet',
       );
     }
     return null;
@@ -329,9 +327,7 @@ class LocationService {
       );
       lat = pos.latitude;
       lng = pos.longitude;
-      source = (Platform.isAndroid || Platform.isIOS)
-          ? 'GPS Perangkat'
-          : 'Sensor / OS Location';
+      source = 'GPS Perangkat';
     } catch (e) {
       debugPrint(
         'Geolocator GPS tidak tersedia/timeout: $e. Menggunakan IP Geolocation...',
@@ -344,7 +340,7 @@ class LocationService {
       if (ipLoc != null) {
         lat = ipLoc.lat;
         lng = ipLoc.lng;
-        source = 'Jaringan Internet (IP)';
+        source = 'Perkiraan Jaringan Internet';
       }
     }
 

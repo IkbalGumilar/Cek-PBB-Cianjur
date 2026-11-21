@@ -300,8 +300,11 @@ _Tabel _bacaTabel(String namaBerkas, Uint8List bytes) {
       error:
           'Format berkas "$namaBerkas" belum didukung. Pakai CSV, Excel (.xlsx/.xls), atau teks (.txt).',
     );
-  } on Exception catch (e) {
-    return _Tabel(error: 'Berkas "$namaBerkas" gagal dibaca: $e');
+  } on Exception {
+    return _Tabel(
+      error:
+          'Berkas "$namaBerkas" gagal dibaca. Pastikan berkas tidak rusak dan sesuai format.',
+    );
   }
 }
 

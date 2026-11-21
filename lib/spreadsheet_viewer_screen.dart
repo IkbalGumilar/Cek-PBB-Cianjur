@@ -13,6 +13,7 @@ import 'dkhp_package_helper.dart';
 import 'incoming_file_service.dart';
 import 'spreadsheet/spreadsheet_parser.dart';
 import 'spreadsheet/spreadsheet_view_widgets.dart';
+import 'user_friendly_error.dart';
 
 // =============================================================================
 // UI SCREEN UTAMA (PEMBACA SPREADSHEET & PRATINJAU DHKP)
@@ -80,7 +81,14 @@ class SpreadsheetViewerScreen extends StatefulWidget {
     } catch (e) {
       if (context.mounted) {
         messenger.showSnackBar(
-          SnackBar(content: Text('Gagal membuka berkas spreadsheet: $e')),
+          SnackBar(
+            content: Text(
+              friendlyErrorMessage(
+                e,
+                fallback: 'Gagal membuka berkas spreadsheet.',
+              ),
+            ),
+          ),
         );
       }
     }
@@ -102,9 +110,16 @@ class SpreadsheetViewerScreen extends StatefulWidget {
       await openFile(context, file, title: files.first.name);
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Gagal memilih berkas: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              friendlyErrorMessage(
+                e,
+                fallback: 'Gagal memilih berkas.',
+              ),
+            ),
+          ),
+        );
       }
     } finally {
       Future.delayed(const Duration(milliseconds: 600), () {
@@ -213,7 +228,10 @@ class _SpreadsheetViewerScreenState extends State<SpreadsheetViewerScreen> {
       if (!mounted) return;
       setState(() {
         _isLoading = false;
-        _errorMessage = e.toString().replaceFirst('FormatException: ', '');
+        _errorMessage = friendlyErrorMessage(
+          e,
+          fallback: 'Gagal membaca isi berkas.',
+        );
       });
       AppSecurityService.instance.setScreenSecure(false);
     }
@@ -255,7 +273,12 @@ class _SpreadsheetViewerScreenState extends State<SpreadsheetViewerScreen> {
             size: 36,
           ),
           title: const Text('Gagal Memeriksa DHKP'),
-          content: Text('$e'),
+          content: Text(
+            friendlyErrorMessage(
+              e,
+              fallback: 'Berkas DHKP tidak dapat diperiksa.',
+            ),
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
@@ -360,7 +383,12 @@ class _SpreadsheetViewerScreenState extends State<SpreadsheetViewerScreen> {
             size: 36,
           ),
           title: const Text('Gagal Memasang DHKP'),
-          content: Text('$e'),
+          content: Text(
+            friendlyErrorMessage(
+              e,
+              fallback: 'Gagal memasang data DHKP ke Buku Catatan.',
+            ),
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
@@ -412,10 +440,10 @@ class _SpreadsheetViewerScreenState extends State<SpreadsheetViewerScreen> {
               _buildInfoRow(
                 'Tipe Dokumen',
                 widget.isDkhp
-                    ? 'Paket DHKP (.dkhp)'
+                    ? 'Paket Data DHKP (.dkhp)'
                     : (widget.fileName.toLowerCase().endsWith('.csv')
-                          ? 'Comma-Separated Values (.csv)'
-                          : 'Excel Spreadsheet (.xlsx/.xls)'),
+                          ? 'Data Tabel (.csv)'
+                          : 'Lembar Kerja Excel (.xlsx/.xls)'),
               ),
               _buildInfoRow('Jumlah Lembar (Sheet)', '${_tables.length}'),
               if (table != null) ...[
@@ -423,7 +451,6 @@ class _SpreadsheetViewerScreenState extends State<SpreadsheetViewerScreen> {
                 _buildInfoRow('Jumlah Baris Data', '${table.rowCount}'),
                 _buildInfoRow('Jumlah Kolom', '${table.columnCount}'),
               ],
-              _buildInfoRow('Lokasi Berkas', widget.file.path),
               const SizedBox(height: 12),
             ],
           ),
@@ -573,23 +600,38 @@ class _SpreadsheetViewerScreenState extends State<SpreadsheetViewerScreen> {
     );
   }
 
+  SpreadsheetTable? _cachedFilteredTable;
+  String? _cachedFilteredQuery;
+  List<List<String>> _cachedFilteredRows = const [];
+
+  List<List<String>> _resolveDisplayRows(SpreadsheetTable? table) {
+    if (table == null) return const [];
+    if (identical(_cachedFilteredTable, table) &&
+        _cachedFilteredQuery == _searchQuery) {
+      return _cachedFilteredRows;
+    }
+    final List<List<String>> result;
+    if (_searchQuery.trim().isEmpty) {
+      result = table.rows;
+    } else {
+      final q = _searchQuery.toLowerCase();
+      result = table.rows.where((row) {
+        return row.any((cell) => cell.toLowerCase().contains(q));
+      }).toList();
+    }
+    _cachedFilteredTable = table;
+    _cachedFilteredQuery = _searchQuery;
+    _cachedFilteredRows = result;
+    return result;
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final table = _currentTable;
 
-    // Filter baris berdasarkan pencarian
-    List<List<String>> displayRows = [];
-    if (table != null) {
-      if (_searchQuery.trim().isEmpty) {
-        displayRows = table.rows;
-      } else {
-        final q = _searchQuery.toLowerCase();
-        displayRows = table.rows.where((row) {
-          return row.any((cell) => cell.toLowerCase().contains(q));
-        }).toList();
-      }
-    }
+    // Filter baris berdasarkan pencarian (di-cache agar ganti halaman tidak memfilter ulang)
+    final displayRows = _resolveDisplayRows(table);
 
     // Hitung paginasi
     final totalRows = displayRows.length;
@@ -684,20 +726,6 @@ class _SpreadsheetViewerScreenState extends State<SpreadsheetViewerScreen> {
               tooltip: 'Info Berkas',
               onPressed: _showFileInfoSheet,
             ),
-            // Tombol impor khusus DHKP di AppBar
-            if (widget.isDkhp)
-              Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: FilledButton.tonalIcon(
-                  onPressed: _importDkhp,
-                  icon: const Icon(Icons.file_download_rounded, size: 18),
-                  label: const Text('Impor'),
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    visualDensity: VisualDensity.compact,
-                  ),
-                ),
-              ),
           ],
         ),
         body: SafeArea(

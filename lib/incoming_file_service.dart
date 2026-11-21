@@ -11,6 +11,7 @@ import 'dhkp/blok_catatan_dialogs.dart';
 import 'dkhp_package_helper.dart';
 import 'document_preview_screen.dart';
 import 'spreadsheet_viewer_screen.dart';
+import 'user_friendly_error.dart';
 
 /// Layanan untuk menangani pembukaan berkas `.dkhp` dan `.dat` secara otomatis
 /// saat diklik dari WhatsApp, File Manager, Telegram, atau Unduhan.
@@ -179,7 +180,12 @@ class IncomingFileService {
             size: 36,
           ),
           title: const Text('Gagal Membuka Berkas'),
-          content: Text('$e'),
+          content: Text(
+            friendlyErrorMessage(
+              e,
+              fallback: 'Berkas tidak dapat dibuka atau formatnya tidak sesuai.',
+            ),
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
@@ -193,7 +199,7 @@ class IncomingFileService {
 
     if (!context.mounted) return;
     if (plan.willOverwriteSameYear) {
-      final fileName = filePath.split(RegExp(r'[\\/]')).last;
+      final fileName = friendlyFileName(filePath);
       final confirmed = await confirmDhkpInstallPlanIfNeeded(
         context,
         plan,
@@ -311,7 +317,12 @@ class IncomingFileService {
             size: 36,
           ),
           title: const Text('Gagal Membuka Berkas'),
-          content: Text('$e'),
+          content: Text(
+            friendlyErrorMessage(
+              e,
+              fallback: 'Berkas tidak dapat dibuka atau formatnya tidak sesuai.',
+            ),
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
@@ -324,12 +335,12 @@ class IncomingFileService {
   }
 
   /// Menampilkan dialog input kata sandi atau kunci pemulihan untuk membuka berkas cadangan `.dkhp` / `.dat`
-  /// yang diproteksi (misalnya saat dipulihkan pada perangkat lain atau saat Secure Storage tidak tersedia).
+  /// yang diproteksi (misalnya saat dipulihkan pada perangkat lain atau saat penyimpanan aman tidak tersedia).
   static Future<String?> promptBackupPassword(
     BuildContext context, {
     String title = 'Kata Sandi / Kunci Pemulihan',
     String message =
-        'Berkas cadangan ini terenkripsi (DKH2 AES-256-GCM). Masukkan Kata Sandi Backup atau Kunci Pemulihan (Recovery Key) dari perangkat asal untuk membukanya:',
+        'Berkas cadangan ini dilindungi enkripsi. Masukkan Kata Sandi Cadangan atau Kunci Pemulihan dari perangkat asal untuk membukanya:',
   }) async {
     final controller = TextEditingController();
     var obscure = true;
@@ -402,6 +413,45 @@ class IncomingFileService {
     return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
   }
 
+  static const List<String> _monthNames = [
+    'Januari',
+    'Februari',
+    'Maret',
+    'April',
+    'Mei',
+    'Juni',
+    'Juli',
+    'Agustus',
+    'September',
+    'Oktober',
+    'November',
+    'Desember',
+  ];
+
+  static String _formatManifestTimestamp(Object? raw) {
+    if (raw == null) return '';
+    DateTime? parsed;
+    if (raw is int) {
+      parsed = DateTime.fromMillisecondsSinceEpoch(raw);
+    } else if (raw is String) {
+      final trimmed = raw.trim();
+      final asInt = int.tryParse(trimmed);
+      if (asInt != null && trimmed.length >= 10) {
+        parsed = DateTime.fromMillisecondsSinceEpoch(
+          trimmed.length == 10 ? asInt * 1000 : asInt,
+        );
+      } else {
+        parsed = DateTime.tryParse(trimmed);
+      }
+    }
+    if (parsed == null) return raw.toString();
+    final local = parsed.toLocal();
+    final month = _monthNames[local.month - 1];
+    final hh = local.hour.toString().padLeft(2, '0');
+    final mm = local.minute.toString().padLeft(2, '0');
+    return '${local.day} $month ${local.year}, $hh.$mm';
+  }
+
   /// Memeriksa header berkas secara aman apakah berkas adalah dokumen PDF (%PDF-).
   static Future<bool> isPdfFile(File file) async {
     try {
@@ -444,6 +494,9 @@ class _ConfirmIncomingFileDialog extends StatelessWidget {
             : null);
     final description = manifest?['description'] as String?;
     final createdAt = manifest?['createdAt'] ?? manifest?['timestamp'];
+    final formattedCreatedAt = IncomingFileService._formatManifestTimestamp(
+      createdAt,
+    );
 
     return AlertDialog(
       icon: Icon(
@@ -462,7 +515,7 @@ class _ConfirmIncomingFileDialog extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Aplikasi menerima berkas dari WhatsApp / File Manager:',
+              'Aplikasi menerima berkas dari perangkat Anda:',
               style: TextStyle(fontSize: 13),
             ),
             const SizedBox(height: 12),
@@ -518,10 +571,10 @@ class _ConfirmIncomingFileDialog extends StatelessWidget {
                       ),
                     ),
                   ],
-                  if (createdAt != null) ...[
+                  if (formattedCreatedAt.isNotEmpty) ...[
                     const SizedBox(height: 4),
                     Text(
-                      'Waktu Ekspor: $createdAt',
+                      'Waktu Ekspor: $formattedCreatedAt',
                       style: TextStyle(
                         fontSize: 11,
                         color: Colors.grey.shade600,

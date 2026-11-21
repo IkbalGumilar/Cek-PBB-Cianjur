@@ -1,6 +1,7 @@
 import 'package:cek_pbb_app/blok_record.dart';
 import 'package:cek_pbb_app/dhkp/dhkp_grafik_analytics.dart';
 import 'package:cek_pbb_app/dhkp/dhkp_rincian_bulanan_dialog.dart';
+import 'package:cek_pbb_app/user_friendly_error.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -164,9 +165,12 @@ void main() {
         expect(find.text('Rincian Pembayaran Bulan Juli 2026'), findsOneWidget);
         expect(find.text('2 Objek Pajak • Total Rp. 150.000'), findsOneWidget);
 
-        // Pastikan 3 tombol aksi ada
+        // Pastikan tombol Unduh & Cetak ada; Bagikan hanya tampil di perangkat seluler
         expect(find.text('Unduh'), findsOneWidget);
-        expect(find.text('Bagikan'), findsOneWidget);
+        expect(
+          find.text('Bagikan'),
+          isDesktopPlatform ? findsNothing : findsOneWidget,
+        );
         expect(find.text('Cetak'), findsOneWidget);
 
         // Pastikan tombol urutkan ada dengan default 'Terlama'

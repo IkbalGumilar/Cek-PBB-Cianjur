@@ -17,11 +17,12 @@ import 'main_shell.dart';
 import 'nop_helper.dart';
 import 'services/location_service.dart';
 import 'theme_controller.dart';
+import 'user_friendly_error.dart';
 
 /// Widget Wizard Interaktif dengan animasi untuk memandu pengguna saat pertama kali
 /// membuka aplikasi:
 /// - Langkah 1: Sapaan Hangat & Sambutan ("Sampurasun!").
-/// - Langkah 2: Identitas Wilayah Kerja Desa (Kecamatan, Desa, dan Prefix NOP 10 Digit).
+/// - Langkah 2: Identitas Wilayah Kerja Desa (Kecamatan, Desa, dan Kode Awalan NOP 10 Digit).
 /// - Langkah 3: Data Master DHKP (Opsional — dapat diunggah atau dilewati) & Mulai Masuk Beranda.
 class StartupSetupScreen extends StatefulWidget {
   final ThemeController? themeController;
@@ -59,7 +60,6 @@ class _StartupSetupScreenState extends State<StartupSetupScreen>
 
   late final TextEditingController _desaNameController;
   late final TextEditingController _kelCodeController;
-  late final TextEditingController _tahunPajakController;
 
   File? _pickedDhkpFile;
   bool _saving = false;
@@ -91,9 +91,6 @@ class _StartupSetupScreenState extends State<StartupSetupScreen>
 
     _desaNameController = TextEditingController();
     _kelCodeController = TextEditingController();
-    _tahunPajakController = TextEditingController(
-      text: '${DateTime.now().year}',
-    );
 
     _loadSavedPreferences();
   }
@@ -159,7 +156,6 @@ class _StartupSetupScreenState extends State<StartupSetupScreen>
     _pulseController.dispose();
     _desaNameController.dispose();
     _kelCodeController.dispose();
-    _tahunPajakController.dispose();
     super.dispose();
   }
 
@@ -189,23 +185,25 @@ class _StartupSetupScreenState extends State<StartupSetupScreen>
     });
 
     try {
-      // 1. Minta izin aplikasi (Notifikasi, Penyimpanan, Lokasi)
-      final perms = await LocationService.instance.requestAllAppPermissions();
+      // 1. Minta izin aplikasi khusus platform seluler (Notifikasi, Penyimpanan, Lokasi)
+      if (isMobilePlatform) {
+        final perms = await LocationService.instance.requestAllAppPermissions();
 
-      if (!perms.locationGranted && (Platform.isAndroid || Platform.isIOS)) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Izin lokasi belum diberikan. Silakan pilih Kecamatan & Desa secara manual atau aktifkan izin lokasi.',
+        if (!perms.locationGranted) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Izin lokasi belum diberikan. Silakan pilih Kecamatan & Desa secara manual atau aktifkan izin lokasi.',
+              ),
+              backgroundColor: Color(0xFFD97706),
             ),
-            backgroundColor: Color(0xFFD97706),
-          ),
-        );
-        return;
+          );
+          return;
+        }
       }
 
-      // 2. Deteksi wilayah kerja saat ini via GPS / Geolocation
+      // 2. Deteksi wilayah kerja saat ini via GPS / Jaringan
       final result = await LocationService.instance.detectCurrentWilayah();
       if (!mounted) return;
 
@@ -241,18 +239,24 @@ class _StartupSetupScreenState extends State<StartupSetupScreen>
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
+          SnackBar(
             content: Text(
-              'Tidak dapat mendeteksi koordinat wilayah secara presisi. Silakan pilih dari daftar kecamatan di bawah.',
+              isDesktopPlatform
+                  ? 'Lokasi tidak dapat dideteksi dari jaringan internet saat ini. Silakan pilih Kecamatan dan Desa secara manual di bawah.'
+                  : 'Tidak dapat mendeteksi koordinat wilayah secara presisi. Silakan pilih dari daftar kecamatan di bawah.',
             ),
           ),
         );
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Gagal mendeteksi lokasi: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Gagal mendeteksi lokasi: ${friendlyErrorMessage(e)}',
+          ),
+        ),
+      );
     } finally {
       if (mounted) {
         setState(() {
@@ -277,9 +281,13 @@ class _StartupSetupScreenState extends State<StartupSetupScreen>
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Gagal memilih berkas DHKP: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Gagal memilih berkas DHKP: ${friendlyErrorMessage(e)}',
+          ),
+        ),
+      );
     }
   }
 
@@ -398,7 +406,9 @@ class _StartupSetupScreenState extends State<StartupSetupScreen>
         _cloudBackupWilayahLabel = backupWilayah;
       });
 
-      LocationService.instance.requestAllAppPermissions().ignore();
+      if (isMobilePlatform) {
+        LocationService.instance.requestAllAppPermissions().ignore();
+      }
 
       if (latestBackup != null) {
         // Jangan langsung restore: arahkan ke Langkah 3 agar pengguna dapat
@@ -428,86 +438,51 @@ class _StartupSetupScreenState extends State<StartupSetupScreen>
         _googleSigningIn = false;
         _googleStatusText = null;
       });
-      final cleanErr = e.toString().replaceFirst('Exception: ', '');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Gagal masuk akun Google: $cleanErr'),
+          content: Text(
+            'Gagal masuk akun Google: ${friendlyErrorMessage(e)}',
+          ),
           backgroundColor: Colors.red[800],
         ),
       );
     }
   }
 
-  /// Konfirmasi 2 tahap ketika pengguna mengunggah DHKP baru yang berbeda wilayah/data
-  /// dari cadangan Google Drive sebelumnya:
-  /// - Setuju -> mengembalikan `true` (lanjut pakai DHKP baru).
-  /// - Tidak Setuju -> konfirmasi ulang apakah ingin membatalkan proses unggah.
-  ///   - Ya, Batalkan -> mengembalikan `false` (proses unggah dibatalkan).
-  ///   - Kembali -> kembali ke dialog konfirmasi pertama.
+  /// Konfirmasi tunggal ketika pengguna mengunggah DHKP baru yang berbeda wilayah/data
+  /// dari cadangan Google Drive sebelumnya.
   Future<bool> _confirmNewDhkpOverride(String newFileName) async {
-    while (mounted) {
-      if (!mounted) return false;
-      final agreeNew = await showDialog<bool>(
-        context: context,
-        barrierDismissible: false,
-        builder: (ctx) => AlertDialog(
-          title: const Row(
-            children: [
-              Icon(Icons.warning_amber_rounded, color: Colors.orange),
-              SizedBox(width: 8),
-              Expanded(child: Text('Perubahan Data DHKP')),
-            ],
-          ),
-          content: Text(
-            'Berkas DHKP baru ("$newFileName") memiliki data/wilayah yang berbeda '
-            'dari cadangan sebelumnya di akun Google Anda'
-            '${_cloudBackupWilayahLabel != null ? ' ($_cloudBackupWilayahLabel)' : ''}.\n\n'
-            'Apakah Anda setuju menggunakan data DHKP baru ini?',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(false),
-              child: const Text('Tidak Setuju'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(ctx).pop(true),
-              child: const Text('Setuju, Gunakan Data Baru'),
-            ),
+    if (!mounted) return false;
+    final agreeNew = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.orange),
+            SizedBox(width: 8),
+            Expanded(child: Text('Perubahan Data DHKP')),
           ],
         ),
-      );
-
-      if (agreeNew == true) return true;
-      if (!mounted) return false;
-
-      final confirmCancel = await showDialog<bool>(
-        context: context,
-        barrierDismissible: false,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Batalkan Proses Unggah?'),
-          content: const Text(
-            'Anda akan membatalkan proses unggah DHKP baru ini. '
-            'Jika memilih Ya, proses unggah akan dibatalkan.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(false),
-              child: const Text('Kembali'),
-            ),
-            FilledButton(
-              style: FilledButton.styleFrom(backgroundColor: Colors.red),
-              onPressed: () => Navigator.of(ctx).pop(true),
-              child: const Text('Ya, Batalkan'),
-            ),
-          ],
+        content: Text(
+          'Berkas DHKP baru ("$newFileName") memiliki data/wilayah yang berbeda '
+          'dari cadangan sebelumnya di akun Google Anda'
+          '${_cloudBackupWilayahLabel != null ? ' ($_cloudBackupWilayahLabel)' : ''}.\n\n'
+          'Apakah Anda setuju menggunakan data DHKP baru ini?',
         ),
-      );
-
-      if (confirmCancel == true) {
-        return false;
-      }
-    }
-    return false;
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Tidak Setuju'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Setuju, Gunakan Data Baru'),
+          ),
+        ],
+      ),
+    );
+    return agreeNew == true;
   }
 
   /// Memulihkan data cadangan Google Drive seutuhnya saat pengguna memilih
@@ -515,7 +490,7 @@ class _StartupSetupScreenState extends State<StartupSetupScreen>
   Future<void> _restoreCloudBackupAndProceed() async {
     final backup = _cloudBackupCandidate;
     if (backup == null) {
-      await _saveAndProceed();
+      await _saveAndProceed(skipDhkpImport: true);
       return;
     }
 
@@ -597,19 +572,23 @@ class _StartupSetupScreenState extends State<StartupSetupScreen>
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Gagal memulihkan cadangan Google Drive: $e'),
+          content: Text(
+            'Gagal memulihkan cadangan Google Drive: ${friendlyErrorMessage(e)}',
+          ),
           backgroundColor: Colors.red[800],
         ),
       );
     }
   }
 
-  Future<void> _saveAndProceed() async {
+  Future<void> _saveAndProceed({bool skipDhkpImport = false}) async {
+    final fileToImport = skipDhkpImport ? null : _pickedDhkpFile;
+
     // Jika ada cadangan Google Drive dan pengguna memilih unggah DHKP baru,
     // periksa apakah berkas DHKP baru berbeda dengan cadangan sebelumnya.
-    if (_cloudBackupCandidate != null && _pickedDhkpFile != null) {
-      final newPath = _pickedDhkpFile!.path;
-      final newFileName = _pickedDhkpFile!.uri.pathSegments.last;
+    if (_cloudBackupCandidate != null && fileToImport != null) {
+      final newPath = fileToImport.path;
+      final newFileName = friendlyFileName(newPath);
       bool isDifferentFromCloud = true;
       try {
         final newManifest = await DhkpPackageHelper.readBackupManifest(newPath);
@@ -638,7 +617,7 @@ class _StartupSetupScreenState extends State<StartupSetupScreen>
           return;
         }
       }
-    } else if (_cloudBackupCandidate != null && _pickedDhkpFile == null) {
+    } else if (_cloudBackupCandidate != null && fileToImport == null) {
       await _restoreCloudBackupAndProceed();
       return;
     }
@@ -676,20 +655,33 @@ class _StartupSetupScreenState extends State<StartupSetupScreen>
 
       if (!mounted) return;
 
-      // Jika ada berkas DHKP yang dipilih, impor ke basis data lokal (opsional)
-      if (_pickedDhkpFile != null) {
+      // Jika ada berkas DHKP yang dipilih (dan tidak dilewati), impor ke basis data lokal
+      if (fileToImport != null) {
         setState(() {
           _statusMessage = 'Mengimpor data master DHKP...';
         });
         try {
-          await FileImporter.importFrom(_pickedDhkpFile!.path);
+          final importPath = fileToImport.path;
+          if (DhkpPackageHelper.isDkhpArchivePath(importPath)) {
+            await BlokDataStore.instance.importCsv(
+              importPath,
+              requireBaseDhkp: false,
+            );
+          } else {
+            final imported = await FileImporter.importBlokRecordsFrom(
+              importPath,
+            );
+            if (imported.isNotEmpty) {
+              await BlokDataStore.instance.upsertAll(imported);
+            }
+          }
           // Perbarui preferensi wilayah sesuai manifest DHKP baru (bila berubah)
           await prefs.setString(_prefKecCodeKey, activeKecamatanCode);
           await prefs.setString(_prefKelCodeKey, activeKelurahanCode);
           await prefs.setString(_prefDesaNameKey, activeDesaName);
           await prefs.setString(_prefKecNameKey, activeKecamatanName);
         } catch (e) {
-          debugPrint('FileImporter error on startup: $e');
+          debugPrint('DHKP import error on startup: $e');
         }
       }
 
@@ -714,7 +706,11 @@ class _StartupSetupScreenState extends State<StartupSetupScreen>
       if (!mounted) return;
       setState(() => _saving = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Terjadi kesalahan menyimpan setup: $e')),
+        SnackBar(
+          content: Text(
+            'Terjadi kendala saat menyimpan pengaturan awal: ${friendlyErrorMessage(e)}',
+          ),
+        ),
       );
     }
   }
@@ -979,7 +975,7 @@ class _StartupSetupScreenState extends State<StartupSetupScreen>
                 iconColor: Colors.teal.shade600,
                 title: 'Multi-Desa & Multi-Kecamatan (32 Kecamatan)',
                 subtitle:
-                    'Siap digunakan langsung untuk desa mana pun di Kabupaten Cianjur dengan katalog NOP prefix resmi.',
+                    'Siap digunakan langsung untuk desa mana pun di Kabupaten Cianjur dengan katalog kode wilayah NOP resmi.',
               ),
               const SizedBox(height: 10),
               _buildFeatureHighlightCard(
@@ -1000,68 +996,67 @@ class _StartupSetupScreenState extends State<StartupSetupScreen>
                     'Dapat langsung digunakan memeriksa tagihan online walau berkas DHKP belum diunggah.',
               ),
 
-              const SizedBox(height: 16),
+              if (isMobilePlatform) ...[
+                const SizedBox(height: 16),
 
-              // Card Izin Akses Aplikasi (Notifikasi, Penyimpanan, Lokasi)
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: colorScheme.surfaceContainerLow,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: colorScheme.outlineVariant.withValues(alpha: 0.5),
+                // Card Izin Akses Aplikasi (khusus platform seluler)
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: colorScheme.surfaceContainerLow,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: colorScheme.outlineVariant.withValues(alpha: 0.5),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.shield_outlined,
+                            color: colorScheme.primary,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 8),
+                          const Text(
+                            'Izin Akses Aplikasi',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      _buildPermissionInfoRow(
+                        context,
+                        icon: Icons.notifications_active_outlined,
+                        title: 'Notifikasi',
+                        desc:
+                            'Pengingat jatuh tempo PBB & info sinkronisasi data.',
+                      ),
+                      const SizedBox(height: 8),
+                      _buildPermissionInfoRow(
+                        context,
+                        icon: Icons.folder_open_rounded,
+                        title: 'Penyimpanan',
+                        desc:
+                            'Membaca paket DHKP (.dkhp/Excel) & ekspor laporan PDF.',
+                      ),
+                      const SizedBox(height: 8),
+                      _buildPermissionInfoRow(
+                        context,
+                        icon: Icons.location_on_outlined,
+                        title: 'Lokasi GPS',
+                        desc:
+                            'Deteksi otomatis wilayah kerja & titik objek pajak di peta.',
+                      ),
+                    ],
                   ),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.shield_outlined,
-                          color: colorScheme.primary,
-                          size: 20,
-                        ),
-                        const SizedBox(width: 8),
-                        const Text(
-                          'Izin Akses Aplikasi',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    _buildPermissionInfoRow(
-                      context,
-                      icon: Icons.notifications_active_outlined,
-                      title: 'Notifikasi',
-                      desc:
-                          'Pengingat jatuh tempo PBB & info sinkronisasi data.',
-                    ),
-                    const SizedBox(height: 8),
-                    _buildPermissionInfoRow(
-                      context,
-                      icon: Icons.folder_open_rounded,
-                      title: 'Penyimpanan',
-                      desc:
-                          'Membaca paket DHKP (.dkhp/Excel) & ekspor laporan PDF.',
-                    ),
-                    const SizedBox(height: 8),
-                    _buildPermissionInfoRow(
-                      context,
-                      icon: Icons.location_on_outlined,
-                      title: (Platform.isAndroid || Platform.isIOS)
-                          ? 'Lokasi GPS'
-                          : 'Lokasi Jaringan (IP)',
-                      desc: (Platform.isAndroid || Platform.isIOS)
-                          ? 'Deteksi otomatis wilayah kerja & titik objek pajak di peta.'
-                          : 'Deteksi otomatis wilayah kerja via jaringan internet (IP Geolocation).',
-                    ),
-                  ],
-                ),
-              ),
+              ],
 
               const SizedBox(height: 28),
 
@@ -1117,9 +1112,11 @@ class _StartupSetupScreenState extends State<StartupSetupScreen>
                         });
                       }
                     : () {
-                        LocationService.instance
-                            .requestAllAppPermissions()
-                            .ignore();
+                        if (isMobilePlatform) {
+                          LocationService.instance
+                              .requestAllAppPermissions()
+                              .ignore();
+                        }
                         _goToStep(1);
                       },
                 icon: Icon(
@@ -1270,7 +1267,7 @@ class _StartupSetupScreenState extends State<StartupSetupScreen>
               ),
               const SizedBox(height: 16),
 
-              // Banner Deteksi Lokasi Otomatis via GPS
+              // Banner Deteksi Lokasi Otomatis
               Container(
                 margin: const EdgeInsets.only(bottom: 16),
                 padding: const EdgeInsets.all(16),
@@ -1320,9 +1317,9 @@ class _StartupSetupScreenState extends State<StartupSetupScreen>
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      (Platform.isAndroid || Platform.isIOS)
-                          ? 'Aktifkan izin lokasi agar sistem langsung mendeteksi posisi Anda saat ini dan mengisi otomatis pilihan Kecamatan serta Desa tempat Anda bertugas di Cianjur.'
-                          : 'Pada perangkat Desktop (Windows/Linux), sistem mendeteksi lokasi wilayah kerja Anda secara otomatis melalui jaringan internet (IP Geolocation).',
+                      isMobilePlatform
+                          ? 'Aktifkan lokasi untuk mengisi Kecamatan dan Desa kerja Anda secara otomatis.'
+                          : 'Deteksi otomatis Kecamatan dan Desa kerja melalui perkiraan jaringan internet.',
                       style: TextStyle(
                         fontSize: 12,
                         color: colorScheme.onSurfaceVariant,
@@ -1345,7 +1342,7 @@ class _StartupSetupScreenState extends State<StartupSetupScreen>
                       label: Text(
                         _isDetectingLocation
                             ? 'Mendeteksi Posisi...'
-                            : '📍 Deteksi Lokasi Saya Sekarang',
+                            : 'Deteksi Lokasi Saya Sekarang',
                         style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
                     ),
@@ -1498,78 +1495,102 @@ class _StartupSetupScreenState extends State<StartupSetupScreen>
 
                       const SizedBox(height: 16),
 
-                      // Kartu NOP Prefix 10 Digit Interaktif
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 14,
-                        ),
-                        decoration: BoxDecoration(
-                          color: colorScheme.surfaceContainerHighest,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: colorScheme.primary.withValues(alpha: 0.3),
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
+                      // Kartu Kode Awalan NOP 10 Digit Interaktif
+                      Builder(
+                        builder: (context) {
+                          final cleanKel = _kelCodeController.text.trim();
+                          final cleanDesa = _desaNameController.text.trim();
+                          final hasWilayah =
+                              _selectedKecCode != null && cleanKel.isNotEmpty;
+                          final previewSubtitle = _selectedKecCode == null
+                              ? 'Pilih Kecamatan dan Desa terlebih dahulu'
+                              : cleanKel.isEmpty
+                              ? 'Kec. ${kec?.name ?? _selectedKecCode} — Pilih Desa / Kelurahan'
+                              : 'Kec. ${kec?.name ?? _selectedKecCode} - Desa ${cleanDesa.isNotEmpty ? cleanDesa.toUpperCase() : cleanKel.padLeft(3, '0')} (${cleanKel.padLeft(3, '0')})';
+
+                          return Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 14,
+                            ),
+                            decoration: BoxDecoration(
+                              color: colorScheme.surfaceContainerHighest,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: colorScheme.primary.withValues(
+                                  alpha: hasWilayah ? 0.35 : 0.15,
+                                ),
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
-                                      Icon(
-                                        Icons.check_circle_rounded,
-                                        size: 16,
-                                        color: colorScheme.primary,
-                                      ),
-                                      const SizedBox(width: 6),
-                                      const Flexible(
-                                        child: Text(
-                                          'Prefix NOP 10 Digit (Otomatis)',
-                                          overflow: TextOverflow.ellipsis,
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.bold,
+                                      Row(
+                                        children: [
+                                          Icon(
+                                            hasWilayah
+                                                ? Icons.check_circle_rounded
+                                                : Icons.pin_outlined,
+                                            size: 16,
+                                            color: hasWilayah
+                                                ? colorScheme.primary
+                                                : colorScheme.onSurfaceVariant,
                                           ),
+                                          const SizedBox(width: 6),
+                                          const Flexible(
+                                            child: Text(
+                                              'Kode Awalan NOP 10 Digit',
+                                              overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        previewSubtitle,
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: colorScheme.onSurfaceVariant,
                                         ),
                                       ),
                                     ],
                                   ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    'Kec. $_selectedKecCode - Desa ${_kelCodeController.text.padLeft(3, '0')} (${_desaNameController.text})',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: colorScheme.onSurfaceVariant,
+                                ),
+                                if (hasWilayah) ...[
+                                  const SizedBox(width: 10),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 6,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: colorScheme.primaryContainer,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      _calculatedNopPrefix,
+                                      style: TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.bold,
+                                        fontFamily: 'monospace',
+                                        color: colorScheme.onPrimaryContainer,
+                                      ),
                                     ),
                                   ),
                                 ],
-                              ),
+                              ],
                             ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 6,
-                              ),
-                              decoration: BoxDecoration(
-                                color: colorScheme.primaryContainer,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Text(
-                                _calculatedNopPrefix,
-                                style: TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.bold,
-                                  fontFamily: 'monospace',
-                                  color: colorScheme.onPrimaryContainer,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
+                          );
+                        },
                       ),
                     ],
                   ),
@@ -1795,7 +1816,7 @@ class _StartupSetupScreenState extends State<StartupSetupScreen>
                               const SizedBox(width: 10),
                               Expanded(
                                 child: Text(
-                                  _pickedDhkpFile!.uri.pathSegments.last,
+                                  friendlyFileName(_pickedDhkpFile!.path),
                                   style: const TextStyle(
                                     fontWeight: FontWeight.w600,
                                     fontSize: 13,
@@ -1811,19 +1832,6 @@ class _StartupSetupScreenState extends State<StartupSetupScreen>
                           ),
                         ),
                       ],
-
-                      const SizedBox(height: 16),
-
-                      TextFormField(
-                        controller: _tahunPajakController,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                          labelText: 'Tahun Pajak Ketetapan',
-                          hintText: '2026',
-                          prefixIcon: Icon(Icons.calendar_today_rounded),
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
 
                       const SizedBox(height: 14),
 
@@ -1900,7 +1908,15 @@ class _StartupSetupScreenState extends State<StartupSetupScreen>
                       flex: 2,
                       child: FilledButton.icon(
                         key: const ValueKey('btn_simpan_selesai'),
-                        onPressed: _saving ? null : _saveAndProceed,
+                        onPressed: _saving
+                            ? null
+                            : (_pickedDhkpFile != null
+                                  ? () => _saveAndProceed()
+                                  : (_cloudBackupCandidate != null
+                                        ? _restoreCloudBackupAndProceed
+                                        : () => _saveAndProceed(
+                                            skipDhkpImport: true,
+                                          ))),
                         icon: Icon(
                           _cloudBackupCandidate != null &&
                                   _pickedDhkpFile == null
@@ -1908,11 +1924,13 @@ class _StartupSetupScreenState extends State<StartupSetupScreen>
                               : Icons.rocket_launch_rounded,
                         ),
                         label: Text(
-                          _cloudBackupCandidate != null
-                              ? (_pickedDhkpFile != null
+                          _pickedDhkpFile != null
+                              ? (_cloudBackupCandidate != null
                                     ? 'Gunakan DHKP Baru'
-                                    : 'Gunakan Data Cadangan')
-                              : 'Simpan & Mulai Gunakan Aplikasi',
+                                    : 'Impor DHKP & Mulai')
+                              : (_cloudBackupCandidate != null
+                                    ? 'Muat Data Cadangan & Mulai'
+                                    : 'Simpan & Mulai Aplikasi'),
                         ),
                         style: FilledButton.styleFrom(
                           minimumSize: const Size(0, 52),
@@ -1924,31 +1942,33 @@ class _StartupSetupScreenState extends State<StartupSetupScreen>
                     ),
                   ],
                 ),
-                const SizedBox(height: 12),
-                OutlinedButton.icon(
-                  key: const ValueKey('btn_lewati_dhkp'),
-                  onPressed: _saving
-                      ? null
-                      : (_cloudBackupCandidate != null
-                            ? _restoreCloudBackupAndProceed
-                            : _saveAndProceed),
-                  icon: Icon(
-                    _cloudBackupCandidate != null
-                        ? Icons.cloud_download_outlined
-                        : Icons.skip_next_rounded,
-                  ),
-                  label: Text(
-                    _cloudBackupCandidate != null
-                        ? 'Lewati Unggah & Muat Data Cadangan'
-                        : 'Lewati Langkah Ini & Selesaikan',
-                  ),
-                  style: OutlinedButton.styleFrom(
-                    minimumSize: const Size(double.infinity, 46),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                if (_pickedDhkpFile != null) ...[
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    key: const ValueKey('btn_lewati_dhkp'),
+                    onPressed: _saving
+                        ? null
+                        : (_cloudBackupCandidate != null
+                              ? _restoreCloudBackupAndProceed
+                              : () => _saveAndProceed(skipDhkpImport: true)),
+                    icon: Icon(
+                      _cloudBackupCandidate != null
+                          ? Icons.cloud_download_outlined
+                          : Icons.skip_next_rounded,
+                    ),
+                    label: Text(
+                      _cloudBackupCandidate != null
+                          ? 'Lewati Impor & Muat Data Cadangan'
+                          : 'Lewati Impor & Selesaikan',
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(double.infinity, 46),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                   ),
-                ),
+                ],
               ],
               const SizedBox(height: 20),
             ],

@@ -12,6 +12,7 @@ import 'feature_tour/feature_tour.dart';
 import 'image_crop_helper.dart';
 import 'kolase_foto_exporter.dart';
 import 'unity_lerp_widgets.dart';
+import 'user_friendly_error.dart';
 
 /// Layar untuk membuat dan mencetak kolase foto dokumentasi penyerahan SPPT.
 ///
@@ -111,12 +112,18 @@ class _KolaseFotoScreenState extends State<KolaseFotoScreen> {
       ),
       FeatureTourStep(
         targetKey: _bottomActionRowKey,
-        title: 'Tombol Simpan, Cetak, Bagikan, & Selesai',
-        description:
-            '• Simpan Media: Menyimpan dokumen PDF kolase ke penyimpanan perangkat.\n'
-            '• Cetak: Mencetak lembaran kolase langsung ke mesin pencetak (printer).\n'
-            '• Ikon Bagikan: Mengirimkan berkas PDF kolase ke WhatsApp atau aplikasi lain.\n'
-            '• Tombol Centang Hijau: Membuka tampilan pratinjau PDF layar penuh.',
+        title: isDesktopPlatform
+            ? 'Simpan PDF, Cetak, Buka Eksternal & Pratinjau'
+            : 'Simpan PDF, Cetak, Bagikan & Pratinjau',
+        description: isDesktopPlatform
+            ? '• Simpan PDF: Menyimpan dokumen PDF kolase ke perangkat.\n'
+              '• Cetak: Mencetak lembaran kolase langsung ke printer.\n'
+              '• Buka Eksternal: Membuka berkas PDF di aplikasi lain.\n'
+              '• Tombol Centang Hijau: Membuka tampilan pratinjau PDF penuh.'
+            : '• Simpan PDF: Menyimpan dokumen PDF kolase ke perangkat.\n'
+              '• Cetak: Mencetak lembaran kolase langsung ke printer.\n'
+              '• Bagikan: Mengirim berkas PDF kolase ke WhatsApp atau aplikasi lain.\n'
+              '• Tombol Centang Hijau: Membuka tampilan pratinjau PDF layar penuh.',
         icon: Icons.print_rounded,
       ),
     ];
@@ -155,7 +162,9 @@ class _KolaseFotoScreenState extends State<KolaseFotoScreen> {
             try {
               final bytes = await photo.readAsBytes();
               if (bytes.isNotEmpty) {
-                final squareBytes = ImageCropHelper.cropToSquare(bytes);
+                final squareBytes = await ImageCropHelper.cropToSquareAsync(
+                  bytes,
+                );
                 _photoBytes.add(squareBytes);
               }
             } catch (_) {}
@@ -194,6 +203,7 @@ class _KolaseFotoScreenState extends State<KolaseFotoScreen> {
       imageBytesList: _photoBytes,
       template: _template,
       blok: _selectedBlok == 'Semua' ? null : _selectedBlok,
+      alreadyCropped: true,
     );
   }
 
@@ -224,9 +234,13 @@ class _KolaseFotoScreenState extends State<KolaseFotoScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Gagal membuat dokumen PDF: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Gagal membuat dokumen PDF: ${friendlyErrorMessage(e)}',
+          ),
+        ),
+      );
     } finally {
       if (mounted) setState(() => _busyExport = false);
     }
@@ -258,14 +272,18 @@ class _KolaseFotoScreenState extends State<KolaseFotoScreen> {
       if (savedPath == null) return;
       messenger.showSnackBar(
         SnackBar(
-          content: Text('Dokumen PDF berhasil disimpan di:\n$savedPath'),
+          content: Text(
+            'Dokumen PDF berhasil disimpan: ${friendlyFileName(savedPath)}',
+          ),
           backgroundColor: Colors.teal[800],
           duration: const Duration(seconds: 4),
         ),
       );
     } catch (e) {
       messenger.showSnackBar(
-        SnackBar(content: Text('Gagal menyimpan dokumen: $e')),
+        SnackBar(
+          content: Text('Gagal menyimpan dokumen: ${friendlyErrorMessage(e)}'),
+        ),
       );
     } finally {
       if (mounted) setState(() => _busyExport = false);
@@ -295,21 +313,27 @@ class _KolaseFotoScreenState extends State<KolaseFotoScreen> {
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Gagal membuka printer: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal membuka printer: ${friendlyErrorMessage(e)}'),
+          ),
+        );
       }
     } finally {
       if (mounted) setState(() => _busyExport = false);
     }
   }
 
-  /// Bagikan dokumen PDF ke WhatsApp / aplikasi lain
+  /// Bagikan dokumen PDF ke WhatsApp / aplikasi lain (atau buka eksternal di Desktop)
   Future<void> _bagikanPdf() async {
     if (_photoBytes.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Belum ada foto dokumentasi untuk dibagikan.'),
+        SnackBar(
+          content: Text(
+            isDesktopPlatform
+                ? 'Belum ada foto dokumentasi untuk dibuka.'
+                : 'Belum ada foto dokumentasi untuk dibagikan.',
+          ),
         ),
       );
       return;
@@ -317,16 +341,24 @@ class _KolaseFotoScreenState extends State<KolaseFotoScreen> {
 
     setState(() {
       _busyExport = true;
-      _busyExportMessage = 'Menyiapkan dokumen PDF F4 untuk dibagikan...';
+      _busyExportMessage = isDesktopPlatform
+          ? 'Menyiapkan dokumen PDF F4 untuk dibuka...'
+          : 'Menyiapkan dokumen PDF F4 untuk dibagikan...';
     });
     try {
       final pdfBytes = await _generatePdfBytes();
       await Printing.sharePdf(bytes: pdfBytes, filename: _pdfFileName);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Gagal membagikan dokumen: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              isDesktopPlatform
+                  ? 'Gagal membuka dokumen: ${friendlyErrorMessage(e)}'
+                  : 'Gagal membagikan dokumen: ${friendlyErrorMessage(e)}',
+            ),
+          ),
+        );
       }
     } finally {
       if (mounted) setState(() => _busyExport = false);
@@ -380,7 +412,7 @@ class _KolaseFotoScreenState extends State<KolaseFotoScreen> {
                 itemBuilder: (ctx) => [
                   const PopupMenuItem(
                     value: 'Semua',
-                    child: Text('Semua Blok (1 Wilayah Full)'),
+                    child: Text('Semua Blok (1 Wilayah Penuh)'),
                   ),
                   const PopupMenuDivider(),
                   for (final b in widget.bloks)
@@ -409,7 +441,7 @@ class _KolaseFotoScreenState extends State<KolaseFotoScreen> {
                     Expanded(
                       child: Text(
                         _selectedBlok == 'Semua'
-                            ? '1 Wilayah Full (Semua Blok)'
+                            ? '1 Wilayah Penuh (Semua Blok)'
                             : 'Wilayah: Blok $_selectedBlok',
                         style: const TextStyle(
                           color: Colors.white70,
@@ -492,7 +524,7 @@ class _KolaseFotoScreenState extends State<KolaseFotoScreen> {
                                 ),
                                 const SizedBox(height: 8),
                                 const Text(
-                                  'Kolase memuat gambar dokumentasi petugas yang diambil di daftar catatan blok.',
+                                  'Kolase memuat gambar dokumentasi petugas yang tersimpan di Data DHKP.',
                                   textAlign: TextAlign.center,
                                   style: TextStyle(
                                     color: Colors.white70,
@@ -704,6 +736,7 @@ class _KolaseFotoScreenState extends State<KolaseFotoScreen> {
                                   child: Image.memory(
                                     images[idx],
                                     fit: BoxFit.cover,
+                                    cacheWidth: 400,
                                   ),
                                 ),
                               ),
@@ -755,11 +788,11 @@ class _KolaseFotoScreenState extends State<KolaseFotoScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               child: Row(
                 children: [
-                  // Simpan ke Android/media/files
+                  // Simpan berkas PDF
                   OutlinedButton.icon(
                     onPressed: _busyExport ? null : _simpanKeMedia,
                     icon: const Icon(Icons.save_alt_rounded, size: 18),
-                    label: const Text('Simpan Media'),
+                    label: const Text('Simpan PDF'),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: Colors.white,
                       side: const BorderSide(color: Colors.white24),
@@ -787,14 +820,18 @@ class _KolaseFotoScreenState extends State<KolaseFotoScreen> {
                   ),
                   const SizedBox(width: 8),
 
-                  // Bagikan PDF
+                  // Bagikan PDF (Mobile) / Buka PDF (Desktop)
                   IconButton(
                     onPressed: _busyExport ? null : _bagikanPdf,
-                    icon: const Icon(
-                      Icons.share_outlined,
+                    icon: Icon(
+                      isDesktopPlatform
+                          ? Icons.open_in_new_outlined
+                          : Icons.share_outlined,
                       color: Colors.white70,
                     ),
-                    tooltip: 'Bagikan Dokumen PDF',
+                    tooltip: isDesktopPlatform
+                        ? 'Buka PDF'
+                        : 'Bagikan Dokumen PDF',
                   ),
 
                   const Spacer(),

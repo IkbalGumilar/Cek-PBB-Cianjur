@@ -6,6 +6,7 @@ import '../batch_notification_service.dart';
 import '../blok_catatan_screen.dart';
 import '../progress_checkpoint_store.dart';
 import '../staff_portal_client.dart';
+import '../user_friendly_error.dart';
 import 'staff_dhkp_sync_dialog.dart';
 import 'staff_dhkp_sync_service.dart';
 
@@ -228,7 +229,10 @@ class StaffDhkpSyncManager extends ChangeNotifier {
       _outcome = StaffDhkpSyncOutcome(
         blokLabel: _blokLabel ?? 'DHKP',
         tahun: _tahun ?? '',
-        errorMessage: 'Gagal menyinkronkan data: $e',
+        errorMessage: friendlyErrorMessage(
+          e,
+          fallback: 'Gagal menyinkronkan data DHKP. Silakan coba lagi.',
+        ),
       );
     } finally {
       if (runId == _syncRunId) {

@@ -42,6 +42,7 @@ import 'result_screen.dart';
 import 'tax_record.dart';
 import 'ui/app_design_system.dart';
 import 'unity_lerp_widgets.dart';
+import 'user_friendly_error.dart';
 
 export 'dhkp/blok_catatan_models.dart';
 
@@ -88,13 +89,37 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
   String? _selectedBlok;
   String _selectedTahun = '${DateTime.now().year}';
   int? _selectedWilayah;
-  DhkpKategoriFilter _kategoriFilter = DhkpKategoriFilter.semua;
-  bool _sembunyikanNihil = false;
+  Set<DhkpKategoriFilter> _activeKategoris = Set<DhkpKategoriFilter>.from(
+    DhkpKategoriFilter.specificValues,
+  );
   BlokSortBy _sortBy = BlokSortBy.blokWilayah;
   List<BlokRecord> _records = [];
+  List<BlokRecord> _rawScopeRecords = [];
+  List<BlokRecord> _rawMultiYearRecords = [];
   List<BlokRecord> _allScopeRecords = [];
   List<BlokRecord> _grafikScopeRecords = [];
   bool _tampilkanGrafik = false;
+
+  bool get _sembunyikanNihil =>
+      !_activeKategoris.contains(DhkpKategoriFilter.nihil);
+
+  bool get _isSemuaKategoriActive =>
+      _activeKategoris.containsAll(DhkpKategoriFilter.specificValues);
+
+  DhkpKategoriFilter? get _kategoriFilter => _isSemuaKategoriActive
+      ? DhkpKategoriFilter.semua
+      : (_activeKategoris.length == 1 ? _activeKategoris.first : null);
+
+  String get _activeKategoriSummaryLabel {
+    if (_isSemuaKategoriActive) return DhkpKategoriFilter.semua.label;
+    if (_activeKategoris.isEmpty) return 'Tidak Ada (0)';
+    final ordered = DhkpKategoriFilter.specificValues
+        .where(_activeKategoris.contains)
+        .map((k) => k.label)
+        .toList();
+    if (ordered.length <= 2) return ordered.join(', ');
+    return '${ordered.length} Kategori';
+  }
 
   // Paginasi & Optimasi Performa
   int _rowsPerPage = 50;
@@ -170,68 +195,69 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
   }
 
   List<FeatureTourStep> _buildTableTourSteps() {
+    final moreMenuExportLine = Platform.isAndroid
+        ? '• Peta Objek Pajak, Cetak PDF, Bagikan/Unduh Excel & CSV, Kolase STTS, dan Kalkulator AJB.'
+        : '• Peta Objek Pajak, Cetak PDF, Unduh Excel & CSV, Kolase STTS, dan Kalkulator AJB.';
+    final photoColumnLine = isMobilePlatform
+        ? '• Kolom Gambar: Memotret atau mengunggah foto STTS.'
+        : '• Kolom Gambar: Mengunggah foto STTS dari perangkat.';
+
     return [
       FeatureTourStep(
         targetKey: _toggleGrafikButtonKey,
         title: 'Beralih ke Visual Grafik DHKP',
         description:
-            'Tekan ikon diagram ini untuk membuka tampilan grafik DHKP: Gauge realisasi, 3 kartu tren KPI, grafik batang per Kedusunan/Blok, serta perbandingan lintas tahun.',
+            'Buka tampilan grafik DHKP berisi Indikator Capaian, ringkasan grafik tren, perbandingan Dusun/Blok, dan lintas tahun.',
         actionHint:
-            'Tekan kembali ikon ini saat di layar grafik untuk kembali ke tabel catatan DHKP.',
+            'Tekan ikon ini kembali untuk beralih ke tabel Data DHKP.',
         icon: Icons.bar_chart_rounded,
       ),
       FeatureTourStep(
         targetKey: _targetPacingTourKey,
-        title: 'Target & Pacing Realisasi',
+        title: 'Target & Laju Penagihan',
         description:
-            'Pantau target capaian harian/bulanan, proyeksi waktu tercapai, dan laju penagihan sesuai tanggal jatuh tempo wilayah Anda.',
+            'Pantau target capaian harian/mingguan dan laju penagihan sesuai tanggal jatuh tempo wilayah Anda.',
         icon: Icons.speed_rounded,
       ),
       FeatureTourStep(
         targetKey: _moreMenuButtonKey,
-        title: 'Menu Aksi DHKP, Cek Massal & Kalkulator',
+        title: 'Menu Aksi DHKP & Kalkulator',
         description:
-            'Tekan ikon tiga titik ini untuk mengakses fitur lengkap:\n'
-            '• Unggah Berkas DHKP (.dkhp) / Laporan (.dat): Tahun baru otomatis ditambahkan tanpa menghapus tahun lama; tahun sama meminta konfirmasi timpa.\n'
-            '• Cek Status Bayar Massal: Berjalan di latar belakang (bisa disembunyikan) dengan opsi Seluruh Blok khusus Kedusunan.\n'
-            '• Peta Objek Pajak, Cetak PDF (dengan Batal Cetak), Bagikan/Unduh Excel & CSV, Kolase STTS, serta Kalkulator AJB.',
+            '• Unggah DHKP (.dkhp) atau Laporan (.dat) dari perangkat/Google Drive.\n'
+            '• Cek Status Bayar Massal di latar belakang.\n'
+            '$moreMenuExportLine',
         icon: Icons.more_vert_rounded,
       ),
       FeatureTourStep(
         targetKey: _filterBlokTahunKey,
-        title: 'Filter Wilayah Dusun, Blok, & Tahun Pajak',
+        title: 'Filter Dusun, Blok & Tahun Pajak',
         description:
-            'Pilih Kedusunan (khusus operator), nomor Blok atau "Semua Blok", serta Tahun Pajak. Pilihan ini juga ikut diterapkan saat beralih ke mode Grafik.',
+            'Pilih Dusun, nomor Blok atau "Semua Blok", serta Tahun Pajak. Filter ini juga berlaku di mode Grafik.',
         icon: Icons.filter_alt_outlined,
       ),
       FeatureTourStep(
         targetKey: _searchFilterSortKey,
-        title: 'Cari Cepat, Filter Kategori, Tanpa Rp 0, & Urutkan',
+        title: 'Cari, Filter Kategori & Urutkan',
         description:
-            '• Kotak Cari: Cari nama WP, NOP, atau alamat objek.\n'
-            '• Filter Kategori: Saring Sudah Bayar, Belum Bayar, Target Pemda, atau objek berfoto/catatan.\n'
-            '• Opsi "Tanpa Rp 0" & Urutkan: Sembunyikan ketetapan nihil (Rp 0) dan urutkan baris sesuai kebutuhan penagihan.',
+            'Cari nama WP, NOP, atau alamat objek; saring kategori bayar, Target Pemda, sembunyikan Rp 0, dan atur urutan data.',
         icon: Icons.manage_search_rounded,
       ),
       FeatureTourStep(
         targetKey: _tableAreaKey,
-        title: 'Tabel Wajib Pajak, Celengan & Aksi Baris',
+        title: 'Tabel Wajib Pajak & Aksi Baris',
         description:
-            'Pada setiap baris wajib pajak Anda dapat:\n'
-            '• Kolom Gambar: Memotret/mengunggah foto STTS.\n'
-            '• Kolom Aksi: Cek rincian objek, cetak bukti lunas PDF, hitung tagihan/cicilan celengan warga, atau cek status langsung.\n'
-            '• Kolom Catatan: Mencatat keterangan lapangan & progres tabungan warga.',
-        actionHint:
-            'Geser tabel ke kiri/kanan atau atas/bawah untuk melihat seluruh kolom.',
+            '$photoColumnLine\n'
+            '• Kolom Aksi: Lihat rincian, cetak bukti lunas, hitung denda/cicilan, atau cek status.\n'
+            '• Kolom Catatan: Simpan keterangan lapangan & tabungan warga.',
+        actionHint: 'Geser tabel ke kiri/kanan untuk melihat seluruh kolom.',
         icon: Icons.table_rows_outlined,
       ),
       FeatureTourStep(
         targetKey: _summaryFooterKey,
-        title: 'Kartu Ringkasan Capaian & Target Pemda',
+        title: 'Ringkasan Capaian & Target Pemda',
         description:
-            'Menampilkan rekap otomatis untuk daftar aktif: jumlah & rupiah Sudah Bayar, Belum Bayar, persentase realisasi, dan pemisahan Target Pemda (>= Rp 2 Juta).',
-        actionHint:
-            'Ketuk bagian atas kartu ringkasan untuk melipat atau membukanya.',
+            'Rekap otomatis jumlah & rupiah Sudah Bayar, Belum Bayar, capaian realisasi, serta Target Pemda (>= Rp 2 Juta).',
+        actionHint: 'Ketuk bagian atas kartu untuk melipat atau membukanya.',
         icon: Icons.summarize_outlined,
       ),
     ];
@@ -365,6 +391,7 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
     bool setBusy = false,
     String? busyMessage,
     IconData? busyIcon,
+    bool refreshPhotos = false,
   }) async {
     final blok = _selectedBlok;
     if (blok == null) return;
@@ -372,14 +399,16 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
     if (setBusy && mounted) {
       setState(() {
         _busy = true;
-        _busyMessage = busyMessage ?? 'Memuat data catatan blok...';
+        _busyMessage = busyMessage ?? 'Memuat Data DHKP...';
         _busyIcon = busyIcon ?? Icons.sync_rounded;
       });
     }
 
-    // Cache direktori & nama file foto di memori agar sel tabel tidak melakukan I/O disk
-    final photosDir = await DhkpPackageHelper.photosDirectory();
-    final photoNames = await DhkpPackageHelper.refreshPhotoNamesCache();
+    // Cache direktori & nama file foto di memori agar sel tabel tidak melakukan I/O disk berulang
+    final photosDir = _photosDir ?? await DhkpPackageHelper.photosDirectory();
+    final photoNames = (refreshPhotos || _cachedPhotoFileNames.isEmpty)
+        ? await DhkpPackageHelper.refreshPhotoNamesCache()
+        : _cachedPhotoFileNames;
 
     final allScope = blok == semuaBlokValue
         ? await BlokDataStore.instance.byWhitelist(
@@ -406,9 +435,9 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
       excludeNihil: _sembunyikanNihil,
     );
     final metrics = DhkpSummaryMetrics.compute(filteredScope);
-    var records = DhkpSummaryMetrics.filterByKategori(
-      filteredScope,
-      _kategoriFilter,
+    var records = DhkpSummaryMetrics.filterByKategoris(
+      allScope,
+      _activeKategoris,
     );
     records = DhkpSummaryMetrics.filterBySearch(records, _searchQuery);
 
@@ -417,6 +446,8 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
       _photosDir = photosDir;
       _cachedPhotoFileNames = photoNames;
       _records = records;
+      _rawScopeRecords = allScope;
+      _rawMultiYearRecords = allScopeMultiYear;
       _allScopeRecords = filteredScope;
       _grafikScopeRecords = filteredGrafikScope;
       _summaryMetrics = metrics;
@@ -430,6 +461,36 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
       _busy = false;
     });
     _updateScreenSecurity();
+  }
+
+  /// Menyaring langsung dari [_rawScopeRecords] di memori tanpa melakukan I/O disk.
+  void _applyMemoryFilterOnly() {
+    final baseScope = _rawScopeRecords.isNotEmpty
+        ? _rawScopeRecords
+        : _allScopeRecords;
+    final filteredScope = DhkpSummaryMetrics.filterOutNihil(
+      baseScope,
+      excludeNihil: _sembunyikanNihil,
+    );
+    final filteredGrafikScope = _rawMultiYearRecords.isNotEmpty
+        ? DhkpSummaryMetrics.filterOutNihil(
+            _rawMultiYearRecords,
+            excludeNihil: _sembunyikanNihil,
+          )
+        : _grafikScopeRecords;
+    final metrics = DhkpSummaryMetrics.compute(filteredScope);
+    var records = DhkpSummaryMetrics.filterByKategoris(
+      baseScope,
+      _activeKategoris,
+    );
+    records = DhkpSummaryMetrics.filterBySearch(records, _searchQuery);
+    setState(() {
+      _allScopeRecords = filteredScope;
+      _grafikScopeRecords = filteredGrafikScope;
+      _summaryMetrics = metrics;
+      _records = records;
+      _currentPage = 0;
+    });
   }
 
   /// Data lingkup saat ini (mengikuti pilihan Blok & Tahun di layar atau blokOverride),
@@ -454,7 +515,7 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
       rawRecords,
       excludeNihil: excludeNihilOverride ?? _sembunyikanNihil,
     );
-    return DhkpSummaryMetrics.filterByKategori(records, _kategoriFilter);
+    return DhkpSummaryMetrics.filterByKategoris(records, _activeKategoris);
   }
 
   void _pilihBlok(String? blok) {
@@ -484,31 +545,31 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
     );
   }
 
-  void _pilihKategori(DhkpKategoriFilter? kategori) {
+  void _pilihKategori(
+    DhkpKategoriFilter? kategori, {
+    bool onlyThis = false,
+  }) {
     if (kategori == null) return;
-    setState(() {
-      _kategoriFilter = kategori;
-      _currentPage = 0;
-    });
-    _loadRecords(
-      setBusy: true,
-      busyMessage: 'Menyaring kategori: ${kategori.label}...',
-      busyIcon: Icons.filter_alt_outlined,
-    );
-  }
-
-  void _toggleSembunyikanNihil() {
-    setState(() {
-      _sembunyikanNihil = !_sembunyikanNihil;
-      _currentPage = 0;
-    });
-    _loadRecords(
-      setBusy: true,
-      busyMessage: _sembunyikanNihil
-          ? 'Mengecualikan SPPT Rp 0 (Nihil)...'
-          : 'Menampilkan kembali SPPT Rp 0 (Nihil)...',
-      busyIcon: Icons.money_off_csred_outlined,
-    );
+    if (onlyThis && kategori != DhkpKategoriFilter.semua) {
+      _activeKategoris = <DhkpKategoriFilter>{kategori};
+    } else if (kategori == DhkpKategoriFilter.semua) {
+      if (_isSemuaKategoriActive) {
+        _activeKategoris = <DhkpKategoriFilter>{};
+      } else {
+        _activeKategoris = Set<DhkpKategoriFilter>.from(
+          DhkpKategoriFilter.specificValues,
+        );
+      }
+    } else {
+      final next = Set<DhkpKategoriFilter>.from(_activeKategoris);
+      if (next.contains(kategori)) {
+        next.remove(kategori);
+      } else {
+        next.add(kategori);
+      }
+      _activeKategoris = next;
+    }
+    _applyMemoryFilterOnly();
   }
 
   void _pilihSort(BlokSortBy? sortBy) {
@@ -552,7 +613,38 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
       onCekStatusBayar: () => _bukaStatusBayar(record),
       onCekTagihan: () => _bukaTagihan(record),
       onEditRincian: () => _editRincianDialog(record),
+      onToggleBermasalah: (current) => _tandaiBermasalahDialog(current),
     );
+  }
+
+  /// Menampilkan konfirmasi untuk menandai atau menghapus tanda Bermasalah
+  /// (khusus Target Desa; Target Pemda tidak dapat ditandai Bermasalah).
+  Future<BlokRecord?> _tandaiBermasalahDialog(BlokRecord record) async {
+    if (record.isTargetPemda) return null;
+    final confirmedBermasalah = await showKonfirmasiBermasalahDialog(
+      context,
+      record,
+    );
+    if (confirmedBermasalah == null) return null;
+
+    final newStatus = confirmedBermasalah
+        ? 'Bermasalah'
+        : (record.hasValidTanggalBayar ? 'Sudah Bayar' : 'Belum Bayar');
+    final updatedRecord = record.copyWith(statusBayar: newStatus);
+    await BlokDataStore.instance.upsert(updatedRecord);
+    await _loadRecords();
+    if (!mounted) return updatedRecord;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          confirmedBermasalah
+              ? 'NOP ${record.formattedNop} ditandai sebagai Bermasalah.'
+              : 'Tanda Bermasalah pada NOP ${record.formattedNop} telah dihapus.',
+        ),
+        backgroundColor: confirmedBermasalah ? Colors.red.shade700 : null,
+      ),
+    );
+    return updatedRecord;
   }
 
   /// Membuka kalkulator terpadu (Denda, Cicilan & Tabungan Warga, AJB)
@@ -685,19 +777,25 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
         DusunData.instance.isDusunLocked || _selectedWilayah != null;
     final downloadSttsOption = ValueNotifier<bool>(false);
     final selectedScopeTitle = ValueNotifier<String?>(null);
-    final selectedRecords = await showPilihBlokCekMassalDialog(
-      context,
-      availableBloks: availableBloks,
-      recordsByBlok: recordsByBlok,
-      selectedWilayah: _selectedWilayah,
-      allowAllBlocks: isKedusunanScope,
-      downloadSttsOption: downloadSttsOption,
-      selectedScopeTitleOut: selectedScopeTitle,
-    );
-    final downloadStts = downloadSttsOption.value;
-    final scopeTitle = selectedScopeTitle.value;
-    downloadSttsOption.dispose();
-    selectedScopeTitle.dispose();
+    List<BlokRecord>? selectedRecords;
+    late final bool downloadStts;
+    late final String? scopeTitle;
+    try {
+      selectedRecords = await showPilihBlokCekMassalDialog(
+        context,
+        availableBloks: availableBloks,
+        recordsByBlok: recordsByBlok,
+        selectedWilayah: _selectedWilayah,
+        allowAllBlocks: isKedusunanScope,
+        downloadSttsOption: downloadSttsOption,
+        selectedScopeTitleOut: selectedScopeTitle,
+      );
+      downloadStts = downloadSttsOption.value;
+      scopeTitle = selectedScopeTitle.value;
+    } finally {
+      downloadSttsOption.dispose();
+      selectedScopeTitle.dispose();
+    }
 
     if (selectedRecords == null || selectedRecords.isEmpty || !mounted) return;
 
@@ -881,7 +979,7 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Laporan .dat tersimpan di $location (${targetRecords.length} objek PBB)',
+            'Laporan .dat tersimpan: ${friendlyFileName(location)} (${targetRecords.length} objek PBB)',
           ),
           backgroundColor: Colors.teal,
         ),
@@ -890,7 +988,9 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Gagal membuat berkas laporan: $e'),
+          content: Text(
+            'Gagal membuat berkas laporan: ${friendlyErrorMessage(e)}',
+          ),
           backgroundColor: Colors.red,
         ),
       );
@@ -937,7 +1037,9 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              isMismatch ? 'Data tidak sesuai' : 'Gagal membaca berkas: $e',
+              isMismatch
+                  ? 'Data tidak sesuai'
+                  : 'Gagal membaca berkas: ${friendlyErrorMessage(e)}',
             ),
             backgroundColor: Colors.red,
           ),
@@ -966,7 +1068,7 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
             content: Text(
               isMismatch
                   ? 'Data tidak sesuai'
-                  : 'Gagal membaca berkas Google Drive: $e',
+                  : 'Gagal membaca berkas Google Drive: ${friendlyErrorMessage(e)}',
             ),
             backgroundColor: Colors.red,
           ),
@@ -1114,7 +1216,9 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            isMismatch ? 'Data tidak sesuai' : 'Gagal memuat berkas: $e',
+            isMismatch
+                ? 'Data tidak sesuai'
+                : 'Gagal memuat berkas: ${friendlyErrorMessage(e)}',
           ),
           backgroundColor: Colors.red,
         ),
@@ -1145,42 +1249,47 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
 
   /// Memilih foto dari Kamera, Galeri, atau File Picker lalu menyimpannya secara lokal
   Future<File?> _pilihDanSimpanFoto(BlokRecord record) async {
-    final method = await showModalBottomSheet<String>(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Padding(
-              padding: EdgeInsets.all(16),
-              child: Text(
-                'Pilih Sumber Foto',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-            ),
-            ListTile(
-              leading: const Icon(Icons.camera_alt, color: Colors.blue),
-              title: const Text('Ambil dari Kamera'),
-              onTap: () => Navigator.pop(ctx, 'camera'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.photo_library, color: Colors.teal),
-              title: const Text('Pilih dari Galeri'),
-              onTap: () => Navigator.pop(ctx, 'gallery'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.folder_open, color: Colors.amber),
-              title: const Text('Pilih dari Penyimpanan Perangkat'),
-              onTap: () => Navigator.pop(ctx, 'file'),
-            ),
-            const SizedBox(height: 8),
-          ],
+    final String? method;
+    if (!isMobilePlatform) {
+      method = 'file';
+    } else {
+      method = await showModalBottomSheet<String>(
+        context: context,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
         ),
-      ),
-    );
+        builder: (ctx) => SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: Text(
+                  'Pilih Sumber Foto',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+              ),
+              ListTile(
+                leading: const Icon(Icons.camera_alt, color: Colors.blue),
+                title: const Text('Ambil dari Kamera'),
+                onTap: () => Navigator.pop(ctx, 'camera'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_library, color: Colors.teal),
+                title: const Text('Pilih dari Galeri'),
+                onTap: () => Navigator.pop(ctx, 'gallery'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.folder_open, color: Colors.amber),
+                title: const Text('Pilih dari Penyimpanan Perangkat'),
+                onTap: () => Navigator.pop(ctx, 'file'),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      );
+    }
 
     if (method == null) return null;
 
@@ -1218,9 +1327,11 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Gagal memilih gambar: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal memilih gambar: ${friendlyErrorMessage(e)}'),
+          ),
+        );
       }
       return null;
     }
@@ -1323,7 +1434,7 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
         child: Tooltip(
           message: hasPhoto
               ? 'Klik untuk perbesar / ganti foto'
-              : 'Klik untuk upload foto',
+              : 'Klik untuk unggah foto',
           child: CircleAvatar(
             radius: 18,
             backgroundColor: hasPhoto
@@ -1413,14 +1524,18 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
       );
       final location = await DownloadHelper.saveBytes(bytes, fileName);
       if (!mounted || location == null) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Laporan tersimpan di $location')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Laporan tersimpan: ${friendlyFileName(location)}'),
+        ),
+      );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Gagal membuat laporan: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Gagal membuat laporan: ${friendlyErrorMessage(e)}'),
+        ),
+      );
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -1484,9 +1599,13 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Gagal membagikan laporan: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Gagal membagikan laporan: ${friendlyErrorMessage(e)}',
+          ),
+        ),
+      );
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -1526,6 +1645,34 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
       }
     }
     await _cetakLaporan();
+  }
+
+  Future<void> _tampilkanPeringatanDataKosongCetak(String message) async {
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.orange.shade800),
+            const SizedBox(width: 8),
+            const Expanded(
+              child: Text(
+                'Peringatan: Data Kosong',
+                style: TextStyle(fontSize: 18),
+              ),
+            ),
+          ],
+        ),
+        content: Text(message),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Mengerti'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _cetakPdfDenganBatal({
@@ -1570,9 +1717,7 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
       );
       if (!mounted) return;
       if (emptyRecords) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(emptyMessage)));
+        await _tampilkanPeringatanDataKosongCetak(emptyMessage);
         return;
       }
       if (bytes == null || cancelToken.isCancelled) {
@@ -1590,15 +1735,25 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Gagal menyiapkan cetakan: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Gagal menyiapkan cetakan: ${friendlyErrorMessage(e)}',
+          ),
+        ),
+      );
     } finally {
       _isPrinting = false;
     }
   }
 
   Future<void> _cetakLaporan() async {
+    if (!_tampilkanGrafik && _records.isEmpty) {
+      await _tampilkanPeringatanDataKosongCetak(
+        'Tidak ada data DHKP pada filter yang dipilih untuk dicetak.',
+      );
+      return;
+    }
     final opsi = await _pilihOpsiEkspor(
       title: 'Cetak Laporan DHKP',
       actionButtonLabel: DocumentPreviewScreen.isDesktop
@@ -1616,7 +1771,8 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
       loadRecords: () =>
           _scopedRecordsForExport(opsi.blok, !opsi.sertakanNihil),
       blokTitle: blokTitle,
-      emptyMessage: 'Belum ada data untuk dicetak.',
+      emptyMessage:
+          'Tidak ada data DHKP pada filter yang dipilih untuk dicetak.',
       initialMessage: 'Menyiapkan dokumen cetak PDF...',
     );
   }
@@ -1634,12 +1790,8 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
     }
 
     if (_records.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Belum ada data pada tampilan filter saat ini untuk dicetak.',
-          ),
-        ),
+      await _tampilkanPeringatanDataKosongCetak(
+        'Tidak ada data DHKP pada filter yang dipilih untuk dicetak.',
       );
       return;
     }
@@ -1652,7 +1804,7 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
       loadRecords: () async => targetRecords,
       blokTitle: blokTitle,
       emptyMessage:
-          'Belum ada data pada tampilan filter saat ini untuk dicetak.',
+          'Tidak ada data DHKP pada filter yang dipilih untuk dicetak.',
       initialMessage: 'Menyiapkan cetakan sesuai filter tampilan saat ini...',
     );
   }
@@ -1741,7 +1893,7 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
                       : Icons.bar_chart_rounded,
                 ),
                 tooltip: _tampilkanGrafik
-                    ? 'Beralih ke Buku Catatan (Tabel)'
+                    ? 'Beralih ke Tabel Data DHKP'
                     : 'Beralih ke Visual Grafik',
               ),
               KeyedSubtree(
@@ -1750,7 +1902,7 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
                   key: const ValueKey('dhkp_target_pacing_btn'),
                   visualDensity: VisualDensity.compact,
                   icon: const Icon(Icons.speed_rounded),
-                  tooltip: 'Target & Pacing Realisasi',
+                  tooltip: 'Target & Laju Penagihan',
                   onPressed: _bukaTargetPacingDialog,
                 ),
               ),
@@ -1843,15 +1995,16 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
                         dense: true,
                       ),
                     ),
-                    const PopupMenuItem(
-                      value: 'bagikan',
-                      child: ListTile(
-                        leading: Icon(Icons.share_outlined),
-                        title: Text('Bagikan Laporan'),
-                        contentPadding: EdgeInsets.zero,
-                        dense: true,
+                    if (Platform.isAndroid)
+                      const PopupMenuItem(
+                        value: 'bagikan',
+                        child: ListTile(
+                          leading: Icon(Icons.share_outlined),
+                          title: Text('Bagikan Laporan'),
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
+                        ),
                       ),
-                    ),
                     const PopupMenuItem(
                       value: 'unduh',
                       child: ListTile(
@@ -2085,11 +2238,8 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
                                               ),
                                               onPressed: () {
                                                 _searchController.clear();
-                                                setState(() {
-                                                  _searchQuery = '';
-                                                  _currentPage = 0;
-                                                });
-                                                _loadRecords();
+                                                _searchQuery = '';
+                                                _applyMemoryFilterOnly();
                                               },
                                             )
                                           : null,
@@ -2102,51 +2252,180 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
                                       isDense: true,
                                     ),
                                     onChanged: (val) {
-                                      setState(() {
-                                        _searchQuery = val;
-                                        _currentPage = 0;
-                                      });
-                                      _loadRecords();
+                                      _searchQuery = val;
+                                      _applyMemoryFilterOnly();
                                     },
                                   ),
                                 ),
                                 const SizedBox(width: 8),
                                 PopupMenuButton<DhkpKategoriFilter>(
                                   tooltip:
-                                      'Filter Kategori: ${_kategoriFilter.label}',
-                                  initialValue: _kategoriFilter,
-                                  onSelected: _pilihKategori,
+                                      'Filter Kategori: $_activeKategoriSummaryLabel',
                                   itemBuilder: (context) => [
-                                    for (final k in DhkpKategoriFilter.values)
-                                      PopupMenuItem<DhkpKategoriFilter>(
-                                        value: k,
-                                        child: Row(
-                                          children: [
-                                            Icon(
-                                              _kategoriFilter == k
-                                                  ? Icons
-                                                        .radio_button_checked_rounded
-                                                  : Icons
-                                                        .radio_button_unchecked_rounded,
-                                              size: 18,
-                                              color: _kategoriFilter == k
-                                                  ? Theme.of(
-                                                      context,
-                                                    ).colorScheme.primary
-                                                  : null,
-                                            ),
-                                            const SizedBox(width: 10),
-                                            Text(
-                                              k.label,
-                                              style: TextStyle(
-                                                fontWeight: _kategoriFilter == k
-                                                    ? FontWeight.bold
-                                                    : FontWeight.normal,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
+                                    PopupMenuItem<DhkpKategoriFilter>(
+                                      enabled: false,
+                                      padding: EdgeInsets.zero,
+                                      child: StatefulBuilder(
+                                        builder: (ctx, setMenuState) {
+                                          return Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.stretch,
+                                            children: [
+                                              for (final k
+                                                  in DhkpKategoriFilter
+                                                      .values) ...[
+                                                () {
+                                                  final isSemua =
+                                                      k ==
+                                                      DhkpKategoriFilter.semua;
+                                                  final isChecked = isSemua
+                                                      ? _isSemuaKategoriActive
+                                                      : _activeKategoris
+                                                            .contains(k);
+                                                  final isOnlyThisSelected =
+                                                      !isSemua &&
+                                                      _activeKategoris.length ==
+                                                          1 &&
+                                                      _activeKategoris.contains(
+                                                        k,
+                                                      );
+                                                  return InkWell(
+                                                    onTap: () {
+                                                      _pilihKategori(k);
+                                                      setMenuState(() {});
+                                                    },
+                                                    child: Padding(
+                                                      padding:
+                                                          const EdgeInsets.symmetric(
+                                                            horizontal: 14,
+                                                            vertical: 9,
+                                                          ),
+                                                      child: Row(
+                                                        children: [
+                                                          Icon(
+                                                            isChecked
+                                                                ? Icons
+                                                                      .radio_button_checked_rounded
+                                                                : Icons
+                                                                      .radio_button_unchecked_rounded,
+                                                            size: 18,
+                                                            color: isChecked
+                                                                ? Theme.of(
+                                                                    context,
+                                                                  ).colorScheme.primary
+                                                                : Theme.of(
+                                                                    context,
+                                                                  ).disabledColor,
+                                                          ),
+                                                          const SizedBox(
+                                                            width: 10,
+                                                          ),
+                                                          Expanded(
+                                                            child: Text(
+                                                              k.label,
+                                                              style: TextStyle(
+                                                                fontSize: 13.5,
+                                                                color:
+                                                                    Theme.of(
+                                                                          context,
+                                                                        )
+                                                                        .textTheme
+                                                                        .bodyMedium
+                                                                        ?.color,
+                                                                fontWeight:
+                                                                    isChecked
+                                                                    ? FontWeight
+                                                                          .bold
+                                                                    : FontWeight
+                                                                          .normal,
+                                                              ),
+                                                            ),
+                                                          ),
+                                                          if (!isSemua) ...[
+                                                            const SizedBox(
+                                                              width: 8,
+                                                            ),
+                                                            InkWell(
+                                                              borderRadius:
+                                                                  BorderRadius.circular(
+                                                                    4,
+                                                                  ),
+                                                              onTap: () {
+                                                                _pilihKategori(
+                                                                  k,
+                                                                  onlyThis:
+                                                                      true,
+                                                                );
+                                                                setMenuState(
+                                                                  () {},
+                                                                );
+                                                              },
+                                                              child: Container(
+                                                                padding:
+                                                                    const EdgeInsets.symmetric(
+                                                                      horizontal:
+                                                                          7,
+                                                                      vertical:
+                                                                          3,
+                                                                    ),
+                                                                decoration: BoxDecoration(
+                                                                  color:
+                                                                      isOnlyThisSelected
+                                                                      ? Theme.of(
+                                                                          context,
+                                                                        ).colorScheme.primaryContainer
+                                                                      : Theme.of(
+                                                                          context,
+                                                                        ).colorScheme.surfaceContainerHighest,
+                                                                  borderRadius:
+                                                                      BorderRadius.circular(
+                                                                        4,
+                                                                      ),
+                                                                  border: Border.all(
+                                                                    color:
+                                                                        isOnlyThisSelected
+                                                                        ? Theme.of(
+                                                                            context,
+                                                                          ).colorScheme.primary
+                                                                        : Theme.of(
+                                                                            context,
+                                                                          ).colorScheme.outlineVariant,
+                                                                    width: 0.8,
+                                                                  ),
+                                                                ),
+                                                                child: Text(
+                                                                  'Hanya',
+                                                                  style: TextStyle(
+                                                                    fontSize:
+                                                                        10.5,
+                                                                    fontWeight:
+                                                                        FontWeight
+                                                                            .w600,
+                                                                    color:
+                                                                        isOnlyThisSelected
+                                                                        ? Theme.of(
+                                                                            context,
+                                                                          ).colorScheme.primary
+                                                                        : Theme.of(
+                                                                            context,
+                                                                          ).colorScheme.onSurfaceVariant,
+                                                                  ),
+                                                                ),
+                                                              ),
+                                                            ),
+                                                          ],
+                                                        ],
+                                                      ),
+                                                    ),
+                                                  );
+                                                }(),
+                                              ],
+                                            ],
+                                          );
+                                        },
                                       ),
+                                    ),
                                   ],
                                   child: Container(
                                     height: 40,
@@ -2154,17 +2433,13 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
                                       horizontal: 12,
                                     ),
                                     decoration: BoxDecoration(
-                                      color:
-                                          _kategoriFilter !=
-                                              DhkpKategoriFilter.semua
+                                      color: !_isSemuaKategoriActive
                                           ? Theme.of(
                                               context,
                                             ).colorScheme.primaryContainer
                                           : null,
                                       border: Border.all(
-                                        color:
-                                            _kategoriFilter !=
-                                                DhkpKategoriFilter.semua
+                                        color: !_isSemuaKategoriActive
                                             ? Theme.of(
                                                 context,
                                               ).colorScheme.primary
@@ -2178,24 +2453,20 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
                                         Icon(
-                                          _kategoriFilter !=
-                                                  DhkpKategoriFilter.semua
+                                          !_isSemuaKategoriActive
                                               ? Icons.filter_alt_rounded
                                               : Icons.filter_list_rounded,
                                           size: 20,
-                                          color:
-                                              _kategoriFilter !=
-                                                  DhkpKategoriFilter.semua
+                                          color: !_isSemuaKategoriActive
                                               ? Theme.of(
                                                   context,
                                                 ).colorScheme.onPrimaryContainer
                                               : null,
                                         ),
-                                        if (_kategoriFilter !=
-                                            DhkpKategoriFilter.semua) ...[
+                                        if (!_isSemuaKategoriActive) ...[
                                           const SizedBox(width: 6),
                                           Text(
-                                            _kategoriFilter.label,
+                                            _activeKategoriSummaryLabel,
                                             style: TextStyle(
                                               fontSize: 12,
                                               fontWeight: FontWeight.w600,
@@ -2206,71 +2477,6 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
                                           ),
                                         ],
                                       ],
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                                Tooltip(
-                                  message: _sembunyikanNihil
-                                      ? 'SPPT Rp 0 (Nihil) sedang dikecualikan — ketuk untuk menampilkan kembali'
-                                      : 'Kecualikan SPPT Rp 0 (Nihil) dari tampilan dan cetakan',
-                                  child: InkWell(
-                                    key: const ValueKey(
-                                      'dhkp_exclude_nihil_btn',
-                                    ),
-                                    borderRadius: BorderRadius.circular(6),
-                                    onTap: _toggleSembunyikanNihil,
-                                    child: Container(
-                                      height: 40,
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 10,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: _sembunyikanNihil
-                                            ? Theme.of(
-                                                context,
-                                              ).colorScheme.tertiaryContainer
-                                            : null,
-                                        border: Border.all(
-                                          color: _sembunyikanNihil
-                                              ? Theme.of(
-                                                  context,
-                                                ).colorScheme.tertiary
-                                              : Theme.of(
-                                                  context,
-                                                ).colorScheme.outline,
-                                        ),
-                                        borderRadius: BorderRadius.circular(6),
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Icon(
-                                            Icons.money_off_csred_outlined,
-                                            size: 18,
-                                            color: _sembunyikanNihil
-                                                ? Theme.of(context)
-                                                      .colorScheme
-                                                      .onTertiaryContainer
-                                                : null,
-                                          ),
-                                          const SizedBox(width: 4),
-                                          Text(
-                                            'Tanpa Rp 0',
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              fontWeight: _sembunyikanNihil
-                                                  ? FontWeight.w700
-                                                  : FontWeight.w500,
-                                              color: _sembunyikanNihil
-                                                  ? Theme.of(context)
-                                                        .colorScheme
-                                                        .onTertiaryContainer
-                                                  : null,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
                                     ),
                                   ),
                                 ),

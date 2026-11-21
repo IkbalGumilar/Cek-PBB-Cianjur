@@ -5,8 +5,10 @@ import 'package:flutter/foundation.dart';
 
 import 'app_storage.dart';
 import 'base_preferences_store.dart';
+import 'blok_catatan_screen.dart';
 import 'blok_data_store.dart';
 import 'cloud_sync/google_account_sync_service.dart';
+import 'cloud_sync/google_drive_service.dart';
 import 'dkhp_package_helper.dart';
 import 'google_drive_backup_policy.dart';
 
@@ -26,6 +28,12 @@ class BlokBackupScheduler extends BasePreferencesStore {
 
   static const int maxRetainedBackups = 3;
 
+  /// Interval pengecekan ringan merger data antar-perangkat di Google Drive (setiap 3 jam).
+  static const Duration cloudMergeCheckInterval = Duration(hours: 3);
+
+  Timer? _cloudMergeTimer;
+  bool _isCheckingCloudMerge = false;
+
   Future<String?> _readSecureToken(String key) => readSecureWithMigration(key);
 
   Future<void> _writeSecureToken(String key, String value) =>
@@ -43,6 +51,9 @@ class BlokBackupScheduler extends BasePreferencesStore {
 
   @visibleForTesting
   void resetForTesting() {
+    _cloudMergeTimer?.cancel();
+    _cloudMergeTimer = null;
+    _isCheckingCloudMerge = false;
     resetPrefsForTesting();
   }
 
@@ -63,6 +74,14 @@ class BlokBackupScheduler extends BasePreferencesStore {
   static const _lastBackupSizeKey = 'blok_backup_last_size_bytes';
   static const _lastBackupPathKey = 'blok_backup_last_path';
   static const _dirtyKey = 'blok_data_dirty';
+  static const _lastCloudMergeCheckTimeKey =
+      'blok_cloud_merge_last_check_time_ms';
+  static const _lastMergedCloudFileIdKey =
+      'blok_cloud_merge_last_merged_file_id';
+  static const _lastMergedCloudModifiedMsKey =
+      'blok_cloud_merge_last_merged_mod_ms';
+  static const _lastUploadedCloudFileIdKey =
+      'blok_cloud_merge_last_uploaded_file_id';
 
   /// Mendapatkan preferensi frekuensi cadangan dalam satuan hari.
   /// 0 = Jangan pernah / Manual
@@ -483,10 +502,184 @@ class BlokBackupScheduler extends BasePreferencesStore {
     }
 
     try {
+      await checkAndMergeCloudUpdatesIfNeeded(now: current, force: true);
       final result = await performBackup(customExporter: exportCsv);
+      if (result != null) {
+        final account = await getGoogleAccount();
+        if (account.isNotEmpty) {
+          try {
+            final mainFolderId = await GoogleDriveService.instance
+                .ensureDedicatedFolder();
+            final backupFolderId = await GoogleDriveService.instance
+                .ensureBackupSubfolder(parentFolderId: mainFolderId);
+            final uploadedFileId = await GoogleDriveService.instance.uploadFile(
+              file: result,
+              folderId: backupFolderId,
+            );
+            if (uploadedFileId != null && uploadedFileId.isNotEmpty) {
+              await recordUploadedCloudFile(
+                fileId: uploadedFileId,
+                modifiedTime: current,
+              );
+            }
+          } catch (_) {}
+        }
+      }
       return result != null;
     } catch (_) {
       return false;
+    }
+  }
+
+  /// Mencatat ID berkas cadangan yang baru saja diunggah oleh perangkat ini sendiri
+  /// agar pengecekan merger 3 jam tidak mengunduh ulang berkas miliknya sendiri.
+  Future<void> recordUploadedCloudFile({
+    required String fileId,
+    DateTime? modifiedTime,
+  }) async {
+    if (fileId.isEmpty) return;
+    await setString(_lastUploadedCloudFileIdKey, fileId);
+    await setString(_lastMergedCloudFileIdKey, fileId);
+    if (modifiedTime != null) {
+      await setInt(
+        _lastMergedCloudModifiedMsKey,
+        modifiedTime.millisecondsSinceEpoch,
+      );
+    }
+  }
+
+  Future<DateTime?> getLastCloudMergeCheckTime() async {
+    final ms = await getInt(_lastCloudMergeCheckTimeKey);
+    if (ms == null || ms <= 0) return null;
+    return DateTime.fromMillisecondsSinceEpoch(ms);
+  }
+
+  /// Menentukan apakah pengecekan merger berkala (setiap 3 jam) sudah waktunya dijalankan.
+  bool isCloudMergeCheckDue({
+    required DateTime now,
+    required DateTime? lastCheckTime,
+  }) {
+    if (lastCheckTime == null) return true;
+    return now.difference(lastCheckTime) >= cloudMergeCheckInterval;
+  }
+
+  /// Memulai timer pengecekan ringan setiap 3 jam untuk mengecek apakah ada data
+  /// cadangan terbaru dari perangkat lain di akun Google yang sama.
+  void startPeriodicCloudMergeChecker() {
+    _cloudMergeTimer?.cancel();
+    _cloudMergeTimer = Timer.periodic(cloudMergeCheckInterval, (_) {
+      unawaited(checkAndMergeCloudUpdatesIfNeeded());
+    });
+    unawaited(checkAndMergeCloudUpdatesIfNeeded());
+  }
+
+  void stopPeriodicCloudMergeChecker() {
+    _cloudMergeTimer?.cancel();
+    _cloudMergeTimer = null;
+  }
+
+  /// Pengecekan ringan (setiap 3 jam) ke folder backup Google Drive:
+  /// - Hanya mengecek daftar metadata berkas terbaru di folder backup Google Drive.
+  /// - Jika tidak ada data yang lebih baru (atau berkas terbaru berasal dari perangkat ini),
+  ///   pengecekan langsung selesai tanpa mengunduh apa pun.
+  /// - Jika ada data terbaru dari perangkat lain yang memakai akun Google yang sama,
+  ///   berkas delta tersebut diunduh dan digabungkan (merger) ke database lokal.
+  Future<int> checkAndMergeCloudUpdatesIfNeeded({
+    DateTime? now,
+    bool force = false,
+  }) async {
+    if (_isCheckingCloudMerge) return 0;
+    final current = now ?? DateTime.now();
+
+    final account = await getGoogleAccount();
+    if (account.isEmpty) return 0;
+
+    if (!force) {
+      final lastCheck = await getLastCloudMergeCheckTime();
+      if (!isCloudMergeCheckDue(now: current, lastCheckTime: lastCheck)) {
+        return 0;
+      }
+    }
+
+    final localRecords = await BlokDataStore.instance.loadAll();
+    if (localRecords.isEmpty) return 0;
+
+    _isCheckingCloudMerge = true;
+    try {
+      final mainFolderId = await GoogleDriveService.instance
+          .ensureDedicatedFolder();
+      final backupFolderId = await GoogleDriveService.instance
+          .ensureBackupSubfolder(parentFolderId: mainFolderId);
+      if (backupFolderId == null || backupFolderId.isEmpty) {
+        return 0;
+      }
+
+      final items = await GoogleDriveService.instance.listDkhpFiles(
+        folderId: backupFolderId,
+      );
+      await setInt(_lastCloudMergeCheckTimeKey, current.millisecondsSinceEpoch);
+
+      final candidates = items
+          .where(
+            (item) =>
+                !item.isFolder &&
+                (item.name.toLowerCase().endsWith('.dkhp') ||
+                    item.name.toLowerCase().endsWith('.dat')),
+          )
+          .toList();
+      if (candidates.isEmpty) return 0;
+
+      candidates.sort((a, b) {
+        final aMs = a.modifiedTime?.millisecondsSinceEpoch ?? 0;
+        final bMs = b.modifiedTime?.millisecondsSinceEpoch ?? 0;
+        return bMs.compareTo(aMs);
+      });
+
+      final newest = candidates.first;
+      final lastUploadedId =
+          (await getString(_lastUploadedCloudFileIdKey)) ?? '';
+      final lastMergedId = (await getString(_lastMergedCloudFileIdKey)) ?? '';
+      final lastMergedModMs =
+          (await getInt(_lastMergedCloudModifiedMsKey)) ?? 0;
+      final newestModMs = newest.modifiedTime?.millisecondsSinceEpoch ?? 0;
+
+      // Jika berkas paling baru adalah berkas yang sudah diunggah atau sudah digabung
+      // di perangkat ini, tidak ada data baru yang perlu diunduh.
+      if (newest.id == lastUploadedId ||
+          newest.id == lastMergedId ||
+          (lastMergedModMs > 0 &&
+              newestModMs > 0 &&
+              newestModMs <= lastMergedModMs)) {
+        return 0;
+      }
+
+      final downloadedFile = await GoogleDriveService.instance.downloadFile(
+        fileId: newest.id,
+        fileName: newest.name,
+      );
+      final masterKey = await GoogleAccountSyncService.instance
+          .getOrCreateBackupMasterKey();
+
+      final mergedList = await DhkpPackageHelper.unpackDkhp(
+        downloadedFile.path,
+        password: masterKey,
+        requireBaseDhkp: true,
+      );
+
+      await setString(_lastMergedCloudFileIdKey, newest.id);
+      if (newestModMs > 0) {
+        await setInt(_lastMergedCloudModifiedMsKey, newestModMs);
+      }
+
+      if (mergedList.isNotEmpty) {
+        BlokCatatanScreen.refreshIfOpen();
+      }
+      return mergedList.length;
+    } catch (e) {
+      debugPrint('Cloud merge check (3h) skipped/failed: $e');
+      return 0;
+    } finally {
+      _isCheckingCloudMerge = false;
     }
   }
 }

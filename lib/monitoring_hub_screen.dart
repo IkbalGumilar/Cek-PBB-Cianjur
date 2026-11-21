@@ -66,7 +66,7 @@ class _MonitoringHubScreenState extends State<MonitoringHubScreen> {
         targetKey: _monitoringWilayahCardKey,
         title: 'Menu Pantauan Wilayah Desa',
         description:
-            'Ketuk kartu ini untuk memantau perkembangan pembayaran pajak warga se-desa atau kelurahan, mulai dari daftar Sudah Bayar, Belum Bayar, Realisasi, hingga Peringkat Capaian.',
+            'Ketuk kartu ini untuk memantau perkembangan pembayaran pajak warga se-desa atau kelurahan, mulai dari daftar Sudah Bayar, Belum Bayar, Realisasi, hingga Peringkat Realisasi.',
         icon: Icons.map_outlined,
         actionHint: 'Buka untuk melihat laporan lengkap wilayah Anda',
       ),
@@ -93,6 +93,30 @@ class _MonitoringHubScreenState extends State<MonitoringHubScreen> {
   // jadi perlu tombol keluar eksplisit — tanpa ini pengguna tidak punya cara
   // ganti akun atau membersihkan sesi yang macet.
   Future<void> _logout() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Keluar dari Portal Petugas?'),
+        content: const Text(
+          'Sesi masuk Anda akan diakhiri dan Anda perlu login ulang untuk membuka menu petugas.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(ctx).colorScheme.error,
+              foregroundColor: Theme.of(ctx).colorScheme.onError,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Keluar'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
     setState(() => _loggingOut = true);
     await widget.client.logout();
     if (!mounted) return;
@@ -156,7 +180,7 @@ class _MonitoringHubScreenState extends State<MonitoringHubScreen> {
               icon: Icons.map_outlined,
               title: 'Pantauan Wilayah Desa',
               subtitle:
-                  '7 laporan: Sudah/Belum Bayar, Realisasi, Tunggakan, Kolektif & Peringkat Capaian',
+                  '7 laporan: Sudah/Belum Bayar, Realisasi, Tunggakan, Kolektif & Peringkat Realisasi',
               onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(

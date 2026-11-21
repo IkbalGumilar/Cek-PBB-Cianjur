@@ -12,6 +12,7 @@ import '../legal_document_screen.dart';
 import '../license_screen.dart';
 import '../update_checker.dart';
 import '../update_screen.dart';
+import '../user_friendly_error.dart';
 
 /// Halaman terpisah untuk Tentang Aplikasi & Bagikan Aplikasi.
 class AboutAppScreen extends StatelessWidget {
@@ -122,9 +123,13 @@ class _AboutAppSectionState extends State<AboutAppSection> {
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Gagal membagikan aplikasi: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Gagal membagikan aplikasi: ${friendlyErrorMessage(e)}',
+          ),
+        ),
+      );
     } finally {
       if (mounted) setState(() => _sharing = false);
     }
@@ -152,6 +157,15 @@ class _AboutAppSectionState extends State<AboutAppSection> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Gagal memeriksa pembaruan: ${friendlyErrorMessage(e)}',
+          ),
+        ),
+      );
     } finally {
       if (mounted) setState(() => _checking = false);
     }

@@ -13,6 +13,7 @@ import 'package:syncfusion_flutter_pdf/pdf.dart' as sf;
 
 import 'app_security_service.dart';
 import 'base_table_exporter.dart';
+import 'user_friendly_error.dart';
 
 /// Pembaca Dokumen PDF bergaya Google PDF Viewer (Camelot):
 /// 1. **Lapisan Teks Presisi Dapat Dipilih & Disalin (Selectable Text Layer)**:
@@ -185,7 +186,14 @@ class DocumentPreviewScreen extends StatefulWidget {
     } catch (e) {
       if (context.mounted) {
         messenger.showSnackBar(
-          SnackBar(content: Text('Gagal membuka dokumen PDF: $e')),
+          SnackBar(
+            content: Text(
+              friendlyErrorMessage(
+                e,
+                fallback: 'Gagal membuka dokumen PDF.',
+              ),
+            ),
+          ),
         );
       }
     }
@@ -207,9 +215,16 @@ class DocumentPreviewScreen extends StatefulWidget {
       await openPdfFile(context, file, title: files.first.name);
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Gagal memilih berkas PDF: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              friendlyErrorMessage(
+                e,
+                fallback: 'Gagal memilih berkas PDF.',
+              ),
+            ),
+          ),
+        );
       }
     } finally {
       Future.delayed(const Duration(milliseconds: 600), () {
@@ -363,7 +378,7 @@ class _DocumentPreviewScreenState extends State<DocumentPreviewScreen>
       final bytes = await widget.pdfFile!.readAsBytes();
       if (!DocumentPreviewScreen.hasPdfHeader(bytes)) {
         throw const FormatException(
-          'Berkas tidak memiliki header PDF yang valid (%PDF-).',
+          'Format berkas tidak valid atau bukan dokumen PDF asli.',
         );
       }
       if (mounted) {
@@ -376,7 +391,10 @@ class _DocumentPreviewScreenState extends State<DocumentPreviewScreen>
     } catch (e) {
       if (mounted) {
         setState(() {
-          _errorMessage = e.toString();
+          _errorMessage = friendlyErrorMessage(
+            e,
+            fallback: 'Gagal membaca dokumen PDF.',
+          );
           _isLoading = false;
         });
       }
@@ -976,13 +994,22 @@ class _DocumentPreviewScreenState extends State<DocumentPreviewScreen>
       if (location == null) return;
       messenger.showSnackBar(
         SnackBar(
-          content: Text('Dokumen tersimpan di $location'),
+          content: Text(
+            'Dokumen ${friendlyFileName(location)} berhasil disimpan.',
+          ),
           action: SnackBarAction(label: 'Tutup', onPressed: () {}),
         ),
       );
     } catch (e) {
       messenger.showSnackBar(
-        SnackBar(content: Text('Gagal menyimpan dokumen: $e')),
+        SnackBar(
+          content: Text(
+            friendlyErrorMessage(
+              e,
+              fallback: 'Gagal menyimpan dokumen PDF.',
+            ),
+          ),
+        ),
       );
     }
   }
@@ -1007,10 +1034,12 @@ class _DocumentPreviewScreenState extends State<DocumentPreviewScreen>
     setState(() {
       _isFullscreen = !_isFullscreen;
     });
-    if (_isFullscreen) {
-      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-    } else {
-      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    if (isMobilePlatform) {
+      if (_isFullscreen) {
+        SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+      } else {
+        SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+      }
     }
   }
 
@@ -1034,7 +1063,7 @@ class _DocumentPreviewScreenState extends State<DocumentPreviewScreen>
     _pageScrollController.dispose();
     _searchController.dispose();
     _searchFocusNode.dispose();
-    if (_isFullscreen) {
+    if (_isFullscreen && isMobilePlatform) {
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     }
     super.dispose();
@@ -1168,7 +1197,9 @@ class _DocumentPreviewScreenState extends State<DocumentPreviewScreen>
                           actions: [
                             IconButton(
                               icon: const Icon(Icons.search),
-                              tooltip: 'Cari di dokumen (Ctrl+F)',
+                              tooltip: DocumentPreviewScreen.isDesktop
+                                  ? 'Cari di dokumen (Ctrl+F)'
+                                  : 'Cari di dokumen',
                               onPressed: _openSearch,
                             ),
                             IconButton(
@@ -1178,7 +1209,9 @@ class _DocumentPreviewScreenState extends State<DocumentPreviewScreen>
                             ),
                             IconButton(
                               icon: const Icon(Icons.print_outlined),
-                              tooltip: 'Cetak (Ctrl+P)',
+                              tooltip: DocumentPreviewScreen.isDesktop
+                                  ? 'Cetak (Ctrl+P)'
+                                  : 'Cetak',
                               onPressed: _printDocument,
                             ),
                             PopupMenuButton<String>(
@@ -1216,37 +1249,46 @@ class _DocumentPreviewScreenState extends State<DocumentPreviewScreen>
                                 }
                               },
                               itemBuilder: (context) => [
-                                const PopupMenuItem(
+                                PopupMenuItem(
                                   value: 'fullscreen',
                                   child: Row(
                                     children: [
-                                      Icon(Icons.fullscreen, size: 20),
-                                      SizedBox(width: 12),
-                                      Text('Layar Penuh'),
+                                      const Icon(Icons.fullscreen, size: 20),
+                                      const SizedBox(width: 12),
+                                      Text(
+                                        DocumentPreviewScreen.isDesktop
+                                            ? 'Sembunyikan Bilah Alat'
+                                            : 'Layar Penuh',
+                                      ),
                                     ],
                                   ),
                                 ),
                                 const PopupMenuDivider(),
-                                const PopupMenuItem(
-                                  value: 'share',
-                                  child: Row(
-                                    children: [
-                                      Icon(Icons.share_outlined, size: 20),
-                                      SizedBox(width: 12),
-                                      Text('Bagikan'),
-                                    ],
+                                if (!DocumentPreviewScreen.isDesktop)
+                                  const PopupMenuItem(
+                                    value: 'share',
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.share_outlined, size: 20),
+                                        SizedBox(width: 12),
+                                        Text('Bagikan'),
+                                      ],
+                                    ),
                                   ),
-                                ),
-                                const PopupMenuItem(
+                                PopupMenuItem(
                                   value: 'open_with',
                                   child: Row(
                                     children: [
-                                      Icon(
+                                      const Icon(
                                         Icons.open_in_new_outlined,
                                         size: 20,
                                       ),
-                                      SizedBox(width: 12),
-                                      Text('Buka dengan...'),
+                                      const SizedBox(width: 12),
+                                      Text(
+                                        DocumentPreviewScreen.isDesktop
+                                            ? 'Buka dengan Aplikasi Eksternal'
+                                            : 'Buka dengan...',
+                                      ),
                                     ],
                                   ),
                                 ),
@@ -1507,7 +1549,9 @@ class _DocumentPreviewScreenState extends State<DocumentPreviewScreen>
                           Icons.fullscreen_exit,
                           color: Colors.white,
                         ),
-                        tooltip: 'Keluar Layar Penuh',
+                        tooltip: DocumentPreviewScreen.isDesktop
+                            ? 'Tampilkan Bilah Alat'
+                            : 'Keluar Layar Penuh',
                         onPressed: _toggleFullscreen,
                       ),
                     ),
@@ -1764,7 +1808,9 @@ class _DocumentPreviewScreenState extends State<DocumentPreviewScreen>
                   IconButton(
                     visualDensity: VisualDensity.compact,
                     icon: const Icon(Icons.remove_circle_outline, size: 19),
-                    tooltip: 'Perkecil (Ctrl+-)',
+                    tooltip: DocumentPreviewScreen.isDesktop
+                        ? 'Perkecil (Ctrl+-)'
+                        : 'Perkecil',
                     onPressed: _zoomOut,
                   ),
                   ValueListenableBuilder<double>(
@@ -1796,7 +1842,9 @@ class _DocumentPreviewScreenState extends State<DocumentPreviewScreen>
                   IconButton(
                     visualDensity: VisualDensity.compact,
                     icon: const Icon(Icons.add_circle_outline, size: 19),
-                    tooltip: 'Perbesar (Ctrl++)',
+                    tooltip: DocumentPreviewScreen.isDesktop
+                        ? 'Perbesar (Ctrl++)'
+                        : 'Perbesar',
                     onPressed: _zoomIn,
                   ),
                 ],
