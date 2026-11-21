@@ -49,13 +49,25 @@ const semuaBlokValue = '__SEMUA_BLOK__';
 
 enum DhkpKategoriFilter {
   semua('Semua Data'),
-  targetPemda('🎯 Target Pemda'),
-  blacklist('⛔ Blacklist (≥ 5 Thn)'),
-  sudahBayar('✓ Sudah Bayar'),
-  belumBayar('⏳ Belum Bayar');
+  nihil('Nihil (Rp 0)'),
+  targetPemda('Target Pemda'),
+  sudahBayar('Sudah Bayar'),
+  belumBayar('Belum Bayar'),
+  blacklist('Blacklist'),
+  bermasalah('Bermasalah');
 
   final String label;
   const DhkpKategoriFilter(this.label);
+
+  /// Daftar kategori spesifik selain [semua] untuk multi-filter.
+  static const List<DhkpKategoriFilter> specificValues = [
+    DhkpKategoriFilter.nihil,
+    DhkpKategoriFilter.targetPemda,
+    DhkpKategoriFilter.sudahBayar,
+    DhkpKategoriFilter.belumBayar,
+    DhkpKategoriFilter.blacklist,
+    DhkpKategoriFilter.bermasalah,
+  ];
 }
 
 /// Tahun 2015 s.d. tahun berjalan (menyesuaikan tanggal saat ini secara
@@ -151,6 +163,31 @@ class DhkpSummaryMetrics {
     return records.where((r) => r.jumlahPbbValue > 0).toList();
   }
 
+  /// Menentukan kategori spesifik utama dari satu baris [BlokRecord].
+  static DhkpKategoriFilter kategoriOf(BlokRecord r) {
+    if (r.jumlahPbbValue == 0) return DhkpKategoriFilter.nihil;
+    if (r.isTargetPemda) return DhkpKategoriFilter.targetPemda;
+    if (r.isBermasalah) return DhkpKategoriFilter.bermasalah;
+    if (r.isBlacklist) return DhkpKategoriFilter.blacklist;
+    if (r.isPaid) return DhkpKategoriFilter.sudahBayar;
+    return DhkpKategoriFilter.belumBayar;
+  }
+
+  /// Menyaring daftar [BlokRecord] berdasarkan multi-filter [activeKategoris].
+  static List<BlokRecord> filterByKategoris(
+    List<BlokRecord> records,
+    Set<DhkpKategoriFilter> activeKategoris,
+  ) {
+    if (activeKategoris.isEmpty) return const [];
+    if (activeKategoris.contains(DhkpKategoriFilter.semua) ||
+        activeKategoris.containsAll(DhkpKategoriFilter.specificValues)) {
+      return records;
+    }
+    return records
+        .where((r) => activeKategoris.contains(kategoriOf(r)))
+        .toList();
+  }
+
   static List<BlokRecord> filterByKategori(
     List<BlokRecord> records,
     DhkpKategoriFilter filter,
@@ -162,10 +199,22 @@ class DhkpSummaryMetrics {
         return records.where((r) => r.isTargetPemda).toList();
       case DhkpKategoriFilter.blacklist:
         return records.where((r) => r.isBlacklist).toList();
+      case DhkpKategoriFilter.bermasalah:
+        return records.where((r) => r.isBermasalah).toList();
+      case DhkpKategoriFilter.nihil:
+        return records.where((r) => r.jumlahPbbValue == 0).toList();
       case DhkpKategoriFilter.sudahBayar:
         return records.where((r) => r.isPaid && !r.isTargetPemda).toList();
       case DhkpKategoriFilter.belumBayar:
-        return records.where((r) => !r.isPaid && !r.isTargetPemda).toList();
+        return records
+            .where(
+              (r) =>
+                  !r.isPaid &&
+                  !r.isTargetPemda &&
+                  !r.isBlacklist &&
+                  !r.isBermasalah,
+            )
+            .toList();
     }
   }
 

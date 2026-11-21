@@ -171,13 +171,14 @@ class DhkpPackageHelper {
   }
 
   /// Memeriksa apakah satu baris DHKP memiliki perubahan dari petugas
-  /// (status bayar lunas, tanggal bayar, catatan, gambar dokumentasi, target pemda, atau blacklist).
+  /// (status bayar lunas, tanggal bayar, catatan, gambar dokumentasi, target pemda, blacklist, atau bermasalah).
   static bool isChangedRecord(BlokRecord r) {
     return r.isPaid ||
         r.catatan.trim().isNotEmpty ||
         r.hasPhoto ||
         r.isTargetPemda ||
-        r.isBlacklist;
+        r.isBlacklist ||
+        r.isBermasalah;
   }
 
   /// Mengambil daftar baris DHKP yang mengalami perubahan saja.
@@ -656,7 +657,7 @@ class DhkpPackageHelper {
           await DusunData.instance.setDusuns(parsedDusuns);
         }
       }
-      if (manifest['scope'] is Map) {
+      if (!isDeltaArchive && manifest['scope'] is Map) {
         final scopeMap = Map<String, dynamic>.from(manifest['scope'] as Map);
         final parsedScope = DusunScope.fromJson(scopeMap);
         await DusunData.instance.setScope(parsedScope);
@@ -1051,19 +1052,62 @@ class DhkpPackageHelper {
 
   static BlokRecord _mergeDeltaWithBase(BlokRecord r, BlokRecord base) {
     final sameYear = r.tahunBayar == base.tahunBayar;
+    final effectiveTargetPemda = r.isTargetPemda || base.isTargetPemda;
+
+    final String resolvedTanggal = r.hasValidTanggalBayar
+        ? r.tanggalBayar
+        : (sameYear && base.hasValidTanggalBayar
+              ? base.tanggalBayar
+              : (r.tanggalBayar.isNotEmpty
+                    ? r.tanggalBayar
+                    : (sameYear ? base.tanggalBayar : '')));
+
+    final String resolvedStatus;
+    if (!effectiveTargetPemda &&
+        (r.isBermasalah || (sameYear && base.isBermasalah && !r.isPaid))) {
+      resolvedStatus = 'Bermasalah';
+    } else if (r.isPaid || (sameYear && base.isPaid)) {
+      resolvedStatus = 'Sudah Bayar';
+    } else if (r.isBlacklist || (sameYear && base.isBlacklist)) {
+      resolvedStatus = r.isBlacklist ? r.statusBayar : base.statusBayar;
+    } else {
+      resolvedStatus = r.statusBayar.isNotEmpty
+          ? r.statusBayar
+          : base.statusBayar;
+    }
+
+    String resolvedCatatan;
+    if (!sameYear || base.catatan.trim().isEmpty) {
+      resolvedCatatan = r.catatan;
+    } else if (r.catatan.trim().isEmpty) {
+      resolvedCatatan = base.catatan;
+    } else if (r.catatan.trim() == base.catatan.trim()) {
+      resolvedCatatan = r.catatan;
+    } else {
+      final rIsAutoPaid = r.catatan.trim().toLowerCase().startsWith(
+        'sudah bayar',
+      );
+      final baseIsAutoPaid = base.catatan.trim().toLowerCase().startsWith(
+        'sudah bayar',
+      );
+      if (rIsAutoPaid && !baseIsAutoPaid) {
+        resolvedCatatan = base.catatan;
+      } else if (!rIsAutoPaid && baseIsAutoPaid) {
+        resolvedCatatan = r.catatan;
+      } else {
+        resolvedCatatan = r.catatan;
+      }
+    }
+
     return base.copyWith(
       tahunBayar: r.tahunBayar,
-      statusBayar: r.statusBayar,
-      tanggalBayar: r.tanggalBayar.isNotEmpty
-          ? r.tanggalBayar
-          : (sameYear ? base.tanggalBayar : ''),
-      catatan: r.catatan.isNotEmpty
-          ? r.catatan
-          : (sameYear ? base.catatan : ''),
+      statusBayar: resolvedStatus,
+      tanggalBayar: resolvedTanggal,
+      catatan: resolvedCatatan,
       namaFoto: (r.namaFoto != null && r.namaFoto!.isNotEmpty)
           ? r.namaFoto
           : (sameYear ? base.namaFoto : null),
-      isTargetPemda: r.isTargetPemda,
+      isTargetPemda: effectiveTargetPemda,
       namaWajibPajak:
           (r.namaWajibPajak.isNotEmpty && !r.namaWajibPajak.startsWith('WP '))
           ? r.namaWajibPajak

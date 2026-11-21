@@ -89,13 +89,37 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
   String? _selectedBlok;
   String _selectedTahun = '${DateTime.now().year}';
   int? _selectedWilayah;
-  DhkpKategoriFilter _kategoriFilter = DhkpKategoriFilter.semua;
-  bool _sembunyikanNihil = false;
+  Set<DhkpKategoriFilter> _activeKategoris = Set<DhkpKategoriFilter>.from(
+    DhkpKategoriFilter.specificValues,
+  );
   BlokSortBy _sortBy = BlokSortBy.blokWilayah;
   List<BlokRecord> _records = [];
+  List<BlokRecord> _rawScopeRecords = [];
+  List<BlokRecord> _rawMultiYearRecords = [];
   List<BlokRecord> _allScopeRecords = [];
   List<BlokRecord> _grafikScopeRecords = [];
   bool _tampilkanGrafik = false;
+
+  bool get _sembunyikanNihil =>
+      !_activeKategoris.contains(DhkpKategoriFilter.nihil);
+
+  bool get _isSemuaKategoriActive =>
+      _activeKategoris.containsAll(DhkpKategoriFilter.specificValues);
+
+  DhkpKategoriFilter? get _kategoriFilter => _isSemuaKategoriActive
+      ? DhkpKategoriFilter.semua
+      : (_activeKategoris.length == 1 ? _activeKategoris.first : null);
+
+  String get _activeKategoriSummaryLabel {
+    if (_isSemuaKategoriActive) return DhkpKategoriFilter.semua.label;
+    if (_activeKategoris.isEmpty) return 'Tidak Ada (0)';
+    final ordered = DhkpKategoriFilter.specificValues
+        .where(_activeKategoris.contains)
+        .map((k) => k.label)
+        .toList();
+    if (ordered.length <= 2) return ordered.join(', ');
+    return '${ordered.length} Kategori';
+  }
 
   // Paginasi & Optimasi Performa
   int _rowsPerPage = 50;
@@ -411,9 +435,9 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
       excludeNihil: _sembunyikanNihil,
     );
     final metrics = DhkpSummaryMetrics.compute(filteredScope);
-    var records = DhkpSummaryMetrics.filterByKategori(
-      filteredScope,
-      _kategoriFilter,
+    var records = DhkpSummaryMetrics.filterByKategoris(
+      allScope,
+      _activeKategoris,
     );
     records = DhkpSummaryMetrics.filterBySearch(records, _searchQuery);
 
@@ -422,6 +446,8 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
       _photosDir = photosDir;
       _cachedPhotoFileNames = photoNames;
       _records = records;
+      _rawScopeRecords = allScope;
+      _rawMultiYearRecords = allScopeMultiYear;
       _allScopeRecords = filteredScope;
       _grafikScopeRecords = filteredGrafikScope;
       _summaryMetrics = metrics;
@@ -437,15 +463,31 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
     _updateScreenSecurity();
   }
 
-  /// Menyaring langsung dari [_allScopeRecords] di memori tanpa melakukan I/O disk,
-  /// tanpa query ulang multi-tahun, dan tanpa menghitung ulang metrik ringkasan.
+  /// Menyaring langsung dari [_rawScopeRecords] di memori tanpa melakukan I/O disk.
   void _applyMemoryFilterOnly() {
-    var records = DhkpSummaryMetrics.filterByKategori(
-      _allScopeRecords,
-      _kategoriFilter,
+    final baseScope = _rawScopeRecords.isNotEmpty
+        ? _rawScopeRecords
+        : _allScopeRecords;
+    final filteredScope = DhkpSummaryMetrics.filterOutNihil(
+      baseScope,
+      excludeNihil: _sembunyikanNihil,
+    );
+    final filteredGrafikScope = _rawMultiYearRecords.isNotEmpty
+        ? DhkpSummaryMetrics.filterOutNihil(
+            _rawMultiYearRecords,
+            excludeNihil: _sembunyikanNihil,
+          )
+        : _grafikScopeRecords;
+    final metrics = DhkpSummaryMetrics.compute(filteredScope);
+    var records = DhkpSummaryMetrics.filterByKategoris(
+      baseScope,
+      _activeKategoris,
     );
     records = DhkpSummaryMetrics.filterBySearch(records, _searchQuery);
     setState(() {
+      _allScopeRecords = filteredScope;
+      _grafikScopeRecords = filteredGrafikScope;
+      _summaryMetrics = metrics;
       _records = records;
       _currentPage = 0;
     });
@@ -473,7 +515,7 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
       rawRecords,
       excludeNihil: excludeNihilOverride ?? _sembunyikanNihil,
     );
-    return DhkpSummaryMetrics.filterByKategori(records, _kategoriFilter);
+    return DhkpSummaryMetrics.filterByKategoris(records, _activeKategoris);
   }
 
   void _pilihBlok(String? blok) {
@@ -503,24 +545,31 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
     );
   }
 
-  void _pilihKategori(DhkpKategoriFilter? kategori) {
+  void _pilihKategori(
+    DhkpKategoriFilter? kategori, {
+    bool onlyThis = false,
+  }) {
     if (kategori == null) return;
-    _kategoriFilter = kategori;
+    if (onlyThis && kategori != DhkpKategoriFilter.semua) {
+      _activeKategoris = <DhkpKategoriFilter>{kategori};
+    } else if (kategori == DhkpKategoriFilter.semua) {
+      if (_isSemuaKategoriActive) {
+        _activeKategoris = <DhkpKategoriFilter>{};
+      } else {
+        _activeKategoris = Set<DhkpKategoriFilter>.from(
+          DhkpKategoriFilter.specificValues,
+        );
+      }
+    } else {
+      final next = Set<DhkpKategoriFilter>.from(_activeKategoris);
+      if (next.contains(kategori)) {
+        next.remove(kategori);
+      } else {
+        next.add(kategori);
+      }
+      _activeKategoris = next;
+    }
     _applyMemoryFilterOnly();
-  }
-
-  void _toggleSembunyikanNihil() {
-    setState(() {
-      _sembunyikanNihil = !_sembunyikanNihil;
-      _currentPage = 0;
-    });
-    _loadRecords(
-      setBusy: true,
-      busyMessage: _sembunyikanNihil
-          ? 'Mengecualikan SPPT Rp 0 (Nihil)...'
-          : 'Menampilkan kembali SPPT Rp 0 (Nihil)...',
-      busyIcon: Icons.money_off_csred_outlined,
-    );
   }
 
   void _pilihSort(BlokSortBy? sortBy) {
@@ -564,7 +613,38 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
       onCekStatusBayar: () => _bukaStatusBayar(record),
       onCekTagihan: () => _bukaTagihan(record),
       onEditRincian: () => _editRincianDialog(record),
+      onToggleBermasalah: (current) => _tandaiBermasalahDialog(current),
     );
+  }
+
+  /// Menampilkan konfirmasi untuk menandai atau menghapus tanda Bermasalah
+  /// (khusus Target Desa; Target Pemda tidak dapat ditandai Bermasalah).
+  Future<BlokRecord?> _tandaiBermasalahDialog(BlokRecord record) async {
+    if (record.isTargetPemda) return null;
+    final confirmedBermasalah = await showKonfirmasiBermasalahDialog(
+      context,
+      record,
+    );
+    if (confirmedBermasalah == null) return null;
+
+    final newStatus = confirmedBermasalah
+        ? 'Bermasalah'
+        : (record.hasValidTanggalBayar ? 'Sudah Bayar' : 'Belum Bayar');
+    final updatedRecord = record.copyWith(statusBayar: newStatus);
+    await BlokDataStore.instance.upsert(updatedRecord);
+    await _loadRecords();
+    if (!mounted) return updatedRecord;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          confirmedBermasalah
+              ? 'NOP ${record.formattedNop} ditandai sebagai Bermasalah.'
+              : 'Tanda Bermasalah pada NOP ${record.formattedNop} telah dihapus.',
+        ),
+        backgroundColor: confirmedBermasalah ? Colors.red.shade700 : null,
+      ),
+    );
+    return updatedRecord;
   }
 
   /// Membuka kalkulator terpadu (Denda, Cicilan & Tabungan Warga, AJB)
@@ -1567,6 +1647,34 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
     await _cetakLaporan();
   }
 
+  Future<void> _tampilkanPeringatanDataKosongCetak(String message) async {
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.orange.shade800),
+            const SizedBox(width: 8),
+            const Expanded(
+              child: Text(
+                'Peringatan: Data Kosong',
+                style: TextStyle(fontSize: 18),
+              ),
+            ),
+          ],
+        ),
+        content: Text(message),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Mengerti'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _cetakPdfDenganBatal({
     required Future<List<BlokRecord>> Function() loadRecords,
     required String blokTitle,
@@ -1609,9 +1717,7 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
       );
       if (!mounted) return;
       if (emptyRecords) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(emptyMessage)));
+        await _tampilkanPeringatanDataKosongCetak(emptyMessage);
         return;
       }
       if (bytes == null || cancelToken.isCancelled) {
@@ -1642,6 +1748,12 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
   }
 
   Future<void> _cetakLaporan() async {
+    if (!_tampilkanGrafik && _records.isEmpty) {
+      await _tampilkanPeringatanDataKosongCetak(
+        'Tidak ada data DHKP pada filter yang dipilih untuk dicetak.',
+      );
+      return;
+    }
     final opsi = await _pilihOpsiEkspor(
       title: 'Cetak Laporan DHKP',
       actionButtonLabel: DocumentPreviewScreen.isDesktop
@@ -1659,7 +1771,8 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
       loadRecords: () =>
           _scopedRecordsForExport(opsi.blok, !opsi.sertakanNihil),
       blokTitle: blokTitle,
-      emptyMessage: 'Belum ada data untuk dicetak.',
+      emptyMessage:
+          'Tidak ada data DHKP pada filter yang dipilih untuk dicetak.',
       initialMessage: 'Menyiapkan dokumen cetak PDF...',
     );
   }
@@ -1677,12 +1790,8 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
     }
 
     if (_records.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Belum ada data pada tampilan filter saat ini untuk dicetak.',
-          ),
-        ),
+      await _tampilkanPeringatanDataKosongCetak(
+        'Tidak ada data DHKP pada filter yang dipilih untuk dicetak.',
       );
       return;
     }
@@ -1695,7 +1804,7 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
       loadRecords: () async => targetRecords,
       blokTitle: blokTitle,
       emptyMessage:
-          'Belum ada data pada tampilan filter saat ini untuk dicetak.',
+          'Tidak ada data DHKP pada filter yang dipilih untuk dicetak.',
       initialMessage: 'Menyiapkan cetakan sesuai filter tampilan saat ini...',
     );
   }
@@ -2151,40 +2260,172 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
                                 const SizedBox(width: 8),
                                 PopupMenuButton<DhkpKategoriFilter>(
                                   tooltip:
-                                      'Filter Kategori: ${_kategoriFilter.label}',
-                                  initialValue: _kategoriFilter,
-                                  onSelected: _pilihKategori,
+                                      'Filter Kategori: $_activeKategoriSummaryLabel',
                                   itemBuilder: (context) => [
-                                    for (final k in DhkpKategoriFilter.values)
-                                      PopupMenuItem<DhkpKategoriFilter>(
-                                        value: k,
-                                        child: Row(
-                                          children: [
-                                            Icon(
-                                              _kategoriFilter == k
-                                                  ? Icons
-                                                        .radio_button_checked_rounded
-                                                  : Icons
-                                                        .radio_button_unchecked_rounded,
-                                              size: 18,
-                                              color: _kategoriFilter == k
-                                                  ? Theme.of(
-                                                      context,
-                                                    ).colorScheme.primary
-                                                  : null,
-                                            ),
-                                            const SizedBox(width: 10),
-                                            Text(
-                                              k.label,
-                                              style: TextStyle(
-                                                fontWeight: _kategoriFilter == k
-                                                    ? FontWeight.bold
-                                                    : FontWeight.normal,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
+                                    PopupMenuItem<DhkpKategoriFilter>(
+                                      enabled: false,
+                                      padding: EdgeInsets.zero,
+                                      child: StatefulBuilder(
+                                        builder: (ctx, setMenuState) {
+                                          return Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.stretch,
+                                            children: [
+                                              for (final k
+                                                  in DhkpKategoriFilter
+                                                      .values) ...[
+                                                () {
+                                                  final isSemua =
+                                                      k ==
+                                                      DhkpKategoriFilter.semua;
+                                                  final isChecked = isSemua
+                                                      ? _isSemuaKategoriActive
+                                                      : _activeKategoris
+                                                            .contains(k);
+                                                  final isOnlyThisSelected =
+                                                      !isSemua &&
+                                                      _activeKategoris.length ==
+                                                          1 &&
+                                                      _activeKategoris.contains(
+                                                        k,
+                                                      );
+                                                  return InkWell(
+                                                    onTap: () {
+                                                      _pilihKategori(k);
+                                                      setMenuState(() {});
+                                                    },
+                                                    child: Padding(
+                                                      padding:
+                                                          const EdgeInsets.symmetric(
+                                                            horizontal: 14,
+                                                            vertical: 9,
+                                                          ),
+                                                      child: Row(
+                                                        children: [
+                                                          Icon(
+                                                            isChecked
+                                                                ? Icons
+                                                                      .radio_button_checked_rounded
+                                                                : Icons
+                                                                      .radio_button_unchecked_rounded,
+                                                            size: 18,
+                                                            color: isChecked
+                                                                ? Theme.of(
+                                                                    context,
+                                                                  ).colorScheme.primary
+                                                                : Theme.of(
+                                                                    context,
+                                                                  ).disabledColor,
+                                                          ),
+                                                          const SizedBox(
+                                                            width: 10,
+                                                          ),
+                                                          Expanded(
+                                                            child: Text(
+                                                              k.label,
+                                                              style: TextStyle(
+                                                                fontSize: 13.5,
+                                                                color:
+                                                                    Theme.of(
+                                                                          context,
+                                                                        )
+                                                                        .textTheme
+                                                                        .bodyMedium
+                                                                        ?.color,
+                                                                fontWeight:
+                                                                    isChecked
+                                                                    ? FontWeight
+                                                                          .bold
+                                                                    : FontWeight
+                                                                          .normal,
+                                                              ),
+                                                            ),
+                                                          ),
+                                                          if (!isSemua) ...[
+                                                            const SizedBox(
+                                                              width: 8,
+                                                            ),
+                                                            InkWell(
+                                                              borderRadius:
+                                                                  BorderRadius.circular(
+                                                                    4,
+                                                                  ),
+                                                              onTap: () {
+                                                                _pilihKategori(
+                                                                  k,
+                                                                  onlyThis:
+                                                                      true,
+                                                                );
+                                                                setMenuState(
+                                                                  () {},
+                                                                );
+                                                              },
+                                                              child: Container(
+                                                                padding:
+                                                                    const EdgeInsets.symmetric(
+                                                                      horizontal:
+                                                                          7,
+                                                                      vertical:
+                                                                          3,
+                                                                    ),
+                                                                decoration: BoxDecoration(
+                                                                  color:
+                                                                      isOnlyThisSelected
+                                                                      ? Theme.of(
+                                                                          context,
+                                                                        ).colorScheme.primaryContainer
+                                                                      : Theme.of(
+                                                                          context,
+                                                                        ).colorScheme.surfaceContainerHighest,
+                                                                  borderRadius:
+                                                                      BorderRadius.circular(
+                                                                        4,
+                                                                      ),
+                                                                  border: Border.all(
+                                                                    color:
+                                                                        isOnlyThisSelected
+                                                                        ? Theme.of(
+                                                                            context,
+                                                                          ).colorScheme.primary
+                                                                        : Theme.of(
+                                                                            context,
+                                                                          ).colorScheme.outlineVariant,
+                                                                    width: 0.8,
+                                                                  ),
+                                                                ),
+                                                                child: Text(
+                                                                  'Hanya',
+                                                                  style: TextStyle(
+                                                                    fontSize:
+                                                                        10.5,
+                                                                    fontWeight:
+                                                                        FontWeight
+                                                                            .w600,
+                                                                    color:
+                                                                        isOnlyThisSelected
+                                                                        ? Theme.of(
+                                                                            context,
+                                                                          ).colorScheme.primary
+                                                                        : Theme.of(
+                                                                            context,
+                                                                          ).colorScheme.onSurfaceVariant,
+                                                                  ),
+                                                                ),
+                                                              ),
+                                                            ),
+                                                          ],
+                                                        ],
+                                                      ),
+                                                    ),
+                                                  );
+                                                }(),
+                                              ],
+                                            ],
+                                          );
+                                        },
                                       ),
+                                    ),
                                   ],
                                   child: Container(
                                     height: 40,
@@ -2192,17 +2433,13 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
                                       horizontal: 12,
                                     ),
                                     decoration: BoxDecoration(
-                                      color:
-                                          _kategoriFilter !=
-                                              DhkpKategoriFilter.semua
+                                      color: !_isSemuaKategoriActive
                                           ? Theme.of(
                                               context,
                                             ).colorScheme.primaryContainer
                                           : null,
                                       border: Border.all(
-                                        color:
-                                            _kategoriFilter !=
-                                                DhkpKategoriFilter.semua
+                                        color: !_isSemuaKategoriActive
                                             ? Theme.of(
                                                 context,
                                               ).colorScheme.primary
@@ -2216,24 +2453,20 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
                                         Icon(
-                                          _kategoriFilter !=
-                                                  DhkpKategoriFilter.semua
+                                          !_isSemuaKategoriActive
                                               ? Icons.filter_alt_rounded
                                               : Icons.filter_list_rounded,
                                           size: 20,
-                                          color:
-                                              _kategoriFilter !=
-                                                  DhkpKategoriFilter.semua
+                                          color: !_isSemuaKategoriActive
                                               ? Theme.of(
                                                   context,
                                                 ).colorScheme.onPrimaryContainer
                                               : null,
                                         ),
-                                        if (_kategoriFilter !=
-                                            DhkpKategoriFilter.semua) ...[
+                                        if (!_isSemuaKategoriActive) ...[
                                           const SizedBox(width: 6),
                                           Text(
-                                            _kategoriFilter.label,
+                                            _activeKategoriSummaryLabel,
                                             style: TextStyle(
                                               fontSize: 12,
                                               fontWeight: FontWeight.w600,
@@ -2244,71 +2477,6 @@ class _BlokCatatanScreenState extends State<BlokCatatanScreen> {
                                           ),
                                         ],
                                       ],
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                                Tooltip(
-                                  message: _sembunyikanNihil
-                                      ? 'SPPT Rp 0 (Nihil) sedang dikecualikan — ketuk untuk menampilkan kembali'
-                                      : 'Kecualikan SPPT Rp 0 (Nihil) dari tampilan dan cetakan',
-                                  child: InkWell(
-                                    key: const ValueKey(
-                                      'dhkp_exclude_nihil_btn',
-                                    ),
-                                    borderRadius: BorderRadius.circular(6),
-                                    onTap: _toggleSembunyikanNihil,
-                                    child: Container(
-                                      height: 40,
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 10,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: _sembunyikanNihil
-                                            ? Theme.of(
-                                                context,
-                                              ).colorScheme.tertiaryContainer
-                                            : null,
-                                        border: Border.all(
-                                          color: _sembunyikanNihil
-                                              ? Theme.of(
-                                                  context,
-                                                ).colorScheme.tertiary
-                                              : Theme.of(
-                                                  context,
-                                                ).colorScheme.outline,
-                                        ),
-                                        borderRadius: BorderRadius.circular(6),
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Icon(
-                                            Icons.money_off_csred_outlined,
-                                            size: 18,
-                                            color: _sembunyikanNihil
-                                                ? Theme.of(context)
-                                                      .colorScheme
-                                                      .onTertiaryContainer
-                                                : null,
-                                          ),
-                                          const SizedBox(width: 4),
-                                          Text(
-                                            'Tanpa Rp 0',
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              fontWeight: _sembunyikanNihil
-                                                  ? FontWeight.w700
-                                                  : FontWeight.w500,
-                                              color: _sembunyikanNihil
-                                                  ? Theme.of(context)
-                                                        .colorScheme
-                                                        .onTertiaryContainer
-                                                  : null,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
                                     ),
                                   ),
                                 ),

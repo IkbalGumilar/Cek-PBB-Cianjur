@@ -122,18 +122,160 @@ Future<String?> showEditCatatanDialog(
   }
 }
 
+/// Menampilkan dialog konfirmasi untuk menandai objek sebagai Bermasalah
+/// atau menghapus tanda Bermasalah yang sudah ada.
+/// Mengembalikan `true` jika dikonfirmasi menjadi Bermasalah,
+/// `false` jika dikonfirmasi hapus tanda Bermasalah, atau `null` jika dibatalkan.
+Future<bool?> showKonfirmasiBermasalahDialog(
+  BuildContext context,
+  BlokRecord record,
+) async {
+  final isUnmarking = record.isBermasalah;
+  final cleanText = PbbTabunganHelper.cleanCatatan(record.catatan);
+  final restoreStatusLabel = record.hasValidTanggalBayar
+      ? 'Sudah Bayar'
+      : 'Belum Bayar';
+
+  return showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Row(
+        children: [
+          Icon(
+            isUnmarking
+                ? Icons.restore_rounded
+                : Icons.report_problem_rounded,
+            color: isUnmarking ? Colors.orange.shade800 : Colors.red,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              isUnmarking
+                  ? 'Hapus Tanda Bermasalah?'
+                  : 'Tandai Sebagai Bermasalah?',
+              style: const TextStyle(fontSize: 18),
+            ),
+          ),
+        ],
+      ),
+      content: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 440),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              record.namaWajibPajak,
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 15,
+              ),
+            ),
+            Text(
+              'NOP: ${record.formattedNop} (Blok ${record.blok} No ${record.wilayah})',
+              style: const TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              isUnmarking
+                  ? 'Apakah Anda yakin ingin menghapus tanda merah Bermasalah pada objek pajak ini dan mengembalikan statusnya ke $restoreStatusLabel?'
+                  : 'Apakah Anda yakin ingin memberikan tanda merah kategori Bermasalah pada objek pajak ini?',
+              style: const TextStyle(fontSize: 13.5),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: (isUnmarking ? Colors.amber : Colors.red).withValues(
+                  alpha: 0.1,
+                ),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: isUnmarking
+                      ? Colors.amber.shade600
+                      : Colors.red.shade300,
+                ),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.info_outline_rounded,
+                    size: 16,
+                    color: isUnmarking
+                        ? Colors.amber.shade900
+                        : Colors.red.shade700,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      cleanText.isNotEmpty
+                          ? 'Catatan petugas: "$cleanText"'
+                          : 'Alasan bermasalah dapat Anda isi pada kolom Catatan yang tersedia di tabel DHKP.',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        color: isUnmarking
+                            ? Colors.amber.shade900
+                            : Colors.red.shade900,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx),
+          child: const Text('Batal'),
+        ),
+        FilledButton.icon(
+          style: FilledButton.styleFrom(
+            backgroundColor: isUnmarking
+                ? Colors.orange.shade800
+                : Colors.red.shade700,
+            foregroundColor: Colors.white,
+          ),
+          onPressed: () => Navigator.pop(ctx, !isUnmarking),
+          icon: Icon(
+            isUnmarking
+                ? Icons.restore_rounded
+                : Icons.report_problem_rounded,
+            size: 18,
+          ),
+          label: Text(
+            isUnmarking ? 'Ya, Hapus Tanda' : 'Ya, Tandai Bermasalah',
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
 Future<void> showRincianObjekDialog(
   BuildContext context, {
   required BlokRecord record,
   required VoidCallback onCekStatusBayar,
   required VoidCallback onCekTagihan,
   required Future<void> Function() onEditRincian,
+  Future<BlokRecord?> Function(BlokRecord currentRecord)? onToggleBermasalah,
 }) async {
+  var currentRecord = record;
   await showDialog<void>(
     context: context,
     builder: (ctx) => StatefulBuilder(
       builder: (context, setDialogState) {
         final isDark = Theme.of(context).brightness == Brightness.dark;
+
+        Future<void> handleToggleBermasalah() async {
+          if (onToggleBermasalah == null) return;
+          final updated = await onToggleBermasalah(currentRecord);
+          if (updated != null && ctx.mounted) {
+            Navigator.pop(ctx);
+          }
+        }
 
         return Dialog(
           shape: RoundedRectangleBorder(
@@ -195,39 +337,39 @@ Future<void> showRincianObjekDialog(
                                 children: [
                                   _buildRincianItem(
                                     'Nomor Objek Pajak (NOP)',
-                                    record.formattedNop,
+                                    currentRecord.formattedNop,
                                     isBold: true,
                                   ),
                                   const SizedBox(height: 10),
                                   _buildRincianItem(
                                     'Luas Bumi',
-                                    record.luasBumi.isNotEmpty
-                                        ? record.luasBumi
+                                    currentRecord.luasBumi.isNotEmpty
+                                        ? currentRecord.luasBumi
                                         : '-',
                                   ),
                                   const SizedBox(height: 10),
                                   _buildRincianItem(
                                     'Luas Bangunan',
-                                    record.luasBangunan.isNotEmpty
-                                        ? record.luasBangunan
+                                    currentRecord.luasBangunan.isNotEmpty
+                                        ? currentRecord.luasBangunan
                                         : '-',
                                   ),
                                   const SizedBox(height: 10),
                                   _buildRincianItem(
                                     'Kecamatan Objek Pajak',
-                                    record.kecamatan,
+                                    currentRecord.kecamatan,
                                   ),
                                   const SizedBox(height: 10),
                                   _buildRincianItem(
                                     'Alamat Objek Pajak',
-                                    record.alamatObjek.isNotEmpty
-                                        ? record.alamatObjek
+                                    currentRecord.alamatObjek.isNotEmpty
+                                        ? currentRecord.alamatObjek
                                         : '-',
                                   ),
                                   const SizedBox(height: 10),
                                   _buildRincianItem(
                                     'Nama Wajib Pajak',
-                                    record.namaWajibPajak,
+                                    currentRecord.namaWajibPajak,
                                     isBold: true,
                                     textColor: isDark
                                         ? Colors.lightBlueAccent
@@ -236,8 +378,8 @@ Future<void> showRincianObjekDialog(
                                   const SizedBox(height: 10),
                                   _buildRincianItem(
                                     'Alamat Wajib Pajak',
-                                    record.alamatWp.isNotEmpty
-                                        ? record.alamatWp
+                                    currentRecord.alamatWp.isNotEmpty
+                                        ? currentRecord.alamatWp
                                         : '-',
                                   ),
                                 ],
@@ -250,48 +392,50 @@ Future<void> showRincianObjekDialog(
                                 children: [
                                   _buildRincianItem(
                                     'Tahun Ketetapan',
-                                    record.tahunBayar,
+                                    currentRecord.tahunBayar,
                                     isBold: true,
                                   ),
                                   const SizedBox(height: 10),
                                   _buildRincianItem(
                                     'NJOP Bumi',
-                                    record.njopBumi.isNotEmpty
-                                        ? record.njopBumi
+                                    currentRecord.njopBumi.isNotEmpty
+                                        ? currentRecord.njopBumi
                                         : '-',
                                   ),
                                   const SizedBox(height: 10),
                                   _buildRincianItem(
                                     'NJOP Bangunan',
-                                    record.njopBangunan.isNotEmpty
-                                        ? record.njopBangunan
+                                    currentRecord.njopBangunan.isNotEmpty
+                                        ? currentRecord.njopBangunan
                                         : '-',
                                   ),
                                   const SizedBox(height: 10),
                                   _buildRincianItem(
                                     'Kelurahan Objek Pajak',
-                                    record.kelurahan,
+                                    currentRecord.kelurahan,
                                   ),
                                   const SizedBox(height: 10),
                                   _buildRincianItem(
                                     'RT Objek Pajak',
-                                    record.rtObjek.isNotEmpty
-                                        ? record.rtObjek
+                                    currentRecord.rtObjek.isNotEmpty
+                                        ? currentRecord.rtObjek
                                         : '-',
                                   ),
                                   const SizedBox(height: 10),
                                   _buildRincianItem(
                                     'Pokok / Ketetapan PBB',
-                                    record.formattedJumlahPbb,
+                                    currentRecord.formattedJumlahPbb,
                                     isBold: true,
                                   ),
                                   const SizedBox(height: 10),
                                   _buildRincianItem(
                                     'Status Bayar',
-                                    record.statusBayar,
-                                    textColor: record.isPaid
+                                    currentRecord.statusBayar,
+                                    textColor: currentRecord.isPaid
                                         ? Colors.green
-                                        : Colors.orange.shade800,
+                                        : (currentRecord.isBermasalah
+                                              ? Colors.red.shade700
+                                              : Colors.orange.shade800),
                                   ),
                                 ],
                               ),
@@ -299,7 +443,7 @@ Future<void> showRincianObjekDialog(
                           ],
                         ),
                         const Divider(height: 24),
-                        if (record.isTargetPemda)
+                        if (currentRecord.isTargetPemda)
                           Container(
                             margin: const EdgeInsets.only(bottom: 12),
                             padding: const EdgeInsets.symmetric(
@@ -326,14 +470,47 @@ Future<void> showRincianObjekDialog(
                               ],
                             ),
                           ),
+                        if (currentRecord.isBermasalah)
+                          Container(
+                            margin: const EdgeInsets.only(bottom: 10),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.red.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: Colors.red),
+                            ),
+                            child: const Row(
+                              children: [
+                                Icon(
+                                  Icons.report_problem_rounded,
+                                  size: 16,
+                                  color: Colors.red,
+                                ),
+                                SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    'OBJEK PAJAK BERMASALAH (Ditandai Petugas)',
+                                    style: TextStyle(
+                                      color: Colors.red,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         () {
                           final cleanCatatan = PbbTabunganHelper.cleanCatatan(
-                            record.catatan,
+                            currentRecord.catatan,
                           );
                           final tabungan = PbbTabunganHelper.extractTabungan(
-                            record.catatan,
-                            defaultTarget: record.jumlahPbbValue > 0
-                                ? record.jumlahPbbValue
+                            currentRecord.catatan,
+                            defaultTarget: currentRecord.jumlahPbbValue > 0
+                                ? currentRecord.jumlahPbbValue
                                 : 50000,
                           );
                           final hasTabungan = tabungan.saldo > 0;
@@ -342,7 +519,8 @@ Future<void> showRincianObjekDialog(
                           return Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              if (cleanCatatan.isNotEmpty)
+                              if (cleanCatatan.isNotEmpty ||
+                                  currentRecord.isBermasalah)
                                 Container(
                                   margin: const EdgeInsets.only(bottom: 10),
                                   padding: const EdgeInsets.all(10),
@@ -365,7 +543,9 @@ Future<void> showRincianObjekDialog(
                                       const SizedBox(width: 6),
                                       Expanded(
                                         child: Text(
-                                          'Catatan: $cleanCatatan',
+                                          cleanCatatan.isNotEmpty
+                                              ? 'Catatan: $cleanCatatan'
+                                              : 'Catatan: - (Alasan bermasalah belum diisi pada kolom catatan)',
                                           style: TextStyle(
                                             fontSize: 12,
                                             color: Colors.amber.shade900,
@@ -375,13 +555,13 @@ Future<void> showRincianObjekDialog(
                                     ],
                                   ),
                                 ),
-                              if (hasTabungan)
+                              if (hasTabungan && !currentRecord.isBermasalah)
                                 InkWell(
                                   onTap: () {
                                     Navigator.pop(ctx);
                                     showNopKalkulatorDialog(
                                       context,
-                                      record: record,
+                                      record: currentRecord,
                                       initialTab: 1,
                                       onCekTagihan: onCekTagihan,
                                     );
@@ -436,74 +616,78 @@ Future<void> showRincianObjekDialog(
                             ],
                           );
                         }(),
-                        const SizedBox(height: 6),
-                        InkWell(
-                          onTap: () {
-                            Navigator.pop(ctx);
-                            showNopKalkulatorDialog(
-                              context,
-                              record: record,
-                              onCekTagihan: onCekTagihan,
-                            );
-                          },
-                          borderRadius: BorderRadius.circular(8),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 10,
-                            ),
-                            decoration: BoxDecoration(
-                              color: isDark
-                                  ? const Color(0xFF2E2215)
-                                  : const Color(0xFFFFF3E0),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Colors.orange.shade400),
-                            ),
-                            child: Row(
-                              children: [
-                                const Icon(
-                                  Icons.calculate_outlined,
-                                  color: Colors.orange,
-                                  size: 22,
+                        if (!currentRecord.isBermasalah) ...[
+                          const SizedBox(height: 6),
+                          InkWell(
+                            onTap: () {
+                              Navigator.pop(ctx);
+                              showNopKalkulatorDialog(
+                                context,
+                                record: currentRecord,
+                                onCekTagihan: onCekTagihan,
+                              );
+                            },
+                            borderRadius: BorderRadius.circular(8),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 10,
+                              ),
+                              decoration: BoxDecoration(
+                                color: isDark
+                                    ? const Color(0xFF2E2215)
+                                    : const Color(0xFFFFF3E0),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: Colors.orange.shade400,
                                 ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        'Kalkulator Denda, Cicilan & AJB',
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 12,
-                                          color: isDark
-                                              ? Colors.orange.shade200
-                                              : Colors.orange.shade900,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        'Hitung denda keterlambatan, simulasi setoran cicilan warga, atau estimasi biaya pajak AJB untuk NOP ini.',
-                                        style: TextStyle(
-                                          fontSize: 10.5,
-                                          color: isDark
-                                              ? Colors.grey.shade400
-                                              : Colors.grey.shade700,
-                                        ),
-                                      ),
-                                    ],
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(
+                                    Icons.calculate_outlined,
+                                    color: Colors.orange,
+                                    size: 22,
                                   ),
-                                ),
-                                const Icon(
-                                  Icons.chevron_right,
-                                  size: 20,
-                                  color: Colors.orange,
-                                ),
-                              ],
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Kalkulator Denda, Cicilan & AJB',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 12,
+                                            color: isDark
+                                                ? Colors.orange.shade200
+                                                : Colors.orange.shade900,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          'Hitung denda keterlambatan, simulasi setoran cicilan warga, atau estimasi biaya pajak AJB untuk NOP ini.',
+                                          style: TextStyle(
+                                            fontSize: 10.5,
+                                            color: isDark
+                                                ? Colors.grey.shade400
+                                                : Colors.grey.shade700,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const Icon(
+                                    Icons.chevron_right,
+                                    size: 20,
+                                    color: Colors.orange,
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
-                        ),
+                        ],
                       ],
                     ),
                   ),
@@ -519,6 +703,30 @@ Future<void> showRincianObjekDialog(
                     spacing: 8,
                     runSpacing: 8,
                     children: [
+                      if (!currentRecord.isTargetPemda &&
+                          onToggleBermasalah != null)
+                        OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.red.shade700,
+                            side: BorderSide(color: Colors.red.shade400),
+                            backgroundColor: currentRecord.isBermasalah
+                                ? Colors.red.withValues(alpha: 0.1)
+                                : null,
+                          ),
+                          icon: Icon(
+                            currentRecord.isBermasalah
+                                ? Icons.restore_rounded
+                                : Icons.report_problem_rounded,
+                            size: 16,
+                            color: Colors.red.shade700,
+                          ),
+                          label: Text(
+                            currentRecord.isBermasalah
+                                ? 'Hapus Tanda Bermasalah'
+                                : 'Tandai Bermasalah',
+                          ),
+                          onPressed: handleToggleBermasalah,
+                        ),
                       OutlinedButton.icon(
                         icon: const Icon(
                           Icons.calculate_outlined,
@@ -528,10 +736,13 @@ Future<void> showRincianObjekDialog(
                         label: const Text('Kalkulator & Denda'),
                         onPressed: () {
                           Navigator.pop(ctx);
-                          showNopKalkulatorDialog(context, record: record);
+                          showNopKalkulatorDialog(
+                            context,
+                            record: currentRecord,
+                          );
                         },
                       ),
-                      if (!record.isPaid)
+                      if (!currentRecord.isPaid)
                         OutlinedButton.icon(
                           icon: const Icon(
                             Icons.fact_check_outlined,

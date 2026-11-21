@@ -586,7 +586,11 @@ class StaffDhkpGenerateService {
           tahunBayar: rowTahun,
           tanggalBayar: '',
           jumlahPbb: cleanNominal,
-          statusBayar: isZeroNominal ? 'Sudah Bayar' : 'Belum Bayar',
+          statusBayar: isZeroNominal
+              ? 'Sudah Bayar'
+              : ((prev != null && (prev.isBermasalah || prev.isBlacklist))
+                    ? prev.statusBayar
+                    : 'Belum Bayar'),
           alamatObjek: parsed.alamatOp.isNotEmpty
               ? parsed.alamatOp
               : 'Kp. Terdata Server',

@@ -151,6 +151,7 @@ class _CekPbbAppState extends State<CekPbbApp> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     ConnectivityMonitor.instance.start();
     unawaited(IncomingFileService.instance.init());
+    BlokBackupScheduler.instance.startPeriodicCloudMergeChecker();
     unawaited(
       BlokBackupScheduler.instance.runIfNeeded(
         exportCsv: (fileName) =>
@@ -172,6 +173,7 @@ class _CekPbbAppState extends State<CekPbbApp> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    BlokBackupScheduler.instance.stopPeriodicCloudMergeChecker();
     _themeController.dispose();
     ConnectivityMonitor.instance.dispose();
     super.dispose();
@@ -181,6 +183,9 @@ class _CekPbbAppState extends State<CekPbbApp> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       ConnectivityMonitor.instance.resume();
+      unawaited(
+        BlokBackupScheduler.instance.checkAndMergeCloudUpdatesIfNeeded(),
+      );
     } else if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.inactive ||
         state == AppLifecycleState.hidden) {

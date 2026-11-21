@@ -50,18 +50,23 @@ class BlokRecord {
     this.rtObjek = '',
   });
 
+  bool get hasValidTanggalBayar {
+    final t = tanggalBayar.trim();
+    return t.isNotEmpty && t != '-' && t != '0';
+  }
+
+  bool get isBermasalah =>
+      !isTargetPemda && statusBayar.toLowerCase().contains('bermasalah');
+
   bool get isPaid {
     final s = statusBayar.toLowerCase();
-    if (s.contains('belum')) return false;
-    return s.contains('sudah') ||
-        s.contains('lunas') ||
-        (tanggalBayar.trim().isNotEmpty &&
-            tanggalBayar.trim() != '-' &&
-            tanggalBayar.trim() != '0');
+    if (s.contains('belum') || isBermasalah) return false;
+    return s.contains('sudah') || s.contains('lunas') || hasValidTanggalBayar;
   }
 
   bool get isBlacklist =>
       !isPaid &&
+      !isBermasalah &&
       (statusBayar.toLowerCase().contains('black') ||
           statusBayar.toLowerCase().contains('daftar hitam') ||
           statusBayar.toLowerCase().contains('hitam'));

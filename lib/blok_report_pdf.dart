@@ -22,6 +22,7 @@ String _cleanPdfText(String text) {
       .replaceAll('✔', '[Lunas]')
       .replaceAll('🎯', '[Target]')
       .replaceAll('⛔', '[Blacklist]')
+      .replaceAll('🔴', '[Bermasalah]')
       .replaceAll('⏳', '[Belum Bayar]')
       .replaceAll('≥', '>=')
       .replaceAll('≤', '<=')
@@ -70,6 +71,7 @@ String _cleanPdfText(String text) {
 /// - Jika Semua Blok & Sudah Bayar: "Laporan Data Blok - Sudah Bayar Tahun 2026"
 /// - Jika Semua Blok & Belum Bayar: "Laporan Data Blok - Belum Bayar Tahun 2026"
 /// - Jika Semua Blok & Blacklist: "Laporan Data Blok - Blacklist Tahun 2026"
+/// - Jika Semua Blok & Bermasalah: "Laporan Data Blok - Bermasalah Tahun 2026"
 /// - Jika Semua Blok & Target Pemda: "Laporan Data Blok - Target Pemda Tahun 2026"
 /// - Jika Blok tertentu (misal 017) & Sudah Bayar: "Laporan Data Blok 017 - Sudah Bayar Tahun 2026"
 /// - Tahun tidak dibungkus tanda kurung, namun tetap dinamis sesuai filter.
@@ -95,6 +97,12 @@ String buildReportJudul({
         break;
       case DhkpKategoriFilter.blacklist:
         filterLabel = 'Blacklist';
+        break;
+      case DhkpKategoriFilter.bermasalah:
+        filterLabel = 'Bermasalah';
+        break;
+      case DhkpKategoriFilter.nihil:
+        filterLabel = 'Nihil (Rp 0)';
         break;
       case DhkpKategoriFilter.targetPemda:
         filterLabel = 'Target Pemda';
@@ -145,6 +153,8 @@ class _PdfIsolateParam {
   final int targetPemdaNominal;
   final int blacklistCount;
   final int blacklistNominal;
+  final int bermasalahCount;
+  final int bermasalahNominal;
   final int totalCount;
   final int totalNominal;
 
@@ -163,6 +173,8 @@ class _PdfIsolateParam {
     required this.targetPemdaNominal,
     required this.blacklistCount,
     required this.blacklistNominal,
+    this.bermasalahCount = 0,
+    this.bermasalahNominal = 0,
     required this.totalCount,
     required this.totalNominal,
   });
@@ -273,6 +285,19 @@ pw.Widget _buildSummarySection(_PdfIsolateParam param) {
       nominal: nominal,
       subtitle: '$count NOP',
       titleColor: PdfColors.orange800,
+    );
+  } else if (filter == 'bermasalah') {
+    final nominal = param.bermasalahNominal > 0
+        ? param.bermasalahNominal
+        : param.belumBayarNominal;
+    final count = param.bermasalahCount > 0
+        ? param.bermasalahCount
+        : param.belumBayarCount;
+    card = _buildCard(
+      title: 'Kurang Bayar (Bermasalah)',
+      nominal: nominal,
+      subtitle: '$count NOP',
+      titleColor: PdfColors.red800,
     );
   } else if (filter == 'targetPemda') {
     card = _buildCard(
@@ -680,10 +705,15 @@ class BlokReportPdf {
     final m = DhkpSummaryMetrics.compute(records);
     int blCount = 0;
     int blNom = 0;
+    int bmCount = 0;
+    int bmNom = 0;
     for (final r in records) {
       if (r.isBlacklist) {
         blCount++;
         blNom += r.jumlahPbbValue;
+      } else if (r.isBermasalah) {
+        bmCount++;
+        bmNom += r.jumlahPbbValue;
       }
     }
 
@@ -732,6 +762,16 @@ class BlokReportPdf {
       blacklistNominal: blNom > 0
           ? blNom
           : (kategoriFilter == DhkpKategoriFilter.blacklist
+                ? effectiveTotalPbb
+                : 0),
+      bermasalahCount: bmCount > 0
+          ? bmCount
+          : (kategoriFilter == DhkpKategoriFilter.bermasalah
+                ? records.length
+                : 0),
+      bermasalahNominal: bmNom > 0
+          ? bmNom
+          : (kategoriFilter == DhkpKategoriFilter.bermasalah
                 ? effectiveTotalPbb
                 : 0),
       totalCount: m.totalCount > 0 ? m.totalCount : records.length,

@@ -142,9 +142,21 @@ class _BackupSettingsSectionState extends State<BackupSettingsSection> {
   Future<void> _performBackup({bool enforcePreviousDhkpMatch = true}) async {
     setState(() {
       _isBackingUp = true;
-      _busyMessage = 'Menyimpan cadangan perubahan DHKP...';
+      _busyMessage = _googleAccount.isNotEmpty
+          ? 'Mengecek & menggabungkan data terbaru dari perangkat lain...'
+          : 'Menyimpan cadangan perubahan DHKP...';
     });
     try {
+      if (_googleAccount.isNotEmpty) {
+        await BlokBackupScheduler.instance.checkAndMergeCloudUpdatesIfNeeded(
+          force: true,
+        );
+        if (mounted) {
+          setState(() {
+            _busyMessage = 'Menyimpan cadangan perubahan DHKP...';
+          });
+        }
+      }
       final file = await BlokBackupScheduler.instance.performBackup(
         enforcePreviousDhkpMatch: enforcePreviousDhkpMatch,
       );
@@ -165,11 +177,15 @@ class _BackupSettingsSectionState extends State<BackupSettingsSection> {
                 .ensureDedicatedFolder();
             final backupFolderId = await GoogleDriveService.instance
                 .ensureBackupSubfolder(parentFolderId: mainFolderId);
-            final uploaded = await GoogleDriveService.instance.uploadFile(
+            final uploadedFileId = await GoogleDriveService.instance.uploadFile(
               file: file,
               folderId: backupFolderId,
             );
-            if (uploaded != null) {
+            if (uploadedFileId != null && uploadedFileId.isNotEmpty) {
+              await BlokBackupScheduler.instance.recordUploadedCloudFile(
+                fileId: uploadedFileId,
+                modifiedTime: DateTime.now(),
+              );
               cloudInfo =
                   '\nDisinkronkan ke Google Drive ($_googleAccount/backup)';
             } else {
